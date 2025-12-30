@@ -72,14 +72,14 @@ function employee_tasks_ensure_directory(): void
     }
 }
 
-function load_tasks(): array
+function load_tasks(?array &$errors = null): array
 {
-    return tasks_load_all();
+    return tasks_load_all($errors);
 }
 
-function save_tasks(array $tasks): void
+function save_tasks(array $tasks, ?array &$errors = null): bool
 {
-    tasks_save_all($tasks);
+    return tasks_save_all($tasks, $errors);
 }
 
 function generate_task_id(): string
@@ -104,7 +104,11 @@ function employee_dashboard_frequency_label(array $task): string
 
 $taskErrors = [];
 $taskSuccess = '';
-$tasks = load_tasks();
+$taskLoadMessages = [];
+$tasks = load_tasks($taskLoadMessages);
+if ($taskLoadMessages !== []) {
+    $taskErrors = array_merge($taskErrors, $taskLoadMessages);
+}
 $today = new DateTimeImmutable('today');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -171,8 +175,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'archived_flag' => false,
             ];
 
-            save_tasks($tasks);
-            $taskSuccess = 'Task created successfully.';
+            $saveErrors = [];
+            if (save_tasks($tasks, $saveErrors)) {
+                $taskSuccess = 'Task created successfully.';
+            } else {
+                $taskErrors = array_merge($taskErrors, $saveErrors);
+            }
         }
     } elseif ($action === 'complete_task') {
         $taskId = (string) ($_POST['task_id'] ?? '');
@@ -214,8 +222,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $tasks[$index]['due_date'] = $newDueDate->format('Y-m-d');
             }
 
-            save_tasks($tasks);
-            $taskSuccess = 'Task marked as completed.';
+            $saveErrors = [];
+            if (save_tasks($tasks, $saveErrors)) {
+                $taskSuccess = 'Task marked as completed.';
+            } else {
+                $taskErrors = array_merge($taskErrors, $saveErrors);
+            }
             break;
         }
     }
