@@ -1052,6 +1052,8 @@ function ai_gemini_generate(array $settings, array $contents, array $options = [
         throw new RuntimeException('Gemini API key is missing.');
     }
 
+    $debugLabel = is_string($options['debug_label'] ?? null) ? (string) $options['debug_label'] : null;
+
     $model = ai_normalize_model_code($settings['models']['text'] ?? '', 'gemini-2.5-flash');
     $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . rawurlencode($apiKey);
 
@@ -1072,10 +1074,22 @@ function ai_gemini_generate(array $settings, array $contents, array $options = [
         if (is_array($result['body']) && isset($result['body']['error']['message'])) {
             $message .= ': ' . (string) $result['body']['error']['message'];
         }
+        if ($debugLabel !== null) {
+            ai_greetings_log($debugLabel, $message, [
+                'http_code' => $result['http_code'],
+                'response' => $result['raw'] ?? '',
+            ]);
+        }
         throw new RuntimeException($message);
     }
 
     if (!is_array($result['body'])) {
+        if ($debugLabel !== null) {
+            ai_greetings_log($debugLabel, 'Unexpected Gemini response body', [
+                'http_code' => $result['http_code'],
+                'response' => $result['raw'] ?? '',
+            ]);
+        }
         throw new RuntimeException('Unexpected Gemini response.');
     }
 
@@ -1231,6 +1245,9 @@ function ai_gemini_generate_image_binary(array $settings, string $prompt, array 
         throw new RuntimeException('Gemini API key is missing.');
     }
 
+    $debugLabel = is_string($options['debug_label'] ?? null) ? (string) $options['debug_label'] : null;
+    $httpOptions = isset($options['http']) && is_array($options['http']) ? $options['http'] : [];
+
     $model = ai_normalize_model_code($settings['models']['image'] ?? '', 'gemini-2.5-flash-image');
     $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . rawurlencode($apiKey);
 
@@ -1260,21 +1277,39 @@ function ai_gemini_generate_image_binary(array $settings, string $prompt, array 
         $payload['generationConfig']['outputImageDimensions'] = $dimensions;
     }
 
-    $response = ai_http_json_post($url, $payload, ['Content-Type: application/json']);
+    $response = ai_http_json_post($url, $payload, ['Content-Type: application/json'], $httpOptions);
     if ($response['http_code'] < 200 || $response['http_code'] >= 300) {
         $message = 'Gemini image generation failed (' . $response['http_code'] . ')';
         if (is_array($response['body']) && isset($response['body']['error']['message'])) {
             $message .= ': ' . (string) $response['body']['error']['message'];
         }
+        if ($debugLabel !== null) {
+            ai_greetings_log($debugLabel, $message, [
+                'http_code' => $response['http_code'],
+                'response' => $response['raw'] ?? '',
+            ]);
+        }
         throw new RuntimeException($message);
     }
 
     if (!is_array($response['body'])) {
+        if ($debugLabel !== null) {
+            ai_greetings_log($debugLabel, 'Unexpected Gemini image response.', [
+                'http_code' => $response['http_code'],
+                'response' => $response['raw'] ?? '',
+            ]);
+        }
         throw new RuntimeException('Unexpected Gemini image response.');
     }
 
     $media = ai_gemini_extract_inline_data($response['body'], 'image/');
     if ($media === null) {
+        if ($debugLabel !== null) {
+            ai_greetings_log($debugLabel, 'Gemini did not return an image payload.', [
+                'http_code' => $response['http_code'],
+                'response' => $response['raw'] ?? '',
+            ]);
+        }
         throw new RuntimeException('Gemini did not return an image.');
     }
 
@@ -1293,8 +1328,19 @@ function ai_gemini_generate_image_binary(array $settings, string $prompt, array 
 
 function ai_gemini_generate_image(array $settings, string $prompt, array $options = []): array
 {
+    $debugLabel = is_string($options['debug_label'] ?? null) ? (string) $options['debug_label'] : null;
     $result = ai_gemini_generate_image_binary($settings, $prompt, $options);
     $path = ai_gemini_store_binary(base64_encode($result['binary']), $result['mimeType'], 'generated_images');
+
+    $absolutePath = __DIR__ . '/../' . ltrim($path, '/');
+    if (!is_file($absolutePath) || filesize($absolutePath) === 0) {
+        if ($debugLabel !== null) {
+            ai_greetings_log($debugLabel, 'Image file was not saved correctly.', [
+                'response' => 'Missing or zero-size file for ' . $path,
+            ]);
+        }
+        throw new RuntimeException('Unable to store Gemini media output.');
+    }
 
     $image = [
         'path' => $path,
@@ -1414,12 +1460,14 @@ function ai_gemini_validate_video_model(array $settings): array
     }
 }
 
-function ai_gemini_generate_video(array $settings, string $prompt): array
+function ai_gemini_generate_video(array $settings, string $prompt, array $options = []): array
 {
     $apiKey = trim((string) ($settings['api_key'] ?? ''));
     if ($apiKey === '') {
         throw new RuntimeException('Gemini API key is missing.');
     }
+
+    $debugLabel = is_string($options['debug_label'] ?? null) ? (string) $options['debug_label'] : null;
 
     $model = ai_normalize_model_code($settings['models']['video'] ?? '', '');
     if ($model === '') {
@@ -1439,21 +1487,45 @@ function ai_gemini_generate_video(array $settings, string $prompt): array
         ],
     ];
 
-    $response = ai_http_json_post($url, $payload, ['Content-Type: application/json']);
+    $response = ai_http_json_post($url, $payload, ['Content-Type: application/json'], [
+        'timeout' => 120,
+        'connect_timeout' => 20,
+        'retries' => 2,
+        'retry_delay' => 2,
+        'retry_http_codes' => [429, 500, 502, 503, 504],
+    ]);
     if ($response['http_code'] < 200 || $response['http_code'] >= 300) {
         $message = 'Gemini video generation failed (' . $response['http_code'] . ')';
         if (is_array($response['body']) && isset($response['body']['error']['message'])) {
             $message .= ': ' . (string) $response['body']['error']['message'];
         }
+        if ($debugLabel !== null) {
+            ai_greetings_log($debugLabel, $message, [
+                'http_code' => $response['http_code'],
+                'response' => $response['raw'] ?? '',
+            ]);
+        }
         throw new RuntimeException($message);
     }
 
     if (!is_array($response['body'])) {
+        if ($debugLabel !== null) {
+            ai_greetings_log($debugLabel, 'Unexpected Gemini video response.', [
+                'http_code' => $response['http_code'],
+                'response' => $response['raw'] ?? '',
+            ]);
+        }
         throw new RuntimeException('Unexpected Gemini video response.');
     }
 
     $media = ai_gemini_extract_inline_data($response['body'], 'video/');
     if ($media === null) {
+        if ($debugLabel !== null) {
+            ai_greetings_log($debugLabel, 'Gemini did not return a video payload.', [
+                'http_code' => $response['http_code'],
+                'response' => $response['raw'] ?? '',
+            ]);
+        }
         throw new RuntimeException('Gemini did not return a video payload.');
     }
 
@@ -1549,12 +1621,17 @@ function ai_http_json_post(string $url, array $payload, array $headers = [], arr
     $responseBody = null;
     $httpCode = 0;
     $timeout = isset($options['timeout']) ? (float) $options['timeout'] : 20.0;
+    $connectTimeout = isset($options['connect_timeout']) ? (float) $options['connect_timeout'] : 10.0;
     $retries = isset($options['retries']) ? (int) $options['retries'] : 0;
     $retryDelay = isset($options['retry_delay']) ? (float) $options['retry_delay'] : 1.0;
+    $retryHttpCodes = [];
+    if (isset($options['retry_http_codes']) && is_array($options['retry_http_codes'])) {
+        $retryHttpCodes = array_map('intval', $options['retry_http_codes']);
+    }
 
     $attempt = 0;
 
-    $executeRequest = static function () use ($url, $headers, $body, $timeout): array {
+    $executeRequest = static function () use ($url, $headers, $body, $timeout, $connectTimeout): array {
         $responseBody = null;
         $httpCode = 0;
 
@@ -1566,6 +1643,7 @@ function ai_http_json_post(string $url, array $payload, array $headers = [], arr
                 CURLOPT_HTTPHEADER => $headers,
                 CURLOPT_POSTFIELDS => $body,
                 CURLOPT_TIMEOUT => $timeout,
+                CURLOPT_CONNECTTIMEOUT => $connectTimeout,
             ]);
 
             $response = curl_exec($ch);
@@ -1614,6 +1692,12 @@ function ai_http_json_post(string $url, array $payload, array $headers = [], arr
     while (true) {
         try {
             [$responseBody, $httpCode] = $executeRequest();
+            $shouldRetryHttp = !empty($retryHttpCodes) && in_array($httpCode, $retryHttpCodes, true);
+            if ($shouldRetryHttp && $attempt < $retries) {
+                $attempt++;
+                usleep((int) ($retryDelay * 1_000_000));
+                continue;
+            }
             break;
         } catch (RuntimeException $exception) {
             $attempt++;
@@ -2923,6 +3007,31 @@ function ai_error_log_append(string $type, string $message, array $context = [])
 // Festival & Occasion Greetings helpers
 // -----------------------------------------------------------------------------
 
+function ai_greetings_log(string $action, string $message, array $context = []): void
+{
+    $dir = __DIR__ . '/../data/logs';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+
+    $http = isset($context['http_code']) ? (int) $context['http_code'] : null;
+    $raw = '';
+    if (isset($context['response']) && is_string($context['response'])) {
+        $raw = substr(preg_replace('/\s+/', ' ', $context['response']), 0, 400);
+    }
+
+    $line = '[' . date('c') . '] ' . $action . ': ' . $message;
+    if ($http !== null && $http > 0) {
+        $line .= ' (HTTP ' . $http . ')';
+    }
+    if ($raw !== '') {
+        $line .= ' | ' . $raw;
+    }
+
+    $path = $dir . '/ai_studio_greetings.log';
+    file_put_contents($path, $line . PHP_EOL, FILE_APPEND | LOCK_EX);
+}
+
 function ai_greetings_file(): string
 {
     return ai_storage_dir() . '/greetings.json';
@@ -3292,47 +3401,80 @@ function ai_greeting_extract_json(string $text): ?array
         $decoded = json_decode($clean, true, 512, JSON_THROW_ON_ERROR);
         return is_array($decoded) ? $decoded : null;
     } catch (Throwable $exception) {
+        $start = strpos($clean, '{');
+        $end = strrpos($clean, '}');
+        if ($start !== false && $end !== false && $end > $start) {
+            $slice = substr($clean, $start, $end - $start + 1);
+            try {
+                $decoded = json_decode($slice, true, 512, JSON_THROW_ON_ERROR);
+                return is_array($decoded) ? $decoded : null;
+            } catch (Throwable $ignored) {
+                return null;
+            }
+        }
         return null;
     }
 }
 
 function ai_greeting_generate_text(array $settings, array $context): array
 {
-    $videoStatus = ai_gemini_validate_video_model($settings);
-    $prompt = ai_greeting_prompt($context);
+    try {
+        $videoStatus = ai_gemini_validate_video_model($settings);
+        $prompt = ai_greeting_prompt($context);
 
-    $needsStoryboard = in_array($context['media_type'] ?? 'image', ['video', 'both'], true)
-        && !($videoStatus['configured'] ?? false);
+        $needsStoryboard = in_array($context['media_type'] ?? 'image', ['video', 'both'], true)
+            && !($videoStatus['configured'] ?? false);
 
-    if ($needsStoryboard) {
-        $prompt .= ' If video model is unavailable, also include a concise storyboard JSON under key storyboard with frames.';
-    }
+        if ($needsStoryboard) {
+            $prompt .= ' If video model is unavailable, also include a concise storyboard JSON under key storyboard with frames.';
+        }
 
-    $raw = ai_gemini_generate_text($settings, $prompt);
-    $decoded = ai_greeting_extract_json($raw);
+        $raw = ai_gemini_generate_text($settings, $prompt, [
+            'timeout' => 90,
+            'retries' => 2,
+            'retry_delay' => 2,
+            'retry_http_codes' => [429, 500, 502, 503, 504],
+            'connect_timeout' => 20,
+            'debug_label' => 'greetings-text',
+        ]);
+        $decoded = ai_greeting_extract_json($raw);
 
-    if (!is_array($decoded)) {
         $captions = [];
-        foreach (preg_split('/\r?\n/', $raw) as $line) {
-            $line = trim((string) $line);
-            if ($line !== '' && count($captions) < 3) {
-                $captions[] = $line;
+        $longText = '';
+        $smsText = '';
+        $storyboard = null;
+
+        if (!is_array($decoded)) {
+            foreach (preg_split('/\r?\n/', $raw) as $line) {
+                $line = trim((string) $line);
+                if ($line !== '' && count($captions) < 3) {
+                    $captions[] = $line;
+                }
             }
+            $longText = ai_clean_text_output($raw, $context['use_brand_profile'] ? ($context['brand_snapshot'] ?? []) : []);
+            $smsText = substr($longText, 0, 160);
+        } else {
+            $captions = ai_clean_paragraphs(array_values(array_filter($decoded['captions'] ?? [])), $context['use_brand_profile'] ? ($context['brand_snapshot'] ?? []) : []);
+            $longText = ai_clean_text_output((string) ($decoded['long_text'] ?? ''), $context['use_brand_profile'] ? ($context['brand_snapshot'] ?? []) : []);
+            $smsText = ai_clean_text_output((string) ($decoded['sms_text'] ?? ''), $context['use_brand_profile'] ? ($context['brand_snapshot'] ?? []) : []);
+            $storyboard = is_array($decoded['storyboard'] ?? null) ? $decoded['storyboard'] : null;
+        }
+
+        if (empty($captions) || $longText === '' || $smsText === '') {
+            ai_greetings_log('greetings-text', 'Text generation returned empty content.', ['response' => $raw]);
+            throw new RuntimeException('Text generation returned empty content. Please try again.');
         }
 
         return [
-            'captions' => ai_clean_paragraphs($captions, $context['use_brand_profile'] ? ($context['brand_snapshot'] ?? []) : []),
-            'long_text' => ai_clean_text_output($raw, $context['use_brand_profile'] ? ($context['brand_snapshot'] ?? []) : []),
-            'sms_text' => substr(ai_clean_text_output($raw, $context['use_brand_profile'] ? ($context['brand_snapshot'] ?? []) : []), 0, 160),
+            'captions' => $captions,
+            'long_text' => $longText,
+            'sms_text' => $smsText,
+            'storyboard' => $storyboard,
         ];
+    } catch (Throwable $exception) {
+        ai_greetings_log('greetings-text', $exception->getMessage());
+        throw $exception;
     }
-
-    return [
-        'captions' => ai_clean_paragraphs(array_values(array_filter($decoded['captions'] ?? [])), $context['use_brand_profile'] ? ($context['brand_snapshot'] ?? []) : []),
-        'long_text' => ai_clean_text_output((string) ($decoded['long_text'] ?? ''), $context['use_brand_profile'] ? ($context['brand_snapshot'] ?? []) : []),
-        'sms_text' => ai_clean_text_output((string) ($decoded['sms_text'] ?? ''), $context['use_brand_profile'] ? ($context['brand_snapshot'] ?? []) : []),
-        'storyboard' => is_array($decoded['storyboard'] ?? null) ? $decoded['storyboard'] : null,
-    ];
 }
 
 function ai_greeting_generate_storyboard(array $settings, array $context): array
@@ -3366,8 +3508,22 @@ function ai_greeting_generate_storyboard(array $settings, array $context): array
 
 function ai_greeting_generate_image(array $settings, array $context): array
 {
-    $prompt = ai_greeting_prompt($context, true);
-    return ai_gemini_generate_image($settings, $prompt);
+    try {
+        $prompt = ai_greeting_prompt($context, true);
+        return ai_gemini_generate_image($settings, $prompt, [
+            'debug_label' => 'greetings-image',
+            'http' => [
+                'timeout' => 120,
+                'connect_timeout' => 20,
+                'retries' => 2,
+                'retry_delay' => 2,
+                'retry_http_codes' => [429, 500, 502, 503, 504],
+            ],
+        ]);
+    } catch (Throwable $exception) {
+        ai_greetings_log('greetings-image', $exception->getMessage());
+        throw $exception;
+    }
 }
 
 function ai_greeting_generate_video(array $settings, array $context, array $videoStatus): array
@@ -3382,7 +3538,9 @@ function ai_greeting_generate_video(array $settings, array $context, array $vide
     }
 
     try {
-        $media = ai_gemini_generate_video($settings, $prompt);
+        $media = ai_gemini_generate_video($settings, $prompt, [
+            'debug_label' => 'greetings-video',
+        ]);
         return [
             'mode' => 'video',
             'video' => $media,

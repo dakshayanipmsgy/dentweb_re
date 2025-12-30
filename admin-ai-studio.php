@@ -620,6 +620,7 @@ if ($flashMessage !== '') {
               </div>
               <div class="ai-greetings__meta" data-greetings-context></div>
             </header>
+            <div class="ai-settings__feedback ai-settings__feedback--info" data-greetings-feedback hidden></div>
             <div class="ai-greetings__preview-body">
               <div class="ai-greetings__text" data-greetings-text>
                 <div class="ai-greetings__stack" data-greetings-captions></div>
@@ -629,6 +630,10 @@ if ($flashMessage !== '') {
               <div class="ai-greetings__media" data-greetings-media-area></div>
             </div>
             <div class="ai-greetings__footer-actions">
+              <button type="button" class="btn btn-ghost btn-sm" data-greetings-retry-image hidden>
+                <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+                Retry image only
+              </button>
               <button type="button" class="btn btn-primary btn-sm" data-greetings-save>
                 <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
                 Save greeting
@@ -3802,6 +3807,8 @@ if ($flashMessage !== '') {
         const calendarSelection = document.querySelector('[data-greetings-calendar-selection]');
         const upcomingList = document.querySelector('[data-greetings-upcoming]');
           const savedList = document.querySelector('[data-greetings-saved]');
+          const feedbackBox = document.querySelector('[data-greetings-feedback]');
+          const retryImageBtn = document.querySelector('[data-greetings-retry-image]');
 
           const greetingState = {
             context: {
@@ -3827,6 +3834,9 @@ if ($flashMessage !== '') {
           auto: { enabled: false, days_before: 3 },
             lastSavedId: null,
           };
+          let lastMediaPayload = null;
+          let textInFlight = false;
+          let mediaInFlight = false;
 
           function toggleCustomOccasionField() {
             if (!customOccasion || !occasionSelect) return;
@@ -3841,6 +3851,25 @@ if ($flashMessage !== '') {
           if (statusEl) {
             statusEl.textContent = message;
           }
+        }
+
+        function setFeedback(message, tone = 'info') {
+          if (!feedbackBox) return;
+          if (!message) {
+            feedbackBox.hidden = true;
+            feedbackBox.textContent = '';
+            feedbackBox.className = 'ai-settings__feedback ai-settings__feedback--info';
+            return;
+          }
+          feedbackBox.hidden = false;
+          feedbackBox.textContent = message;
+          feedbackBox.className = `ai-settings__feedback ai-settings__feedback--${tone}`;
+        }
+
+        function setRetryImageVisible(visible) {
+          if (!retryImageBtn) return;
+          retryImageBtn.hidden = !visible;
+          retryImageBtn.disabled = !visible;
         }
 
         function syncVideoMeta(meta) {
@@ -4448,6 +4477,9 @@ if ($flashMessage !== '') {
         }
 
         async function generateGreetingText() {
+          if (textInFlight) {
+            return;
+          }
           const context = readContextFromForm();
           const issues = validateContext(context);
           if (issues.length) {
@@ -4455,8 +4487,12 @@ if ($flashMessage !== '') {
             return;
           }
           try {
+            textInFlight = true;
             generateTextBtn.disabled = true;
             generateTextBtn.textContent = 'Generating…';
+            setRetryImageVisible(false);
+            setStatus('Generating text…');
+            setFeedback('Generating greeting text…', 'info');
             const response = await fetch('api/gemini.php?action=greetings-generate-text', {
               method: 'POST',
               headers: {
@@ -4466,12 +4502,10 @@ if ($flashMessage !== '') {
               credentials: 'same-origin',
               body: JSON.stringify(context),
             });
-            if (!response.ok) {
-              throw new Error('Gemini could not generate text.');
-            }
-            const payload = await response.json();
-            if (!payload || !payload.success) {
-              throw new Error(payload && payload.error ? payload.error : 'Text generation failed.');
+            const payload = await response.json().catch(() => null);
+            if (!response.ok || !payload || !payload.success) {
+              const msg = payload && payload.error ? payload.error : `Gemini could not generate text (HTTP ${response.status}).`;
+              throw new Error(msg);
             }
             greetingState.context = payload.context || context;
             greetingState.text = payload.text;
@@ -4485,29 +4519,51 @@ if ($flashMessage !== '') {
               showToast('Brand Profile missing — generated text is generic until you add brand details.', 'warning');
             }
             greetingState.lastSavedId = null;
+            lastMediaPayload = null;
             renderPreview();
+            setFeedback('Greeting text ready. Proceed to generate media.', 'success');
+            setStatus('Text generated');
             showToast('Greeting text ready.', 'success');
           } catch (error) {
             console.error(error);
+            setStatus('Text generation failed');
+            setFeedback(error.message || 'Could not generate greeting text.', 'error');
             showToast('Could not generate greeting. Please check Gemini settings or try again.', 'error');
           } finally {
+            textInFlight = false;
             generateTextBtn.disabled = false;
             generateTextBtn.textContent = 'Generate Greeting';
           }
         }
 
-        async function generateGreetingMedia() {
-          const context = readContextFromForm();
+        async function generateGreetingMedia(payloadOverride = null) {
+          if (mediaInFlight) {
+            return;
+          }
+          if (!greetingState.text) {
+            setFeedback('Generate greeting text first so media and copy stay in sync.', 'warning');
+            showToast('Create greeting text before generating media.', 'warning');
+            return;
+          }
+          const context = payloadOverride && payloadOverride.context ? payloadOverride.context : readContextFromForm();
           const issues = validateContext(context);
           if (issues.length) {
             showToast(issues.join(' '), 'warning');
             return;
           }
           try {
+            mediaInFlight = true;
             generateMediaBtn.disabled = true;
             generateMediaBtn.textContent = 'Generating…';
-            const wantImage = context.media_type === 'image' || context.media_type === 'both';
-            const wantVideo = context.media_type === 'video' || context.media_type === 'both';
+            const wantImage = payloadOverride && typeof payloadOverride.want_image === 'boolean'
+              ? payloadOverride.want_image
+              : (context.media_type === 'image' || context.media_type === 'both');
+            const wantVideo = payloadOverride && typeof payloadOverride.want_video === 'boolean'
+              ? payloadOverride.want_video
+              : (context.media_type === 'video' || context.media_type === 'both');
+            lastMediaPayload = { context, want_image: wantImage, want_video: wantVideo };
+            setStatus('Generating media…');
+            setFeedback('Generating media with Gemini…', 'info');
             const response = await fetch('api/gemini.php?action=greetings-generate-media', {
               method: 'POST',
               headers: {
@@ -4517,12 +4573,10 @@ if ($flashMessage !== '') {
               credentials: 'same-origin',
               body: JSON.stringify({ ...context, want_image: wantImage, want_video: wantVideo }),
             });
-            if (!response.ok) {
-              throw new Error('Gemini could not generate media.');
-            }
-            const payload = await response.json();
-            if (!payload || !payload.success) {
-              throw new Error(payload && payload.error ? payload.error : 'Media generation failed.');
+            const payload = await response.json().catch(() => null);
+            if (!response.ok || !payload || !payload.success) {
+              const msg = payload && payload.error ? payload.error : `Gemini could not generate media (HTTP ${response.status}).`;
+              throw new Error(msg);
             }
             greetingState.context = payload.context || context;
             greetingState.image = payload.image || null;
@@ -4537,17 +4591,28 @@ if ($flashMessage !== '') {
             }
             greetingState.lastSavedId = null;
             renderPreview();
+            const mediaSuccess = greetingState.image || greetingState.video || greetingState.storyboard;
+            setFeedback(mediaSuccess ? 'Media updated successfully.' : 'Media generated without attachments.', mediaSuccess ? 'success' : 'warning');
+            setRetryImageVisible(false);
+            setStatus('Media generated');
             showToast('Media updated.', 'success');
           } catch (error) {
             console.error(error);
+            setStatus('Media generation failed');
+            setFeedback(error.message || 'Could not generate media.', 'error');
+            setRetryImageVisible(!!lastMediaPayload);
             showToast('Could not generate media. Please check Gemini settings or try again.', 'error');
           } finally {
+            mediaInFlight = false;
             generateMediaBtn.disabled = false;
             generateMediaBtn.textContent = 'Generate Media';
           }
         }
 
         async function regenerateGreetingImageWithFix(fixText, buttonEl) {
+          if (mediaInFlight) {
+            return;
+          }
           const baseContext = greetingState.context && greetingState.context.occasion ? greetingState.context : readContextFromForm();
           const context = {
             ...baseContext,
@@ -4557,9 +4622,13 @@ if ($flashMessage !== '') {
           };
           const payload = { ...context, want_image: true, want_video: false };
           try {
+            mediaInFlight = true;
+            lastMediaPayload = { context, want_image: true, want_video: false };
             if (buttonEl) {
               buttonEl.disabled = true;
             }
+            setStatus('Regenerating image…');
+            setFeedback('Applying fixes and regenerating image…', 'info');
             const response = await fetch('api/gemini.php?action=greetings-generate-media', {
               method: 'POST',
               headers: {
@@ -4569,12 +4638,10 @@ if ($flashMessage !== '') {
               credentials: 'same-origin',
               body: JSON.stringify(payload),
             });
-            if (!response.ok) {
-              throw new Error('Gemini could not generate media.');
-            }
-            const result = await response.json();
-            if (!result || !result.success) {
-              throw new Error(result && result.error ? result.error : 'Image regeneration failed.');
+            const result = await response.json().catch(() => null);
+            if (!response.ok || !result || !result.success) {
+              const msg = result && result.error ? result.error : `Gemini could not generate media (HTTP ${response.status}).`;
+              throw new Error(msg);
             }
             greetingState.context = result.context || context;
             greetingState.image = result.image || greetingState.image;
@@ -4585,15 +4652,36 @@ if ($flashMessage !== '') {
               showToast('Brand Profile missing — media prompts are generic until you add brand details.', 'warning');
             }
             renderPreview();
+            setFeedback('Image regenerated with fixes.', 'success');
+            setRetryImageVisible(false);
+            setStatus('Image regenerated');
             showToast('Image regenerated with fixes.', 'success');
           } catch (error) {
             console.error(error);
+            setStatus('Image regeneration failed');
+            setFeedback(error.message || 'Image regeneration failed. Please try again or adjust fix instructions.', 'error');
+            setRetryImageVisible(!!lastMediaPayload);
             showToast('Image regeneration failed. Please try again or adjust fix instructions.', 'error');
           } finally {
             if (buttonEl) {
               buttonEl.disabled = false;
             }
+            mediaInFlight = false;
           }
+        }
+
+        async function retryLastMedia() {
+          if (!lastMediaPayload) {
+            showToast('No media request to retry.', 'warning');
+            return;
+          }
+          if (lastMediaPayload.context) {
+            applyContextToForm(lastMediaPayload.context);
+            renderContextMeta();
+          }
+          setFeedback('Retrying last media request…', 'info');
+          setStatus('Retrying media…');
+          await generateGreetingMedia(lastMediaPayload);
         }
 
         async function saveGreeting(source = 'manual', silent = false) {
@@ -4743,6 +4831,9 @@ if ($flashMessage !== '') {
         }
         if (generateMediaBtn) {
           generateMediaBtn.addEventListener('click', generateGreetingMedia);
+        }
+        if (retryImageBtn) {
+          retryImageBtn.addEventListener('click', retryLastMedia);
         }
         if (formEl) {
           formEl.addEventListener('change', readContextFromForm);
