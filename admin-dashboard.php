@@ -87,11 +87,7 @@ $employees = $employeeStore->listEmployees();
 
 $taskErrors = [];
 $taskSuccess = '';
-$taskLoadMessages = [];
-$tasks = tasks_load_all($taskLoadMessages);
-if ($taskLoadMessages !== []) {
-    $taskErrors = array_merge($taskErrors, $taskLoadMessages);
-}
+$tasks = tasks_load_all();
 $today = new DateTimeImmutable('today');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -172,18 +168,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'archived_flag' => false,
             ];
 
-            $saveErrors = [];
-            if (tasks_save_all($tasks, $saveErrors)) {
-                $taskSuccess = sprintf(
-                    'Task assigned to %s. Total tasks saved: %d. Last ID: %s. Storage: %s',
-                    (string) ($assignedEmployee['name'] ?? $assignedEmployee['login_id'] ?? $assignedEmployeeId),
-                    count($tasks),
-                    $taskId,
-                    tasks_file_path()
-                );
-            } else {
-                $taskErrors = array_merge($taskErrors, $saveErrors);
-            }
+            tasks_save_all($tasks);
+            $taskSuccess = 'Task assigned successfully.';
         }
     } elseif ($taskAction === 'admin_complete_task') {
         $taskId = (string) ($_POST['task_id'] ?? '');
@@ -223,16 +209,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $tasks[$index]['status'] = 'Open';
             }
 
-            $saveErrors = [];
-            if (tasks_save_all($tasks, $saveErrors)) {
-                $taskSuccess = sprintf(
-                    'Task marked as completed. Total tasks saved: %d. Storage: %s',
-                    count($tasks),
-                    tasks_file_path()
-                );
-            } else {
-                $taskErrors = array_merge($taskErrors, $saveErrors);
-            }
+            tasks_save_all($tasks);
+            $taskSuccess = 'Task marked as completed.';
             break;
         }
     } elseif ($taskAction === 'admin_archive_task') {
@@ -243,16 +221,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $tasks[$index]['archived_flag'] = true;
             $tasks[$index]['updated_at'] = date('Y-m-d H:i:s');
-            $saveErrors = [];
-            if (tasks_save_all($tasks, $saveErrors)) {
-                $taskSuccess = sprintf(
-                    'Task archived. Total tasks saved: %d. Storage: %s',
-                    count($tasks),
-                    tasks_file_path()
-                );
-            } else {
-                $taskErrors = array_merge($taskErrors, $saveErrors);
-            }
+            tasks_save_all($tasks);
+            $taskSuccess = 'Task archived.';
             break;
         }
     }
@@ -284,10 +254,11 @@ $filteredTasks = array_values(array_filter($tasks, static function (array $task)
         return false;
     }
 
-    $effectiveDueDate = tasks_effective_due_date($task, $today);
-    $isOverdue = $status !== 'completed' && $effectiveDueDate < $today;
-    $isToday = $status !== 'completed' && $effectiveDueDate->format('Y-m-d') === $today->format('Y-m-d');
-    $isUpcoming = $status !== 'completed' && $effectiveDueDate > $today;
+    $nextDueDateString = (string) ($task['next_due_date'] ?? ($task['due_date'] ?? ''));
+    $nextDueDate = $nextDueDateString !== '' ? tasks_parse_date($nextDueDateString, $today) : $today;
+    $isOverdue = $status !== 'completed' && $nextDueDate < $today;
+    $isToday = $status !== 'completed' && $nextDueDate->format('Y-m-d') === $today->format('Y-m-d');
+    $isUpcoming = $status !== 'completed' && $nextDueDate > $today;
 
     if ($taskDueFilter === 'overdue' && !$isOverdue) {
         return false;
@@ -303,35 +274,38 @@ $filteredTasks = array_values(array_filter($tasks, static function (array $task)
 }));
 
 usort($filteredTasks, static function (array $left, array $right) use ($today): int {
-    $leftDue = tasks_effective_due_date($left, $today);
-    $rightDue = tasks_effective_due_date($right, $today);
+    $leftDue = tasks_parse_date((string) ($left['next_due_date'] ?? $left['due_date'] ?? $today->format('Y-m-d')), $today);
+    $rightDue = tasks_parse_date((string) ($right['next_due_date'] ?? $right['due_date'] ?? $today->format('Y-m-d')), $today);
     return strcmp($leftDue->format('Y-m-d'), $rightDue->format('Y-m-d'));
 });
 
 $activeTasks = array_filter($tasks, static fn(array $task): bool => !(bool) ($task['archived_flag'] ?? false));
 $overdueTaskCount = count(array_filter($activeTasks, static function (array $task) use ($today): bool {
     $status = strtolower((string) ($task['status'] ?? 'open'));
-    if ($status === 'completed') {
-        return false;
-    }
-    $effectiveDueDate = tasks_effective_due_date($task, $today);
-    return $effectiveDueDate < $today;
+    $nextDueDateString = (string) ($task['next_due_date'] ?? ($task['due_date'] ?? ''));
+    $nextDueDate = $nextDueDateString !== '' ? tasks_parse_date($nextDueDateString, $today) : $today;
+    return $status !== 'completed' && $nextDueDate < $today;
 }));
 
-$weekWindowStart = $today->setTime(0, 0)->modify('-6 days');
-$weekWindowEnd = $today->setTime(23, 59, 59);
-$completedThisWeekCount = 0;
-foreach ($activeTasks as $task) {
-    $completedThisWeekCount += tasks_recent_completion_count($task, $weekWindowStart, $weekWindowEnd);
-}
+$completedThisWeekCount = count(array_filter($activeTasks, static function (array $task) use ($today): bool {
+    $lastCompleted = (string) ($task['last_completed_at'] ?? '');
+    if ($lastCompleted === '') {
+        return false;
+    }
+    try {
+        $completedAt = new DateTimeImmutable($lastCompleted);
+    } catch (Throwable $exception) {
+        return false;
+    }
+    $weekStart = $today->modify('monday this week');
+    return $completedAt >= $weekStart && $completedAt <= $today->modify('+1 day');
+}));
 
 $pendingTodayCount = count(array_filter($activeTasks, static function (array $task) use ($today): bool {
     $status = strtolower((string) ($task['status'] ?? 'open'));
-    if ($status === 'completed') {
-        return false;
-    }
-    $effectiveDueDate = tasks_effective_due_date($task, $today);
-    return $effectiveDueDate->format('Y-m-d') === $today->format('Y-m-d');
+    $nextDueDateString = (string) ($task['next_due_date'] ?? ($task['due_date'] ?? ''));
+    $nextDueDate = $nextDueDateString !== '' ? tasks_parse_date($nextDueDateString, $today) : $today;
+    return $status !== 'completed' && $nextDueDate->format('Y-m-d') === $today->format('Y-m-d');
 }));
 
 $employeeCompletionCounts = [];
