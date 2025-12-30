@@ -16,6 +16,13 @@ if (!$loggedInAdmin && !$loggedInEmployee) {
     exit;
 }
 
+$homeUrl = '/admin-dashboard.php';
+if ($loggedInEmployee && !$loggedInAdmin) {
+    $homeUrl = '/employee-dashboard.php';
+} elseif ($loggedInAdmin) {
+    $homeUrl = '/admin-dashboard.php';
+}
+
 $employeeStore = new EmployeeFsStore();
 $employees = $employeeStore->listEmployees();
 $customerStore = new CustomerFsStore();
@@ -342,10 +349,10 @@ $ratings = ['Hot', 'Warm', 'Cold'];
           <h1>Leads Dashboard</h1>
           <p style="margin:0;color:#4b5563;">Quickly add new leads and manage follow-ups.</p>
         </div>
-        <button type="button" class="back-button" onclick="history.back();" aria-label="Go back">
+        <a class="back-button" href="<?php echo leads_safe($homeUrl); ?>" aria-label="Back to dashboard">
           <span aria-hidden="true">&larr;</span>
-          Back
-        </button>
+          Back to Dashboard
+        </a>
       </div>
     </div>
 
