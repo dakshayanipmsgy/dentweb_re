@@ -87,21 +87,24 @@ $employees = $employeeStore->listEmployees();
 
 $taskErrors = [];
 $taskSuccess = '';
-$tasks = tasks_load_all();
+$taskWarnings = [];
+$tasks = tasks_load_all($taskWarnings);
 $today = new DateTimeImmutable('today');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $taskAction = (string) ($_POST['task_action'] ?? '');
     if ($taskAction === 'admin_create_task') {
-        $title = trim((string) ($_POST['task_title'] ?? ''));
-        $description = trim((string) ($_POST['task_description'] ?? ''));
-        $priorityInput = strtolower((string) ($_POST['task_priority'] ?? ''));
+        $taskSuccess = 'Task submission received.';
+
+        $title = trim((string) ($_POST['title'] ?? ''));
+        $description = trim((string) ($_POST['description'] ?? ''));
+        $priorityInput = strtolower((string) ($_POST['priority'] ?? ''));
         $priority = in_array($priorityInput, ['low', 'medium', 'high'], true) ? ucfirst($priorityInput) : 'Low';
-        $frequency = (string) ($_POST['task_frequency'] ?? 'once');
-        $customDays = (int) ($_POST['task_custom_days'] ?? 0);
-        $startDateInput = trim((string) ($_POST['task_start_date'] ?? ''));
-        $dueDateInput = trim((string) ($_POST['task_due_date'] ?? ''));
-        $assignedEmployeeId = trim((string) ($_POST['assigned_to_employee'] ?? ''));
+        $frequency = strtolower((string) ($_POST['frequency_type'] ?? 'once'));
+        $customDays = (int) ($_POST['frequency_custom_days'] ?? 0);
+        $startDateInput = trim((string) ($_POST['start_date'] ?? ''));
+        $dueDateInput = trim((string) ($_POST['due_date'] ?? ''));
+        $assignedEmployeeId = trim((string) ($_POST['assigned_to_employee_id'] ?? ''));
 
         if ($title === '') {
             $taskErrors[] = 'Title is required.';
@@ -112,17 +115,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $allowedFrequencies = ['once', 'daily', 'weekly', 'monthly', 'custom'];
         if (!in_array($frequency, $allowedFrequencies, true)) {
-            $frequency = 'once';
+            $taskErrors[] = 'Frequency type is invalid.';
         }
         if ($frequency === 'custom' && $customDays <= 0) {
             $taskErrors[] = 'Please provide the number of days for the custom frequency.';
         }
 
-        $startDate = tasks_parse_date($startDateInput, new DateTimeImmutable('today'));
-        $chosenDueDate = $dueDateInput !== '' ? tasks_parse_date($dueDateInput, $startDate) : $startDate;
+        $startDate = DateTimeImmutable::createFromFormat('Y-m-d', $startDateInput) ?: null;
+        if ($startDate === null) {
+            $taskErrors[] = 'Start date is invalid.';
+            $startDate = new DateTimeImmutable('today');
+        }
+
+        $dueDate = null;
+        if ($frequency === 'once') {
+            $dueDate = DateTimeImmutable::createFromFormat('Y-m-d', $dueDateInput) ?: null;
+            if ($dueDate === null) {
+                $taskErrors[] = 'Due date is required for one-time tasks.';
+                $dueDate = $startDate;
+            }
+        } elseif ($dueDateInput !== '') {
+            $dueDate = DateTimeImmutable::createFromFormat('Y-m-d', $dueDateInput) ?: $startDate;
+        }
         $nextDueDate = $frequency === 'once'
-            ? $chosenDueDate
-            : tasks_parse_date($dueDateInput !== '' ? $dueDateInput : $startDate->format('Y-m-d'), $startDate);
+            ? ($dueDate ?? $startDate)
+            : tasks_next_due_date($frequency, $startDate, $customDays);
 
         $assignedEmployee = null;
         foreach ($employees as $employeeRow) {
@@ -158,7 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'frequency_type' => $frequency,
                 'frequency_custom_days' => $frequency === 'custom' ? $customDays : 0,
                 'start_date' => $startDate->format('Y-m-d'),
-                'due_date' => $chosenDueDate->format('Y-m-d'),
+                'due_date' => $frequency === 'once' ? ($dueDate ? $dueDate->format('Y-m-d') : $startDate->format('Y-m-d')) : '',
                 'next_due_date' => $nextDueDate->format('Y-m-d'),
                 'last_completed_at' => '',
                 'status' => 'Open',
@@ -168,8 +185,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'archived_flag' => false,
             ];
 
-            tasks_save_all($tasks);
-            $taskSuccess = 'Task assigned successfully.';
+            $saveErrors = [];
+            $saved = tasks_save_all($tasks, $saveErrors);
+            if ($saved) {
+                tasks_log_event('create', 'success', sprintf('Task %s assigned to %s by admin %s', $taskId, $assignedEmployeeId, (string) ($user['id'] ?? '')));
+                set_flash('success', 'Task assigned to ' . ($assignedEmployee['name'] ?? $assignedEmployee['login_id'] ?? 'employee') . ' successfully.');
+                header('Location: ' . ($_SERVER['REQUEST_URI'] ?? 'admin-dashboard.php'));
+                exit;
+            }
+
+            if ($saveErrors !== []) {
+                $taskErrors = array_merge($taskErrors, $saveErrors);
+            } else {
+                $taskErrors[] = 'Failed to save the task.';
+            }
+            tasks_log_event('create', 'error', implode(' ', $taskErrors));
+        } else {
+            tasks_log_event('create', 'error', 'Validation failed: ' . implode(' ', $taskErrors));
         }
     } elseif ($taskAction === 'admin_complete_task') {
         $taskId = (string) ($_POST['task_id'] ?? '');
@@ -209,8 +241,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $tasks[$index]['status'] = 'Open';
             }
 
-            tasks_save_all($tasks);
-            $taskSuccess = 'Task marked as completed.';
+            $saveErrors = [];
+            if (tasks_save_all($tasks, $saveErrors)) {
+                $taskSuccess = 'Task marked as completed.';
+                tasks_log_event('complete', 'success', sprintf('Task %s completed by admin %s', $taskId, (string) ($user['id'] ?? '')));
+            } else {
+                $taskErrors = array_merge($taskErrors, $saveErrors);
+                tasks_log_event('complete', 'error', implode(' ', $saveErrors));
+            }
             break;
         }
     } elseif ($taskAction === 'admin_archive_task') {
@@ -221,8 +259,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $tasks[$index]['archived_flag'] = true;
             $tasks[$index]['updated_at'] = date('Y-m-d H:i:s');
-            tasks_save_all($tasks);
-            $taskSuccess = 'Task archived.';
+            $saveErrors = [];
+            if (tasks_save_all($tasks, $saveErrors)) {
+                $taskSuccess = 'Task archived.';
+                tasks_log_event('archive', 'success', sprintf('Task %s archived by admin %s', $taskId, (string) ($user['id'] ?? '')));
+            } else {
+                $taskErrors = array_merge($taskErrors, $saveErrors);
+                tasks_log_event('archive', 'error', implode(' ', $saveErrors));
+            }
             break;
         }
     }
@@ -665,6 +709,12 @@ $cardConfigs[] = [
       <div class="admin-task-card">
         <h2>Tasks</h2>
 
+        <?php if ($taskWarnings !== []): ?>
+          <div class="admin-alert admin-alert--warning" role="status" style="margin:0 0 0.75rem;">
+            <?= htmlspecialchars(implode(' ', $taskWarnings), ENT_QUOTES) ?>
+          </div>
+        <?php endif; ?>
+
         <?php if ($taskErrors !== []): ?>
           <div class="admin-alert admin-alert--error" role="alert" style="margin:0 0 0.75rem;">
             <?= htmlspecialchars(implode(' ', $taskErrors), ENT_QUOTES) ?>
@@ -824,7 +874,7 @@ $cardConfigs[] = [
           <input type="hidden" name="task_action" value="admin_create_task" />
 
           <label for="admin_assigned_to">Assign to Employee *</label>
-          <select id="admin_assigned_to" name="assigned_to_employee" required>
+          <select id="admin_assigned_to" name="assigned_to_employee_id" required>
             <option value="">Select employee</option>
             <?php foreach ($employees as $emp): ?>
               <option value="<?= htmlspecialchars((string) ($emp['id'] ?? ''), ENT_QUOTES) ?>">
@@ -834,20 +884,20 @@ $cardConfigs[] = [
           </select>
 
           <label for="admin_task_title">Title *</label>
-          <input id="admin_task_title" type="text" name="task_title" required />
+          <input id="admin_task_title" type="text" name="title" required />
 
           <label for="admin_task_description">Description</label>
-          <textarea id="admin_task_description" name="task_description"></textarea>
+          <textarea id="admin_task_description" name="description"></textarea>
 
           <label for="admin_task_priority">Priority</label>
-          <select id="admin_task_priority" name="task_priority">
+          <select id="admin_task_priority" name="priority">
             <option value="low">Low</option>
             <option value="medium" selected>Medium</option>
             <option value="high">High</option>
           </select>
 
           <label for="admin_task_frequency">Frequency</label>
-          <select id="admin_task_frequency" name="task_frequency">
+          <select id="admin_task_frequency" name="frequency_type">
             <option value="once">Once</option>
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
@@ -857,17 +907,22 @@ $cardConfigs[] = [
 
           <div id="admin_custom_days_wrapper" style="display:none;">
             <label for="admin_task_custom_days">Custom days (for custom frequency)</label>
-            <input id="admin_task_custom_days" type="number" name="task_custom_days" min="1" value="0" />
+            <input id="admin_task_custom_days" type="number" name="frequency_custom_days" min="1" value="0" />
           </div>
 
           <label for="admin_task_start_date">Start date</label>
-          <input id="admin_task_start_date" type="date" name="task_start_date" value="<?= htmlspecialchars($today->format('Y-m-d'), ENT_QUOTES) ?>" />
+          <input id="admin_task_start_date" type="date" name="start_date" value="<?= htmlspecialchars($today->format('Y-m-d'), ENT_QUOTES) ?>" />
 
           <label for="admin_task_due_date">Due date / Next due date</label>
-          <input id="admin_task_due_date" type="date" name="task_due_date" value="<?= htmlspecialchars($today->format('Y-m-d'), ENT_QUOTES) ?>" />
+          <input id="admin_task_due_date" type="date" name="due_date" value="<?= htmlspecialchars($today->format('Y-m-d'), ENT_QUOTES) ?>" />
 
           <button type="submit">Assign Task</button>
         </form>
+        <div class="admin-task-log" aria-live="polite">
+          <strong>Storage path debug:</strong><br />
+          Path: <?= htmlspecialchars(realpath(tasks_file_path()) ?: tasks_file_path(), ENT_QUOTES) ?><br />
+          Writable: <?= is_writable(tasks_storage_dir()) ? 'Yes' : 'No' ?>
+        </div>
       </div>
     </section>
 
