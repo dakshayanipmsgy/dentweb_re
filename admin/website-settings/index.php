@@ -4,12 +4,59 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/bootstrap.php';
 
+function website_settings_hero_public_root(): string
+{
+    return realpath(__DIR__ . '/../../') ?: dirname(__DIR__, 2);
+}
+
+function website_settings_hero_dir(): string
+{
+    return rtrim(website_settings_hero_public_root(), '/') . '/images/hero';
+}
+
+function website_settings_list_hero_images(string $dir, array $allowedExtensions): array
+{
+    if (!is_dir($dir)) {
+        return [];
+    }
+
+    $images = [];
+    $iterator = new DirectoryIterator($dir);
+    foreach ($iterator as $fileinfo) {
+        if ($fileinfo->isDot() || !$fileinfo->isFile()) {
+            continue;
+        }
+
+        $extension = strtolower($fileinfo->getExtension());
+        if (!in_array($extension, $allowedExtensions, true)) {
+            continue;
+        }
+
+        $images[] = [
+            'filename' => $fileinfo->getFilename(),
+            'mtime' => $fileinfo->getMTime(),
+            'url' => '/images/hero/' . $fileinfo->getFilename(),
+        ];
+    }
+
+    usort($images, static fn(array $a, array $b): int => $b['mtime'] <=> $a['mtime']);
+
+    return $images;
+}
+
 require_admin();
 start_session();
 if (!isset($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(16));
 }
 $csrfToken = $_SESSION['csrf_token'];
+
+$heroDir = website_settings_hero_dir();
+$allowedHeroExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+$maxHeroUploadBytes = 5 * 1024 * 1024;
+$heroDirReady = is_dir($heroDir) || mkdir($heroDir, 0775, true);
+$heroImages = $heroDirReady ? website_settings_list_hero_images($heroDir, $allowedHeroExtensions) : [];
+$uploadedHeroMessage = '';
 
 $settings = website_settings();
 $flashMessage = '';
@@ -149,6 +196,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'Seasonal offer title is required.';
         }
 
+        if (count($errors) === 0) {
+            $selectedHeroImage = trim((string) ($_POST['selected_hero_image'] ?? ''));
+            $heroPrimaryImage = $hero['primary_image'];
+
+            if (isset($_FILES['hero_image_upload']) && is_array($_FILES['hero_image_upload']) && ($_FILES['hero_image_upload']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+                $file = $_FILES['hero_image_upload'];
+
+                if (!$heroDirReady) {
+                    $errors[] = 'Hero images folder is not writable.';
+                } elseif (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+                    $errors[] = 'Hero image upload failed. Please try again.';
+                } elseif (($file['size'] ?? 0) > $maxHeroUploadBytes) {
+                    $errors[] = 'Hero image is too large. Maximum size is 5 MB.';
+                } elseif (!is_uploaded_file($file['tmp_name'] ?? '')) {
+                    $errors[] = 'Invalid upload request.';
+                } elseif (@getimagesize($file['tmp_name']) === false) {
+                    $errors[] = 'Please upload a valid image file.';
+                } else {
+                    $extension = strtolower(pathinfo($file['name'] ?? '', PATHINFO_EXTENSION));
+                    if (!in_array($extension, $allowedHeroExtensions, true)) {
+                        $errors[] = 'Unsupported hero image format. Allowed types: jpg, jpeg, png, webp.';
+                    } else {
+                        $newFilename = 'hero_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $extension;
+                        $targetPath = rtrim($heroDir, '/') . '/' . $newFilename;
+                        if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+                            $errors[] = 'Unable to save the uploaded hero image.';
+                        } else {
+                            @chmod($targetPath, 0664);
+                            $heroPrimaryImage = '/images/hero/' . $newFilename;
+                            $uploadedHeroMessage = 'Hero image uploaded and updated.';
+                        }
+                    }
+                }
+            }
+
+            if ($uploadedHeroMessage === '' && $selectedHeroImage !== '') {
+                $cleanName = basename($selectedHeroImage);
+                $extension = strtolower(pathinfo($cleanName, PATHINFO_EXTENSION));
+                $candidatePath = rtrim($heroDir, '/') . '/' . $cleanName;
+
+                if ($cleanName !== $selectedHeroImage || str_contains($cleanName, '..')) {
+                    $errors[] = 'Invalid hero image selection.';
+                } elseif (!in_array($extension, $allowedHeroExtensions, true) || !is_file($candidatePath)) {
+                    $errors[] = 'Selected hero image is not available.';
+                } else {
+                    $heroPrimaryImage = '/images/hero/' . $cleanName;
+                }
+            }
+
+            $hero['primary_image'] = $heroPrimaryImage;
+        }
+
         if (count($errors) > 0) {
             $flashMessage = implode(' ', $errors);
             $flashTone = 'error';
@@ -165,6 +264,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 website_settings_save($merged);
                 $settings = website_settings();
                 $flashMessage = 'Website content & theme saved successfully.';
+                if ($uploadedHeroMessage !== '') {
+                    $flashMessage .= ' ' . $uploadedHeroMessage;
+                }
                 $flashTone = 'success';
             } catch (Throwable $exception) {
                 $flashMessage = 'Unable to save settings: ' . $exception->getMessage();
@@ -172,6 +274,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+}
+
+$heroImages = $heroDirReady ? website_settings_list_hero_images($heroDir, $allowedHeroExtensions) : [];
+$currentHeroImage = $settings['hero']['primary_image'] ?? '';
+if ($currentHeroImage === '') {
+    $currentHeroImage = $defaults['hero']['primary_image'] ?? '';
 }
 
 $testimonialsJson = htmlspecialchars(json_encode($settings['testimonials'] ?? []), ENT_QUOTES, 'UTF-8');
@@ -219,8 +327,9 @@ $globalJson = htmlspecialchars(json_encode($settings['global'] ?? []), ENT_QUOTE
         </div>
       <?php endif; ?>
 
-      <form method="post" class="space-y-8" id="website-settings-form">
+      <form method="post" class="space-y-8" id="website-settings-form" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+        <input type="hidden" name="selected_hero_image" id="selected-hero-image" value="">
 
         <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
           <div class="flex items-center justify-between">
@@ -347,13 +456,59 @@ $globalJson = htmlspecialchars(json_encode($settings['global'] ?? []), ENT_QUOTE
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label class="block space-y-1">
               <span class="text-sm font-medium text-slate-700">Hero main image URL</span>
-              <input type="text" name="hero_primary_image" value="<?= htmlspecialchars($settings['hero']['primary_image'] ?? '') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500" placeholder="https://... or /images/...">
+              <input type="text" name="hero_primary_image" value="<?= htmlspecialchars($settings['hero']['primary_image'] ?? '') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500" placeholder="https://... or /images/..." id="hero-primary-image">
               <p class="text-xs text-slate-500">If left blank, the homepage will fall back to the default hero image.</p>
             </label>
             <label class="block space-y-1">
               <span class="text-sm font-medium text-slate-700">Hero image caption</span>
               <input type="text" name="hero_primary_caption" value="<?= htmlspecialchars($settings['hero']['primary_caption'] ?? '') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500" placeholder="Short caption visible under the hero image">
             </label>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="space-y-2 md:col-span-2">
+              <label class="block space-y-1">
+                <span class="text-sm font-medium text-slate-700">Upload new Hero Image</span>
+                <input type="file" name="hero_image_upload" accept="image/*" class="w-full text-sm text-slate-700">
+                <p class="text-xs text-slate-500">Images will be saved in /images/hero/ and you can reuse them later.</p>
+              </label>
+              <div class="space-y-1">
+                <p class="text-sm font-semibold text-slate-800">Choose from existing hero images</p>
+                <div class="border border-slate-200 rounded-xl p-3 bg-slate-50 space-y-3">
+                  <?php if (!$heroDirReady): ?>
+                    <p class="text-sm text-red-700">Hero images folder is not writable. Please check permissions.</p>
+                  <?php elseif (count($heroImages) === 0): ?>
+                    <p class="text-sm text-slate-600">No hero images found in /images/hero/. Upload one to get started.</p>
+                  <?php else: ?>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                      <?php foreach ($heroImages as $image): ?>
+                        <div class="border border-slate-200 bg-white rounded-lg overflow-hidden shadow-sm">
+                          <div class="aspect-video bg-slate-100">
+                            <img src="<?= htmlspecialchars($image['url']) ?>" alt="<?= htmlspecialchars($image['filename']) ?>" class="w-full h-full object-cover">
+                          </div>
+                          <div class="px-3 py-2 flex items-center justify-between space-x-2">
+                            <div class="min-w-0">
+                              <p class="text-xs font-medium text-slate-800 truncate" title="<?= htmlspecialchars($image['filename']) ?>"><?= htmlspecialchars($image['filename']) ?></p>
+                            </div>
+                            <button type="button" class="text-xs font-semibold text-emerald-700 hover:text-emerald-800 whitespace-nowrap" data-hero-select="<?= htmlspecialchars($image['filename']) ?>">Use this</button>
+                          </div>
+                        </div>
+                      <?php endforeach; ?>
+                    </div>
+                  <?php endif; ?>
+                </div>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <p class="text-sm font-semibold text-slate-800">Current Hero Image</p>
+              <div class="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+                <div class="aspect-video bg-white">
+                  <img src="<?= htmlspecialchars($currentHeroImage) ?>" alt="Current hero image" class="w-full h-full object-cover">
+                </div>
+                <div class="px-3 py-2">
+                  <p class="text-xs text-slate-600 break-all"><?= htmlspecialchars($currentHeroImage) ?></p>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label class="block space-y-1">
@@ -761,6 +916,28 @@ $globalJson = htmlspecialchars(json_encode($settings['global'] ?? []), ENT_QUOTE
           }
         }
       }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const heroInput = document.getElementById('hero-primary-image');
+        const selectedInput = document.getElementById('selected-hero-image');
+
+        if (heroInput && selectedInput) {
+          heroInput.addEventListener('input', () => {
+            selectedInput.value = '';
+          });
+        }
+
+        document.querySelectorAll('[data-hero-select]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const filename = button.getAttribute('data-hero-select');
+            if (!filename || !heroInput || !selectedInput) return;
+
+            const resolvedPath = `/images/hero/${filename}`;
+            heroInput.value = resolvedPath;
+            selectedInput.value = filename;
+          });
+        });
+      });
     </script>
   </body>
 </html>
