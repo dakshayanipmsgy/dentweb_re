@@ -54,20 +54,58 @@ function employee_dashboard_safe(string $value): string
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+function employee_tasks_storage_dir(): string
+{
+    return __DIR__ . '/data/tasks';
+}
+
+function employee_tasks_file_path(): string
+{
+    return employee_tasks_storage_dir() . '/tasks.json';
+}
+
+function employee_tasks_ensure_directory(): void
+{
+    $dir = employee_tasks_storage_dir();
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+}
+
+function load_tasks(): array
+{
+    return tasks_load_all();
+}
+
+function save_tasks(array $tasks): void
+{
+    tasks_save_all($tasks);
+}
+
+function generate_task_id(): string
+{
+    return tasks_generate_id();
+}
+
+function employee_dashboard_parse_date(string $value, ?DateTimeImmutable $fallback = null): DateTimeImmutable
+{
+    return tasks_parse_date($value, $fallback);
+}
+
+function employee_dashboard_next_due_date(string $frequency, DateTimeImmutable $currentDueDate, int $customDays): DateTimeImmutable
+{
+    return tasks_next_due_date($frequency, $currentDueDate, $customDays);
+}
+
 function employee_dashboard_frequency_label(array $task): string
 {
     return tasks_frequency_label($task);
 }
 
-$tz = tasks_timezone();
 $taskErrors = [];
 $taskSuccess = '';
-$tasksLoadError = null;
-$tasks = tasks_load_all($tasksLoadError);
-$today = new DateTimeImmutable('today', $tz);
-if ($tasksLoadError !== null) {
-    $taskErrors[] = $tasksLoadError;
-}
+$tasks = load_tasks();
+$today = new DateTimeImmutable('today');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) ($_POST['task_action'] ?? '');
@@ -80,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $frequency = (string) ($_POST['task_frequency'] ?? 'once');
         $customDays = (int) ($_POST['task_custom_days'] ?? 0);
         $startDateInput = trim((string) ($_POST['task_start_date'] ?? ''));
-        $startDate = tasks_parse_date($startDateInput !== '' ? $startDateInput : $today->format('Y-m-d'), $today, $tz);
+        $startDate = employee_dashboard_parse_date($startDateInput, new DateTimeImmutable('today'));
         $dueDateInput = trim((string) ($_POST['task_due_date'] ?? ''));
 
         if ($title === '') {
@@ -96,19 +134,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $taskErrors[] = 'Please provide the number of days for the custom frequency.';
         }
 
-        $chosenDueDate = $dueDateInput !== '' ? tasks_parse_date($dueDateInput, $startDate, $tz) : $startDate;
+        $chosenDueDate = $dueDateInput !== '' ? employee_dashboard_parse_date($dueDateInput, $startDate) : $startDate;
 
         if ($taskErrors === []) {
             $existingIds = array_column($tasks, 'id');
-            $taskId = tasks_generate_id();
+            $taskId = generate_task_id();
             while (in_array($taskId, $existingIds, true)) {
-                $taskId = tasks_generate_id();
+                $taskId = generate_task_id();
             }
 
             $baseTimestamps = date('Y-m-d H:i:s');
             $nextDueDate = $frequency === 'once'
                 ? $chosenDueDate
-                : tasks_parse_date($dueDateInput !== '' ? $dueDateInput : $startDate->format('Y-m-d'), $startDate, $tz);
+                : employee_dashboard_parse_date($dueDateInput !== '' ? $dueDateInput : $startDate->format('Y-m-d'), $startDate);
 
             $tasks[] = [
                 'id' => $taskId,
@@ -133,13 +171,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'archived_flag' => false,
             ];
 
-            $saveError = null;
-            if (tasks_save_all($tasks, $saveError)) {
-                $taskSuccess = 'Task created successfully.';
-            } else {
-                array_pop($tasks);
-                $taskErrors[] = $saveError ?? 'Could not save the new task.';
-            }
+            save_tasks($tasks);
+            $taskSuccess = 'Task created successfully.';
         }
     } elseif ($action === 'complete_task') {
         $taskId = (string) ($_POST['task_id'] ?? '');
@@ -169,24 +202,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $nextDueDateStr = (string) ($task['next_due_date'] ?? '');
             $dueDateFallback = (string) ($task['due_date'] ?? '');
             $currentDueDate = $nextDueDateStr !== ''
-                ? tasks_parse_date($nextDueDateStr, $today, $tz)
-                : tasks_parse_date($dueDateFallback !== '' ? $dueDateFallback : $today->format('Y-m-d'), $today, $tz);
+                ? employee_dashboard_parse_date($nextDueDateStr, $today)
+                : employee_dashboard_parse_date($dueDateFallback !== '' ? $dueDateFallback : $today->format('Y-m-d'), $today);
 
             if ($frequency === 'once') {
                 $tasks[$index]['status'] = 'Completed';
             } else {
                 $tasks[$index]['status'] = $status === 'Completed' ? 'Completed' : 'Open';
-                $newDueDate = tasks_next_due_date($frequency, $currentDueDate, $customDays);
+                $newDueDate = employee_dashboard_next_due_date($frequency, $currentDueDate, $customDays);
                 $tasks[$index]['next_due_date'] = $newDueDate->format('Y-m-d');
                 $tasks[$index]['due_date'] = $newDueDate->format('Y-m-d');
             }
 
-            $saveError = null;
-            if (tasks_save_all($tasks, $saveError)) {
-                $taskSuccess = 'Task marked as completed.';
-            } else {
-                $taskErrors[] = $saveError ?? 'Could not update the task status.';
-            }
+            save_tasks($tasks);
+            $taskSuccess = 'Task marked as completed.';
             break;
         }
     }
@@ -206,7 +235,8 @@ $groupedTasks = [
 
 foreach ($myTasks as $task) {
     $status = (string) ($task['status'] ?? 'Open');
-    $nextDueDate = tasks_effective_due_date($task, $today) ?? $today;
+    $nextDueDateString = (string) ($task['next_due_date'] ?? ($task['due_date'] ?? ''));
+    $nextDueDate = $nextDueDateString !== '' ? employee_dashboard_parse_date($nextDueDateString, $today) : $today;
     $key = 'upcoming';
 
     if (strcasecmp($status, 'Completed') === 0) {
