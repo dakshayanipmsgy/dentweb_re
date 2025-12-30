@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Advanced Solar Calculator & Finance | Dakshayani Enterprises</title>
+    <meta name="description" content="Calculate system size via units, bill, or load, get Viaan's advisory, and estimate EMI for rooftop solar in Jharkhand."/>
+
+    <link rel="icon" href="images/favicon.ico" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer"/>
+
+    <style>
+        /* --- New Tab Logic Styling --- */
+        #input-forms-container > form { display: none; }
+        #input-forms-container > form.active { display: block; }
+
+        /* Sequential Input Fields */
+        .hidden-step { opacity: 0; max-height: 0; overflow: hidden; transition: opacity 0.5s ease-in-out, max-height 0.5s ease-in-out, margin 0.5s ease-in-out; margin-top: 0 !important; margin-bottom: 0 !important; }
+        .hidden-step.show { opacity: 1; max-height: 200px; margin-top: 1.5rem !important; margin-bottom: 1.5rem !important; }
+        .hidden-step.show:not(.form-group) { margin-top: 1rem !important; margin-bottom: 0 !important; }
+
+        /* Calculator Specific Styles */
+        .calculator-hero { background: linear-gradient(135deg, var(--base-900), var(--base-700)); color: var(--surface); text-align: center; padding: 4rem 1rem; }
+        .calculator-panel { background: var(--surface); padding: 2rem; border-radius: 1rem; box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        .form-group label { display: block; font-weight: 700; margin-bottom: 0.5rem; color: var(--base-700); }
+        .form-group input, .form-group select { width: 100%; padding: 0.75rem; border: 1px solid var(--base-300); border-radius: 0.5rem; font-size: 1rem; transition: border-color 0.2s ease; }
+        .form-group input:focus, .form-group select:focus { border-color: var(--primary-main); outline: none; box-shadow: 0 0 0 2px rgba(0, 161, 214, 0.5); }
+        
+        .result-box { text-align: center; padding: 1.5rem; border-radius: 0.75rem; background: var(--primary-bg); margin-top: 1rem; border: 2px solid var(--primary-main); }
+        .result-value { font-size: 2rem; font-weight: 900; color: var(--base-900); margin-bottom: 0.25rem; }
+        .result-label { color: var(--base-700); font-weight: 600; font-size: 0.9rem; }
+        .ai-output-box { background: var(--alt-surface); padding: 1.5rem; border-radius: 0.75rem; border: 1px solid var(--base-300); min-height: 100px; }
+        .ai-output-box h3 { font-size: 1.25rem; font-weight: 800; margin-bottom: 0.75rem; }
+        .ai-output-box ul { list-style: disc; margin-left: 1.5rem; color: var(--base-600); }
+        .ai-footnote { margin-top: 0.75rem; font-size: 0.85rem; color: var(--base-500); }
+        .ai-footnote.error { color: #b91c1c; }
+        .ai-follow-up { margin-top: 1rem; font-weight: 600; color: var(--primary-dark); }
+        .loader { display: flex; align-items: center; justify-content: center; gap: 0.5rem; color: var(--base-600); }
+        
+        .tab-selector button { flex-grow: 1; padding: 0.75rem; border: 1px solid var(--base-300); border-radius: 0.5rem; font-weight: 600; background: var(--alt-surface); transition: all 0.2s ease; cursor: pointer; }
+        .tab-selector button.active { background: var(--primary-main); color: var(--surface); border-color: var(--primary-dark); }
+        .tts-button { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--primary-light); color: var(--base-900); border-radius: 0.5rem; font-weight: 600; transition: background 0.2s; border: none;}
+        .tts-button:hover { background: var(--primary-main); color: var(--surface); }
+
+        /* Message Box Styling */
+        .message-box, #rate-update-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); z-index: 1000; max-width: 90%; width: 600px; text-align: center; border: 2px solid var(--primary-main); display: none; }
+        .message-box button { margin-top: 15px; width: 100%; }
+        .rate-table-container { max-height: 60vh; overflow-y: auto; }
+        .rate-table { width: 100%; text-align: left; margin-top: 1rem; border-collapse: collapse; }
+        .rate-table th, .rate-table td { padding: 8px; border: 1px solid #ddd; }
+        .rate-table th { background-color: var(--primary-bg); }
+        .rate-table input { width: 100%; padding: 4px; border-radius: 4px; border: 1px solid #ccc; }
+
+        /* Support Content Enhancements */
+        .info-grid { display: grid; gap: 1.5rem; }
+        .info-card { background: var(--surface); border: 1px solid var(--base-300); border-radius: 0.75rem; padding: 1.5rem; box-shadow: 0 8px 16px rgba(0,0,0,0.05); }
+        .info-card h3 { font-size: 1.2rem; margin-bottom: 0.75rem; color: var(--base-800); }
+        .info-card p, .info-card li { color: var(--base-600); font-size: 0.95rem; }
+        .info-card ul { padding-left: 1.25rem; margin: 0.75rem 0 0; list-style: disc; }
+        @media (min-width: 768px) {
+            .info-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .info-card:last-child { grid-column: span 3; }
+        }
+    </style>
+</head>
+<body>
+    <div id="message-modal" class="message-box">
+        <p id="message-text" style="color: var(--base-900); font-weight: 600;"></p>
+        <button class="btn btn-primary" onclick="document.getElementById('message-modal').style.display = 'none';">OK</button>
+    </div>
+
+    <div id="rate-update-modal">
+        <h3 class="title">Update System Costs (₹)</h3>
+        <div class="rate-table-container">
+            <h4 class="font-semibold text-lg" style="margin-top: 1rem;">PM Surya Ghar Yojana (Residential)</h4>
+            <table id="pm-rates-table" class="rate-table"></table>
+            <h4 class="font-semibold text-lg" style="margin-top: 1rem;">Non-PM Surya Ghar (Commercial)</h4>
+            <table id="non-pm-rates-table" class="rate-table"></table>
+        </div>
+        <div class="flex gap-4" style="margin-top: 1.5rem;">
+            <button class="btn btn-secondary" style="flex-grow: 1;" onclick="closeRateModal()">Cancel</button>
+            <button class="btn btn-primary" style="flex-grow: 1;" onclick="saveRates()">Save Changes</button>
+        </div>
+    </div>
+
+    <header class="site-header"></header>
+
+    <main>
+        <section class="page-hero">
+            <div class="container hero-inner">
+                <div class="hero-copy">
+                    <span class="hero-eyebrow"><i class="fa-solid fa-calculator"></i> Savings calculator</span>
+                    <h1>Model your solar ROI in minutes</h1>
+                    <p class="lead" style="color:rgba(255,255,255,0.82);">Use Jharkhand-specific irradiation data to size your rooftop solar plant, estimate subsidies, and preview financing options.</p>
+                    <div class="hero-metrics">
+                        <div class="hero-metric">
+                            <span>5 kWh</span>
+                            <span>Daily output per kWp</span>
+                        </div>
+                        <div class="hero-metric">
+                            <span>₹78k</span>
+                            <span>Max PM Surya Ghar subsidy</span>
+                        </div>
+                        <div class="hero-metric">
+                            <span>3 Modes</span>
+                            <span>Bill, units, or load</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="hero-media" aria-hidden="true">
+                    <img src="images/finance.jpg" alt="Illustration of solar savings planning" loading="lazy" />
+                    <div class="caption">Finance desk · Customer advisory</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="container grid" style="grid-template-columns: 1fr; gap: 3rem;">
+                
+                <div class="calculator-panel">
+                    <div class="flex justify-between items-start">
+                         <h2 style="margin-top: 0; font-size: 1.8rem;">1. Choose Your Input Method</h2>
+                         <button class="btn btn-secondary !py-2 !px-3 text-sm" style="padding: 0.5rem 1rem;" onclick="openRateModal()"><i class="fa-solid fa-gear"></i> Update Costs</button>
+                    </div>
+                   
+                    <div class="tab-selector flex gap-2" style="margin-bottom: 1.5rem;">
+                        <button id="tab-units" class="active" onclick="showInputMethod('units')">Monthly Units</button>
+                        <button id="tab-bill" onclick="showInputMethod('bill')">Bill Amount & Rate</button>
+                        <button id="tab-load" onclick="showInputMethod('load')">Appliance Load</button>
+                    </div>
+
+                    <div id="input-forms-container">
+                        
+                        <form id="form-units" class="active" onsubmit="calculateSolar(event, 'units')">
+                            <div class="form-group">
+                                <label for="input-units">Monthly Units Consumed (kWh)</label>
+                                <input type="number" id="input-units" placeholder="e.g., 450 units" required min="1" oninput="checkFormSequential('units')" />
+                                <p style="font-size: 0.85rem; color: var(--base-600); margin-top: 0.25rem;">Found on your monthly electricity bill statement.</p>
+                            </div>
+                            
+                            <div class="form-group hidden-step" id="units-step-2"> 
+                                <label for="units-rate">Average Unit Rate (₹/kWh)</label>
+                                <input type="number" step="0.01" id="units-rate" placeholder="e.g., 6.50" required min="0.01" oninput="checkFormSequential('units')" />
+                                <div class="flex justify-between items-center" style="margin-top: 0.5rem;">
+                                    <p style="font-size: 0.85rem; color: var(--base-600);">Used to calculate potential savings.</p>
+                                    <button type="button" class="tts-button" onclick="callTTSUnitRate()">
+                                        <i class="fa-solid fa-volume-up"></i> Explain Rate
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group hidden-step" id="units-step-3">
+                                <label for="units-type">System Type</label>
+                                <select id="units-type" required>
+                                    <option value="residential">Residential (PM Surya Ghar)</option>
+                                    <option value="commercial">Commercial / Industrial</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary hidden-step" id="units-submit-btn" style="width: 100%; margin-top: 1rem; padding: 1rem 1.5rem;">Calculate Potential</button>
+                        </form>
+
+                        <form id="form-bill" onsubmit="calculateSolar(event, 'bill')">
+                            <div class="form-group">
+                                <label for="bill-amount">Monthly Electricity Bill Amount (₹)</label>
+                                <input type="number" step="1" id="bill-amount" placeholder="e.g., 3000" required min="1" oninput="checkFormSequential('bill')" />
+                            </div>
+
+                            <div class="form-group hidden-step" id="bill-step-2">
+                                <label for="bill-rate">Average Unit Rate (₹/kWh)</label>
+                                <input type="number" step="0.01" id="bill-rate" placeholder="e.g., 7.50" required min="0.01" oninput="checkFormSequential('bill')" />
+                                <div class="flex justify-between items-center" style="margin-top: 0.5rem;">
+                                    <p style="font-size: 0.85rem; color: var(--base-600);">Used to determine consumption units.</p>
+                                    <button type="button" class="tts-button" onclick="callTTSUnitRate()">
+                                        <i class="fa-solid fa-volume-up"></i> Explain Rate
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group hidden-step" id="bill-step-3">
+                                <label for="bill-type">System Type</label>
+                                <select id="bill-type" required>
+                                    <option value="residential">Residential (PM Surya Ghar)</option>
+                                    <option value="commercial">Commercial / Industrial</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary hidden-step" id="bill-submit-btn" style="width: 100%; margin-top: 1rem; padding: 1rem 1.5rem;">Calculate Potential</button>
+                        </form>
+
+                        <form id="form-load" onsubmit="calculateSolar(event, 'load')">
+                            <div class="form-group">
+                                <label for="load-profile">Select Load Profile</label>
+                                <select id="load-profile" onchange="populateLoadTable(this.value)">
+                                    <option value="residential">Residential (Standard Home)</option>
+                                    <option value="commercial">Commercial (Office/Shop)</option>
+                                    <option value="industrial">Industrial (Small Factory)</option>
+                                    <option value="institutional">Institutional (School/Hospital)</option>
+                                </select>
+                            </div>
+
+                            <h4 class="font-semibold text-base mb-2">Adjust Appliance Usage (Total Watt-Hours/Day)</h4>
+                            <div id="load-table-container" style="border: 1px solid var(--base-300); padding: 0.75rem; border-radius: 0.5rem; overflow-x: auto; background: var(--alt-surface); max-height: 240px; margin-bottom: 1rem;">
+                                <table class="min-w-full text-sm">
+                                    <thead style="position: sticky; top: 0; background: var(--base-300);">
+                                        <tr>
+                                            <th class="px-2 py-1 text-left">Appliance</th>
+                                            <th class="px-2 py-1 text-center">Count</th>
+                                            <th class="px-2 py-1 text-center">Wattage (W)</th>
+                                            <th class="px-2 py-1 text-center">Hours/Day</th>
+                                            <th class="px-2 py-1 text-right">Wh/Day</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="load-table-body"></tbody>
+                                </table>
+                            </div>
+                            
+                            <div class="form-group hidden-step" id="load-step-2">
+                                <label for="load-rate">Average Unit Rate (₹/kWh)</label>
+                                <input type="number" step="0.01" id="load-rate" placeholder="e.g., 6.50" required min="0.01" value="6.50" oninput="checkFormSequential('load')" />
+                            </div>
+                            <button type="submit" class="btn btn-primary hidden-step" id="load-submit-btn" style="width: 100%; margin-top: 1rem; padding: 1rem 1.5rem;">Calculate Potential</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="results-panel" class="calculator-panel" style="margin-top: 1.5rem;">
+                <h2 style="margin-top: 0; font-size: 1.8rem;">2. Your Solar & Financial Estimate</h2>
+                
+                <div id="loading-spinner" class="loader" style="padding: 2rem; display: none;">
+                    <i class="fa-solid fa-spinner fa-spin fa-2x" style="color: var(--primary-main);"></i>
+                    <p class="font-semibold">Calculating system size and generating Viaan's advisory...</p>
+                </div>
+
+                <div id="initial-message-results">
+                    <p style="text-align: center; color: var(--base-600);">Submit your details in the form above to see your customized results.</p>
+                </div>
+                
+                <div id="calculated-results" class="hidden">
+                    
+                    <div class="grid cols-4" style="grid-template-columns: 1fr 1fr 2fr; gap: 1rem; margin-bottom: 2rem;">
+                        <div class="result-box" style="background: var(--primary-light); border-color: var(--primary-main);">
+                            <div class="result-label" style="color: var(--base-900);">Recommended System Size</div>
+                            <div class="result-value" id="system-size-output" style="color: var(--base-900);">0 kWp</div>
+                        </div>
+                        <div class="result-box" style="background: var(--primary-bg); border-color: var(--primary-light);">
+                            <div class="result-label">Est. Monthly Generation</div>
+                            <div class="result-value" id="monthly-gen-output">0 Units</div>
+                        </div>
+                        <div class="grid cols-2" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div class="result-box" style="padding: 1rem; background: var(--surface); border: 1px solid var(--base-300);">
+                                <div class="result-label" style="font-size: 0.8rem;">Est. Annual Savings</div>
+                                <div class="result-value" id="annual-savings-output" style="font-size: 1.4rem;">₹0</div>
+                            </div>
+                             <div class="result-box" style="padding: 1rem; background: var(--surface); border: 1px solid var(--base-300);">
+                                <div class="result-label" style="font-size: 0.8rem;">Required Rooftop Area</div>
+                                <div class="result-value" id="area-output" style="font-size: 1.4rem;">0 sq. ft.</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid cols-3" style="grid-template-columns: 2fr 1fr; gap: 1.5rem;">
+                        
+                        <div class="ai-output-box">
+                            <h3 class="flex items-center gap-2" style="color: var(--primary-dark);"><i class="fa-solid fa-robot"></i> Viaan Solar Advisory</h3>
+                            <div id="ai-advisory-output">
+                                <p class="loader"><i class="fa-solid fa-spinner fa-spin"></i> Generating personalized advice...</p>
+                            </div>
+                            <div id="ai-advisory-follow-up"></div>
+                            <p class="ai-footnote" id="ai-powered-note" style="display: none;"></p>
+                        </div>
+
+                        <div class="ai-output-box">
+                            <h3 class="flex items-center gap-2" style="color: var(--primary-dark);"><i class="fa-solid fa-indian-rupee-sign"></i> Financial Snapshot</h3>
+                            <div id="financial-summary-output">
+                                <p class="loader"><i class="fa-solid fa-spinner fa-spin"></i> Finalizing costs...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="calculator-panel" style="margin-top: 1.5rem; background: var(--alt-surface); border: 1px solid var(--base-300);">
+                        <h3 style="margin-top: 0; font-size: 1.5rem;">3. Financing & EMI Estimate</h3>
+                        
+                        <div class="grid cols-3" style="grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                            <div class="form-group !mb-0">
+                                <label for="loan-amount">Net Loan Amount (₹)</label>
+                                <input type="number" id="loan-amount" required disabled />
+                                <p class="text-xs text-gray-500" style="font-size: 0.75rem; color: var(--base-600); margin-top: 0.25rem;">Gross Cost - Subsidy</p>
+                            </div>
+                            <div class="form-group !mb-0">
+                                <label for="interest-rate">Interest Rate (% p.a.)</label>
+                                <input type="number" step="0.1" id="interest-rate" value="6.0" required />
+                                <p class="text-xs text-gray-500" style="font-size: 0.75rem; color: var(--base-600); margin-top: 0.25rem;">Start at 6.0% for residential schemes</p>
+                            </div>
+                            <div class="form-group !mb-0">
+                                <label for="loan-tenure">Loan Tenure (Months)</label>
+                                <input type="number" step="1" id="loan-tenure" value="120" required min="12" max="180" />
+                                <p class="text-xs text-gray-500" style="font-size: 0.75rem; color: var(--base-600); margin-top: 0.25rem;">Max 15 years (180 months)</p>
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary" type="button" onclick="calculateEMI()" style="width: 100%; margin-top: 1rem; background: var(--base-900); color: var(--surface); padding: 0.75rem 1.5rem;">
+                            Calculate EMI
+                        </button>
+                        
+                        <div id="emi-output-container" class="hidden">
+                            <div class="result-box" style="margin-top: 1rem; background: var(--surface); border-color: var(--primary-dark);">
+                                <div class="result-label" style="color: var(--primary-dark);">Est. Monthly EMI (₹)</div>
+                                <div class="result-value" id="emi-monthly-output" style="font-size: 2.2rem; color: var(--primary-dark);">₹0</div>
+                                <p class="text-xs text-gray-600" style="font-size: 0.75rem; color: var(--base-600); margin-top: 0.25rem;">Total interest over <span id="emi-tenure"></span> months: ₹<span id="total-interest"></span></p>
+                            </div>
+                            <p class="text-sm font-semibold text-center" style="color: #10B981; margin-top: 0.75rem;" id="saving-vs-emi-message"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <a href="contact.html" class="btn btn-primary" style="width: 100%; max-width: 400px; margin: 2rem auto 0 auto; padding: 1rem 1.5rem; display: block;">Get Final, Official Quote</a>
+            </div>
+        </section>
+
+        <section class="section alt">
+            <div class="container" style="max-width: 1100px;">
+                <div class="info-grid">
+                    <article class="info-card" aria-labelledby="how-to-use">
+                        <h3 id="how-to-use">How to Use This Calculator</h3>
+                        <p>Choose the entry method that best matches the information on hand, then follow the guided fields that appear:</p>
+                        <ul>
+                            <li><strong>Monthly Units:</strong> Perfect when you know the kWh usage from your bill.</li>
+                            <li><strong>Bill Amount &amp; Rate:</strong> Ideal if you only know how much you paid last month.</li>
+                            <li><strong>Appliance Load:</strong> Helps plan for new sites or upcoming expansions.</li>
+                        </ul>
+                    </article>
+
+                    <article class="info-card" aria-labelledby="what-you-get">
+                        <h3 id="what-you-get">What You Get</h3>
+                        <ul>
+                            <li>A recommended solar size aligned with Jharkhand&#39;s 5 kWh/kWp/day benchmark.</li>
+                            <li>Updated cost estimates for both PM Surya Ghar and commercial categories.</li>
+                            <li>Viaan guidance and EMI planning tools so you can budget confidently.</li>
+                        </ul>
+                    </article>
+
+                    <article class="info-card" aria-labelledby="next-steps">
+                        <h3 id="next-steps">Need Extra Help?</h3>
+                        <p>Save your results, then reach out to our advisory team for a site survey or to lock in financing. You can call <a href="tel:+917070278178" style="color: var(--primary-main); font-weight: 600;">+91&nbsp;70702&nbsp;78178</a> or email <a href="mailto:connect@dakshayani.co.in" style="color: var(--primary-main); font-weight: 600;">connect@dakshayani.co.in</a> for personalised recommendations.</p>
+                        <p style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--base-500);">Estimates are indicative and final quotes depend on shadow analysis, DISCOM approvals, and financing eligibility.</p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // --- NOTE: This block contains the essential JavaScript logic for the calculator. ---
+        // --- It MUST be preserved to maintain functionality. ---
+        function sanitiseParagraph(text) {
+            const div = document.createElement('div');
+            div.textContent = typeof text === 'string' ? text : '';
+            return div.innerHTML;
+        }
+
+        function showMessage(text, details = '') {
+            const modal = document.getElementById('message-modal');
+            const textEl = document.getElementById('message-text');
+            if (!modal || !textEl) {
+                return;
+            }
+
+            const mainMessage = sanitiseParagraph(text || 'Something went wrong.');
+            const detailMessage = sanitiseParagraph(details || '');
+
+            textEl.innerHTML = detailMessage && detailMessage !== mainMessage
+                ? `${mainMessage}<br><small style="color: var(--base-500); display:block; margin-top:0.35rem;">${detailMessage}</small>`
+                : mainMessage;
+
+            modal.style.display = 'block';
+        }
+
+        async function fetchSolarAdvisory(payload) {
+            const response = await fetch('/api/public/solar-advisory', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Advisory API error: ${response.status}`);
+            }
+
+            return response.json();
+        }
+
+
+
+        // --- Rate Data (From original calculator.html) ---
+        let pmSuryaGharRates = {
+            1: 68450, // Extrapolated from 2kWp rate
+            2: 140900,
+            3: 183900,
+            4: 248900,
+            5: 272900,
+            6: 341900,
+            7: 382900,
+            8: 424900,
+            9: 454900,
+            10: 483900
+        };
+
+        let nonPmSuryaGharRates = {
+            1: 54450, // Extrapolated from 2kWp rate
+            2: 110900,
+            3: 146900,
+            4: 210900,
+            5: 237900,
+            6: 314900,
+            7: 349900,
+            8: 388900,
+            9: 431900,
+            10: 456900
+        };
+
+        let currentSolarEstimate = {
+            requiredSize: 0, // kWp
+            monthlyConsumption: 0, // kWh
+            unitRate: 0, // ₹/kWh
+            grossCost: 0, // ₹
+            subsidy: 0, // ₹
+            netCost: 0, // ₹ (The Loan Amount)
+            systemType: 'residential'
+        };
+
+        const LOCAL_UNITS_PER_KW_PER_MONTH = 150; // 5 units/day * 30 days
+        const AREA_PER_KW = 100; // sq. ft. per kWp (approx)
+
+        function getGrossCost(size, type) {
+            const rates = type === 'residential' ? pmSuryaGharRates : nonPmSuryaGharRates;
+            const lookupSize = Math.ceil(size);
+
+            if (lookupSize <= 1) return rates[1] || 0;
+            if (lookupSize >= 10) return rates[10] || 0;
+            
+            return rates[lookupSize] || 0;
+        }
+
+        function getSubsidy(size, type) {
+            if (type !== 'residential') return 0;
+            
+            if (size <= 2) {
+                return size * 30000;
+            } else if (size > 2 && size <= 3) {
+                return 60000 + (size - 2) * 18000;
+            } else {
+                return 78000;
+            }
+        }
+        
+        function calculateSolar(e, inputMethod) {
+            e.preventDefault();
+
+            const initialMessage = document.getElementById('initial-message-results');
+            const resultsContainer = document.getElementById('calculated-results');
+            const loading = document.getElementById('loading-spinner');
+
+            initialMessage.style.display = 'none';
+            resultsContainer.classList.add('hidden');
+            loading.style.display = 'flex';
+
+            let consumption = 0;
+            let rate = 0;
+            let type = 'residential';
+            let validationError = '';
+
+            if (inputMethod === 'units') {
+                consumption = parseFloat(document.getElementById('input-units').value);
+                rate = parseFloat(document.getElementById('units-rate').value);
+                type = document.getElementById('units-type').value;
+                if (isNaN(consumption) || consumption <= 0) {
+                    validationError = 'Please enter a valid Monthly Units Consumed.';
+                }
+            } else if (inputMethod === 'bill') {
+                const billAmount = parseFloat(document.getElementById('bill-amount').value);
+                rate = parseFloat(document.getElementById('bill-rate').value);
+                type = document.getElementById('bill-type').value;
+
+                if (isNaN(billAmount) || billAmount <= 0) {
+                    validationError = 'Please enter a valid Monthly Bill Amount.';
+                } else if (isNaN(rate) || rate <= 0) {
+                    validationError = 'Please enter a valid Average Unit Rate.';
+                } else {
+                    consumption = billAmount / rate;
+                }
+            } else if (inputMethod === 'load') {
+                const whPerDay = calculateLoadWhPerDay();
+                consumption = (whPerDay * 30) / 1000;
+                rate = parseFloat(document.getElementById('load-rate').value);
+                type = document.getElementById('load-profile').value === 'residential' ? 'residential' : 'commercial';
+                if (whPerDay === 0) {
+                    validationError = 'Please enter a valid appliance load (W/h).';
+                }
+            }
+
+            if (validationError) {
+                loading.style.display = 'none';
+                resultsContainer.classList.add('hidden');
+                initialMessage.style.display = 'block';
+                showMessage(validationError);
+                return;
+            }
+
+            if (isNaN(rate) || rate <= 0) {
+                rate = 6.50;
+            }
+
+            let requiredSize = consumption / LOCAL_UNITS_PER_KW_PER_MONTH;
+            requiredSize = Math.ceil(requiredSize * 2) / 2;
+            if (requiredSize < 1) {
+                requiredSize = 1;
+            }
+            if (type === 'residential' && requiredSize > 10) {
+                requiredSize = 10;
+            }
+
+            const grossCost = getGrossCost(requiredSize, type);
+            const subsidy = getSubsidy(requiredSize, type);
+            const netCost = Math.max(0, grossCost - subsidy);
+            const annualSavings = consumption * rate * 12;
+
+            currentSolarEstimate = {
+                requiredSize,
+                monthlyConsumption: consumption,
+                unitRate: rate,
+                grossCost,
+                subsidy,
+                netCost,
+                systemType: type
+            };
+
+            document.getElementById('system-size-output').textContent = requiredSize.toFixed(1) + ' kWp';
+            document.getElementById('monthly-gen-output').textContent = (requiredSize * LOCAL_UNITS_PER_KW_PER_MONTH).toFixed(0) + ' Units';
+            document.getElementById('annual-savings-output').textContent = '₹' + annualSavings.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+            document.getElementById('area-output').textContent = (requiredSize * AREA_PER_KW).toFixed(0) + ' sq. ft.';
+
+            document.getElementById('loan-amount').value = netCost.toFixed(0);
+            document.getElementById('emi-output-container').classList.add('hidden');
+
+            const aiOutput = document.getElementById('ai-advisory-output');
+            const financeOutput = document.getElementById('financial-summary-output');
+            const aiFollowUp = document.getElementById('ai-advisory-follow-up');
+            const aiFootnote = document.getElementById('ai-powered-note');
+
+            aiOutput.innerHTML = '<p class="loader"><i class="fa-solid fa-spinner fa-spin"></i> Generating personalised advice...</p>';
+            financeOutput.innerHTML = '<p class="loader"><i class="fa-solid fa-spinner fa-spin"></i> Finalising costs...</p>';
+            if (aiFollowUp) {
+                aiFollowUp.innerHTML = '';
+            }
+            if (aiFootnote) {
+                aiFootnote.textContent = '';
+                aiFootnote.style.display = 'none';
+                aiFootnote.classList.remove('error');
+            }
+
+            const advisoryPayload = {
+                size: requiredSize,
+                systemType: type,
+                grossCost,
+                netCost,
+                subsidy,
+                annualSavings,
+                monthlyConsumption: consumption,
+                unitRate: rate
+            };
+
+            fetchSolarAdvisory(advisoryPayload)
+                .then((data) => {
+                    const advisoryText = typeof data?.advisory === 'string' ? data.advisory.trim() : '';
+                    if (advisoryText !== '') {
+                        aiOutput.innerHTML = `<p style="color: var(--base-700);">${sanitiseParagraph(advisoryText)}</p>`;
+                    } else {
+                        aiOutput.innerHTML = renderFallbackAdvisory(requiredSize, netCost, annualSavings, type);
+                    }
+
+                    const points = Array.isArray(data?.financial?.points) ? data.financial.points : [];
+                    if (points.length) {
+                        let html = '<ul>';
+                        points.forEach((point) => {
+                            html += `<li>${sanitiseParagraph(point)}</li>`;
+                        });
+                        html += '</ul>';
+                        financeOutput.innerHTML = html;
+                    } else {
+                        financeOutput.innerHTML = renderFallbackFinancialSummary(requiredSize, grossCost, subsidy, netCost, annualSavings, type);
+                    }
+
+                    if (aiFollowUp) {
+                        const followUpText = typeof data?.followUp === 'string' ? data.followUp.trim() : '';
+                        aiFollowUp.innerHTML = followUpText !== ''
+                            ? `<p class="ai-follow-up">${sanitiseParagraph(followUpText)}</p>`
+                            : '';
+                    }
+
+                    if (aiFootnote) {
+                        const status = typeof data?.ai?.status === 'string' ? data.ai.status.toLowerCase() : '';
+                        const errorMessage = typeof data?.ai?.message === 'string' ? data.ai.message.trim() : '';
+
+                        aiFootnote.classList.remove('error');
+
+                        if (status === 'success') {
+                            aiFootnote.textContent = 'Insights prepared by Dakshayani advisory specialists.';
+                            aiFootnote.style.display = 'block';
+                        } else if (status === 'error') {
+                            const baseMessage = errorMessage !== ''
+                                ? `Sharing Dakshayani\'s standard advisory playbook (${errorMessage}).`
+                                : "Sharing Dakshayani's standard advisory playbook.";
+                            aiFootnote.textContent = baseMessage;
+                            aiFootnote.classList.add('error');
+                            aiFootnote.style.display = 'block';
+                        } else {
+                            aiFootnote.style.display = 'none';
+                        }
+                    }
+                })
+                .catch((error) => {
+                    console.error('Solar advisory error:', error);
+                    aiOutput.innerHTML = renderFallbackAdvisory(requiredSize, netCost, annualSavings, type);
+                    financeOutput.innerHTML = renderFallbackFinancialSummary(requiredSize, grossCost, subsidy, netCost, annualSavings, type);
+                    if (aiFollowUp) {
+                        aiFollowUp.innerHTML = '';
+                    }
+                    if (aiFootnote) {
+                        aiFootnote.textContent = "Sharing Dakshayani's standard advisory playbook.";
+                        aiFootnote.classList.add('error');
+                        aiFootnote.style.display = 'block';
+                    }
+                })
+                .finally(() => {
+                    loading.style.display = 'none';
+                    resultsContainer.classList.remove('hidden');
+                });
+        }
+
+        function formatCurrencyINR(value) {
+            return Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+        }
+
+        function describeSystemType(type) {
+            switch (type) {
+                case 'commercial':
+                    return 'commercial solar plant';
+                case 'industrial':
+                    return 'industrial solar plant';
+                default:
+                    return 'residential PM Surya Ghar system';
+            }
+        }
+
+        function renderFallbackAdvisory(size, cost, savings, type) {
+            const safeSize = Number(size || 0).toFixed(1);
+            const costText = formatCurrencyINR(cost);
+            const savingsText = formatCurrencyINR(savings);
+            const typeDescription = describeSystemType(type);
+            return `<p style="color: var(--base-700);">Based on your inputs, a <strong>${safeSize} kWp ${typeDescription}</strong> can offset a large part of your electricity bill. The estimated annual savings are around <strong>₹${savingsText}</strong> with an upfront investment of about <strong>₹${costText}</strong>. Our team recommends scheduling a site survey so we can lock in subsidy paperwork and finalise financing options.</p>`;
+        }
+
+        function renderFallbackFinancialSummary(size, grossCost, subsidy, netCost, annualSavings, type) {
+            const points = [
+                `System Size: ${Number(size || 0).toFixed(1)} kWp (${describeSystemType(type)})`,
+                `Estimated Project Cost: ₹${formatCurrencyINR(grossCost)} before subsidy`,
+                subsidy > 0
+                    ? `PM Surya Ghar Support: Approx. ₹${formatCurrencyINR(subsidy)} subsidy available`
+                    : `Subsidy: Not applicable for this category`,
+                `Net Investment: About ₹${formatCurrencyINR(netCost)} with savings near ₹${formatCurrencyINR(annualSavings)} per year`
+            ];
+
+            let html = '<ul>';
+            points.forEach(point => {
+                html += `<li>${sanitiseParagraph(point)}</li>`;
+            });
+            html += '</ul>';
+            return html;
+        }
+
+        function callTTSUnitRate() {
+            const button = document.querySelector('.tts-button');
+            if (!button) {
+                return;
+            }
+
+            const explanation = "Average Unit Rate is calculated by dividing your total monthly bill amount by the total units of electricity consumed. This gives you the actual rupee cost per unit you pay, which is essential for accurate solar savings projections.";
+
+            if (!('speechSynthesis' in window)) {
+                showMessage('Audio unavailable', 'Your browser does not support speech playback.');
+                return;
+            }
+
+            const originalHtml = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fa-solid fa-volume-up"></i> Playing...';
+
+            const utterance = new SpeechSynthesisUtterance(explanation);
+            utterance.lang = 'en-IN';
+            utterance.rate = 1;
+            utterance.pitch = 1;
+
+            utterance.onend = () => {
+                button.disabled = false;
+                button.innerHTML = originalHtml;
+            };
+
+            utterance.onerror = () => {
+                button.disabled = false;
+                button.innerHTML = originalHtml;
+                showMessage('Audio unavailable', 'Unable to start voice playback right now.');
+            };
+
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function calculateEMI() {
+            const P = currentSolarEstimate.netCost;
+            const R_annual = parseFloat(document.getElementById('interest-rate').value);
+            const N = parseFloat(document.getElementById('loan-tenure').value);
+
+            if (P <= 0) {
+                showMessage('Financing Required', 'No loan is needed. Your subsidy covers the cost!');
+                document.getElementById('emi-output-container').classList.add('hidden');
+                return;
+            }
+            if (isNaN(R_annual) || R_annual < 0 || N <= 0 || N < 12 || N > 180) {
+                showMessage('Input Error', 'Please check interest rate and tenure.');
+                return;
+            }
+
+            const R_monthly = (R_annual / 100) / 12;
+            
+            let emi = 0;
+            let totalInterest = 0;
+            
+            if (R_monthly === 0) {
+                 emi = P / N;
+                 totalInterest = 0;
+            } else {
+                 emi = P * R_monthly * Math.pow(1 + R_monthly, N) / (Math.pow(1 + R_monthly, N) - 1);
+                 totalInterest = (emi * N) - P;
+            }
+
+            const monthlySavings = (currentSolarEstimate.monthlyConsumption * currentSolarEstimate.unitRate);
+            
+            document.getElementById('emi-monthly-output').textContent = '₹' + emi.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+            document.getElementById('total-interest').textContent = totalInterest.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+            document.getElementById('emi-tenure').textContent = N.toFixed(0);
+            
+            const messageEl = document.getElementById('saving-vs-emi-message');
+            if (monthlySavings > emi) {
+                const netCashflow = monthlySavings - emi;
+                messageEl.textContent = `Excellent! Your estimated monthly savings (₹${monthlySavings.toFixed(0)}) are higher than your EMI. You achieve immediate net savings of ₹${netCashflow.toFixed(0)}/month!`;
+                messageEl.style.color = '#10B981';
+            } else {
+                 messageEl.textContent = `Your estimated monthly bill reduction (₹${monthlySavings.toFixed(0)}) helps offset most of your EMI. You are building an asset with low monthly outflow.`;
+                 messageEl.style.color = '#F59E0B';
+            }
+            
+            document.getElementById('emi-output-container').classList.remove('hidden');
+        }
+
+        const FORM_SEQUENTIAL_STEPS = {
+            units: [
+                { trigger: 'input-units', target: 'units-step-2' },
+                { trigger: 'units-rate', target: 'units-step-3' }
+            ],
+            bill: [
+                { trigger: 'bill-amount', target: 'bill-step-2' },
+                { trigger: 'bill-rate', target: 'bill-step-3' }
+            ],
+        };
+
+        function checkFormSequential(formId) {
+            const steps = FORM_SEQUENTIAL_STEPS[formId];
+            const submitBtn = document.getElementById(`${formId}-submit-btn`);
+            let allPreviousFilled = true;
+
+            if (steps) {
+                for (let i = 0; i < steps.length; i++) {
+                    const step = steps[i];
+                    const triggerEl = document.getElementById(step.trigger);
+                    const targetEl = document.getElementById(step.target);
+
+                    const isTriggerValid = (triggerEl?.value?.trim() !== '' && parseFloat(triggerEl?.value) > 0);
+
+                    if (targetEl) {
+                        if (allPreviousFilled && isTriggerValid) {
+                            targetEl.classList.add('show');
+                        } else {
+                            targetEl.classList.remove('show');
+                            allPreviousFilled = false;
+                        }
+                    }
+                    
+                    if (!isTriggerValid) {
+                        allPreviousFilled = false;
+                    }
+                }
+
+                if (allPreviousFilled && document.getElementById(steps[steps.length - 1].target).classList.contains('show')) {
+                    submitBtn?.classList.add('show');
+                } else {
+                    submitBtn?.classList.remove('show');
+                }
+            } else if (formId === 'load') {
+                const loadRateEl = document.getElementById('load-rate');
+                if (loadRateEl && loadRateEl.value.trim() !== '' && parseFloat(loadRateEl.value) > 0) {
+                    submitBtn?.classList.add('show');
+                } else {
+                    submitBtn?.classList.remove('show');
+                }
+            }
+        }
+        
+        function showInputMethod(method) {
+            const allForms = document.querySelectorAll('#input-forms-container form');
+            const allTabs = document.querySelectorAll('.tab-selector button');
+
+            allForms.forEach(form => form.classList.remove('active'));
+            allTabs.forEach(tab => tab.classList.remove('active'));
+
+            document.querySelectorAll('.hidden-step').forEach(el => el.classList.remove('show'));
+
+            document.getElementById(`form-${method}`).classList.add('active');
+            document.getElementById(`tab-${method}`).classList.add('active');
+            
+            if (method === 'units') {
+                document.getElementById('input-units').focus();
+            } else if (method === 'bill') {
+                document.getElementById('bill-amount').focus();
+            } else if (method === 'load') {
+                populateLoadTable(document.getElementById('load-profile').value); 
+                document.getElementById('load-profile').focus();
+            }
+        }
+
+        const APPLIANCE_LOADS = {
+            residential: [
+                { name: "LED Lights (10W)", wattage: 10, count: 10, hours: 6, inputId: "res-light" },
+                { name: "Ceiling Fan (75W)", wattage: 75, count: 4, hours: 10, inputId: "res-fan" },
+                { name: "Refrigerator (150W)", wattage: 150, count: 1, hours: 24, inputId: "res-fridge" },
+                { name: "AC (1.5 Ton, 1500W)", wattage: 1500, count: 1, hours: 4, inputId: "res-ac" }
+            ],
+            commercial: [
+                { name: "Desktops/Laptops (150W)", wattage: 150, count: 15, hours: 8, inputId: "comm-pc" },
+                { name: "Office Lighting (LED, 20W)", wattage: 20, count: 25, hours: 10, inputId: "comm-light" },
+                { name: "Central HVAC (5kW)", wattage: 5000, count: 1, hours: 8, inputId: "comm-hvac" },
+                { name: "Printers/Misc. (500W)", wattage: 500, count: 2, hours: 4, inputId: "comm-misc" }
+            ],
+             industrial: [
+                { name: "Motor (5 HP/3.73kW)", wattage: 3730, count: 2, hours: 10, inputId: "ind-motor" },
+                { name: "High Bay Lighting (200W)", wattage: 200, count: 10, hours: 12, inputId: "ind-light" },
+                { name: "Welding Equipment (5kW)", wattage: 5000, count: 1, hours: 2, inputId: "ind-weld" },
+                { name: "Office/Admin Load (1kW)", wattage: 1000, count: 1, hours: 8, inputId: "ind-admin" }
+            ],
+            institutional: [
+                { name: "Classroom Lighting (1kW)", wattage: 1000, count: 10, hours: 6, inputId: "inst-light" },
+                { name: "Computers Lab (150W)", wattage: 150, count: 30, hours: 4, inputId: "inst-pc" },
+                { name: "Elevator/Lift (3kW)", wattage: 3000, count: 1, hours: 4, inputId: "inst-lift" },
+                { name: "Water Coolers (500W)", wattage: 500, count: 3, hours: 8, inputId: "inst-cooler" }
+            ]
+        };
+        
+        function populateLoadTable(profile) {
+            const tableBody = document.getElementById('load-table-body');
+            tableBody.innerHTML = '';
+            const profileData = APPLIANCE_LOADS[profile];
+            
+            profileData.forEach((appliance, index) => {
+                const row = document.createElement('tr');
+                row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                
+                const whPerDay = appliance.wattage * appliance.count * appliance.hours;
+
+                row.innerHTML = `
+                    <td class="px-2 py-1 font-semibold">${appliance.name}</td>
+                    <td class="px-2 py-1 text-center"><input type="number" data-wattage="${appliance.wattage}" data-hours="${appliance.hours}" data-type="count" style="width: 3rem; text-align: center; border: 1px solid var(--base-300); border-radius: 0.25rem;" value="${appliance.count}" min="0" oninput="updateLoadCalculation(); checkFormSequential('load');"></td>
+                    <td class="px-2 py-1 text-center"><input type="number" data-count="${appliance.count}" data-hours="${appliance.hours}" data-type="wattage" style="width: 4rem; text-align: center; border: 1px solid var(--base-300); border-radius: 0.25rem;" value="${appliance.wattage}" min="0" oninput="updateLoadCalculation(); checkFormSequential('load');"></td>
+                    <td class="px-2 py-1 text-center"><input type="number" data-wattage="${appliance.wattage}" data-count="${appliance.count}" data-type="hours" style="width: 3rem; text-align: center; border: 1px solid var(--base-300); border-radius: 0.25rem;" value="${appliance.hours}" min="0" max="24" oninput="updateLoadCalculation(); checkFormSequential('load');"></td>
+                    <td class="px-2 py-1 text-right font-medium" data-wh-output>${whPerDay.toLocaleString()}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            const totalRow = document.createElement('tr');
+            totalRow.className = 'font-bold';
+            totalRow.style.backgroundColor = 'var(--primary-bg)';
+            totalRow.innerHTML = `
+                <td class="px-2 py-2" colspan="4">Total Watt-Hours / Day</td>
+                <td class="px-2 py-2 text-right" id="total-wh-per-day">0</td>
+            `;
+            tableBody.appendChild(totalRow);
+
+            document.getElementById('load-step-2')?.classList.add('show');
+            checkFormSequential('load');
+
+            updateLoadCalculation();
+        }
+
+        function calculateLoadWhPerDay() {
+            let totalWh = 0;
+            const rows = document.querySelectorAll('#load-table-body tr:not(:last-child)');
+            
+            rows.forEach(row => {
+                const countInput = row.querySelector('input[data-type="count"]');
+                const wattageInput = row.querySelector('input[data-type="wattage"]');
+                const hoursInput = row.querySelector('input[data-type="hours"]');
+                const outputCell = row.querySelector('[data-wh-output]');
+                
+                const count = parseFloat(countInput?.value) || 0;
+                const wattage = parseFloat(wattageInput?.value) || 0;
+                const hours = parseFloat(hoursInput?.value) || 0;
+
+                const rowWh = count * wattage * hours;
+                
+                if (outputCell) outputCell.textContent = rowWh.toLocaleString();
+                totalWh += rowWh;
+            });
+
+            document.getElementById('total-wh-per-day').textContent = totalWh.toLocaleString();
+            return totalWh;
+        }
+
+        function updateLoadCalculation() {
+             calculateLoadWhPerDay();
+        }
+
+        function openRateModal() {
+            populateRateTable('pm-rates-table', pmSuryaGharRates);
+            populateRateTable('non-pm-rates-table', nonPmSuryaGharRates);
+            document.getElementById('rate-update-modal').style.display = 'block';
+        }
+
+        function closeRateModal() {
+            document.getElementById('rate-update-modal').style.display = 'none';
+        }
+
+        function populateRateTable(tableId, rates) {
+            const table = document.getElementById(tableId);
+            table.innerHTML = `<thead><tr><th>System Size (kWp)</th><th>Price (₹)</th></tr></thead><tbody>`;
+            for (const size in rates) {
+                const row = `<tr>
+                    <td>${size} kWp</td>
+                    <td><input type="number" id="rate-${tableId}-${size}" value="${rates[size]}"></td>
+                </tr>`;
+                table.innerHTML += row;
+            }
+            table.innerHTML += `</tbody>`;
+        }
+
+        function saveRates() {
+            const pmTable = document.getElementById('pm-rates-table');
+            const nonPmTable = document.getElementById('non-pm-rates-table');
+
+            for (const size in pmSuryaGharRates) {
+                pmSuryaGharRates[size] = parseInt(document.getElementById(`rate-pm-rates-table-${size}`).value) || 0;
+            }
+            for (const size in nonPmSuryaGharRates) {
+                nonPmSuryaGharRates[size] = parseInt(document.getElementById(`rate-non-pm-rates-table-${size}`).value) || 0;
+            }
+            
+            showMessage('Rates updated successfully for this session.');
+            closeRateModal();
+        }
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            populateLoadTable('residential');
+            showInputMethod('units');
+            
+            document.querySelectorAll('input[type="number"][oninput]').forEach(input => {
+                input.addEventListener('input', () => {
+                    const formId = input.closest('form').id.replace('form-', '');
+                    checkFormSequential(formId);
+                });
+            });
+        });
+    </script>
+
+  <footer class="site-footer"></footer>
+
+  <script src="script.js" defer></script>
+</body>
+
+</html>

@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="480" viewBox="0 0 720 480" role="img" aria-labelledby="caseTitle caseDesc">
+  <title id="caseTitle">Dakshayani Enterprises solar case studies collage</title>
+  <desc id="caseDesc">Stylised cards showing residential, commercial, and agricultural solar installations.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#020617" />
+      <stop offset="50%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="residential" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#22c55e" />
+    </linearGradient>
+    <linearGradient id="commercial" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0ea5e9" />
+      <stop offset="100%" stop-color="#22d3ee" />
+    </linearGradient>
+    <linearGradient id="agri" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#facc15" />
+      <stop offset="100%" stop-color="#f97316" />
+    </linearGradient>
+  </defs>
+  <rect width="720" height="480" rx="32" fill="url(#bg)" />
+  <g fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="1.5" opacity="0.4">
+    <path d="M80 120H640" />
+    <path d="M80 180H640" />
+    <path d="M80 240H640" />
+    <path d="M80 300H640" />
+    <path d="M140 60V420" />
+    <path d="M240 60V420" />
+    <path d="M340 60V420" />
+    <path d="M440 60V420" />
+    <path d="M540 60V420" />
+  </g>
+  <g transform="translate(120 120)">
+    <rect width="180" height="240" rx="24" fill="rgba(15,23,42,0.84)" stroke="rgba(226,232,240,0.1)" />
+    <rect x="20" y="28" width="140" height="80" rx="16" fill="url(#residential)" />
+    <path d="M20 128H160" stroke="rgba(226,232,240,0.6)" stroke-width="2" stroke-linecap="round" />
+    <path d="M20 152H150" stroke="rgba(226,232,240,0.35)" stroke-width="2" stroke-linecap="round" />
+    <rect x="20" y="180" width="56" height="20" rx="10" fill="#0ea5e9" opacity="0.6" />
+    <rect x="84" y="180" width="56" height="20" rx="10" fill="#facc15" opacity="0.6" />
+    <text x="20" y="220" fill="#e2e8f0" font-family="'Inter', 'Segoe UI', sans-serif" font-size="16" font-weight="600">Residential</text>
+    <text x="20" y="244" fill="#94a3b8" font-family="'Inter', 'Segoe UI', sans-serif" font-size="12">5 kWp rooftop, 22% higher yield</text>
+  </g>
+  <g transform="translate(300 80)">
+    <rect width="220" height="280" rx="24" fill="rgba(15,23,42,0.92)" stroke="rgba(226,232,240,0.1)" />
+    <rect x="30" y="32" width="160" height="90" rx="18" fill="url(#commercial)" />
+    <path d="M30 142H200" stroke="rgba(226,232,240,0.6)" stroke-width="2" stroke-linecap="round" />
+    <path d="M30 170H190" stroke="rgba(226,232,240,0.35)" stroke-width="2" stroke-linecap="round" />
+    <rect x="30" y="202" width="70" height="22" rx="11" fill="#34d399" opacity="0.6" />
+    <rect x="108" y="202" width="70" height="22" rx="11" fill="#f97316" opacity="0.6" />
+    <text x="30" y="238" fill="#e2e8f0" font-family="'Inter', 'Segoe UI', sans-serif" font-size="16" font-weight="600">Commercial</text>
+    <text x="30" y="264" fill="#94a3b8" font-family="'Inter', 'Segoe UI', sans-serif" font-size="12">120 kWp factory, 18-month payback</text>
+  </g>
+  <g transform="translate(500 140)">
+    <rect width="180" height="220" rx="24" fill="rgba(15,23,42,0.78)" stroke="rgba(226,232,240,0.1)" />
+    <rect x="20" y="24" width="140" height="80" rx="18" fill="url(#agri)" />
+    <path d="M20 120H160" stroke="rgba(226,232,240,0.6)" stroke-width="2" stroke-linecap="round" />
+    <path d="M20 146H150" stroke="rgba(226,232,240,0.35)" stroke-width="2" stroke-linecap="round" />
+    <rect x="20" y="176" width="64" height="20" rx="10" fill="#22d3ee" opacity="0.6" />
+    <rect x="92" y="176" width="64" height="20" rx="10" fill="#34d399" opacity="0.6" />
+    <text x="20" y="206" fill="#e2e8f0" font-family="'Inter', 'Segoe UI', sans-serif" font-size="16" font-weight="600">Agriculture</text>
+    <text x="20" y="228" fill="#94a3b8" font-family="'Inter', 'Segoe UI', sans-serif" font-size="12">Solar pump + PM-KUSUM savings</text>
+  </g>
+  <g fill="#f97316" opacity="0.6">
+    <circle cx="180" cy="92" r="5" />
+    <circle cx="540" cy="88" r="6" />
+    <circle cx="640" cy="360" r="4" />
+  </g>
+</svg>

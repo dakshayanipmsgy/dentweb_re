@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Chosen Palette: Soft & Subtle -->
+    <!-- Application Structure Plan: The report mixes a high-level technical proposal (inno.pdf) with a granular budget (Annexure A). A linear report is hard to read. A tabbed SPA structure ('Overview', 'Project Budget', 'Detailed Costs', 'Timeline & Phases', 'Pilot & Scope') is chosen for a clear separation of concerns. This allows a user (e.g., a reviewer) to either get the high-level summary (Overview, Budget) or dive deep into a specific area (Detailed Costs) without endless scrolling. The key interaction is the 'Detailed Costs' section, which uses sub-navigation buttons to dynamically update *both* a chart and its corresponding text/table block, directly linking the visual data to its justification from the report. -->
+    <!-- Visualization & Content Choices: 
+        1. Overview (Platform Diagram): Goal=Organize. Viz=Flowchart. Method=HTML/CSS/Tailwind (NO SVG/Mermaid). Justification=Visually explains the core 3-sided platform concept immediately.
+        2. Project Budget (Funding Split): Goal=Inform. Viz=Donut Chart. Method=Chart.js/Canvas. Justification=Perfect for part-to-whole funding relationship.
+        3. Project Budget (Cost Breakdown): Goal=Compare. Viz=Bar Chart. Method=Chart.js/Canvas. Justification=Clearly compares main cost categories.
+        4. Detailed Costs (Interactive): Goal=Compare/Explore. Viz=Dynamic Bar Chart + Dynamic HTML Table. Method=Chart.js/Canvas + Vanilla JS. Justification=This is the core interactive element. One dynamic chart + text block is cleaner than 3 static charts and shows the link between data and its context.
+        5. Timeline & Phases (Phased Spending): Goal=Change/Compare. Viz=Stacked Bar Chart. Method=Chart.js/Canvas. Justification=Best-in-class viz to show how spending *composition* (the stacks) changes over *time* (the bars).
+        6. Pilot & Scope (Stats): Goal=Inform. Viz='Big Number' Stat Cards. Method=HTML/CSS/Tailwind. Justification=Simple, high-impact numbers that don't require a chart.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <title>INNO-68: Project Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F5F5F5;
+            color: #4A4A4A;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            height: 320px;
+            max-height: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 384px;
+            }
+        }
+        .nav-button {
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+        }
+        .nav-button.active {
+            border-bottom-color: #DAAD86;
+            color: #4A4A4A;
+            font-weight: 700;
+        }
+        .nav-button:hover {
+            background-color: #EFEFEF;
+        }
+        .detail-button {
+            transition: all 0.3s ease;
+            border-color: #659DBD;
+            color: #659DBD;
+        }
+        .detail-button.active {
+            background-color: #659DBD;
+            color: white;
+        }
+        .content-section {
+            animation: fadeIn 0.5s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .stat-card {
+            background-color: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 1.5rem;
+            text-align: center;
+        }
+        .flow-diagram-box {
+            border: 2px solid #659DBD;
+            background-color: white;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .flow-diagram-core {
+            border: 3px solid #8D8741;
+            background-color: #4A4A4A;
+            color: white;
+        }
+        .flow-arrow {
+            position: relative;
+            flex-grow: 1;
+            height: 2px;
+            background-color: #DAAD86;
+        }
+        .flow-arrow::after {
+            content: '►';
+            position: absolute;
+            right: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #DAAD86;
+            font-size: 1.25rem;
+        }
+        .flow-arrow-vertical {
+            position: relative;
+            width: 2px;
+            height: 40px;
+            background-color: #DAAD86;
+            margin: 0 auto;
+        }
+        .flow-arrow-vertical::after {
+            content: '▼';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #DAAD86;
+            font-size: 1.25rem;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto max-w-7xl p-4 md:p-8">
+        
+        <header class="mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-center text-[#4A4A4A]">INNO-68: Project Explorer</h1>
+            <p class="text-center text-lg text-[#8D8741] mt-1">Digital RESCO Enablement Platform</p>
+            
+            <nav class="mt-6 bg-white rounded-lg shadow-sm">
+                <div class="flex flex-wrap justify-center border-b border-gray-200">
+                    <button class="nav-button active py-4 px-6 text-sm md:text-base font-medium text-gray-500" data-target="overview">
+                        Overview
+                    </button>
+                    <button class="nav-button py-4 px-6 text-sm md:text-base font-medium text-gray-500" data-target="budget">
+                        Project Budget
+                    </button>
+                    <button class="nav-button py-4 px-6 text-sm md:text-base font-medium text-gray-500" data-target="details">
+                        Detailed Costs
+                    </button>
+                    <button class="nav-button py-4 px-6 text-sm md:text-base font-medium text-gray-500" data-target="timeline">
+                        Timeline & Phases
+                    </button>
+                    <button class="nav-button py-4 px-6 text-sm md:text-base font-medium text-gray-500" data-target="pilot">
+                        Pilot & Scope
+                    </button>
+                </div>
+            </nav>
+        </header>
+
+        <main id="main-content">
+
+            <!-- ======================= -->
+            <!-- SECTION 1: OVERVIEW     -->
+            <!-- ======================= -->
+            <section id="overview" class="content-section space-y-8">
+                <div class="bg-white rounded-lg shadow-md p-6 md:p-8">
+                    <h2 class="text-2xl font-bold text-[#8D8741] mb-4">Project Overview</h2>
+                    <p class="text-base md:text-lg leading-relaxed">
+                        This project addresses the primary bottlenecks in India's residential solar (RESCO) market. Currently, small vendors lack capital for projects, while consumers and lenders face high risks and administrative complexity. 
+                        The proposed solution is a unified digital platform to connect all three stakeholders, de-risk financing, and automate critical workflows from contracts to billing.
+                    </p>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6 md:p-8">
+                    <h2 class="text-2xl font-bold text-[#8D8741] mb-6 text-center">The 3-Sided Platform Model</h2>
+                    <p class="text-center text-gray-600 mb-8 max-w-3xl mx-auto">
+                        The core of the project is a technology platform that serves as a trusted intermediary, automating workflows and enabling capital flow between lenders, vendors, and consumers. This diagram illustrates the primary value exchange.
+                    </p>
+                    
+                    <div class="flex flex-col md:flex-row items-center justify-between space-y-8 md:space-y-0 md:space-x-4">
+                        
+                        <div class="flow-diagram-box w-full md:w-1/4">
+                            <h3 class="font-bold text-lg">Lenders</h3>
+                            <p class="text-sm">Access to a de-risked asset class with transparent data and automated EMI routing.</p>
+                        </div>
+
+                        <div class="flow-arrow-vertical md:hidden"></div>
+                        <div class="hidden md:flex items-center flow-arrow">
+                            <span class="text-sm bg-[#F5F5F5] px-2 relative z-10 -mt-8">Provides Capital</span>
+                        </div>
+
+                        <div class="flow-diagram-box flow-diagram-core w-full md:w-1/3">
+                            <h3 class="font-bold text-xl">Digital RESCO Platform</h3>
+                            <p class="text-sm text-gray-200">Smart Contracts<br>Digital PPAs<br>Automated Billing & EMI<br>Risk & Credit Scoring</p>
+                        </div>
+                        
+                        <div class="flow-arrow-vertical md:hidden"></div>
+                        <div class="hidden md:flex items-center flow-arrow">
+                            <span class="text-sm bg-[#F5F5F5] px-2 relative z-10 -mt-8">Enables Projects</span>
+                        </div>
+
+                        <div class="flex flex-col space-y-4 w-full md:w-1/4">
+                            <div class="flow-diagram-box">
+                                <h3 class="font-bold text-lg">RESCO Vendors</h3>
+                                <p class="text-sm">Access to "no-CAPEX" financing and automated project management.</p>
+                            </div>
+                            <div class="flow-diagram-box">
+                                <h3 class="font-bold text-lg">Consumers</h3>
+                                <p class="text-sm">Access to "no-investment" solar with simple digital billing and tracking.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ======================= -->
+            <!-- SECTION 2: BUDGET       -->
+            <!-- ======================= -->
+            <section id="budget" class="content-section hidden space-y-8">
+                <div class="bg-white rounded-lg shadow-md p-6 md:p-8">
+                    <h2 class="text-2xl font-bold text-[#8D8741] mb-4">Project Budget Overview</h2>
+                    <p class="text-base md:text-lg leading-relaxed">
+                        The total project is budgeted for ₹5.32 Crores over an 18-month period. This funding is sourced from both MNRE and the implementing organisation. The budget is primarily allocated across three main categories: Equipment, Manpower, and Consumables, with additional provisions for overhead and contingencies.
+                    </p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="stat-card md:col-span-1">
+                        <h3 class="text-lg font-semibold text-gray-500">Total Project Cost</h3>
+                        <p class="text-5xl font-bold text-[#4A4A4A] my-3">₹5.32 Cr</p>
+                        <p class="text-sm text-gray-500">(Over 18 Months)</p>
+                    </div>
+                    <div class="stat-card md:col-span-2">
+                        <h3 class="text-lg font-semibold text-gray-500 text-center mb-4">Funding Sources</h3>
+                        <div class="chart-container" style="height: 220px; max-height: 250px;">
+                            <canvas id="fundingDonutChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6 md:p-8">
+                    <h2 class="text-2xl font-bold text-[#8D8741] mb-4 text-center">Top-Level Cost Breakdown</h2>
+                    <p class="text-center text-gray-600 mb-8 max-w-3xl mx-auto">
+                        This chart illustrates the allocation of the total project budget across its major components. Manpower and Equipment represent the two largest areas of investment, reflecting the project's nature as a technology platform build-out.
+                    </p>
+                    <div class="chart-container">
+                        <canvas id="costBreakdownBarChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ======================= -->
+            <!-- SECTION 3: DETAILED COSTS -->
+            <!-- ======================= -->
+            <section id="details" class="content-section hidden space-y-8">
+                <div class="bg-white rounded-lg shadow-md p-6 md:p-8">
+                    <h2 class="text-2xl font-bold text-[#8D8741] mb-4">Detailed Cost Explorer</h2>
+                    <p class="text-base md:text-lg leading-relaxed mb-6">
+                        This section provides an interactive drill-down into the project's main cost centers. Select a category below to see a detailed visualization of its components and the corresponding justifications from the project proposal. This allows for a clear understanding of exactly where funds are being allocated.
+                    </p>
+                    <div class="flex flex-wrap gap-3">
+                        <button class="detail-button active border-2 rounded-full py-2 px-5 font-semibold" data-detail="equipment">
+                            Equipment
+                        </button>
+                        <button class="detail-button border-2 rounded-full py-2 px-5 font-semibold" data-detail="manpower">
+                            Manpower
+                        </button>
+                        <button class="detail-button border-2 rounded-full py-2 px-5 font-semibold" data-detail="consumables">
+                            Consumables
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h3 id="detail-chart-title" class="text-xl font-bold text-center text-[#4A4A4A] mb-4">Equipment Costs</h3>
+                        <div class="chart-container">
+                            <canvas id="detailedChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-xl font-bold text-[#4A4A4A] mb-4">Justification & Details</h3>
+                        <div id="detail-content" class="text-sm space-y-4">
+                            <!-- Content is populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ======================= -->
+            <!-- SECTION 4: TIMELINE     -->
+            <!-- ======================= -->
+            <section id="timeline" class="content-section hidden space-y-8">
+                <div class="bg-white rounded-lg shadow-md p-6 md:p-8">
+                    <h2 class="text-2xl font-bold text-[#8D8741] mb-4">Timeline & Phased Spending</h2>
+                    <p class="text-base md:text-lg leading-relaxed">
+                        The 18-month project is divided into three 6-month phases. This chart visualizes the spending plan over time, broken down by cost category. This approach highlights the project's lifecycle, from a heavy initial investment in equipment in Phase 1 to a more stable, manpower-driven expenditure in Phases 2 and 3 as development and deployment ramp up.
+                    </p>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6 md:p-8">
+                    <h2 class="text-2xl font-bold text-[#8D8741] mb-6 text-center">18-Month Phased Budget Allocation</h2>
+                    <div class="chart-container" style="max-width: 800px; height: 400px; max-height: 500px;">
+                        <canvas id="timelineStackedBarChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ======================= -->
+            <!-- SECTION 5: PILOT & SCOPE -->
+            <!-- ======================= -->
+            <section id="pilot" class="content-section hidden space-y-8">
+                <div class="bg-white rounded-lg shadow-md p-6 md:p-8">
+                    <h2 class="text-2xl font-bold text-[#8D8741] mb-4">Pilot Scope & Future Innovation</h2>
+                    <p class="text-base md:text-lg leading-relaxed">
+                        The project will be validated through a focused pilot program in Jharkhand before scaling. The initial scope is designed to test the platform with all key stakeholder groups. Following a successful pilot, the platform is built to scale geographically and functionally, with optional AI-driven tools for enhanced risk assessment and forecasting.
+                    </F>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6 md:p-8">
+                    <h2 class="text-2xl font-bold text-[#8D8741] mb-6 text-center">Initial Pilot Scope (Jharkhand)</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="stat-card">
+                            <h3 class="text-lg font-semibold text-gray-500">Rooftop Owners</h3>
+                            <p class="text-5xl font-bold text-[#659DBD] my-3">50+</p>
+                            <p class="text-sm text-gray-500">Residential & RWA Consumers</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3 class="text-lg font-semibold text-gray-500">RESCO Vendors</h3>
+                            <p class="text-5xl font-bold text-[#8D8741] my-3">20+</p>
+                            <p class="text-sm text-gray-500">Small & Medium EPCs</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3 class="text-lg font-semibold text-gray-500">Financial Partners</h3>
+                            <p class="text-5xl font-bold text-[#DAAD86] my-3">1-2</p>
+                            <p class="text-sm text-gray-500">NBFCs / Banks</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6 md:p-8">
+                    <h2 class="text-2xl font-bold text-[#8D8741] mb-4">Future Innovation (Post-Pilot)</h2>
+                    <p class="text-gray-600 mb-6">The platform is designed to be future-proof by integrating optional AI/ML tools in later phases to further de-risk and optimize the ecosystem.</p>
+                    <ul class="list-disc list-inside space-y-3 text-gray-700">
+                        <li><strong class="text-[#4A4A4A]">AI-Driven Credit Scoring:</strong> Analyzing consumer financial and utility payment data to assess risk.</li>
+                        <li><strong class="text-[#4A4A4A]">Solar Generation Forecasting:</strong> Using weather and historical data to predict energy output and revenue.</li>
+                        <li><strong class="text-[#4A4A4A]">Predictive Maintenance:</strong> Detecting fault trends from IoT data to prevent downtime.</li>
+                        <li><strong class="text-[#4A4A4A]">Tariff Optimization:</strong> Recommending dynamic PPA pricing based on real-time grid data.</li>
+                    </ul>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+
+            const PALETTE = {
+                bg: '#F5F5F5',
+                main: '#4A4A4A',
+                accent1: '#8D8741',
+                accent2: '#659DBD',
+                highlight: '#DAAD86',
+                gray: '#A9A9A9'
+            };
+
+            // --- Chart.js Global Config ---
+
+            Chart.defaults.font.family = "'Inter', sans-serif";
+            Chart.defaults.color = PALETTE.main;
+            Chart.defaults.plugins.legend.position = 'bottom';
+            Chart.defaults.plugins.tooltip.backgroundColor = PALETTE.main;
+            Chart.defaults.plugins.tooltip.titleFont = { size: 14, weight: 'bold' };
+            Chart.defaults.plugins.tooltip.bodyFont = { size: 12 };
+            Chart.defaults.plugins.tooltip.padding = 10;
+            Chart.defaults.plugins.tooltip.cornerRadius = 6;
+            Chart.defaults.plugins.tooltip.boxPadding = 3;
+
+            // --- Tooltip & Label Helpers ---
+
+            const tooltipTitleCallback = (tooltipItems) => {
+                const item = tooltipItems[0];
+                let label = item.chart.data.labels[item.dataIndex];
+                return Array.isArray(label) ? label.join(' ') : label;
+            };
+
+            const formatCurrency = (value) => {
+                if (value >= 10000000) {
+                    return `₹${(value / 10000000).toFixed(2)} Cr`;
+                }
+                if (value >= 100000) {
+                    return `₹${(value / 100000).toFixed(2)} L`;
+                }
+                return `₹${value.toLocaleString('en-IN')}`;
+            };
+
+            const formatTooltipLabel = (context) => {
+                let label = context.dataset.label || context.label || '';
+                if (label) { label += ': '; }
+                let value = context.parsed.y || context.parsed.x || context.parsed;
+                label += formatCurrency(value);
+                return label;
+            };
+            
+            const formatTooltipLabelWithPercent = (context) => {
+                let label = context.label || '';
+                if (label) { label += ': '; }
+                let value = context.parsed;
+                let sum = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                let percentage = ((value / sum) * 100).toFixed(1) + '%';
+                label += `${formatCurrency(value)} (${percentage})`;
+                return label;
+            };
+
+
+            // --- Main Navigation Logic ---
+            
+            const navButtons = document.querySelectorAll('.nav-button');
+            const sections = document.querySelectorAll('.content-section');
+
+            navButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const targetId = button.dataset.target;
+                    
+                    sections.forEach(section => {
+                        section.classList.toggle('hidden', section.id !== targetId);
+                    });
+                    
+                    navButtons.forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.target === targetId);
+                    });
+                });
+            });
+
+            // --- Section 2: Budget Charts ---
+
+            function initBudgetCharts() {
+                const fundingCtx = document.getElementById('fundingDonutChart')?.getContext('2d');
+                if (fundingCtx) {
+                    new Chart(fundingCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['MNRE Share (60%)', 'Organisation Share (40%)'],
+                            datasets: [{
+                                data: [31896000, 21264000],
+                                backgroundColor: [PALETTE.accent2, PALETTE.accent1],
+                                borderColor: PALETTE.bg,
+                                borderWidth: 4,
+                                hoverOffset: 4,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            cutout: '70%',
+                            plugins: {
+                                tooltip: {
+                                    callbacks: {
+                                        title: tooltipTitleCallback,
+                                        label: formatTooltipLabelWithPercent
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                const costBreakdownCtx = document.getElementById('costBreakdownBarChart')?.getContext('2d');
+                if (costBreakdownCtx) {
+                    const otherCosts = 2000000 + 1500000 + 900000 + 1500000;
+                    new Chart(costBreakdownCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Manpower', 'Equipment', 'Consumables', 'Other Costs'],
+                            datasets: [{
+                                label: 'Total Cost',
+                                data: [17760000, 18000000, 11500000, otherCosts],
+                                backgroundColor: [PALETTE.accent2, PALETTE.accent1, PALETTE.highlight, PALETTE.gray],
+                                borderRadius: 4,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            indexAxis: 'y',
+                            scales: {
+                                x: { ticks: { callback: formatCurrency } },
+                                y: { grid: { display: false } }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        title: tooltipTitleCallback,
+                                        label: (context) => `Total Cost: ${formatCurrency(context.parsed.x)}`
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+
+            // --- Section 3: Detailed Costs Chart & Logic ---
+
+            const detailData = {
+                equipment: {
+                    labels: ['Cloud Servers', 'IoT/Smart Meters', 'Security Tooling', 'Blockchain Nodes'],
+                    datasets: [{
+                        label: 'Cost',
+                        data: [6000000, 4500000, 4500000, 3000000],
+                        backgroundColor: [PALETTE.accent2, PALETTE.accent1, PALETTE.highlight, PALETTE.gray],
+                    }]
+                },
+                manpower: {
+                    labels: ['Full-stack Devs (4)', 'DevOps Eng (1)', 'AI/ML Eng (1)', 'Project Mgr (1)', 'UX Designer (1)'],
+                    datasets: [{
+                        label: 'Cost',
+                        data: [8640000, 2700000, 2520000, 2700000, 1200000],
+                        backgroundColor: [PALETTE.accent2, PALETTE.accent1, PALETTE.highlight, PALETTE.main, PALETTE.gray],
+                    }]
+                },
+                consumables: {
+                    labels: ['Cloud Credits & APIs', 'Pilot Deployment', 'Training & Workshops'],
+                    datasets: [{
+                        label: 'Cost',
+                        data: [5000000, 4000000, 2500000],
+                        backgroundColor: [PALETTE.accent2, PALETTE.accent1, PALETTE.highlight],
+                    }]
+                }
+            };
+
+            const detailContent = {
+                equipment: `
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="border-b-2 border-gray-200">
+                                <tr><th class="py-2 pr-2">Item</th><th class="py-2 pr-2">Cost</th><th class="py-2 pr-2">Justification</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b border-gray-100">
+                                    <td class="py-3 pr-2 font-medium">Cloud Servers (AWS/Azure)</td>
+                                    <td class="py-3 pr-2">${formatCurrency(6000000)}</td>
+                                    <td class="py-3 pr-2">Core computing backbone for high-availability platform.</td>
+                                </tr>
+                                <tr class="border-b border-gray-100">
+                                    <td class="py-3 pr-2 font-medium">IoT gateway & smart meters</td>
+                                    <td class="py-3 pr-2">${formatCurrency(4500000)}</td>
+                                    <td class="py-3 pr-2">Real-time data capture for billing and pilot ops.</td>
+                                </tr>
+                                <tr class="border-b border-gray-100">
+                                    <td class="py-3 pr-2 font-medium">Security & Compliance Tooling</td>
+                                    <td class="py-3 pr-2">${formatCurrency(4500000)}</td>
+                                    <td class="py-3 pr-2">Mandatory for GDPR/RBI compliance and data protection.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 pr-2 font-medium">Blockchain Service Nodes</td>
+                                    <td class="py-3 pr-2">${formatCurrency(3000000)}</td>
+                                    <td class="py-3 pr-2">Enables smart-contract-based EMI routing.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `,
+                manpower: `
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="border-b-2 border-gray-200">
+                                <tr><th class="py-2 pr-2">Role</th><th class="py-2 pr-2">Total Cost</th><th class="py-2 pr-2">Justification</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b border-gray-100">
+                                    <td class="py-3 pr-2 font-medium">Full-stack Developers (4)</td>
+                                    <td class="py-3 pr-2">${formatCurrency(8640000)}</td>
+                                    <td class="py-3 pr-2">Core platform development (portals, APIs, backend).</td>
+                                </tr>
+                                <tr class="border-b border-gray-100">
+                                    <td class="py-3 pr-2 font-medium">DevOps Engineer (1)</td>
+                                    <td class="py-3 pr-2">${formatCurrency(2700000)}</td>
+                                    <td class="py-3 pr-2">Cloud infrastructure, CI/CD, security & monitoring.</td>
+                                </tr>
+                                <tr class="border-b border-gray-100">
+                                    <td class="py-3 pr-2 font-medium">AI/ML Engineer (1)</td>
+                                    <td class="py-3 pr-2">${formatCurrency(2520000)}</td>
+                                    <td class="py-3 pr-2">Develop credit scoring & generation forecasting models.</td>
+                                </tr>
+                                <tr class="border-b border-gray-100">
+                                    <td class="py-3 pr-2 font-medium">Project Manager (1)</td>
+                                    <td class="py-3 pr-2">${formatCurrency(2700000)}</td>
+                                    <td class="py-3 pr-2">Project planning, stakeholder coordination, reporting.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 pr-2 font-medium">UX Designer (1)</td>
+                                    <td class="py-3 pr-2">${formatCurrency(1200000)}</td>
+                                    <td class="py-3 pr-2">UI/UX design and user journey mapping (starts Phase 2).</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `,
+                consumables: `
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="border-b-2 border-gray-200">
+                                <tr><th class="py-2 pr-2">Item</th><th class="py-2 pr-2">Total Cost</th><th class="py-2 pr-2">Justification</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b border-gray-100">
+                                    <td class="py-3 pr-2 font-medium">Cloud Credits & API Subs</td>
+                                    <td class="py-3 pr-2">${formatCurrency(5000000)}</td>
+                                    <td class="py-3 pr-2">Cost for cloud usage, API gateways, and 3rd-party services.</td>
+                                </tr>
+                                <tr class="border-b border-gray-100">
+                                    <td class="py-3 pr-2 font-medium">Pilot Deployment Support</td>
+                                    <td class="py-3 pr-2">${formatCurrency(4000000)}</td>
+                                    <td class="py-3 pr-2">Logistics, kits, and on-ground support for the pilot phase.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 pr-2 font-medium">Training & Workshops</td>
+                                    <td class="py-3 pr-2">${formatCurrency(2500000)}</td>
+                                    <td class="py-3 pr-2">Materials and outreach for onboarding vendors and consumers.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `
+            };
+
+            let detailedChartInstance;
+            function initDetailedChart() {
+                const detailedCtx = document.getElementById('detailedChart')?.getContext('2d');
+                if (!detailedCtx) return;
+
+                detailedChartInstance = new Chart(detailedCtx, {
+                    type: 'bar',
+                    data: detailData.equipment,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        scales: {
+                            x: { ticks: { callback: formatCurrency } },
+                            y: { grid: { display: false } }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: tooltipTitleCallback,
+                                    label: (context) => `Total Cost: ${formatCurrency(context.parsed.x)}`
+                                }
+                            }
+                        }
+                    }
+                });
+
+                const detailButtons = document.querySelectorAll('.detail-button');
+                const detailContentEl = document.getElementById('detail-content');
+                const detailChartTitleEl = document.getElementById('detail-chart-title');
+
+                detailContentEl.innerHTML = detailContent.equipment; 
+
+                detailButtons.forEach(button => {
+                    button.addEventListener('click', () => {
+                        const key = button.dataset.detail;
+                        
+                        detailedChartInstance.data = detailData[key];
+                        detailedChartInstance.update();
+                        
+                        detailContentEl.innerHTML = detailContent[key];
+                        detailChartTitleEl.textContent = `${key.charAt(0).toUpperCase() + key.slice(1)} Costs`;
+                        
+                        detailButtons.forEach(btn => btn.classList.remove('active'));
+                        button.classList.add('active');
+                    });
+                });
+            }
+
+
+            // --- Section 4: Timeline Chart ---
+            
+            function initTimelineChart() {
+                const timelineCtx = document.getElementById('timelineStackedBarChart')?.getContext('2d');
+                if (timelineCtx) {
+                    const otherCosts = {
+                        p1: 800000 + 600000 + 300000 + 1500000,
+                        p2: 600000 + 400000 + 300000,
+                        p3: 600000 + 500000 + 300000
+                    };
+                    new Chart(timelineCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Phase 1 (0-6 Mo)', 'Phase 2 (7-12 Mo)', 'Phase 3 (13-18 Mo)'],
+                            datasets: [
+                                { label: 'Equipment', data: [18000000, 0, 0], backgroundColor: PALETTE.accent1 },
+                                { label: 'Manpower', data: [5520000, 6120000, 6120000], backgroundColor: PALETTE.accent2 },
+                                { label: 'Consumables', data: [3700000, 4000000, 3800000], backgroundColor: PALETTE.highlight },
+                                { label: 'Other Costs', data: [otherCosts.p1, otherCosts.p2, otherCosts.p3], backgroundColor: PALETTE.gray }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: { stacked: true, grid: { display: false } },
+                                y: { stacked: true, ticks: { callback: formatCurrency } }
+                            },
+                            plugins: {
+                                tooltip: {
+                                    callbacks: {
+                                        title: tooltipTitleCallback,
+                                        label: formatTooltipLabel
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // --- Initialize all charts ---
+            initBudgetCharts();
+            initDetailedChart();
+            initTimelineChart();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+# Ignore generated user records and index files
+*
+!.gitignore

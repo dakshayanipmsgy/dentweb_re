@@ -1,0 +1,20 @@
+[
+    {
+        "timestamp": "2025-11-11T09:27:33+05:30",
+        "type": "seasonal_schedule",
+        "campaign_id": null,
+        "message": "Seasonal bursts locked: Summer rooftop push & Diwali festival offers."
+    },
+    {
+        "timestamp": "2025-11-11T09:27:33+05:30",
+        "type": "dayparting",
+        "campaign_id": null,
+        "message": "Applied 25% bid uplift during 9am-8pm call hours and reduced bids overnight."
+    },
+    {
+        "timestamp": "2025-11-11T09:27:33+05:30",
+        "type": "compliance_rescan",
+        "campaign_id": null,
+        "message": "Re-scanned active creatives; flagged items would be paused automatically."
+    }
+]

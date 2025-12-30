@@ -1,0 +1,301 @@
+[
+    {
+        "id": "1",
+        "name": "Q",
+        "type": "online",
+        "primary_goal": "Lead Generation",
+        "channels": [
+            "facebook_instagram"
+        ],
+        "target_areas": "Jharkhand",
+        "target_persona": "30",
+        "budget_notes": "1000",
+        "start_date": "2025-12-04",
+        "end_date": "2025-12-11",
+        "ai_brief": "Hi",
+        "ai_strategy_summary": "Jm",
+        "ai_online_creatives": [
+            "Mm"
+        ],
+        "ai_offline_creatives": [
+            "Mm"
+        ],
+        "status": "draft",
+        "channel_assets": [],
+        "created_at": "2025-12-03 00:39:08",
+        "updated_at": "2025-12-03 00:39:08"
+    },
+    {
+        "id": "2",
+        "name": "Qo",
+        "type": "online",
+        "primary_goal": "Lead Generation",
+        "channels": [
+            "facebook_instagram"
+        ],
+        "target_areas": "Ranchi",
+        "target_persona": "30",
+        "budget_notes": "10000",
+        "start_date": "2025-12-03",
+        "end_date": "2025-12-10",
+        "ai_brief": "",
+        "ai_strategy_summary": "",
+        "ai_online_creatives": [],
+        "ai_offline_creatives": [],
+        "status": "draft",
+        "channel_assets": [],
+        "created_at": "2025-12-03 00:40:19",
+        "updated_at": "2025-12-03 02:49:40",
+        "whatsapp_packs": [
+            {
+                "id": "wp_20251203_005931_165",
+                "label": "Jhn",
+                "pack_type": "Cold outreach",
+                "language": "English",
+                "notes": "",
+                "messages": [
+                    "Tired of rising electricity bills in Ranchi? Switch to solar energy with Dakshayani Enterprises and reduce your power costs by up to 90% immediately. As Jharkhand's trusted solar EPC partner, we handle everything from site survey to installation, helping you unlock maximum government subsidies under the PM Surya Ghar Muft Bijli Yojana. Reply \"SOLAR\" to get a free site assessment today!",
+                    "Turn your empty rooftop into a money-saving asset with Dakshayani Enterprises. With the latest solar technology, homeowners in Ranchi are recovering their investment in record time while enjoying free electricity for decades. Don't let your roof sit idle; click the link below to schedule a free consultation and see exactly how much you can save this month: [Link]",
+                    "Did you know you can get substantial subsidies for installing solar on your home right now? Dakshayani Enterprises is helping families in Ranchi take full advantage of current government schemes for a seamless, cost-effective transition to green energy. Secure your subsidy and slash your bills by booking a quick callback with our expert team here: [Link]",
+                    "Looking for a reliable solar solution in Ranchi? Dakshayani Enterprises brings you world-class solar installations right to your doorstep, ensuring zero power cuts and massive savings. We specialize in customized residential setups that fit your budget and energy needs perfectly, so call us at [Phone Number] or reply \"YES\" to book your expert consultation now.",
+                    "Hello! Stop paying for electricity that you can generate for free right at home. Dakshayani Enterprises is Ranchi’s premier solar EPC company, dedicated to empowering your household with clean energy and lifetime savings. Let’s calculate your solar potential together—reply with your average monthly bill amount for a free customized savings report."
+                ],
+                "created_at": "2025-12-03 00:59:31"
+            }
+        ],
+        "tracking_code": "cmp_2_8959e8",
+        "offline_assets": [
+            {
+                "id": "off_20251203_023803_648",
+                "type": "pamphlet",
+                "title": "Pm surya ghar must bijli Yojana",
+                "html_path": "data/marketing/offline_assets/2_off_20251203_023803_648.html",
+                "pdf_path": "data/marketing/offline_assets/2_off_20251203_023803_648.pdf",
+                "created_at": "2025-12-03 02:38:03"
+            }
+        ],
+        "last_ai_insights": "### Overview\n**Status:** **CRITICAL BLOCKER.** The \"Qo\" campaign is currently in **Draft** with **0 online assets** prepared. No budget has been deployed, and no leads have been generated.\n**Diagnosis:** There is a disconnect between the channel strategy (Facebook/Instagram) and the asset library (0 channel assets). We cannot launch without creative material.\n**Immediate Goal:** Create ad creatives, finalize targeting, and move the campaign to \"Active\" within 48 hours to utilize the ₹10,000 budget for initial market validation in Ranchi.\n\n### Online actions\n1.  **Create 3 Ad Creatives (Urgent):** You currently have 0 assets for FB/Insta. Immediate requirement:\n    *   **Creative A (Trust):** Photo of a completed Dakshayani installation in Jharkhand with the text \"Solarize your home in Ranchi.\"\n    *   **Creative B (Savings):** A graphic showing an electricity bill drop (e.g., \"Reduce bills by 90%\").\n    *   **Creative C (Subsidy):** A bold graphic highlighting the PM Surya Ghar Muft Bijli Yojana subsidy benefits.\n2.  **Launch Campaign with \"WhatsApp\" Objective:** Since you have a \"WhatsApp pack\" ready, configure the Facebook Ad Set to **Traffic > WhatsApp** or **Leads > WhatsApp**. This reduces friction and allows immediate conversation.\n3.  **Refine Targeting:**\n    *   **Location:** Ranchi (+15km radius).\n    *   **Age:** 30–60 (Homeowner demographic).\n    *   **Interests:** Solar power, Sustainable energy, Home construction, Real estate.\n    *   **Exclusions:** Renters (if selectable) or students.\n\n### Offline actions\n1.  **Digitize the Offline Asset:** You have 1 offline asset available. Take a high-quality photo or scan of this asset (flyer/banner) and use it as an organic social media post to support the paid ads.\n2.  **Strategic Distribution:** If the offline asset is a physical flyer/standee, deploy it in high-traffic residential areas in Ranchi (e.g., Morabadi, Bariatu, or Kanke Road) where homeownership is high, to create a \"surround sound\" effect with the digital ads.\n\n### WhatsApp & follow-up\n1.  **Deploy the WhatsApp Pack:** Ensure the \"WhatsApp pack\" (scripts/templates) is loaded into your Business App or CRM. The auto-reply for incoming leads must be set immediately.\n    *   *Draft Greeting:* \"Namaste! Thanks for choosing Dakshayani Enterprises. Are you looking for a Solar setup for your Home or Business?\"\n2.  **Speed to Lead:** For solar leads in Ranchi, trust is key. Assign a sales rep to call any lead coming from Facebook within **15 minutes**.\n3.  **Trust Building:** Prepare a PDF or image gallery of \"Recent Projects in Ranchi\" to send immediately via WhatsApp once a user engages.\n\n### Budget & optimization\n1.  **Pacing Strategy:** Do not spend the ₹10,000 all at once. Set a **Daily Budget of ₹500–₹700**. This allows the campaign to run for ~14 days, giving the Facebook algorithm time to learn.\n2.  **Cost Cap:** Monitor Cost Per Lead (CPL).\n    *   **Target CPL:** ₹150–₹250.\n    *   **Kill Switch:** If an ad set spends ₹1,000 without a single lead/message, turn it off and change the creative.\n3.  **A/B Testing:** After 5 days, review which of the 3 creatives (Trust vs. Savings vs. Subsidy) has the highest Click-Through Rate (CTR). Shift the remaining budget to the winner.",
+        "last_ai_insights_at": "2025-12-03 02:49:40"
+    },
+    {
+        "id": "3",
+        "name": "1",
+        "tracking_code": "",
+        "type": "online",
+        "primary_goal": "Lead Generation",
+        "channels": [
+            "facebook_instagram"
+        ],
+        "intent_note": "Get industrial leads in Jharkhand of 30-100kwp solar.",
+        "target_areas": "Prioritize the Adityapur Industrial Area and Gamharia in Jamshedpur, which house a dense concentration of MSMEs and auto-ancillary units ideal for mid-sized solar installations. Expand targeting to the Tupudana and Kokar Industrial Areas in Ranchi, as well as the Bokaro Industrial Area and Balidih for steel-dependent manufacturing. Additionally, focus on the industrial belts of Ramgarh and Giridih, specifically targeting small-scale alloy, cement, and rolling mill facilities that face high grid tariffs.",
+        "target_persona": "- Factory Managing Directors and MSME owners in auto-ancillary, steel, and cement sectors\r\n- Located in high-density industrial clusters of Adityapur, Gamharia, Bokaro, and Ramgarh\r\n- Operating energy-intensive units facing eroding margins due to rising grid tariffs\r\n- Facilities with connected loads suitable for 30–100kWp captive solar systems\r\n- Pragmatic investors seeking immediate OPEX reduction and sub-4-year payback periods\r\n- Decision-makers valuing local regulatory expertise and reliable after-sales service over sustainability goals",
+        "budget_notes": "Allocate ₹3,500 (70%) to Facebook Feed ads geo-fenced to Adityapur and Gamharia, targeting MSME owners with \"High Tariff Solution\" messaging.\r\nAssign ₹1,500 (30%) to Instagram ads showcasing installation case studies in Bokaro and Ranchi to build trust with local decision-makers.\r\nSet a daily budget cap of approximately ₹715 to ensure consistent delivery throughout the 7-day period.\r\nSchedule ads to run strictly between 9:00 AM and 7:00 PM to maximize visibility during factory operating hours.",
+        "start_date": "2025-12-10",
+        "end_date": "2025-12-12",
+        "ai_brief": "Execute a targeted B2B lead generation campaign across Google, Meta, and LinkedIn with a monthly budget of ₹80,000 to capture industrial solar demand (30–100kWp) in Jharkhand’s key manufacturing clusters like Adityapur, Gamharia, and Bokaro. The messaging must directly address Cost-Conscious MSME Owners and Factory MDs in auto-ancillary and steel sectors, positioning solar as a financial necessity to combat high grid tariffs with a payback period under 4 years. Emphasize Dakshayani Enterprises’ local regulatory expertise and reliable after-sales support to differentiate from generic national competitors.\r\n\r\nAllocate ₹45,000 to Google Search Ads for transaction-ready keywords such as \"solar installation for factory,\" ₹25,000 to Meta for geo-fenced display ads targeting specific industrial estates in Jamshedpur and Ranchi, and ₹10,000 to LinkedIn for precision targeting of decision-makers. The creative approach should be pragmatic and data-driven, utilizing ROI calculators and testimonials from local facility managers to build trust and secure high-quality leads at a target CPL of ₹1,200.",
+        "ai_strategy_summary": "This campaign focuses on acquiring high-intent industrial leads for 30–100kWp solar systems within Jharkhand’s primary manufacturing hubs, including Adityapur, Gamharia, and Bokaro. We will target cost-conscious MSME owners and Factory MDs in the auto-ancillary and steel sectors by positioning solar as a financial necessity to combat rising grid tariffs, explicitly highlighting a payback period of under four years and Dakshayani Enterprises' superior local regulatory expertise compared to national competitors.\r\n\r\nTo achieve this, we will deploy a monthly budget of ₹80,000 across a tiered channel mix: ₹45,000 on Google Search to capture immediate transaction-ready intent, ₹25,000 on geo-fenced Meta ads to saturate specific industrial estates, and ₹10,000 on LinkedIn for precision targeting of decision-makers. The creative strategy will rely on pragmatic data, ROI calculators, and local testimonials to build trust and drive high-quality inquiries at a target Cost Per Lead of ₹1,200.",
+        "ai_online_creatives": [
+            "Cut your Adityapur factory's electricity overheads by 70% with a solar payback period of under 4 years—get a custom ROI calculation today.",
+            "Stop letting rising grid tariffs eat your steel plant's margins; lock in a fixed energy cost of ₹4/unit for the next 25 years with Dakshayani Enterprises.",
+            "Visual ad showing a split bill comparison: \"Current JBVNL Bill: ₹1.5 Lakhs vs. Solar Bill: ₹20,000\"—Book a free site survey for your 30-100kWp requirement.",
+            "Auto-ancillary units in Gamharia: Turn your 5,000+ sq. ft. idle roof space into a profit center generating ₹10 Lakhs in annual savings.",
+            "Don't get stuck in regulatory red tape; choose the local expert who navigates Jharkhand's solar approvals faster than any national competitor.",
+            "Claim 40% accelerated depreciation this financial year while powering your rolling mill with a captive 100kWp solar plant.",
+            "Factory MDs: Download our \"Jharkhand Industrial Solar ROI Sheet\" to see exactly how a 50kWp system pays for itself by 2028.",
+            "Local support matters: We guarantee 24-hour onsite service response for solar installations in the Bokaro and Ramgarh industrial belts."
+        ],
+        "ai_offline_creatives": [],
+        "status": "draft",
+        "channel_assets": {
+            "facebook_instagram": {
+                "primary_texts": [
+                    "Primary Texts:",
+                    "- Running a factory in Adityapur, Gamharia, or Bokaro? Don’t let rising grid tariffs eat your operational margins. Switch to a 30-100kWp captive solar system and achieve ROI in under 4 years. Dakshayani Enterprises offers expert local support specifically for Jharkhand’s auto-ancillary and steel industries.",
+                    "- Is your facility’s electricity bill reducing your profits? Join smart MSME owners in Ramgarh and Ranchi who are cutting overheads with industrial solar. We specialize in 30-100kWp installations with seamless regulatory approval and reliable after-sales service right here in Jharkhand.",
+                    "- Transform your factory's roof into a profit center. With a payback period of less than 4 years, our solar solutions are designed for the heavy energy loads of rolling mills and fabrication workshops. Get a reliable partner who understands the local grid landscape better than any national competitor."
+                ],
+                "headlines": [
+                    "Headlines:",
+                    "- Cut Factory Power Costs by 80%",
+                    "- 30-100kW Solar for Jharkhand MSMEs",
+                    "- ROI < 4 Years: Industrial Solar",
+                    "- Adityapur & Bokaro: Switch to Solar"
+                ],
+                "descriptions": [
+                    "Descriptions:",
+                    "- Trusted by local steel & auto units.",
+                    "- Free site survey & ROI calculation.",
+                    "- Expert EPC for high-tariff industries.",
+                    "- Local service, faster regulatory approvals."
+                ],
+                "cta_suggestions": [
+                    "CTAs:",
+                    "- Get Quote",
+                    "- Learn More",
+                    "- Book Consultation",
+                    "- Sign Up"
+                ]
+            }
+        },
+        "created_at": "2025-12-03 04:40:47",
+        "updated_at": "2025-12-03 16:17:11",
+        "total_budget_rs": "5000",
+        "budget_period": "Per week",
+        "ai_budget_allocation": ""
+    },
+    {
+        "id": "4",
+        "name": "Solar Home December 2025",
+        "tracking_code": "cmp_4_8b9e56",
+        "type": "online",
+        "primary_goal": "Lead Generation",
+        "channels": [
+            "facebook_instagram",
+            "google_search",
+            "whatsapp_broadcast"
+        ],
+        "intent_note": "i want to get leads from households that have electricity bill more than 1500rs per month throughout jharkhand.",
+        "target_areas": "Ashok Nagar, Harmu Housing Colony, and Morabadi Residential Zone, Ranchi\r\nKadma, Sonari, and Bistupur Premium Housing Clusters, Jamshedpur\r\nSaraidhela, Hirapur, and Bank More Residential Belts, Dhanbad\r\nCooperative Colony and Sector 4 Independent Housing Units, Bokaro Steel City\r\nMatwari and Canary Hill Road High-Income Sectors, Hazaribagh\r\nCastairs Town and Williams Town Residential Hubs, Deoghar\r\nRamgarh Cantt and Gola Road Business Residential Zone, Ramgarh",
+        "target_persona": "- Homeowners aged 30–55 residing in independent houses within Jharkhand’s key urban centers\r\n- Government employees, PSU professionals, and business owners with high disposable income\r\n- Households consistently paying over ₹1,500 monthly for electricity bills\r\n- Heavy appliance users (ACs, geysers) seeking relief from rising tariffs and power cuts\r\n- Residents of premium zones like Ashok Nagar (Ranchi) and Bistupur (Jamshedpur) targeting long-term ROI\r\n- Decision-makers viewing solar installation as a critical financial investment for family security",
+        "budget_notes": "Allocate ₹5,000 (50%) to Facebook and Instagram Ads targeting independent homeowners in premium clusters like Ashok Nagar and Bistupur.\r\nAssign ₹4,000 (40%) to Google Search Ads focusing on high-intent keywords like \"solar panel price Jharkhand\" and \"reduce electricity bill.\"\r\nReserve ₹1,000 (10%) for WhatsApp Broadcasts to nurture leads and drive direct engagement.\r\nSet a strict daily spend limit of ₹330 to ensure consistent visibility across the 30-day campaign duration.",
+        "start_date": "2025-12-05",
+        "end_date": "2025-12-07",
+        "ai_brief": "*   Launch a high-precision lead generation campaign for Dakshayani Enterprises targeting homeowners aged 30–55 in independent houses across Jharkhand’s key urban clusters (Ranchi, Jamshedpur, Dhanbad, Bokaro) and semi-urban hubs (Hazaribagh, Deoghar, Ramgarh), specifically focusing on households paying electricity bills exceeding ₹1,500 monthly.\r\n\r\n*   Target specific premium residential zones including Ashok Nagar and Harmu (Ranchi), Bistupur and Kadma (Jamshedpur), and Saraidhela (Dhanbad), appealing to government employees, PSU professionals, and business owners by positioning solar as a high-ROI financial investment that enables guilt-free use of heavy appliances like ACs and geysers.\r\n\r\n*   Deploy a ₹10,000 budget with a strict daily cap of ₹330, allocating ₹5,000 (50%) to Facebook and Instagram Ads for demographic targeting, ₹4,000 (40%) to Google Search Ads for high-intent keywords like \"solar panel price Jharkhand,\" and ₹1,000 (10%) for WhatsApp Broadcasts to nurture leads directly.\r\n\r\n*   Utilize radius targeting around district headquarters to strictly isolate high-income colonies such as Sector 4 (Bokaro) and Canary Hill Road (Hazaribagh), ensuring ad spend is focused solely on financially capable households seeking long-term energy security while excluding deep rural pockets.",
+        "ai_strategy_summary": "To capture qualified leads across Jharkhand, we will execute a hyper-local digital push targeting homeowners aged 30–55 in major urban centers like Ranchi and Jamshedpur, specifically filtering for independent house residents with electricity bills exceeding ₹1,500. By utilizing radius targeting around high-income pin codes and excluding deep rural pockets, we ensure ad spend focuses strictly on financially autonomous professionals in government, PSU, and business sectors capable of high-ticket investments.\r\n\r\nThe messaging will pivot from general sustainability to urgent financial relief, positioning solar as a necessity for running heavy appliances like ACs and geysers amidst rising tariffs and erratic supply. With a lean ₹10,000 budget, we will allocate 50% to Facebook and Instagram for visual demographic targeting, 40% to Google Search to capture high-intent queries, and the final 10% to WhatsApp Broadcasts for direct lead nurturing, ensuring a cohesive funnel from discovery to consultation.",
+        "ai_online_creatives": [
+            "Ranchi & Jamshedpur Homeowners: Electricity bill over ₹1,500? Stop renting power and start owning it with Dakshayani Solar. [Get Free Quote]",
+            "Run Geysers & Heaters worry-free this winter; cut your electricity costs by up to 90% and secure energy independence. [Check Eligibility]",
+            "Why pay the electricity board when the sun is free? Turn your ₹2,000 monthly expense into ₹0 with a smart rooftop investment. [Calculate Savings]",
+            "Attention PSU & Govt Employees: Solar offers better ROI than your savings account; install now for long-term financial freedom. [Book Site Visit]",
+            "Independent House in Dhanbad or Bokaro? Your roof is an unused asset waiting to save you lakhs over the next 25 years. [Get Callback]",
+            "Tired of erratic supply and rising rates? Lock in free electricity for decades with Jharkhand's trusted EPC partner. [Apply Now]",
+            "See how households in Ramgarh and Deoghar are eliminating bills over ₹1,500; swap your monthly expense for a solar asset. [See Plans]"
+        ],
+        "ai_offline_creatives": [],
+        "status": "draft",
+        "channel_assets": {
+            "facebook_instagram": {
+                "primary_texts": [
+                    "Tired of paying electricity bills over ₹1,500 just to run your AC and geyser? Switch to solar with Dakshayani Enterprises to slash your costs and enjoy 24/7 power freedom in your independent home.",
+                    "Jharkhand homeowners, stop renting electricity and start owning it by turning your rooftop into a savings engine. If you live in an independent house and pay high tariffs, our solar solutions offer the perfect financial ROI.",
+                    "Run your heavy appliances without fear of rising rates or power cuts this December. Join smart homeowners in Ranchi and Jamshedpur who are saving lakhs by installing high-efficiency solar systems today.",
+                    "Make a smart investment for your home by eliminating monthly electricity bills above ₹1,500 forever. Dakshayani Enterprises brings expert solar installation to government employees and business owners across Jharkhand looking for energy independence."
+                ],
+                "headlines": [
+                    "Bill over ₹1500? Switch to Solar now.",
+                    "Run ACs and Geysers for free daily.",
+                    "Slash your Jharkhand electricity bill today.",
+                    "Smartest investment for independent house owners.",
+                    "Get free electricity for your independent home.",
+                    "Stop worrying about rising power tariffs."
+                ],
+                "descriptions": [
+                    "Stop paying over ₹1,500 monthly for electricity and run your AC and geysers worry-free with our custom rooftop solar solutions.",
+                    "Turn your independent home in Jharkhand into a power plant and save lakhs on electricity bills over the next 25 years.",
+                    "Protect your family from rising tariffs and erratic power supply by switching to solar, the smartest investment for government employees and business owners.",
+                    "Join smart homeowners in Ranchi and Jamshedpur who have slashed their bills to zero while enjoying uninterrupted power for heavy appliances."
+                ],
+                "cta_suggestions": [
+                    "Get Your Solar Quote",
+                    "Calculate Your Savings",
+                    "Book Free Site Visit",
+                    "Reduce Your Bill Today",
+                    "Switch To Solar Now"
+                ],
+                "media_concepts": "A modern double-story independent house in Ranchi with shiny solar panels installed on the flat terrace.\r\nA stressed homeowner staring at a paper electricity bill with a high amount visible in a well-furnished living room.\r\nA happy family sitting comfortably under a running air conditioner with a sun icon overlay indicating solar power source.\r\nUniformed technicians installing solar panels on a concrete roof with a recognizable Jharkhand urban skyline in the background.\r\nA smartphone screen in a hand showing a solar monitoring app with green bars indicating high energy savings.\r\nA split visual showing a dark house during a power cut versus a brightly lit neighbor's house with solar panels.\r\nA middle-aged professional standing proudly with crossed arms in front of a residential solar inverter setup.\r\nAn aerial drone shot of a premium colony in Jamshedpur showing multiple rooftops equipped with blue solar arrays.",
+                "media_prompts": "A photorealistic wide shot of a premium two-story independent house in an Indian urban residential colony featuring a sleek rooftop solar panel installation glistening under bright sunshine. In the foreground, a confident middle-aged Indian couple stands smiling while holding a paper electricity bill, with a split AC outdoor unit visibly running on the wall behind them to symbolize guilt-free heavy appliance usage. The lighting is warm and aspirational, evoking a sense of financial security and modern living suitable for a high-income Jharkhand household."
+            },
+            "google_search": {
+                "headlines": [
+                    "Bill Over ₹1500? Go Solar",
+                    "Save Big on Power Bills",
+                    "Run AC & Geyser on Solar",
+                    "Best Solar In Jharkhand",
+                    "Dakshayani Solar Promo",
+                    "Zero Electricity Bill",
+                    "Solar for Home in Ranchi",
+                    "Reduce Your Tariff Today",
+                    "Jamshedpur Solar Expert",
+                    "Get Free Solar Quote"
+                ],
+                "descriptions": [
+                    "Slash your monthly electricity bill by up to 90% with Dakshayani Enterprises; perfect for homes running ACs and geysers.",
+                    "Paying over ₹1,500 for electricity? Turn your roof into a savings engine and secure your family against rising tariffs today.",
+                    "Run your home appliances worry-free with a custom solar setup designed specifically for independent houses in Jharkhand.",
+                    "Join smart homeowners in Ranchi and Jamshedpur saving lakhs on power; get a free site survey and quote now.",
+                    "Stop renting power and start owning it; invest in high-efficiency solar for long-term savings and energy independence."
+                ],
+                "keywords": [
+                    "solar panel installation ranchi",
+                    "rooftop solar for home jharkhand",
+                    "solar company in jamshedpur",
+                    "solar panel price in dhanbad",
+                    "best solar epc company jharkhand",
+                    "3kw solar system price with subsidy jharkhand",
+                    "solar power plant for home bokaro",
+                    "reduce electricity bill jharkhand",
+                    "solar installation cost in hazaribagh",
+                    "solar panel dealers in deoghar",
+                    "residential solar system ramgarh",
+                    "pm surya ghar yojana jharkhand",
+                    "5kw on grid solar system price jharkhand",
+                    "solar energy solutions ranchi",
+                    "buy solar panels for home jharkhand",
+                    "solar installers near me",
+                    "solar subsidy in jharkhand 2025",
+                    "cost of solar panel for house in giridih",
+                    "solar panel price list ranchi",
+                    "dakshayani enterprises solar"
+                ]
+            },
+            "whatsapp_broadcast": {
+                "short_messages": [
+                    "Is your monthly electricity bill crossing ₹1,500? Switch to solar with Dakshayani Enterprises to run your AC and geyser worry-free while slashing your expenses.",
+                    "Stop renting electricity and start owning your power today; reply 'YES' for a free solar assessment for your independent house in Jharkhand.",
+                    "Smart homeowners in Ranchi and Jamshedpur are beating rising tariffs by installing rooftop solar this December.",
+                    "Contact Dakshayani Enterprises now to turn your roof into a money-saving asset and secure your family against future rate hikes.",
+                    "Don't let erratic power supply ruin your comfort; install a solar system designed for high-consumption households and enjoy energy independence.",
+                    "If you own a home and pay over ₹1,500 for electricity, you are eligible for massive savings with our premium solar solutions.",
+                    "Reply to this message to book your free site survey with Dakshayani Enterprises and see how much you can save next month."
+                ],
+                "long_messages": [
+                    "Are you tired of seeing your electricity bill cross ₹1,500 every month just because you want to run your AC or geyser comfortably without worrying about the meter? At Dakshayani Enterprises, we help homeowners in Ranchi, Jamshedpur, and Dhanbad turn that monthly expense into a long-term asset by installing high-efficiency solar systems that can slash your bills by up to 90% immediately. Instead of paying the electricity board forever, invest in your own power plant today and enjoy free electricity for the next 25 years while significantly increasing the market value of your independent home. Reply with \"SOLAR\" to get a free savings calculation customized specifically for your roof size and consumption patterns.",
+                    "Stop letting erratic power cuts and rising tariffs control your daily life, especially when you need your heavy appliances the most during peak seasons. By switching to a rooftop solar solution with Dakshayani Enterprises, you gain total energy independence, allowing you to run air conditioners and heaters without the fear of a skyrocketing bill at the end of the month. We are currently offering specialized consultations for independent house owners in Jharkhand who want to secure their family's comfort against future rate hikes and grid failures. Click the link below to schedule a priority site visit and see exactly how much you can save starting this December.",
+                    "If your household electricity bill consistently exceeds ₹1,500, you are essentially renting power at a premium rate when you could be generating your own for free. Join hundreds of smart homeowners across Jharkhand who have partnered with Dakshayani Enterprises to eliminate their dependence on the grid and lock in massive financial savings for decades to come. Our team specializes in designing aesthetic, high-performance solar setups for independent houses, ensuring you get the maximum return on your investment while contributing to a greener state. Send us a photo of your latest bill today, and our engineers will design a system that fits your roof and your budget perfectly."
+                ],
+                "media_prompts": "A split-screen vertical image showing a stressed person holding a high electricity bill labeled \"₹2500+\" on the top half, contrasted with a peaceful rooftop solar installation on an independent house on the bottom half, overlaid with the text \"Stop Renting Power, Own It! Call For Anything Solar\" and the Dakshayani Enterprises logo.\r\n\r\nA warm, family-centric photo of a household enjoying a cool living room with the AC running, featuring a graphic overlay of a sun powering the AC unit, accompanied by the text \"Run AC & Geyser Free of Cost – Switch to Solar Today\" and the phone number 7070278178.\r\n\r\nA professional, trust-building graphic featuring a map of Jharkhand with location pins on Ranchi, Jamshedpur, and Dhanbad connected to a central solar panel icon, with the text \"Trusted by 100+ Homes in Premium Colonies\" and a \"Book Free Consultation\" button graphic.\r\n\r\nA minimalist financial infographic style image showing a downward trend line for electricity bills crashing to zero next to an upward trend line for savings, with the headline \"Bill > ₹1500? It’s Time to Upgrade\" and the website dakshayani.co.in at the bottom.\r\n\r\nA bright, high-resolution image of a modern rooftop solar setup against a clear blue sky, styled with a 'PM Surya Ghar' golden badge and bold text saying \"Government Subsidy Available – Secure Your Rate Now\" with a direct WhatsApp CTA icon."
+            }
+        },
+        "created_at": "2025-12-03 15:38:20",
+        "updated_at": "2025-12-10 08:15:28",
+        "last_ai_insights": "### Overview\n**Status:** Draft | **Risk Level:** High (Budget Dilution)\n\nThe strategy targets a high-value persona (PSU/Govt employees) with a strong pain point (running ACs/Geysers), but the **₹10,000 budget is insufficient to cover the proposed geographic spread** (8+ urban/semi-urban centers). Spreading ₹4,000 on Google Ads across Ranchi, Jamshedpur, Dhanbad, *and* secondary hubs will result in negligible impression share and zero meaningful data.\n\n**Strategic Pivot:** We must treat December as a **single-market pilot**. We will concentrate 100% of the spend on **Ranchi and Jamshedpur only**. Once we validate CPL (Cost Per Lead) here, we expand to Dhanbad/Bokaro in January.\n\n---\n\n### Online actions\n**Priority 1: Geo-Fencing & Exclusion (Google & Meta)**\n*   **Action:** Edit campaign settings to strictly target **Ranchi and Jamshedpur** urban limits. Remove Dhanbad, Bokaro, Hazaribagh, Deoghar, Ramgarh, and Giridih from this specific flight.\n*   **Action:** Apply negative radius targeting for \"deep rural pockets\" immediately to prevent wasted clicks from non-serviceable areas.\n*   **Rationale:** ₹10,000 cannot penetrate the whole state. Dominating two cities is better than being invisible in eight.\n\n**Priority 2: Google Search Ads (₹4,000 Allocation)**\n*   **Action:** Implement \"Exact Match\" and \"Phrase Match\" only. Bidding on broad terms like \"Solar Panel\" will drain ₹4,000 in two days with no conversions.\n*   **Keywords:** Focus exclusively on intent: \"Solar installation company Ranchi,\" \"Tata Power Solar dealer Jamshedpur,\" \"Solar EPC Jharkhand.\"\n*   **Ad Copy:** Highlight the specific pain point from the persona data: *\"Run your AC without the Bill. Solar solutions for independent homes in Ranchi.\"*\n\n**Priority 3: Facebook/Instagram Creative (₹5,000 Allocation)**\n*   **Action:** Update ad visuals to feature **local housing aesthetics**. Do not use stock photos of American suburbs. Show a concrete roof installation typical of a Ranchi colony (e.g., Harmu or Morabadi).\n*   **Audience Layering:** Target \"Government Employees,\" \"Indian Railways\" (for Jamshedpur/Ranchi), and \"State Bank of India\" interests combined with \"Home Ownership.\"\n*   **Lead Form:** Add a mandatory qualifying question: *\"Is your monthly electricity bill above ₹1,500?\"* (Yes/No). This filters out low-value leads before you pay for them.\n\n---\n\n### Offline actions\n**Priority 1: Sales \"Speed-to-Lead\" Protocol**\n*   **Action:** Since we have 0 offline marketing assets, the \"offline\" component is the sales team's response time. Instruct the sales team that online leads must be called within **15 minutes**.\n*   **Scripting:** Equip the sales team with a script that references the ad hook: *\"I saw you were interested in cutting down your AC costs...\"* rather than a generic *\"Do you want solar?\"*\n\n**Priority 2: Site Survey Readiness**\n*   **Action:** Ensure survey engineers in Ranchi and Jamshedpur are on standby. The goal for this campaign is to convert a digital lead to a physical site visit within 48 hours to lock in the high-intent PSU persona.\n\n---\n\n### WhatsApp & follow-up\n**Priority 1: Create Missing Assets (Critical)**\n*   **Action:** The data shows **0 WhatsApp packs**. Create a \"Solar Savings Calculator\" template immediately.\n*   **Message Draft:** *\"Hi [Name], tired of ₹2,000+ bills? See how much you can save by switching to solar. Reply 'CALCULATE' for a free estimate.\"*\n\n**Priority 2: Automation Setup**\n*   **Action:** Configure the ₹1,000 budget to trigger *only* as an auto-response to Facebook Lead Form fills. Do not use this budget for cold broadcasting (risk of number banning and low conversion).\n*   **Goal:** Use WhatsApp to deliver the company profile and past project photos (social proof) instantly after they sign up.\n\n---\n\n### Budget & optimization\n**Priority 1: Reallocation**\n*   **Action:** If Google CPC (Cost Per Click) in Ranchi exceeds ₹60, pause Google Ads immediately and shift the remaining budget to Facebook/Instagram, where CPM (Cost Per 1,000 impressions) is cheaper for this specific demographic.\n\n**Priority 2: \"Draft\" to \"Live\" Checklist**\n1.  **Reduce Geo-Targeting:** Ranchi + Jamshedpur ONLY.\n2.  **Upload Creative:** Local home images + \"High Bill\" copy.\n3.  **Create WhatsApp Template:** Auto-response for leads.\n4.  **Launch:** Execute immediately to catch the end-of-year tax planning crowd (PSU employees).",
+        "last_ai_insights_at": "2025-12-03 16:02:42",
+        "total_budget_rs": "1000",
+        "budget_period": "Per day",
+        "ai_budget_allocation": "",
+        "media_assets": [
+            {
+                "id": "media_20251210_081506_255",
+                "title": "Generated 2025-12-10 08:15",
+                "use_for": "facebook_instagram",
+                "file_url": "/uploads/smart_marketing_media/4/media_20251210_081506_255.jpg",
+                "source_prompt": "A photorealistic wide shot of a premium two-story independent house in an Indian urban residential colony featuring a sleek rooftop solar panel installation glistening under bright sunshine. In the foreground, a confident middle-aged Indian couple stands smiling while holding a paper electricity bill, with a split AC outdoor unit visibly running on the wall behind them to symbolize guilt-free heavy appliance usage. The lighting is warm and aspirational, evoking a sense of financial security and modern living suitable for a high-income Jharkhand household.",
+                "channel": "facebook_instagram",
+                "notes": "Generated by AI image tool",
+                "created_at": "2025-12-10 08:15:06"
+            }
+        ],
+        "meta_ads_settings": {
+            "objective": "Leads",
+            "conversion_location": "Instant forms",
+            "performance_goal": "Maximize number of leads",
+            "budget_strategy": "Set a **Daily Budget** of **₹500** for your Meta campaign, which aligns with your strategy to allocate 50% of your ₹1,000 total daily spend to Facebook and Instagram.\r\nThis ensures you retain ₹400/day for Google Search and ₹100/day for WhatsApp without overspending your aggregate limit.\r\nUse **Standard Delivery** to pace your budget evenly throughout the day, ensuring visibility during peak morning and evening hours for working professionals.\r\nIf the cost per lead exceeds ₹150 after 48 hours, consider temporarily shifting the Google budget to Meta to maximize algorithm learning.",
+            "audience_summary": "",
+            "placement_strategy": "",
+            "optimization_and_bidding": "",
+            "creative_recommendations": "",
+            "tracking_and_reporting": "Check Cost Per Lead (CPL) daily; aim to keep it under ₹200–₹250 given the high-ticket nature of solar investments in Jharkhand.\r\nMonitor CTR (Link Click-Through Rate); if it falls below 1%, refresh your creatives to better visualize the \"zero electricity bill\" benefit.\r\nWatch Frequency closely due to your narrow radius targeting in zones like Ashok Nagar; pause ads if frequency exceeds 3.0 to avoid ad fatigue.\r\nIf an ad set spends ₹400 (approx. 2x target CPL) without generating a single lead, turn it off immediately to conserve your limited budget.\r\nReview the Age breakdown weekly; if users under 35 are clicking but not converting, tighten the minimum age to 35 to focus on decision-makers.\r\nVerify lead quality by cross-referencing new leads with WhatsApp activity; if response rates are low, add a qualifying question about monthly bill amounts to the form."
+        },
+        "meta_manual_guide": "Step 1: Create Campaign\r\n*   Go to **Ads Manager** and click the green **+ Create** button.\r\n*   Select **Leads** as your campaign objective.\r\n*   Click **Continue**.\r\n*   Select **Manual leads campaign** and click **Continue**.\r\n\r\nStep 2: Campaign Level Settings\r\n*   **Campaign Name:** Delete the default name and type \"Solar Home December 2025\".\r\n*   **Special Ad Categories:** Leave this strictly **OFF** (unchecked).\r\n*   **Advantage+ Campaign Budget:** Turn this **OFF**.\r\n*   Click **Next** at the bottom right.\r\n\r\nStep 3: Ad Set Settings & Conversion\r\n*   **Ad Set Name:** Type \"Jharkhand Homeowners\".\r\n*   **Conversion Location:** Select **Instant forms**.\r\n*   **Facebook Page:** Select \"Dakshayani Enterprises\" (d.entranchi).\r\n*   **Performance Goal:** Ensure it is set to **Maximize number of leads**.\r\n\r\nStep 4: Budget & Schedule\r\n*   **Budget:** Select **Daily Budget**.\r\n*   **Amount:** Type **500**.\r\n*   **Start Date:** Leave as today's date and time.\r\n*   **End Date:** Leave unchecked (you will monitor this manually).\r\n\r\nStep 5: Audience - Locations\r\n*   **Locations:** Click \"Edit\". Select **People living in or recently in this location**.\r\n*   **Search Box:** Type and select the following cities one by one:\r\n    *   Ranchi, Jharkhand\r\n    *   Jamshedpur, Jharkhand\r\n    *   Dhanbad, Jharkhand\r\n    *   Bokaro Steel City, Jharkhand\r\n    *   Hazaribagh, Jharkhand\r\n    *   Deoghar, Jharkhand\r\n    *   Ramgarh, Jharkhand\r\n*   **Radius Adjustment:** Next to each city name, click the miles/km dropdown and set it to **Current city only** or a small radius (e.g., 10 miles) to ensure you hit the urban centers and exclude deep rural areas.\r\n\r\nStep 6: Audience - Demographics\r\n*   **Age:** Click \"Edit\" and set to **30** to **55**.\r\n*   **Gender:** Leave as **All genders**.\r\n\r\nStep 7: Audience - Detailed Targeting\r\n*   **Detailed Targeting:** Click \"Edit\".\r\n*   **Include people who match:** Type and select these interests:\r\n    *   Solar power\r\n    *   Solar energy\r\n    *   Construction (proxy for independent house owners)\r\n    *   Real property (proxy for homeowners)\r\n*   **Define further (Optional):** Click \"Define further\" and type **Public sector** or **Business** to narrow down to your persona (Govt/Business owners), but for a ₹500 budget, keeping it slightly broader with just \"Solar\" and \"Construction\" is safer.\r\n\r\nStep 8: Placements\r\n*   **Placements:** Select **Advantage+ placements (Recommended)**.\r\n*   This allows Meta to find your homeowners on both Facebook and Instagram automatically.\r\n*   Click **Next**.\r\n\r\nStep 9: Ad Setup\r\n*   **Ad Name:** Type \"Solar ROI Image 1\".\r\n*   **Identity:** Ensure your Facebook page and Instagram account (d.entranchi) are selected.\r\n*   **Format:** Select **Single image or video**.\r\n*   **Multi-advertiser ads:** Uncheck this box.\r\n\r\nStep 10: Ad Creative\r\n*   **Media:** Click **Add Media** > **Add Image**.\r\n*   **Upload:** Upload your image (Logo/Solar installation photo).\r\n*   **Primary Text:** Copy and paste this:\r\n    \"Electricity bill over ₹1,500/month? Turn that expense into an asset. Run ACs and Geysers guilt-free with Dakshayani Solar. High ROI for homeowners in Ranchi, Jamshedpur, and Dhanbad. Call 7070278178 for a quote.\"\r\n*   **Headline:** Type: \"Reduce Electricity Bill to Zero\".\r\n*   **Call to Action:** Select **Get Quote** or **Learn More**.\r\n\r\nStep 11: Create Instant Form\r\n*   Scroll down to **Destination** and click **Create form**.\r\n*   **Form Name:** Type \"Solar Lead Filter Form\".\r\n*   **Form Type:** Select **More volume**.\r\n*   **Intro:** Upload your logo image.\r\n*   **Headline:** Type \"Get Your Solar Estimate\".\r\n*   **Description:** Type \"Fill the form below to get a free consultation for your home.\"\r\n\r\nStep 12: Form Questions\r\n*   Click **Questions**.\r\n*   **Custom Questions:** Click **+ Add Question** > **Multiple Choice**.\r\n    *   **Question:** \"Is your monthly electricity bill above ₹1,500?\"\r\n    *   **Answers:** Add \"Yes\" and \"No\". (This filters your leads).\r\n*   **Prefill Questions:** Ensure these fields are listed (Add category if missing):\r\n    *   Full name\r\n    *   Phone number\r\n    *   City\r\n*   **Description:** Type \"We will use this info to contact you.\"\r\n\r\nStep 13: Privacy Policy & Completion\r\n*   Click **Privacy Policy**.\r\n*   **Link Text:** Type \"Privacy Policy\".\r\n*   **Link URL:** Paste your website link: `https://dakshayani.co.in`\r\n*   Click **Message for leads**.\r\n*   **Headline:** \"Thanks, you're all set.\"\r\n*   **Description:** \"One of our solar experts will call you shortly. You can also call us at 7070278178.\"\r\n*   **Call to Action Button:** Select **Call Business**.\r\n*   **Phone Number:** Enter **+91 7070278178**.\r\n*   Click **Create Form**.\r\n\r\nStep 14: Publish\r\n*   Review the preview on the right side to ensure the text and image look correct.\r\n*   Click the green **Publish** button at the bottom right."
+    }
+]

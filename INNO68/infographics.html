@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INNO-68: Digital RESCO Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7fa;
+            color: #073B4C;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 350px;
+        }
+        .chart-container-bar {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 400px;
+            max-height: 500px;
+        }
+        .chart-container-stacked-bar {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 400px;
+            max-height: 500px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+                max-height: 400px;
+            }
+        }
+        .flow-box {
+            border: 2px solid #118AB2;
+            background-color: #ffffff;
+            color: #073B4C;
+        }
+        .platform-box {
+            border: 3px solid #06D6A0;
+            background-color: #073B4C;
+            color: #ffffff;
+            z-index: 10;
+        }
+        .flow-arrow {
+            position: relative;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #118AB2;
+            font-weight: 600;
+        }
+        .flow-arrow::after {
+            content: '→';
+            position: absolute;
+            font-size: 2rem;
+            line-height: 1;
+            color: #FFD166;
+        }
+        .flow-arrow-left::after {
+            content: '←';
+            right: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .flow-arrow-right::after {
+            content: '→';
+            left: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .flow-arrow-down::after {
+            content: '↓';
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .flow-arrow-up::after {
+            content: '↑';
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+
+        <header class="text-center mb-12">
+            <p class="text-lg font-semibold text-[#118AB2]">NISE PROJECT (INNO-68)</p>
+            <h1 class="text-4xl md:text-5xl font-extrabold text-[#073B4C] mt-2">Digital RESCO Enablement Platform</h1>
+            <h2 class="text-2xl md:text-3xl font-medium text-[#FF6B6B] mt-4">Unlocking India's Residential Solar Potential</h2>
+        </header>
+
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12 items-center">
+            <div class="bg-white rounded-lg shadow-lg p-6 md:p-8">
+                <h3 class="text-2xl font-bold text-[#073B4C] mb-4">The Core Problem</h3>
+                <p class="text-lg text-gray-700 leading-relaxed">
+                    India's residential solar (RESCO) market is constrained. Small & medium-sized solar vendors (MSMEs) lack the
+                    <strong>upfront capital</strong> to finance projects, while complex contracts, manual billing, and high perceived
+                    risk create barriers for both homeowners and financial lenders.
+                </p>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-6 md:p-8">
+                <h3 class="text-2xl font-bold text-[#073B4C] mb-4">Key Project Objectives</h3>
+                <div class="space-y-4">
+                    <div class="flex items-start space-x-4">
+                        <span class="text-3xl mt-1">💰</span>
+                        <div>
+                            <h4 class="text-lg font-semibold">Enable Capital-Free Growth</h4>
+                            <p class="text-gray-600">Provide small vendors access to institutional finance without upfront CAPEX.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start space-x-4">
+                        <span class="text-3xl mt-1">⚙️</span>
+                        <div>
+                            <h4 class="text-lg font-semibold">Digitize & Automate Workflows</h4>
+                            <p class="text-gray-600">Reduce administrative overheads by at least 50% through digital contracts, billing, and tracking.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start space-x-4">
+                        <span class="text-3xl mt-1">🔒</span>
+                        <div>
+                            <h4 class="text-lg font-semibold">De-Risk Financing</h4>
+                            <p class="text-gray-600">Automate EMI routing and enhance transparency for lenders via smart contracts and a dedicated portal.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-lg shadow-lg p-6 md:p-8 mb-12">
+            <h3 class="text-3xl font-bold text-[#073B4C] mb-8 text-center">The Solution: A 3-Sided Digital Platform</h3>
+            <div class="flex flex-col md:flex-row items-center justify-around space-y-8 md:space-y-0 md:space-x-8">
+
+                <div class="flex flex-col items-center space-y-4">
+                    <div class="flow-box w-48 h-32 p-4 rounded-lg shadow-md text-center flex flex-col justify-center">
+                        <h4 class="font-bold text-lg">RESCO Vendors</h4>
+                        <p class="text-sm">Access to financing, project tracking, and digital contracts.</p>
+                    </div>
+                    <div class="flow-arrow flow-arrow-down h-10 w-32" style="padding-top: 4px;">Financing</div>
+                    <div class="flow-box w-48 h-32 p-4 rounded-lg shadow-md text-center flex flex-col justify-center">
+                        <h4 class="font-bold text-lg">Consumers</h4>
+                        <p class="text-sm">Digital PPAs, real-time generation data, and automated bill payments.</p>
+                    </div>
+                </div>
+
+                <div class="platform-box w-64 h-64 p-6 rounded-full shadow-2xl flex flex-col justify-center items-center text-center">
+                    <h4 class="font-bold text-2xl">Digital Platform</h4>
+                    <p class="text-sm text-gray-200 mt-2">Vendor Portal<br>Consumer Portal<br>Lender Portal<br>Smart Contracts</p>
+                </div>
+                
+                <div class="flex flex-col items-center justify-center">
+                    <div class="flow-box w-48 h-32 p-4 rounded-lg shadow-md text-center flex flex-col justify-center">
+                        <h4 class="font-bold text-lg">Lenders</h4>
+                        <p class="text-sm">Automated EMI settlement, risk monitoring, and verified data.</p>
+                    </div>
+                    <div class="flow-arrow flow-arrow-up h-10 w-32 md:hidden" style="padding-bottom: 4px;">Automated Settlement</div>
+                </div>
+
+            </div>
+        </section>
+
+        <section class="bg-white rounded-lg shadow-lg p-6 md:p-8 mb-12">
+            <h3 class="text-3xl font-bold text-[#073B4C] mb-8 text-center">Project Budget & Funding</h3>
+            <div class="text-center mb-8">
+                <p class="text-xl text-gray-700">Total Project Cost</p>
+                <p class="text-6xl font-extrabold text-[#073B4C]">₹5,31,60,000</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h4 class="text-xl font-bold text-center text-[#073B4C] mb-4">Funding Source</h4>
+                    <div class="chart-container">
+                        <canvas id="fundingDonutChart"></canvas>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="text-xl font-bold text-center text-[#073B4C] mb-4">Project Cost Components</h4>
+                    <div class="chart-container">
+                        <canvas id="costDonutChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mb-12">
+            <h3 class="text-3xl font-bold text-[#073B4C] mb-8 text-center">In-Depth Breakdown: Manpower & Timeline</h3>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h4 class="text-xl font-bold text-center text-[#073B4C] mb-4">Manpower Cost by Role (Total 18 Mo.)</h4>
+                    <div class="chart-container-bar">
+                        <canvas id="manpowerBarChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h4 class="text-xl font-bold text-center text-[#073B4C] mb-4">Phase-wise Spending (18 Months)</h4>
+                    <div class="chart-container-stacked-bar">
+                        <canvas id="phaseStackedBarChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-white rounded-lg shadow-lg p-6 md:p-8">
+                <h3 class="text-2xl font-bold text-[#073B4C] mb-4">Initial Pilot Scope</h3>
+                <p class="text-lg text-gray-700 mb-4">The project will launch with a focused pilot in <strong>Jharkhand</strong>, validating the platform with key stakeholders.</p>
+                <div class="flex justify-around text-center">
+                    <div>
+                        <p class="text-4xl font-bold text-[#118AB2]">50+</p>
+                        <p class="text-gray-600">Rooftop Owners</p>
+                    </div>
+                    <div>
+                        <p class="text-4xl font-bold text-[#06D6A0]">20+</p>
+                        <p class="text-gray-600">RESCO Vendors</p>
+                    </div>
+                    <div>
+                        <p class="text-4xl font-bold text-[#FFD166]">1-2</p>
+                        <p class="text-gray-600">NBFCs / Lenders</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-6 md:p-8">
+                <h3 class="text-2xl font-bold text-[#073B4C] mb-4">Future Outlook</h3>
+                <p class="text-lg text-gray-700 leading-relaxed">
+                    Post-pilot, the platform will integrate optional AI tools to further enhance value and reduce risk, including:
+                </p>
+                <ul class="list-disc list-inside text-gray-700 space-y-1 mt-4">
+                    <li><strong>AI-Driven Credit Scoring</strong> for consumers.</li>
+                    <li><strong>Solar Generation Forecasting</strong> models.</li>
+                    <li><strong>Predictive Maintenance</strong> alerts from IoT data.</li>
+                </ul>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        window.onload = function() {
+            
+            Chart.defaults.font.family = "'Inter', sans-serif";
+            Chart.defaults.font.weight = '600';
+
+            const tooltipTitleCallback = function(tooltipItems) {
+                const item = tooltipItems[0];
+                let label = item.chart.data.labels[item.dataIndex];
+                if (Array.isArray(label)) {
+                    return label.join(' ');
+                } else {
+                    return label;
+                }
+            };
+            
+            const sharedTooltipConfig = {
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            title: tooltipTitleCallback
+                        },
+                        backgroundColor: '#073B4C',
+                        titleFont: { size: 14, weight: 'bold' },
+                        bodyFont: { size: 12 },
+                        padding: 12,
+                        cornerRadius: 6,
+                        boxPadding: 4,
+                    }
+                }
+            };
+
+            function formatCurrency(value) {
+                if (value >= 10000000) {
+                    return (value / 10000000).toFixed(2) + ' Cr';
+                }
+                if (value >= 100000) {
+                    return (value / 100000).toFixed(2) + ' L';
+                }
+                return value.toLocaleString('en-IN');
+            }
+
+            const formatTooltipLabel = (context) => {
+                let label = context.dataset.label || '';
+                if (label) {
+                    label += ': ';
+                }
+                if (context.parsed.y !== null) {
+                    label += formatCurrency(context.parsed.y);
+                }
+                return label;
+            };
+
+            const formatTooltipLabelDonut = (context) => {
+                let label = context.label || '';
+                if (label) {
+                    label += ': ';
+                }
+                let value = context.parsed;
+                let sum = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                let percentage = ((value / sum) * 100).toFixed(1) + '%';
+                label += formatCurrency(value) + ' (' + percentage + ')';
+                return label;
+            };
+            
+
+            const fundingDonutCtx = document.getElementById('fundingDonutChart').getContext('2d');
+            new Chart(fundingDonutCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['MNRE Share (60%)', 'Organisation Share (40%)'],
+                    datasets: [{
+                        label: 'Funding Source',
+                        data: [31896000, 21264000],
+                        backgroundColor: ['#118AB2', '#06D6A0'],
+                        borderColor: '#f4f7fa',
+                        borderWidth: 4,
+                        hoverOffset: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                font: { size: 14 }
+                            }
+                        },
+                        tooltip: {
+                            ...sharedTooltipConfig.plugins.tooltip,
+                            callbacks: {
+                                title: tooltipTitleCallback,
+                                label: formatTooltipLabelDonut
+                            }
+                        }
+                    }
+                }
+            });
+
+            const costDonutCtx = document.getElementById('costDonutChart').getContext('2d');
+            const otherCosts = 2000000 + 1500000 + 900000 + 1500000;
+            new Chart(costDonutCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Equipment', 'Manpower', 'Consumables', 'Other Costs'],
+                    datasets: [{
+                        label: 'Cost Components',
+                        data: [18000000, 17760000, 11500000, otherCosts],
+                        backgroundColor: ['#118AB2', '#06D6A0', '#FFD166', '#FF6B6B'],
+                        borderColor: '#f4f7fa',
+                        borderWidth: 4,
+                        hoverOffset: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                font: { size: 14 }
+                            }
+                        },
+                        tooltip: {
+                            ...sharedTooltipConfig.plugins.tooltip,
+                            callbacks: {
+                                title: tooltipTitleCallback,
+                                label: formatTooltipLabelDonut
+                            }
+                        }
+                    }
+                }
+            });
+
+            function wrapLabels(label, maxWidth) {
+                const words = label.split(' ');
+                const lines = [];
+                let currentLine = '';
+                for (const word of words) {
+                    if ((currentLine + ' ' + word).trim().length > maxWidth && currentLine.length > 0) {
+                        lines.push(currentLine);
+                        currentLine = word;
+                    } else {
+                        currentLine = (currentLine + ' ' + word).trim();
+                    }
+                }
+                if (currentLine.length > 0) {
+                    lines.push(currentLine);
+                }
+                return lines;
+            }
+
+            const manpowerLabelsRaw = [
+                'Full-stack Developers (4)', 
+                'DevOps Engineer (1)', 
+                'AI/ML Engineer (1)', 
+                'UX Designer (1)', 
+                'Project Manager (1)'
+            ];
+            const manpowerLabelsWrapped = manpowerLabelsRaw.map(label => wrapLabels(label, 16));
+
+            const manpowerBarCtx = document.getElementById('manpowerBarChart').getContext('2d');
+            new Chart(manpowerBarCtx, {
+                type: 'bar',
+                data: {
+                    labels: manpowerLabelsWrapped,
+                    datasets: [{
+                        label: 'Total Manpower Cost (18 Mo.)',
+                        data: [8640000, 2700000, 2520000, 1200000, 2700000],
+                        backgroundColor: ['#118AB2', '#06D6A0', '#FFD166', '#FF6B6B', '#073B4C'],
+                        borderRadius: 6,
+                        barPercentage: 0.7
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: {
+                                drawOnChartArea: false,
+                                color: '#e0e0e0'
+                            },
+                            ticks: {
+                                callback: value => formatCurrency(value),
+                                font: { size: 12 }
+                            }
+                        },
+                        y: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                font: { size: 14 }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            ...sharedTooltipConfig.plugins.tooltip,
+                            callbacks: {
+                                title: tooltipTitleCallback,
+                                label: (context) => 'Total Cost: ' + formatCurrency(context.parsed.x)
+                            }
+                        }
+                    }
+                }
+            });
+
+            const phaseStackedBarCtx = document.getElementById('phaseStackedBarChart').getContext('2d');
+            const otherCostsPhase1 = 800000 + 600000 + 300000 + 1500000;
+            const otherCostsPhase2 = 600000 + 400000 + 300000 + 0;
+            const otherCostsPhase3 = 600000 + 500000 + 300000 + 0;
+
+            new Chart(phaseStackedBarCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Phase 1 (0-6 Mo)', 'Phase 2 (7-12 Mo)', 'Phase 3 (13-18 Mo)'],
+                    datasets: [
+                        {
+                            label: 'Equipment',
+                            data: [18000000, 0, 0],
+                            backgroundColor: '#118AB2',
+                        },
+                        {
+                            label: 'Manpower',
+                            data: [5520000, 6120000, 6120000],
+                            backgroundColor: '#06D6A0',
+                        },
+                        {
+                            label: 'Consumables',
+                            data: [3700000, 4000000, 3800000],
+                            backgroundColor: '#FFD166',
+                        },
+                        {
+                            label: 'Other Costs',
+                            data: [otherCostsPhase1, otherCostsPhase2, otherCostsPhase3],
+                            backgroundColor: '#FF6B6B',
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                font: { size: 14 }
+                            }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            grid: {
+                                color: '#e0e0e0',
+                                drawOnChartArea: true
+                            },
+                            ticks: {
+                                callback: value => formatCurrency(value),
+                                font: { size: 12 }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                font: { size: 14 }
+                            }
+                        },
+                        tooltip: {
+                            ...sharedTooltipConfig.plugins.tooltip,
+                            callbacks: {
+                                title: tooltipTitleCallback,
+                                label: formatTooltipLabel
+                            }
+                        }
+                    }
+                }
+            });
+
+        }
+    </script>
+</body>
+</html>

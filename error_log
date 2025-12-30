@@ -1,0 +1,1928 @@
+[25-Oct-2025 16:11:59 Asia/Kolkata] PHP Warning:  require_once(/home/tegwf0aqgwek/public_html/portal-state.php): Failed to open stream: No such file or directory in /home/tegwf0aqgwek/public_html/login.php on line 6
+[25-Oct-2025 16:11:59 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required '/home/tegwf0aqgwek/public_html/portal-state.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/tegwf0aqgwek/public_html/login.php:6
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 6
+[25-Oct-2025 16:12:01 Asia/Kolkata] PHP Warning:  require_once(/home/tegwf0aqgwek/public_html/portal-state.php): Failed to open stream: No such file or directory in /home/tegwf0aqgwek/public_html/login.php on line 6
+[25-Oct-2025 16:12:01 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required '/home/tegwf0aqgwek/public_html/portal-state.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/tegwf0aqgwek/public_html/login.php:6
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 6
+[25-Oct-2025 16:12:02 Asia/Kolkata] PHP Warning:  require_once(/home/tegwf0aqgwek/public_html/portal-state.php): Failed to open stream: No such file or directory in /home/tegwf0aqgwek/public_html/login.php on line 6
+[25-Oct-2025 16:12:02 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required '/home/tegwf0aqgwek/public_html/portal-state.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/tegwf0aqgwek/public_html/login.php:6
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 6
+[25-Oct-2025 16:39:58 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 16:40:03 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 16:40:16 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 17:10:15 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 18:10:11 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 19:32:59 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 19:33:19 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 20:14:32 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 20:16:12 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 20:26:20 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 21:15:47 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 21:20:41 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 21:24:30 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 21:24:42 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 21:25:45 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 21:25:54 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 21:27:22 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 21:28:14 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 21:28:32 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 21:29:21 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 21:29:32 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 21:30:21 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[25-Oct-2025 21:39:28 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:303
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 303
+[26-Oct-2025 08:49:27 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Undefined constant "ADMIN_EMAIL" in /home/tegwf0aqgwek/public_html/login.php:313
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/login.php on line 313
+[26-Oct-2025 05:54:58 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function portal_redirect() in /home/tegwf0aqgwek/public_html/logout.php:5
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/logout.php on line 5
+[26-Oct-2025 05:55:01 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function portal_redirect() in /home/tegwf0aqgwek/public_html/logout.php:5
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/logout.php on line 5
+[26-Oct-2025 05:55:02 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function portal_redirect() in /home/tegwf0aqgwek/public_html/logout.php:5
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/logout.php on line 5
+[26-Oct-2025 05:58:28 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function portal_redirect() in /home/tegwf0aqgwek/public_html/logout.php:5
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/logout.php on line 5
+[26-Oct-2025 06:03:51 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function portal_redirect() in /home/tegwf0aqgwek/public_html/logout.php:6
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/logout.php on line 6
+[26-Oct-2025 06:03:57 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function portal_redirect() in /home/tegwf0aqgwek/public_html/logout.php:6
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/logout.php on line 6
+[26-Oct-2025 06:03:59 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function portal_redirect() in /home/tegwf0aqgwek/public_html/logout.php:6
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/logout.php on line 6
+[26-Oct-2025 06:04:00 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function portal_redirect() in /home/tegwf0aqgwek/public_html/logout.php:6
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/logout.php on line 6
+[26-Oct-2025 06:04:22 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function portal_redirect() in /home/tegwf0aqgwek/public_html/logout.php:6
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/logout.php on line 6
+[26-Oct-2025 06:12:32 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function portal_redirect() in /home/tegwf0aqgwek/public_html/logout.php:6
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/logout.php on line 6
+[26-Oct-2025 06:14:20 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function portal_redirect() in /home/tegwf0aqgwek/public_html/logout.php:6
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/logout.php on line 6
+[26-Oct-2025 12:30:22 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 default value of column [created_at] is not constant in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:44
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(44): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(25): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/login.php(8): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 44
+[26-Oct-2025 12:30:29 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 default value of column [created_at] is not constant in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:44
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(44): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(25): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/login.php(8): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 44
+[26-Oct-2025 12:32:14 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 default value of column [created_at] is not constant in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:44
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(44): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(25): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/login.php(8): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 44
+[26-Oct-2025 15:15:13 UTC] PHP Warning:  Undefined variable $leadRecords in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[26-Oct-2025 15:15:13 UTC] PHP Fatal error:  Uncaught TypeError: array_filter(): Argument #1 ($array) must be of type array, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:182
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(182): array_filter()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[26-Oct-2025 15:15:59 UTC] PHP Warning:  Undefined variable $leadRecords in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[26-Oct-2025 15:15:59 UTC] PHP Fatal error:  Uncaught TypeError: array_filter(): Argument #1 ($array) must be of type array, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:182
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(182): array_filter()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[26-Oct-2025 15:16:08 UTC] PHP Warning:  Undefined variable $leadRecords in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[26-Oct-2025 15:16:08 UTC] PHP Fatal error:  Uncaught TypeError: array_filter(): Argument #1 ($array) must be of type array, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:182
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(182): array_filter()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[26-Oct-2025 15:19:35 UTC] PHP Warning:  Undefined variable $leadRecords in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[26-Oct-2025 15:19:35 UTC] PHP Fatal error:  Uncaught TypeError: array_filter(): Argument #1 ($array) must be of type array, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:182
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(182): array_filter()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[26-Oct-2025 15:19:48 UTC] PHP Warning:  Undefined variable $leadRecords in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[26-Oct-2025 15:19:48 UTC] PHP Fatal error:  Uncaught TypeError: array_filter(): Argument #1 ($array) must be of type array, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:182
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(182): array_filter()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[26-Oct-2025 15:36:52 UTC] PHP Warning:  Undefined variable $leadRecords in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[26-Oct-2025 15:36:52 UTC] PHP Fatal error:  Uncaught TypeError: array_filter(): Argument #1 ($array) must be of type array, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:182
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(182): array_filter()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[26-Oct-2025 16:21:29 UTC] PHP Warning:  Undefined variable $leadRecords in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[26-Oct-2025 16:21:29 UTC] PHP Fatal error:  Uncaught TypeError: array_filter(): Argument #1 ($array) must be of type array, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:182
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(182): array_filter()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 182
+[27-Oct-2025 03:07:47 UTC] PHP Parse error:  syntax error, unexpected end of file, expecting "elseif" or "else" or "endif" in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 1427
+[27-Oct-2025 03:07:54 UTC] PHP Parse error:  syntax error, unexpected end of file, expecting "elseif" or "else" or "endif" in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 1427
+[27-Oct-2025 03:25:56 UTC] PHP Parse error:  syntax error, unexpected end of file, expecting "elseif" or "else" or "endif" in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 1427
+[27-Oct-2025 03:30:07 UTC] PHP Parse error:  syntax error, unexpected end of file, expecting "elseif" or "else" or "endif" in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 1891
+[27-Oct-2025 03:42:42 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:569
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(569): PDOStatement->execute()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(347): seed_portal_defaults()
+#2 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(32): seed_defaults()
+#3 /home/tegwf0aqgwek/public_html/login.php(8): get_db()
+#4 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 569
+[27-Oct-2025 03:42:58 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:569
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(569): PDOStatement->execute()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(347): seed_portal_defaults()
+#2 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(32): seed_defaults()
+#3 /home/tegwf0aqgwek/public_html/login.php(8): get_db()
+#4 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 569
+[27-Oct-2025 03:54:30 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:569
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(569): PDOStatement->execute()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(347): seed_portal_defaults()
+#2 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(32): seed_defaults()
+#3 /home/tegwf0aqgwek/public_html/login.php(8): get_db()
+#4 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 569
+[27-Oct-2025 03:54:33 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:569
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(569): PDOStatement->execute()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(347): seed_portal_defaults()
+#2 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(32): seed_defaults()
+#3 /home/tegwf0aqgwek/public_html/login.php(8): get_db()
+#4 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 569
+[27-Oct-2025 03:55:33 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:569
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(569): PDOStatement->execute()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(347): seed_portal_defaults()
+#2 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(32): seed_defaults()
+#3 /home/tegwf0aqgwek/public_html/login.php(8): get_db()
+#4 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 569
+[27-Oct-2025 04:08:00 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:569
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(569): PDOStatement->execute()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(347): seed_portal_defaults()
+#2 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(32): seed_defaults()
+#3 /home/tegwf0aqgwek/public_html/login.php(44): get_db()
+#4 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 569
+[27-Oct-2025 04:12:02 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:569
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(569): PDOStatement->execute()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(347): seed_portal_defaults()
+#2 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(32): seed_defaults()
+#3 /home/tegwf0aqgwek/public_html/login.php(44): get_db()
+#4 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 569
+[27-Oct-2025 04:16:45 UTC] Login bootstrap failed: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at
+[27-Oct-2025 04:17:06 UTC] Login bootstrap failed: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at
+[27-Oct-2025 04:23:22 UTC] Login bootstrap failed: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at
+[27-Oct-2025 04:23:39 UTC] Login bootstrap failed: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at
+[27-Oct-2025 04:27:24 UTC] Login bootstrap failed: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at
+[27-Oct-2025 04:31:10 UTC] Login bootstrap failed: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at
+[27-Oct-2025 04:31:20 UTC] Login bootstrap failed: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at
+[27-Oct-2025 04:31:45 UTC] Login bootstrap failed: SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: portal_tasks.created_at
+[27-Oct-2025 04:40:37 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 64
+[27-Oct-2025 04:40:45 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 64
+[27-Oct-2025 04:40:45 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 70
+[27-Oct-2025 04:40:45 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 71
+[27-Oct-2025 04:41:01 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 64
+[27-Oct-2025 04:41:01 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 70
+[27-Oct-2025 04:41:01 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 71
+[27-Oct-2025 04:42:00 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 64
+[27-Oct-2025 04:42:12 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 64
+[27-Oct-2025 04:42:12 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 70
+[27-Oct-2025 04:42:12 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 71
+[27-Oct-2025 04:42:35 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 64
+[27-Oct-2025 04:42:35 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 70
+[27-Oct-2025 04:42:35 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 71
+[27-Oct-2025 04:44:09 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 64
+[27-Oct-2025 04:44:09 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 70
+[27-Oct-2025 04:44:09 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 71
+[27-Oct-2025 04:44:13 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 64
+[27-Oct-2025 04:44:13 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 70
+[27-Oct-2025 04:44:13 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 71
+[27-Oct-2025 04:44:16 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 64
+[27-Oct-2025 04:44:16 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 70
+[27-Oct-2025 04:44:16 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 71
+[27-Oct-2025 04:51:25 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 61
+[27-Oct-2025 04:51:25 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 67
+[27-Oct-2025 04:51:25 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 68
+[27-Oct-2025 04:51:30 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 61
+[27-Oct-2025 04:51:30 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 67
+[27-Oct-2025 04:51:30 UTC] PHP Warning:  Undefined variable $bootstrapError in /home/tegwf0aqgwek/public_html/login.php on line 68
+[27-Oct-2025 04:57:01 UTC] PHP Fatal error:  Cannot redeclare portal_employee_submit_document() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:1310) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 1833
+[27-Oct-2025 04:57:09 UTC] PHP Fatal error:  Cannot redeclare portal_employee_submit_document() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:1310) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 1833
+[27-Oct-2025 05:22:40 UTC] PHP Fatal error:  Cannot redeclare portal_employee_submit_document() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:1435) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 1958
+[27-Oct-2025 05:22:41 UTC] PHP Fatal error:  Cannot redeclare portal_employee_submit_document() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:1435) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 1958
+[27-Oct-2025 05:22:42 UTC] PHP Fatal error:  Cannot redeclare portal_employee_submit_document() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:1435) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 1958
+[27-Oct-2025 05:22:43 UTC] PHP Fatal error:  Cannot redeclare portal_employee_submit_document() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:1435) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 1958
+[27-Oct-2025 05:22:45 UTC] PHP Fatal error:  Cannot redeclare portal_employee_submit_document() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:1435) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 1958
+[27-Oct-2025 05:36:27 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 05:36:29 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 05:41:26 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 05:41:28 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 05:42:01 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 05:42:02 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 05:42:12 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 06:09:30 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 06:09:32 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 06:09:36 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 06:15:58 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 06:15:59 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 06:16:04 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 08:04:57 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 08:08:20 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 08:09:21 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 08:16:30 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 08:16:45 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 08:16:48 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 08:17:00 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 08:20:25 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function employee_bootstrap_payload() in /home/tegwf0aqgwek/public_html/employee-dashboard.php:63
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 63
+[27-Oct-2025 08:22:13 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function employee_bootstrap_payload() in /home/tegwf0aqgwek/public_html/employee-dashboard.php:63
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 63
+[27-Oct-2025 09:41:42 UTC] PHP Parse error:  syntax error, unexpected token "if" in /home/tegwf0aqgwek/public_html/login.php on line 48
+[27-Oct-2025 09:41:48 UTC] PHP Parse error:  syntax error, unexpected token "if" in /home/tegwf0aqgwek/public_html/login.php on line 48
+[27-Oct-2025 09:41:50 UTC] PHP Parse error:  syntax error, unexpected token "if" in /home/tegwf0aqgwek/public_html/login.php on line 48
+[27-Oct-2025 09:42:34 UTC] PHP Parse error:  syntax error, unexpected token "if" in /home/tegwf0aqgwek/public_html/login.php on line 48
+[27-Oct-2025 11:31:59 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function employee_bootstrap_payload() in /home/tegwf0aqgwek/public_html/employee-dashboard.php:86
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 86
+[27-Oct-2025 12:53:15 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function employee_bootstrap_payload() in /home/tegwf0aqgwek/public_html/employee-dashboard.php:86
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 86
+[27-Oct-2025 13:11:52 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:2417
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(2417): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(26): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(152): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 2417
+[27-Oct-2025 13:12:01 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:2417
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(2417): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(26): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(152): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 2417
+[27-Oct-2025 13:23:23 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:2417
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(2417): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(26): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(152): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 2417
+[27-Oct-2025 13:55:43 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3217
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3217): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(26): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(152): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3217
+[27-Oct-2025 13:55:46 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 ambiguous column name: status in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:2965
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(2965): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(93): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 2965
+[27-Oct-2025 14:42:11 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3932
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3932): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(51): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(230): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3932
+[27-Oct-2025 21:43:30 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 ambiguous column name: status in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4012
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(4012): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(93): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4012
+[27-Oct-2025 21:43:34 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4549
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(4549): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(51): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4549
+[27-Oct-2025 23:12:19 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5460
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5460): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(51): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5460
+[27-Oct-2025 23:12:24 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 ambiguous column name: status in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4117
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(4117): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(93): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4117
+[27-Oct-2025 23:38:18 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5805
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5805): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(51): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5805
+[27-Oct-2025 23:38:36 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4258
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(4258): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4258
+[27-Oct-2025 23:38:40 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4462
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(4462): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(104): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4462
+[28-Oct-2025 00:03:56 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3200
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3200): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(80): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3200
+[28-Oct-2025 00:19:42 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3173
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3173): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3488): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3173
+[28-Oct-2025 00:46:04 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3200
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3200): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(80): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3200
+[28-Oct-2025 00:54:32 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3200
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3200): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(80): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3200
+[28-Oct-2025 00:55:48 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5679
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5679): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(104): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5679
+[28-Oct-2025 00:55:58 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:7067
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(7067): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(51): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 7067
+[28-Oct-2025 00:56:07 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3200
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3200): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(80): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3200
+[28-Oct-2025 00:56:23 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5679
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5679): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(104): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5679
+[28-Oct-2025 00:56:30 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3200
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3200): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(80): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3200
+[28-Oct-2025 00:56:58 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5341
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5341): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5341
+[28-Oct-2025 00:57:07 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5341
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5341): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5341
+[28-Oct-2025 00:57:39 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5341
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5341): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5341
+[28-Oct-2025 00:57:43 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5679
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5679): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(104): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5679
+[28-Oct-2025 00:58:06 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5679
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5679): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(104): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5679
+[28-Oct-2025 00:58:20 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5341
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5341): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5341
+[28-Oct-2025 00:59:19 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3173
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3173): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3488): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3173
+[28-Oct-2025 00:59:37 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3173
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3173): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3488): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3173
+[28-Oct-2025 01:00:01 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3173
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3173): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3488): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3173
+[28-Oct-2025 01:01:39 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5341
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5341): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5341
+[28-Oct-2025 01:04:52 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3200
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3200): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(80): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3200
+[28-Oct-2025 01:05:21 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:7067
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(7067): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(51): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 7067
+[28-Oct-2025 01:07:28 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5341
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5341): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5341
+[28-Oct-2025 01:07:41 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5341
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5341): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5341
+[28-Oct-2025 01:10:22 UTC] PHP Warning:  Undefined array key "updated_at" in /home/tegwf0aqgwek/public_html/admin-blog.php on line 306
+[28-Oct-2025 01:10:22 UTC] PHP Warning:  Undefined array key "published_at" in /home/tegwf0aqgwek/public_html/admin-blog.php on line 307
+[28-Oct-2025 01:10:22 UTC] PHP Warning:  Undefined array key "updated_at" in /home/tegwf0aqgwek/public_html/admin-blog.php on line 306
+[28-Oct-2025 01:10:22 UTC] PHP Warning:  Undefined array key "published_at" in /home/tegwf0aqgwek/public_html/admin-blog.php on line 307
+[28-Oct-2025 01:11:16 UTC] PHP Warning:  Undefined array key "updated_at" in /home/tegwf0aqgwek/public_html/admin-blog.php on line 306
+[28-Oct-2025 01:11:16 UTC] PHP Warning:  Undefined array key "published_at" in /home/tegwf0aqgwek/public_html/admin-blog.php on line 307
+[28-Oct-2025 01:11:16 UTC] PHP Warning:  Undefined array key "updated_at" in /home/tegwf0aqgwek/public_html/admin-blog.php on line 306
+[28-Oct-2025 01:11:16 UTC] PHP Warning:  Undefined array key "published_at" in /home/tegwf0aqgwek/public_html/admin-blog.php on line 307
+[28-Oct-2025 01:15:43 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5341
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5341): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5341
+[28-Oct-2025 01:18:26 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3200
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3200): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(80): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3200
+[28-Oct-2025 01:18:29 UTC] PHP Warning:  Undefined array key "updated_at" in /home/tegwf0aqgwek/public_html/admin-blog.php on line 306
+[28-Oct-2025 01:18:29 UTC] PHP Warning:  Undefined array key "published_at" in /home/tegwf0aqgwek/public_html/admin-blog.php on line 307
+[28-Oct-2025 01:18:29 UTC] PHP Warning:  Undefined array key "updated_at" in /home/tegwf0aqgwek/public_html/admin-blog.php on line 306
+[28-Oct-2025 01:18:29 UTC] PHP Warning:  Undefined array key "published_at" in /home/tegwf0aqgwek/public_html/admin-blog.php on line 307
+[28-Oct-2025 01:19:33 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5679
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5679): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(104): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5679
+[28-Oct-2025 01:19:47 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5341
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5341): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5341
+[28-Oct-2025 01:20:01 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:7067
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(7067): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(51): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 7067
+[28-Oct-2025 01:26:04 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3200
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3200): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(80): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3200
+[28-Oct-2025 01:54:48 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:7067
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(7067): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(51): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 7067
+[28-Oct-2025 02:00:42 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3173
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3173): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3488): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3173
+[28-Oct-2025 02:09:33 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3173
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3173): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3488): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3173
+[28-Oct-2025 02:22:54 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3173
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3173): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3488): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3173
+[28-Oct-2025 02:31:02 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:7067
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(7067): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(51): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 7067
+[28-Oct-2025 02:31:07 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5341
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5341): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5341
+[28-Oct-2025 02:39:39 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5679
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5679): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(104): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5679
+[28-Oct-2025 02:40:38 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5341
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5341): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5341
+[28-Oct-2025 02:41:11 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:7067
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(7067): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(51): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 7067
+[28-Oct-2025 02:41:13 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5679
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5679): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(104): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5679
+[28-Oct-2025 02:41:16 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5341
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5341): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5341
+[28-Oct-2025 02:45:25 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:7190
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(7190): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(51): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 7190
+[28-Oct-2025 03:01:24 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:7190
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(7190): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(51): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 7190
+[28-Oct-2025 03:01:27 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5757
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5757): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(112): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5757
+[28-Oct-2025 03:01:29 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5419
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5419): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5419
+[28-Oct-2025 03:01:52 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "\" in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:7190
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(7190): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-records.php(51): admin_list_employees()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 7190
+[28-Oct-2025 03:02:03 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5757
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5757): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(112): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5757
+[28-Oct-2025 03:02:07 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5419
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5419): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5419
+[28-Oct-2025 03:08:50 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5762
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5762): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(112): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5762
+[28-Oct-2025 03:09:00 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5762
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5762): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(112): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5762
+[28-Oct-2025 03:09:03 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5424
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5424): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5424
+[28-Oct-2025 03:09:49 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5762
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5762): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(112): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5762
+[28-Oct-2025 03:09:51 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5424
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5424): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5424
+[28-Oct-2025 03:21:31 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5793
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5793): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(112): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5793
+[28-Oct-2025 03:21:34 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5455
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5455): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5455
+[28-Oct-2025 03:39:16 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5793
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5793): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(112): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5793
+[28-Oct-2025 03:39:19 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5455
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5455): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5455
+[28-Oct-2025 04:08:29 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3376
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3376): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(80): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3376
+[28-Oct-2025 04:13:53 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3376
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3376): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(80): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3376
+[28-Oct-2025 04:15:41 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3376
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3376): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(80): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3376
+[28-Oct-2025 04:42:31 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3364
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3364): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3364
+[28-Oct-2025 04:42:34 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5855
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5855): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(123): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5855
+[28-Oct-2025 04:58:31 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3373
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3373): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3688): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3373
+[28-Oct-2025 05:01:13 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3373
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3373): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3688): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3373
+[28-Oct-2025 05:29:04 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3467
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3467): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3467
+[28-Oct-2025 09:36:57 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:6060
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(6060): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(123): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 6060
+[28-Oct-2025 09:37:00 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5722
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5722): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5722
+[28-Oct-2025 09:59:42 UTC] Gemini image generation failed: Gemini API responded with HTTP 404.
+[28-Oct-2025 10:00:04 UTC] Gemini image generation failed: Gemini API responded with HTTP 404.
+[28-Oct-2025 11:19:07 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3671
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3671): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3986): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3671
+[28-Oct-2025 11:19:31 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3671
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3671): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3986): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3671
+[28-Oct-2025 11:19:46 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3671
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3671): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3986): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3671
+[28-Oct-2025 11:19:51 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3671
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3671): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3986): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3671
+[28-Oct-2025 11:22:48 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3698
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3698): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3698
+[28-Oct-2025 12:15:25 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:6058
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(6058): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(123): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 6058
+[28-Oct-2025 12:15:30 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:5720
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(5720): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-referrers.php(84): admin_list_referrers()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 5720
+[28-Oct-2025 12:16:43 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3542
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3542): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3855): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3542
+[28-Oct-2025 12:17:53 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3542
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3542): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3855): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(251): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3542
+[28-Oct-2025 12:36:29 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3569
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3569): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3882): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(294): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3569
+[28-Oct-2025 12:37:12 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3569
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3569): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3882): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(294): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3569
+[28-Oct-2025 12:37:58 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3569
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3569): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3882): employee_list_requests()
+#2 /home/tegwf0aqgwek/public_html/employee-dashboard.php(294): employee_bootstrap_payload()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3569
+[28-Oct-2025 12:45:51 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:45:51 UTC] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 620
+[28-Oct-2025 12:46:02 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:46:04 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:46:24 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:46:24 UTC] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 620
+[28-Oct-2025 12:49:18 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:49:18 UTC] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 620
+[28-Oct-2025 12:49:26 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:49:30 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:49:42 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:49:47 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:49:49 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:54:14 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:6086
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(6086): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(123): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 6086
+[28-Oct-2025 12:55:02 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3597
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3597): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3597
+[28-Oct-2025 12:56:35 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:56:35 UTC] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 620
+[28-Oct-2025 12:56:48 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:56:48 UTC] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 620
+[28-Oct-2025 12:56:55 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:56:55 UTC] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 620
+[28-Oct-2025 12:57:37 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:57:40 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:57:40 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:57:42 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:57:46 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:58:56 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:59:13 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:59:20 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 12:59:20 UTC] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 620
+[28-Oct-2025 13:02:07 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:6087
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(6087): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(183): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 6087
+[28-Oct-2025 13:02:12 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_referrers() in /home/tegwf0aqgwek/public_html/admin-referrers.php:83
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-referrers.php on line 83
+[28-Oct-2025 13:02:17 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_referrers() in /home/tegwf0aqgwek/public_html/admin-referrers.php:83
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-referrers.php on line 83
+[28-Oct-2025 13:02:23 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_installations() in /home/tegwf0aqgwek/public_html/admin-records.php:107
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-records.php on line 107
+[28-Oct-2025 13:02:36 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:6087
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(6087): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(183): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 6087
+[28-Oct-2025 13:02:39 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_referrers() in /home/tegwf0aqgwek/public_html/admin-referrers.php:83
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-referrers.php on line 83
+[28-Oct-2025 13:02:41 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_installations() in /home/tegwf0aqgwek/public_html/admin-records.php:107
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-records.php on line 107
+[28-Oct-2025 13:03:39 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3598
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3598): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3598
+[28-Oct-2025 13:09:08 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:6087
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(6087): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(183): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 6087
+[28-Oct-2025 13:09:10 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_referrers() in /home/tegwf0aqgwek/public_html/admin-referrers.php:83
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-referrers.php on line 83
+[28-Oct-2025 13:09:12 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_installations() in /home/tegwf0aqgwek/public_html/admin-records.php:107
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-records.php on line 107
+[28-Oct-2025 13:19:20 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 13:19:20 UTC] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 620
+[28-Oct-2025 13:19:23 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 13:19:23 UTC] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 620
+[28-Oct-2025 13:19:34 UTC] portal_find_user: failed to sync user 2: SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: users.username
+[28-Oct-2025 13:19:34 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 13:19:34 UTC] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 603
+[28-Oct-2025 13:19:38 UTC] portal_find_user: failed to sync user 2: SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: users.username
+[28-Oct-2025 13:19:38 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 13:19:38 UTC] PHP Warning:  Undefined variable $portalCsrfToken in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 823
+[28-Oct-2025 13:19:38 UTC] PHP Fatal error:  Uncaught TypeError: htmlspecialchars(): Argument #1 ($string) must be of type string, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:823
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(823): htmlspecialchars()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 823
+[28-Oct-2025 13:19:45 UTC] portal_find_user: failed to sync user 2: SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: users.username
+[28-Oct-2025 13:19:45 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 13:19:47 UTC] portal_find_user: failed to sync user 2: SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: users.username
+[28-Oct-2025 13:19:47 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 13:19:47 UTC] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 603
+[28-Oct-2025 13:19:49 UTC] portal_find_user: failed to sync user 2: SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: users.username
+[28-Oct-2025 13:19:49 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 13:19:49 UTC] PHP Warning:  Undefined variable $portalCsrfToken in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 823
+[28-Oct-2025 13:19:49 UTC] PHP Fatal error:  Uncaught TypeError: htmlspecialchars(): Argument #1 ($string) must be of type string, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:823
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(823): htmlspecialchars()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 823
+[28-Oct-2025 13:19:50 UTC] portal_find_user: failed to sync user 2: SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: users.username
+[28-Oct-2025 13:19:50 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 13:19:51 UTC] portal_find_user: failed to sync user 2: SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: users.username
+[28-Oct-2025 13:19:51 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 13:19:53 UTC] portal_find_user: failed to sync user 2: SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: users.username
+[28-Oct-2025 13:19:53 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 13:19:53 UTC] portal_find_user: failed to sync user 2: SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: users.username
+[28-Oct-2025 13:19:53 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 13:19:57 UTC] portal_find_user: failed to sync user 2: SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: users.username
+[28-Oct-2025 13:19:57 UTC] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[28-Oct-2025 13:27:45 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:6226
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(6226): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(183): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 6226
+[28-Oct-2025 13:27:49 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_referrers() in /home/tegwf0aqgwek/public_html/admin-referrers.php:83
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-referrers.php on line 83
+[28-Oct-2025 13:27:51 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_installations() in /home/tegwf0aqgwek/public_html/admin-records.php:107
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-records.php on line 107
+[28-Oct-2025 13:28:20 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3732
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3732): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3732
+[28-Oct-2025 13:30:20 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_referrers() in /home/tegwf0aqgwek/public_html/admin-referrers.php:83
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-referrers.php on line 83
+[28-Oct-2025 13:31:57 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:6226
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(6226): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(183): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 6226
+[28-Oct-2025 13:31:59 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_referrers() in /home/tegwf0aqgwek/public_html/admin-referrers.php:83
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-referrers.php on line 83
+[28-Oct-2025 13:32:04 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_installations() in /home/tegwf0aqgwek/public_html/admin-records.php:107
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-records.php on line 107
+[28-Oct-2025 13:32:08 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3732
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3732): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3732
+[28-Oct-2025 13:33:38 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:6226
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(6226): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(183): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 6226
+[28-Oct-2025 13:33:43 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_referrers() in /home/tegwf0aqgwek/public_html/admin-referrers.php:83
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-referrers.php on line 83
+[28-Oct-2025 13:33:48 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_installations() in /home/tegwf0aqgwek/public_html/admin-records.php:107
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-records.php on line 107
+[28-Oct-2025 13:33:52 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3732
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3732): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3732
+[28-Oct-2025 13:44:53 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:6227
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(6227): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(183): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 6227
+[28-Oct-2025 13:45:43 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:6227
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(6227): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(183): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 6227
+[28-Oct-2025 13:45:57 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3733
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3733): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3733
+[28-Oct-2025 14:00:40 UTC] Unable to load admin lead overview: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id
+[28-Oct-2025 14:00:40 UTC] PHP Warning:  Undefined variable $flashIcons in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:00:40 UTC] PHP Warning:  Trying to access array offset on null in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:01:31 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3733
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3733): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3733
+[28-Oct-2025 14:02:55 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:6226
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(6226): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(183): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 6226
+[28-Oct-2025 14:03:24 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_referrers() in /home/tegwf0aqgwek/public_html/admin-referrers.php:83
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-referrers.php on line 83
+[28-Oct-2025 14:03:39 UTC] Unable to load admin lead overview: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id
+[28-Oct-2025 14:03:39 UTC] PHP Warning:  Undefined variable $flashIcons in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:03:39 UTC] PHP Warning:  Trying to access array offset on null in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:04:32 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:6226
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(6226): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-leads.php(183): admin_fetch_lead_overview()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 6226
+[28-Oct-2025 14:04:35 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_referrers() in /home/tegwf0aqgwek/public_html/admin-referrers.php:83
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-referrers.php on line 83
+[28-Oct-2025 14:04:36 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function file_admin_list_installations() in /home/tegwf0aqgwek/public_html/admin-records.php:107
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-records.php(209): {closure}()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-records.php on line 107
+[28-Oct-2025 14:05:17 UTC] Unable to load admin lead overview: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id
+[28-Oct-2025 14:05:17 UTC] PHP Warning:  Undefined variable $flashIcons in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:05:17 UTC] PHP Warning:  Trying to access array offset on null in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:05:33 UTC] Unable to load admin lead overview: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id
+[28-Oct-2025 14:05:33 UTC] PHP Warning:  Undefined variable $flashIcons in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:05:33 UTC] PHP Warning:  Trying to access array offset on null in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:06:52 UTC] Unable to load admin lead overview: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id
+[28-Oct-2025 14:06:52 UTC] PHP Warning:  Undefined variable $flashIcons in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:06:52 UTC] PHP Warning:  Trying to access array offset on null in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:08:38 UTC] Unable to load admin lead overview: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id
+[28-Oct-2025 14:08:38 UTC] PHP Warning:  Undefined variable $flashIcons in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:08:38 UTC] PHP Warning:  Trying to access array offset on null in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:09:52 UTC] Unable to load admin lead overview: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id
+[28-Oct-2025 14:09:52 UTC] PHP Warning:  Undefined variable $flashIcons in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:09:52 UTC] PHP Warning:  Trying to access array offset on null in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:14:59 UTC] Unable to load admin lead overview: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id
+[28-Oct-2025 14:14:59 UTC] PHP Warning:  Undefined variable $flashIcons in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 14:14:59 UTC] PHP Warning:  Trying to access array offset on null in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 19:47:04 Asia/Kolkata] Unable to load admin lead overview: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id
+[28-Oct-2025 19:47:04 Asia/Kolkata] PHP Warning:  Undefined variable $flashIcons in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 19:47:04 Asia/Kolkata] PHP Warning:  Trying to access array offset on null in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 19:54:37 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3804
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3804): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3804
+[28-Oct-2025 19:54:39 Asia/Kolkata] Unable to load admin lead overview: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id
+[28-Oct-2025 19:54:39 Asia/Kolkata] PHP Warning:  Undefined variable $flashIcons in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 19:54:39 Asia/Kolkata] PHP Warning:  Trying to access array offset on null in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 20:08:37 Asia/Kolkata] Unable to load admin lead overview: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id
+[28-Oct-2025 20:08:37 Asia/Kolkata] PHP Warning:  Undefined variable $flashIcons in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[28-Oct-2025 20:08:37 Asia/Kolkata] PHP Warning:  Trying to access array offset on null in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[29-Oct-2025 09:24:44 Asia/Kolkata] Unable to load admin lead overview: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id
+[29-Oct-2025 09:24:44 Asia/Kolkata] PHP Warning:  Undefined variable $flashIcons in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[29-Oct-2025 09:24:44 Asia/Kolkata] PHP Warning:  Trying to access array offset on null in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[29-Oct-2025 09:24:54 Asia/Kolkata] Unable to load admin lead overview: SQLSTATE[HY000]: General error: 1 no such column: l.referrer_id
+[29-Oct-2025 09:24:54 Asia/Kolkata] PHP Warning:  Undefined variable $flashIcons in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[29-Oct-2025 09:24:54 Asia/Kolkata] PHP Warning:  Trying to access array offset on null in /home/tegwf0aqgwek/public_html/admin-leads.php on line 191
+[02-Nov-2025 17:42:00 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3687
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3687): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3687
+[02-Nov-2025 19:08:30 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: activity_log in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4453
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(4453): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-dashboard.php(36): admin_today_highlights()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4453
+[02-Nov-2025 19:08:39 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: activity_log in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4453
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(4453): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-dashboard.php(36): admin_today_highlights()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4453
+[02-Nov-2025 22:21:48 Asia/Kolkata] PHP Warning:  file_put_contents(/home/tegwf0aqgwek/public_html/includes/../storage/ai/logs/activity.log): Failed to open stream: No such file or directory in /home/tegwf0aqgwek/public_html/includes/ai.php on line 664
+[02-Nov-2025 22:23:09 Asia/Kolkata] PHP Warning:  file_put_contents(/home/tegwf0aqgwek/public_html/includes/../storage/ai/logs/activity.log): Failed to open stream: No such file or directory in /home/tegwf0aqgwek/public_html/includes/ai.php on line 664
+[02-Nov-2025 16:56:53 UTC] PHP Fatal error:  Cannot redeclare admin_overview_counts() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4392) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4428
+[02-Nov-2025 16:57:01 UTC] PHP Fatal error:  Cannot redeclare admin_overview_counts() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4392) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4428
+[02-Nov-2025 17:01:26 UTC] PHP Fatal error:  Cannot redeclare admin_overview_counts() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4392) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4428
+[02-Nov-2025 17:01:31 UTC] PHP Fatal error:  Cannot redeclare admin_overview_counts() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4392) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4428
+[02-Nov-2025 17:01:34 UTC] PHP Fatal error:  Cannot redeclare admin_overview_counts() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4392) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4428
+[02-Nov-2025 17:01:36 UTC] PHP Fatal error:  Cannot redeclare admin_overview_counts() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4392) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4428
+[02-Nov-2025 17:01:47 UTC] PHP Fatal error:  Cannot redeclare admin_overview_counts() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4392) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4428
+[02-Nov-2025 17:04:15 UTC] PHP Fatal error:  Cannot redeclare admin_overview_counts() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4392) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4428
+[02-Nov-2025 22:57:41 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[02-Nov-2025 22:57:41 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[02-Nov-2025 22:57:56 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[02-Nov-2025 22:57:56 Asia/Kolkata] PHP Warning:  Undefined variable $portalCsrfToken in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[02-Nov-2025 22:57:56 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: htmlspecialchars(): Argument #1 ($string) must be of type string, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:837
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(837): htmlspecialchars()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[02-Nov-2025 22:58:23 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[02-Nov-2025 22:58:25 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[02-Nov-2025 22:58:30 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[02-Nov-2025 22:58:38 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[02-Nov-2025 22:58:40 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[02-Nov-2025 22:58:40 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[02-Nov-2025 23:08:02 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[02-Nov-2025 23:08:02 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[02-Nov-2025 23:08:18 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[02-Nov-2025 17:44:52 UTC] PHP Fatal error:  Cannot redeclare ai_gemini_stream_generate_content() (previously declared in /home/tegwf0aqgwek/public_html/includes/ai.php:230) in /home/tegwf0aqgwek/public_html/includes/ai.php on line 265
+[02-Nov-2025 17:45:01 UTC] PHP Fatal error:  Cannot redeclare ai_gemini_stream_generate_content() (previously declared in /home/tegwf0aqgwek/public_html/includes/ai.php:230) in /home/tegwf0aqgwek/public_html/includes/ai.php on line 265
+[02-Nov-2025 17:45:20 UTC] PHP Fatal error:  Cannot redeclare ai_gemini_stream_generate_content() (previously declared in /home/tegwf0aqgwek/public_html/includes/ai.php:230) in /home/tegwf0aqgwek/public_html/includes/ai.php on line 265
+[02-Nov-2025 17:45:21 UTC] PHP Fatal error:  Cannot redeclare ai_gemini_stream_generate_content() (previously declared in /home/tegwf0aqgwek/public_html/includes/ai.php:230) in /home/tegwf0aqgwek/public_html/includes/ai.php on line 265
+[03-Nov-2025 00:28:55 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 00:28:55 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[03-Nov-2025 00:30:24 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 00:30:24 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[03-Nov-2025 00:30:29 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 00:30:29 Asia/Kolkata] PHP Warning:  Undefined variable $portalCsrfToken in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[03-Nov-2025 00:30:29 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: htmlspecialchars(): Argument #1 ($string) must be of type string, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:837
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(837): htmlspecialchars()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[03-Nov-2025 00:30:36 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 00:30:39 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 00:31:05 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 00:31:27 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 00:31:31 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 00:31:37 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 00:31:37 Asia/Kolkata] PHP Warning:  Undefined variable $portalCsrfToken in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[03-Nov-2025 00:31:37 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: htmlspecialchars(): Argument #1 ($string) must be of type string, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:837
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(837): htmlspecialchars()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[03-Nov-2025 00:31:51 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 00:31:51 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[03-Nov-2025 08:28:37 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3752
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3752): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3752
+[03-Nov-2025 09:05:20 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 09:05:20 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[03-Nov-2025 09:05:23 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 09:05:27 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 09:05:27 Asia/Kolkata] PHP Warning:  Undefined variable $portalCsrfToken in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[03-Nov-2025 09:05:27 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: htmlspecialchars(): Argument #1 ($string) must be of type string, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:837
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(837): htmlspecialchars()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[03-Nov-2025 09:05:31 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 09:05:33 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 09:05:34 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 09:05:35 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 09:05:35 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[03-Nov-2025 09:06:33 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3752
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3752): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3752
+[03-Nov-2025 09:06:40 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3752
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3752): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3752
+[03-Nov-2025 11:14:50 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 11:14:50 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[03-Nov-2025 11:15:01 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[03-Nov-2025 11:15:01 Asia/Kolkata] PHP Warning:  Undefined variable $portalCsrfToken in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[03-Nov-2025 11:15:01 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: htmlspecialchars(): Argument #1 ($string) must be of type string, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:837
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(837): htmlspecialchars()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[03-Nov-2025 11:17:10 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[04-Nov-2025 11:11:15 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[04-Nov-2025 11:11:15 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[04-Nov-2025 11:11:23 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[04-Nov-2025 11:11:23 Asia/Kolkata] PHP Warning:  Undefined variable $portalCsrfToken in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[04-Nov-2025 11:11:23 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: htmlspecialchars(): Argument #1 ($string) must be of type string, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:837
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(837): htmlspecialchars()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[04-Nov-2025 11:11:47 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[04-Nov-2025 11:11:55 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[04-Nov-2025 11:11:59 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[04-Nov-2025 11:12:13 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[04-Nov-2025 11:12:13 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[04-Nov-2025 11:12:23 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[04-Nov-2025 11:12:26 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[04-Nov-2025 11:12:29 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[04-Nov-2025 11:12:32 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[04-Nov-2025 11:12:32 Asia/Kolkata] PHP Warning:  Undefined variable $portalCsrfToken in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[04-Nov-2025 11:12:32 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: htmlspecialchars(): Argument #1 ($string) must be of type string, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:837
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(837): htmlspecialchars()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[04-Nov-2025 11:12:34 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[04-Nov-2025 11:12:34 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[04-Nov-2025 23:18:32 Asia/Kolkata] PHP Fatal error:  Uncaught RuntimeException: Unsupported customer state. in /home/tegwf0aqgwek/public_html/includes/customer_records.php:855
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/customer_records.php(868): CustomerRecordStore->normaliseState()
+#1 /home/tegwf0aqgwek/public_html/includes/customer_records.php(212): CustomerRecordStore->normaliseStateOrAll()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(29): CustomerRecordStore->list()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/customer_records.php on line 855
+[04-Nov-2025 23:18:37 Asia/Kolkata] PHP Fatal error:  Uncaught RuntimeException: Unsupported customer state. in /home/tegwf0aqgwek/public_html/includes/customer_records.php:855
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/customer_records.php(868): CustomerRecordStore->normaliseState()
+#1 /home/tegwf0aqgwek/public_html/includes/customer_records.php(212): CustomerRecordStore->normaliseStateOrAll()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(29): CustomerRecordStore->list()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/customer_records.php on line 855
+[04-Nov-2025 23:18:55 Asia/Kolkata] PHP Fatal error:  Uncaught RuntimeException: Unsupported customer state. in /home/tegwf0aqgwek/public_html/includes/customer_records.php:855
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/customer_records.php(868): CustomerRecordStore->normaliseState()
+#1 /home/tegwf0aqgwek/public_html/includes/customer_records.php(212): CustomerRecordStore->normaliseStateOrAll()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(29): CustomerRecordStore->list()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/customer_records.php on line 855
+[04-Nov-2025 23:20:04 Asia/Kolkata] PHP Fatal error:  Uncaught RuntimeException: Unsupported customer state. in /home/tegwf0aqgwek/public_html/includes/customer_records.php:855
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/customer_records.php(868): CustomerRecordStore->normaliseState()
+#1 /home/tegwf0aqgwek/public_html/includes/customer_records.php(212): CustomerRecordStore->normaliseStateOrAll()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(29): CustomerRecordStore->list()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/customer_records.php on line 855
+[04-Nov-2025 23:31:08 Asia/Kolkata] PHP Fatal error:  Uncaught RuntimeException: Unsupported customer state. in /home/tegwf0aqgwek/public_html/includes/customer_records.php:855
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/customer_records.php(868): CustomerRecordStore->normaliseState()
+#1 /home/tegwf0aqgwek/public_html/includes/customer_records.php(212): CustomerRecordStore->normaliseStateOrAll()
+#2 /home/tegwf0aqgwek/public_html/admin-records.php(29): CustomerRecordStore->list()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/customer_records.php on line 855
+[04-Nov-2025 23:41:31 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3752
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3752): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3752
+[04-Nov-2025 23:50:36 Asia/Kolkata] PHP Warning:  Undefined variable $highlights in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 128
+[04-Nov-2025 23:50:36 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: array_map(): Argument #2 ($array) must be of type array, null given in /home/tegwf0aqgwek/public_html/admin-dashboard.php:111
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-dashboard.php(111): array_map()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 111
+[04-Nov-2025 23:50:40 Asia/Kolkata] PHP Warning:  Undefined variable $highlights in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 128
+[04-Nov-2025 23:50:40 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: array_map(): Argument #2 ($array) must be of type array, null given in /home/tegwf0aqgwek/public_html/admin-dashboard.php:111
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-dashboard.php(111): array_map()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 111
+[04-Nov-2025 23:50:42 Asia/Kolkata] PHP Warning:  Undefined variable $highlights in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 128
+[04-Nov-2025 23:50:42 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: array_map(): Argument #2 ($array) must be of type array, null given in /home/tegwf0aqgwek/public_html/admin-dashboard.php:111
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-dashboard.php(111): array_map()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 111
+[04-Nov-2025 23:50:58 Asia/Kolkata] PHP Warning:  Undefined variable $highlights in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 128
+[04-Nov-2025 23:50:58 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: array_map(): Argument #2 ($array) must be of type array, null given in /home/tegwf0aqgwek/public_html/admin-dashboard.php:111
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-dashboard.php(111): array_map()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 111
+[04-Nov-2025 23:51:02 Asia/Kolkata] PHP Warning:  Undefined variable $highlights in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 128
+[04-Nov-2025 23:51:02 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: array_map(): Argument #2 ($array) must be of type array, null given in /home/tegwf0aqgwek/public_html/admin-dashboard.php:111
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-dashboard.php(111): array_map()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 111
+[04-Nov-2025 23:52:00 Asia/Kolkata] PHP Warning:  Undefined variable $highlights in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 128
+[04-Nov-2025 23:52:00 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: array_map(): Argument #2 ($array) must be of type array, null given in /home/tegwf0aqgwek/public_html/admin-dashboard.php:111
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-dashboard.php(111): array_map()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 111
+[04-Nov-2025 23:54:49 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3752
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3752): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3752
+[05-Nov-2025 00:00:03 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Call to undefined function ai_daily_notes_generate_if_due() in /home/tegwf0aqgwek/public_html/admin-dashboard.php:39
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 39
+[05-Nov-2025 00:00:33 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Call to undefined function ai_daily_notes_generate_if_due() in /home/tegwf0aqgwek/public_html/admin-dashboard.php:39
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 39
+[05-Nov-2025 00:03:47 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Call to undefined function ai_daily_notes_generate_if_due() in /home/tegwf0aqgwek/public_html/admin-dashboard.php:38
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 38
+[05-Nov-2025 00:03:49 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Call to undefined function ai_daily_notes_generate_if_due() in /home/tegwf0aqgwek/public_html/admin-dashboard.php:38
+Stack trace:
+#0 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-dashboard.php on line 38
+[05-Nov-2025 00:14:28 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3752
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3752): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3752
+[05-Nov-2025 00:35:57 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4464
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(4464): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-dashboard.php(35): admin_overview_counts()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4464
+[05-Nov-2025 00:36:00 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:4464
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(4464): PDO->query()
+#1 /home/tegwf0aqgwek/public_html/admin-dashboard.php(35): admin_overview_counts()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 4464
+[05-Nov-2025 00:40:17 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3751
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3751): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3751
+[09-Nov-2025 21:13:01 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3751
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3751): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3751
+[09-Nov-2025 21:19:42 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3751
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3751): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3751
+[09-Nov-2025 21:19:59 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3751
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3751): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3751
+[10-Nov-2025 20:42:15 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3752
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3752): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3752
+[10-Nov-2025 20:50:09 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_1ae631c5790c","context_id":"bd7ff1c9ddd32486"}
+[10-Nov-2025 20:50:09 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_1ae631c5790c","slug":"hello-sunshine-welcome-to-our-solar-journey-1v6jrg","context_id":"bd7ff1c9ddd32486","developer_message":"Attachment not found: storage/ages/060216b02.50553826.png"}
+[10-Nov-2025 20:50:46 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_1ae631c5790c","context_id":"d42016aa48ffcc48"}
+[10-Nov-2025 20:50:46 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_1ae631c5790c","slug":"hello-sunshine-welcome-to-our-solar-journey-1v6jrg","context_id":"d42016aa48ffcc48"}
+[10-Nov-2025 20:51:56 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_1ae631c5790c","context_id":"ae6dfe94efed15c1"}
+[10-Nov-2025 20:51:56 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_1ae631c5790c","slug":"hello-sunshine-welcome-to-our-solar-journey-1v6jrg","context_id":"ae6dfe94efed15c1","developer_message":"Attachment not found: storage/s/_7df4e45a9cdf.png"}
+[10-Nov-2025 20:52:08 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_1ae631c5790c","context_id":"1106bf9b8b9d2b50"}
+[10-Nov-2025 20:52:08 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_1ae631c5790c","slug":"hello-sunshine-welcome-to-our-solar-journey-1v6jrg","context_id":"1106bf9b8b9d2b50","developer_message":"Attachment not found: storage/f.png"}
+[10-Nov-2025 20:52:14 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_1ae631c5790c","context_id":"baef825ff77cc858"}
+[10-Nov-2025 20:52:14 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_1ae631c5790c","slug":"hello-sunshine-welcome-to-our-solar-journey-1v6jrg","context_id":"baef825ff77cc858","developer_message":"Attachment not found: storage/g"}
+[10-Nov-2025 20:56:56 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"a9e3bbd480016167"}
+[10-Nov-2025 20:56:56 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"a9e3bbd480016167","developer_message":"Attachment not found: storage/db5cce2.png"}
+[10-Nov-2025 21:01:12 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"9b0e15ea7f35af3e"}
+[10-Nov-2025 21:01:12 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"9b0e15ea7f35af3e","developer_message":"Attachment not found: storage/ts/"}
+[10-Nov-2025 21:01:34 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"7c729a7365af0325"}
+[10-Nov-2025 21:01:34 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"7c729a7365af0325","developer_message":"Attachment not found: storage/ts/g"}
+[10-Nov-2025 21:02:51 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"358d313d5d6c948b"}
+[10-Nov-2025 21:02:51 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"358d313d5d6c948b"}
+[11-Nov-2025 11:41:40 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3752
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3752): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3752
+[17-Nov-2025 17:58:04 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3752
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3752): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3752
+[17-Nov-2025 17:58:53 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"a407d64965c61b65"}
+[17-Nov-2025 17:58:53 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"a407d64965c61b65"}
+[17-Nov-2025 18:31:51 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"a92b8ea9e7cdd810"}
+[17-Nov-2025 18:31:51 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"a92b8ea9e7cdd810","developer_message":"Attachment not found: storage/28901.png"}
+[17-Nov-2025 18:32:13 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"d254a35fcb92cbc0"}
+[17-Nov-2025 18:32:13 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"d254a35fcb92cbc0"}
+[17-Nov-2025 18:32:18 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"78ee3d94af851acb"}
+[17-Nov-2025 18:32:18 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"78ee3d94af851acb"}
+[17-Nov-2025 19:16:02 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"0c77cbf6315c964b"}
+[17-Nov-2025 19:16:02 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"0c77cbf6315c964b","developer_message":"Attachment not found: storage/ted_images/_691b270e40d244.56924485.png"}
+[17-Nov-2025 19:16:21 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"42f63bdc49f1d6dc"}
+[17-Nov-2025 19:16:21 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"42f63bdc49f1d6dc"}
+[17-Nov-2025 20:26:51 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"7f142712d5e7e059"}
+[17-Nov-2025 20:26:51 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"7f142712d5e7e059"}
+[17-Nov-2025 20:59:41 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"4cfc873dc4313081"}
+[17-Nov-2025 20:59:41 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"4cfc873dc4313081","developer_message":"Attachment not found: storage/"}
+[17-Nov-2025 21:00:02 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"c69e9a50857a9ed3"}
+[17-Nov-2025 21:00:02 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"c69e9a50857a9ed3"}
+[17-Nov-2025 21:00:11 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"3d17dee56b29fdd7"}
+[17-Nov-2025 21:00:11 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"3d17dee56b29fdd7"}
+[17-Nov-2025 21:15:00 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"3f035d2206e24f89"}
+[17-Nov-2025 21:15:00 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"3f035d2206e24f89"}
+[19-Nov-2025 14:29:43 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3752
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3752): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3752
+[19-Nov-2025 14:31:45 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_f7c5e9e95c82","context_id":"2ce7b4cbd5b13373"}
+[19-Nov-2025 14:31:45 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_f7c5e9e95c82","slug":"your-home-a-healthier-planet-the-green-impact-of-going-solar-18hrqx","context_id":"2ce7b4cbd5b13373","developer_message":"Attachment not found: storage/ts/t_74214f00254c.png"}
+[19-Nov-2025 14:32:02 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_f7c5e9e95c82","context_id":"f83a71310ac4e72b"}
+[19-Nov-2025 14:32:02 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_f7c5e9e95c82","slug":"your-home-a-healthier-planet-the-green-impact-of-going-solar-18hrqx","context_id":"f83a71310ac4e72b"}
+[19-Nov-2025 14:36:51 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_f7c5e9e95c82","context_id":"cb811b3cba8356c3"}
+[19-Nov-2025 14:36:51 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_f7c5e9e95c82","slug":"your-home-a-healthier-planet-the-green-impact-of-going-solar-18hrqx","context_id":"cb811b3cba8356c3","developer_message":"Attachment not found: torage/og/sets/set_74214f00254c.png"}
+[19-Nov-2025 14:37:14 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_f7c5e9e95c82","context_id":"1c0f2d5422edfa65"}
+[19-Nov-2025 14:37:14 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_f7c5e9e95c82","slug":"your-home-a-healthier-planet-the-green-impact-of-going-solar-18hrqx","context_id":"1c0f2d5422edfa65","developer_message":"Attachment not found: dakshayani.co.in/orage/og/sets/set_74214f00254c.png"}
+[19-Nov-2025 14:37:39 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_f7c5e9e95c82","context_id":"03694094d40edb45"}
+[19-Nov-2025 14:37:39 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_f7c5e9e95c82","slug":"your-home-a-healthier-planet-the-green-impact-of-going-solar-18hrqx","context_id":"03694094d40edb45","developer_message":"Attachment not found: dakshayani.co.in/orage/og/sets/set_74214f00254c.png"}
+[19-Nov-2025 14:38:24 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_f7c5e9e95c82","context_id":"aaa703b0ee5a49bf"}
+[19-Nov-2025 14:38:24 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_f7c5e9e95c82","slug":"your-home-a-healthier-planet-the-green-impact-of-going-solar-18hrqx","context_id":"aaa703b0ee5a49bf","developer_message":"Attachment not found: astorage/blog/assets/asset_74214f00254c.png"}
+[19-Nov-2025 14:38:45 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_f7c5e9e95c82","context_id":"143e385f4979c8c8"}
+[19-Nov-2025 14:38:45 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_f7c5e9e95c82","slug":"your-home-a-healthier-planet-the-green-impact-of-going-solar-18hrqx","context_id":"143e385f4979c8c8","developer_message":"Attachment not found: sstorage/log/ssets/sset_74214f00254c.png"}
+[19-Nov-2025 14:39:05 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_f7c5e9e95c82","context_id":"f199d68088c50a8b"}
+[19-Nov-2025 14:39:05 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_f7c5e9e95c82","slug":"your-home-a-healthier-planet-the-green-impact-of-going-solar-18hrqx","context_id":"f199d68088c50a8b","developer_message":"Attachment not found: dakshayani.co.in/orage/og/sets/set_74214f00254c.png"}
+[19-Nov-2025 14:39:55 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_f7c5e9e95c82","context_id":"228159f5993bf1f1"}
+[19-Nov-2025 14:39:55 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_f7c5e9e95c82","slug":"your-home-a-healthier-planet-the-green-impact-of-going-solar-18hrqx","context_id":"228159f5993bf1f1","developer_message":"Attachment not found: torage/og/sets/set_74214f00254c.png"}
+[19-Nov-2025 14:41:25 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_f7c5e9e95c82","context_id":"6c9a85262daeb276"}
+[19-Nov-2025 14:41:25 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_f7c5e9e95c82","slug":"your-home-a-healthier-planet-the-green-impact-of-going-solar-18hrqx","context_id":"6c9a85262daeb276","developer_message":"Attachment not found: a/orage/blog/assets/asset_74214f00254c.png"}
+[19-Nov-2025 14:58:53 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_f7c5e9e95c82","context_id":"0952314fdcd917bb"}
+[19-Nov-2025 14:58:53 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_f7c5e9e95c82","slug":"your-home-a-healthier-planet-the-green-impact-of-going-solar-18hrqx","context_id":"0952314fdcd917bb"}
+[19-Nov-2025 15:07:20 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"712f47a3f4ccf6bb"}
+[19-Nov-2025 15:07:20 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"712f47a3f4ccf6bb","developer_message":"Attachment not found: storage/"}
+[19-Nov-2025 15:08:42 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"e21b27a1496b1e4d"}
+[19-Nov-2025 15:08:42 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"e21b27a1496b1e4d","developer_message":"Attachment not found: storage/"}
+[19-Nov-2025 15:09:17 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"806069510ac93202"}
+[19-Nov-2025 15:09:17 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"806069510ac93202","developer_message":"Attachment not found: storage/"}
+[19-Nov-2025 15:12:00 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_bbed762fea2b","context_id":"877358ae5ae060ed"}
+[19-Nov-2025 15:12:00 Asia/Kolkata] [blog] blog_publish_error: {"draft_id":"drf_bbed762fea2b","slug":"hello-sunshine-welcome-to-our-solar-journey-19xff7","context_id":"877358ae5ae060ed","developer_message":"Attachment not found: storage/"}
+[19-Nov-2025 15:12:03 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_25cbc3318d4b","context_id":"6e917932c8c89094"}
+[19-Nov-2025 15:12:04 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_25cbc3318d4b","slug":"beyond-the-panels-the-next-generation-of-smart-solar-for-your-home-1x570f","context_id":"6e917932c8c89094"}
+[19-Nov-2025 15:14:35 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_21847b584f75","context_id":"630acbf02cc4e8eb"}
+[19-Nov-2025 15:14:35 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_21847b584f75","slug":"take-back-your-power-why-solar-is-the-ultimate-home-upgrade-for-control-confidence-1kukoh","context_id":"630acbf02cc4e8eb"}
+[20-Nov-2025 14:13:02 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_02e7cb2ad92e","context_id":"3600b7928235a07b"}
+[20-Nov-2025 14:13:02 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_02e7cb2ad92e","slug":"the-shield-of-india-guru-tegh-bahadur-s-universal-stand-for-human-rights-that-still-resonates-3bl6ao","context_id":"3600b7928235a07b"}
+[20-Nov-2025 17:49:14 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_9573a51ddd53","context_id":"1c5210652d663129"}
+[20-Nov-2025 17:49:14 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_9573a51ddd53","slug":"beyond-fear-guru-tegh-bahadur-s-unbreakable-spirit-in-the-face-of-tyranny-vgwsua","context_id":"1c5210652d663129"}
+[20-Nov-2025 17:53:00 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_9573a51ddd53","context_id":"4051941995042057"}
+[20-Nov-2025 17:53:00 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_9573a51ddd53","slug":"beyond-fear-guru-tegh-bahadur-s-unbreakable-spirit-in-the-face-of-tyranny-vgwsua","context_id":"4051941995042057"}
+[20-Nov-2025 17:53:56 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_9573a51ddd53","context_id":"54e609b07d9c59f5"}
+[20-Nov-2025 17:53:56 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_9573a51ddd53","slug":"beyond-fear-guru-tegh-bahadur-s-unbreakable-spirit-in-the-face-of-tyranny-vgwsua","context_id":"54e609b07d9c59f5"}
+[20-Nov-2025 17:56:29 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3752
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3752): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3752
+[20-Nov-2025 18:15:20 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_312e520522a4","context_id":"0269591caa14182a"}
+[20-Nov-2025 18:15:20 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_312e520522a4","slug":"beyond-fear-guru-tegh-bahadur-s-unbreakable-spirit-in-the-face-of-tyranny-1jzagq","context_id":"0269591caa14182a"}
+[25-Nov-2025 17:26:47 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3753
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3753): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3753
+[25-Nov-2025 17:27:17 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[25-Nov-2025 17:27:17 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[25-Nov-2025 17:27:19 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[25-Nov-2025 17:27:19 Asia/Kolkata] PHP Warning:  Undefined variable $portalCsrfToken in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[25-Nov-2025 17:27:19 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: htmlspecialchars(): Argument #1 ($string) must be of type string, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:837
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(837): htmlspecialchars()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[25-Nov-2025 17:27:28 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[25-Nov-2025 17:27:30 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[25-Nov-2025 17:27:31 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[25-Nov-2025 17:27:31 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[25-Nov-2025 17:27:31 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[25-Nov-2025 17:27:32 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[25-Nov-2025 17:27:49 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[25-Nov-2025 17:28:07 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[25-Nov-2025 17:28:09 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[25-Nov-2025 17:28:10 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[25-Nov-2025 17:28:10 Asia/Kolkata] PHP Warning:  Undefined variable $portalCsrfToken in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[25-Nov-2025 17:28:10 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: htmlspecialchars(): Argument #1 ($string) must be of type string, null given in /home/tegwf0aqgwek/public_html/employee-dashboard.php:837
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/employee-dashboard.php(837): htmlspecialchars()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 837
+[25-Nov-2025 17:28:10 Asia/Kolkata] Unable to prepare employee workspace payload: SQLSTATE[HY000]: General error: 1 no such table: approval_requests
+[25-Nov-2025 17:28:10 Asia/Kolkata] PHP Warning:  Undefined variable $employeeLeadsCount in /home/tegwf0aqgwek/public_html/employee-dashboard.php on line 617
+[25-Nov-2025 18:32:21 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_312e520522a4","context_id":"fe91797276c3e127"}
+[25-Nov-2025 18:32:21 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_312e520522a4","slug":"beyond-fear-guru-tegh-bahadur-s-unbreakable-spirit-in-the-face-of-tyranny-1jzagq","context_id":"fe91797276c3e127"}
+[25-Nov-2025 21:54:05 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3741
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3741): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3741
+[28-Nov-2025 02:44:04 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3741
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3741): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3741
+[29-Nov-2025 23:45:29 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_312e520522a4","context_id":"169200447515c2cf"}
+[29-Nov-2025 23:45:29 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_312e520522a4","slug":"beyond-fear-guru-tegh-bahadur-s-unbreakable-spirit-in-the-face-of-tyranny-1jzagq","context_id":"169200447515c2cf"}
+[29-Nov-2025 23:51:20 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_969d8b9fb06b","context_id":"64c365b5be84da05"}
+[29-Nov-2025 23:51:20 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_969d8b9fb06b","slug":"the-science-of-longevity-understanding-solar-panel-efficiency-and-degradation-rates-xvpld6","context_id":"64c365b5be84da05"}
+[29-Nov-2025 23:52:39 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_312e520522a4","context_id":"957a088b039a2118"}
+[29-Nov-2025 23:52:39 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_312e520522a4","slug":"beyond-fear-guru-tegh-bahadur-s-unbreakable-spirit-in-the-face-of-tyranny-1jzagq","context_id":"957a088b039a2118"}
+[02-Dec-2025 01:09:43 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_0d115b9a9421","context_id":"dcd90a31e6e7b4d5"}
+[02-Dec-2025 01:09:43 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_0d115b9a9421","slug":"the-heart-of-your-system-a-technical-comparison-of-microinverters-vs-string-inverters-16fylg","context_id":"dcd90a31e6e7b4d5"}
+[02-Dec-2025 15:44:54 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3741
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3741): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3741
+[02-Dec-2025 22:12:11 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3741
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3741): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3741
+[02-Dec-2025 22:38:13 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3741
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3741): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3741
+[03-Dec-2025 00:37:10 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 959
+[03-Dec-2025 00:37:10 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 959 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:430
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(959): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 430
+[03-Dec-2025 00:37:50 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 959
+[03-Dec-2025 00:37:50 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 959 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:430
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(959): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 430
+[03-Dec-2025 00:39:48 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 959
+[03-Dec-2025 00:39:48 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 959 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:430
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(959): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 430
+[03-Dec-2025 00:40:24 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 959
+[03-Dec-2025 00:40:24 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 959 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:430
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(959): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 430
+[03-Dec-2025 00:40:37 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 959
+[03-Dec-2025 00:40:37 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 959 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:430
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(959): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 430
+[03-Dec-2025 00:42:08 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 959
+[03-Dec-2025 00:42:08 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 959 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:430
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(959): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 430
+[03-Dec-2025 00:58:51 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1149
+[03-Dec-2025 00:58:51 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1149 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:430
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1149): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 430
+[03-Dec-2025 02:36:38 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418
+[03-Dec-2025 02:36:38 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:477
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1418): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 477
+[03-Dec-2025 02:37:00 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418
+[03-Dec-2025 02:37:00 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:477
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1418): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 477
+[03-Dec-2025 02:56:02 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418
+[03-Dec-2025 02:56:02 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:477
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1418): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 477
+[03-Dec-2025 03:02:05 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418
+[03-Dec-2025 03:02:05 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:477
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1418): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 477
+[03-Dec-2025 03:03:04 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418
+[03-Dec-2025 03:03:04 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:477
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1418): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 477
+[03-Dec-2025 03:03:49 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418
+[03-Dec-2025 03:03:49 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:477
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1418): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 477
+[03-Dec-2025 03:04:29 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418
+[03-Dec-2025 03:04:29 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1418 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:477
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1418): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 477
+[03-Dec-2025 03:12:18 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3741
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3741): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3741
+[03-Dec-2025 03:12:21 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3741
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3741): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3741
+[03-Dec-2025 03:21:33 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1503
+[03-Dec-2025 03:21:33 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1503 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:478
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1503): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 478
+[03-Dec-2025 03:22:03 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1503
+[03-Dec-2025 03:22:03 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1503 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:478
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1503): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 478
+[03-Dec-2025 03:41:11 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1504
+[03-Dec-2025 03:41:11 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1504 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:525
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1504): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 525
+[03-Dec-2025 04:06:17 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1632
+[03-Dec-2025 04:06:17 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1632 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:525
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1632): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 525
+[03-Dec-2025 04:06:43 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1632
+[03-Dec-2025 04:06:43 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1632 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:525
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1632): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 525
+[03-Dec-2025 04:07:26 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1632
+[03-Dec-2025 04:07:26 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1632 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:525
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1632): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 525
+[03-Dec-2025 04:08:44 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1632
+[03-Dec-2025 04:08:44 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1632 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:525
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1632): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 525
+[03-Dec-2025 04:39:37 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1602
+[03-Dec-2025 04:39:37 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1602 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:478
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1602): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 478
+[03-Dec-2025 04:39:43 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1602
+[03-Dec-2025 04:39:43 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1602 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:478
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1602): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 478
+[03-Dec-2025 04:39:57 Asia/Kolkata] PHP Warning:  Undefined array key "performance_logs" in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1602
+[03-Dec-2025 04:39:57 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: smart_marketing_sum_performance(): Argument #1 ($logs) must be of type array, null given, called in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 1602 and defined in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php:478
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/admin-smart-marketing.php(1602): smart_marketing_sum_performance()
+#1 {main}
+  thrown in /home/tegwf0aqgwek/public_html/admin-smart-marketing.php on line 478
+[09-Dec-2025 00:58:40 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_f9b8c4f00bac","context_id":"0f0fac9630f3cf86"}
+[09-Dec-2025 00:58:40 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_f9b8c4f00bac","slug":"demystifying-net-metering-how-the-grid-acts-as-your-virtual-battery-12mery","context_id":"0f0fac9630f3cf86"}
+[09-Dec-2025 01:03:14 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3741
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3741): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3741
+[10-Dec-2025 07:26:48 Asia/Kolkata] smart_marketing: image generation failed: Gemini request failed: Operation timed out after 20002 milliseconds with 0 bytes received
+[10-Dec-2025 08:01:12 Asia/Kolkata] smart_marketing: image generation failed: Gemini request failed: Operation timed out after 20002 milliseconds with 0 bytes received
+[10-Dec-2025 08:01:36 Asia/Kolkata] smart_marketing: image generation failed: Gemini request failed: Operation timed out after 20002 milliseconds with 0 bytes received
+[10-Dec-2025 13:42:30 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3741
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3741): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3741
+[12-Dec-2025 11:28:07 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3741
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3741): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3741
+[12-Dec-2025 11:29:07 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3741
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3741): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3741
+[12-Dec-2025 15:33:36 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_cf9aebab65fc","context_id":"fdd3351c3f81d38b"}
+[12-Dec-2025 15:33:36 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_cf9aebab65fc","slug":"fact-vs-fiction-debunking-the-top-5-myths-about-home-solar-19zstn","context_id":"fdd3351c3f81d38b"}
+[12-Dec-2025 15:47:50 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_cf9aebab65fc","context_id":"b3d19b55b460f06b"}
+[12-Dec-2025 15:47:50 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_cf9aebab65fc","slug":"fact-vs-fiction-debunking-the-top-5-myths-about-home-solar-19zstn","context_id":"b3d19b55b460f06b"}
+[20-Dec-2025 14:09:31 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_8432020b9678","context_id":"2801742d0b009534"}
+[20-Dec-2025 14:09:31 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_8432020b9678","slug":"beat-the-hike-why-the-surge-in-jharkhand-s-electricity-rates-makes-solar-a-must-have-dv2hrb","context_id":"2801742d0b009534"}
+[21-Dec-2025 13:08:06 Asia/Kolkata] [blog] blog_publish_attempt: {"draft_id":"drf_c6cea871f4e6","context_id":"29e54e31aa85bbfe"}
+[21-Dec-2025 13:08:06 Asia/Kolkata] [blog] blog_publish_success: {"draft_id":"drf_c6cea871f4e6","slug":"jbvnl-tariff-shock-how-solar-locks-in-your-electricity-price-for-decades-gxczov","context_id":"29e54e31aa85bbfe"}
+[21-Dec-2025 13:12:17 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3741
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3741): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3741
+[23-Dec-2025 11:52:17 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such table: approval_requests in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:3741
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(3741): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/admin-requests.php(92): admin_list_requests()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 3741

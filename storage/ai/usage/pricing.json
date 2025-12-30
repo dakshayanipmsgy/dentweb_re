@@ -1,0 +1,12 @@
+{
+    "text": {
+        "input_per_million": 1.25,
+        "output_per_million": 5
+    },
+    "image": {
+        "per_call": 0.06
+    },
+    "tts": {
+        "per_thousand_chars": 0.015
+    }
+}

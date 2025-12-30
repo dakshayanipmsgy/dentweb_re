@@ -1,0 +1,19 @@
+{
+    "daily": {
+        "date": "2025-12-30",
+        "input_tokens": 2550,
+        "output_tokens": 11603,
+        "cost": 0.6612025000000001
+    },
+    "monthly": {
+        "month": "2025-12",
+        "input_tokens": 68336,
+        "output_tokens": 61477,
+        "cost": 3.5128050000000033
+    },
+    "aggregate": {
+        "input_tokens": 120092,
+        "output_tokens": 207925,
+        "cost": 11.449740000000006
+    }
+}

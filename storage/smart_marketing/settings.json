@@ -1,0 +1,450 @@
+{
+    "business": {
+        "companyName": "Dakshayani Enterprises",
+        "brandTone": "friendly",
+        "defaultLanguages": [
+            "English",
+            "Hindi"
+        ],
+        "baseLocations": [
+            "Jharkhand"
+        ],
+        "timeZone": "Asia/Kolkata",
+        "autoSync": {
+            "enabled": true,
+            "lastSyncedAt": null
+        },
+        "summary": "",
+        "lastUpdatedAt": null,
+        "lastUpdatedBy": null
+    },
+    "goals": {
+        "goalType": "Leads",
+        "targetProducts": [
+            "Rooftop 3 kW",
+            "Rooftop 5 kW",
+            "PM Surya Ghar"
+        ],
+        "coreFocus": "Residential",
+        "offerMessaging": "Book a free subsidy audit today.",
+        "campaignDuration": {
+            "start": "2025-11-11",
+            "end": "2025-12-11"
+        },
+        "autonomyMode": "review",
+        "lastUpdatedAt": null,
+        "lastUpdatedBy": null
+    },
+    "budgeting": {
+        "currency": "INR",
+        "dailyBudget": 400,
+        "monthlyCap": 10000,
+        "platformSplit": {
+            "meta": 40,
+            "google": 30,
+            "youtube": 15,
+            "whatsapp": 10,
+            "emailSms": 5
+        },
+        "bidStrategy": "cpc",
+        "autoScaling": true,
+        "emergencyStopEngaged": false,
+        "lastUpdatedAt": null,
+        "lastUpdatedBy": null,
+        "dailyCap": 400,
+        "minBid": 0,
+        "targetCpl": 0
+    },
+    "audience": {
+        "locations": [
+            "Jharkhand"
+        ],
+        "ageRange": {
+            "min": 24,
+            "max": 60
+        },
+        "interestTags": [
+            "homeowners",
+            "solar",
+            "renewable energy"
+        ],
+        "exclusions": "existing customers",
+        "languageSplit": [
+            {
+                "language": "English",
+                "percent": 60
+            },
+            {
+                "language": "Hindi",
+                "percent": 40
+            }
+        ],
+        "devicePriorities": {
+            "mobile": 70,
+            "desktop": 30
+        },
+        "schedule": [],
+        "lastUpdatedAt": null,
+        "lastUpdatedBy": null
+    },
+    "complianceCenter": {
+        "autoDisclaimer": true,
+        "disclaimerText": "Subsidy subject to MNRE / DISCOM approval.",
+        "policyChecks": true,
+        "warnings": [],
+        "flaggedCreatives": [],
+        "lastUpdatedAt": null,
+        "lastUpdatedBy": null,
+        "brandTone": true,
+        "legalDisclaimers": true,
+        "pmSuryaDisclaimer": "Subsidy subject to MNRE / DISCOM approval.",
+        "notes": ""
+    },
+    "integrationsHub": {
+        "channels": {
+            "meta": {
+                "status": "disabled",
+                "connectedAt": null,
+                "lastTested": "2025-11-17T19:08:48+05:30",
+                "lastValidatedAt": "2025-11-17T19:08:48+05:30",
+                "lastTestResult": "unknown",
+                "validatedBy": "d.entranchi@gmail.com",
+                "message": "Integration disabled",
+                "disabled": true,
+                "available": [],
+                "businessManagerId": "",
+                "adAccountId": "",
+                "pageId": "",
+                "whatsappNumberId": "",
+                "pixelId": "",
+                "accessToken": "",
+                "tokenExpiresAt": "",
+                "metaUserId": ""
+            },
+            "googleAds": {
+                "status": "disabled",
+                "connectedAt": null,
+                "lastTested": "2025-11-12T09:33:27+05:30",
+                "lastValidatedAt": "2025-11-12T09:33:27+05:30",
+                "lastTestResult": "unknown",
+                "validatedBy": "d.entranchi@gmail.com",
+                "message": "Integration disabled",
+                "disabled": true,
+                "available": [],
+                "managerId": "",
+                "linkedYoutubeChannelId": "",
+                "refreshToken": "",
+                "developerToken": "",
+                "oauthClientId": "",
+                "oauthClientSecret": "",
+                "conversionTrackingId": "",
+                "account": "",
+                "subAccount": ""
+            },
+            "youtube": {
+                "status": "disabled",
+                "connectedAt": null,
+                "lastTested": "2025-11-12T09:33:28+05:30",
+                "lastValidatedAt": "2025-11-12T09:33:28+05:30",
+                "lastTestResult": "unknown",
+                "validatedBy": "d.entranchi@gmail.com",
+                "message": "Integration disabled",
+                "disabled": true,
+                "available": [],
+                "linkedYoutubeChannelId": "",
+                "channel": ""
+            },
+            "whatsapp": {
+                "status": "unknown",
+                "connectedAt": null,
+                "lastTested": null,
+                "lastValidatedAt": null,
+                "lastTestResult": "unknown",
+                "validatedBy": null,
+                "message": "Not connected",
+                "disabled": false,
+                "available": [],
+                "provider": "",
+                "apiKey": "",
+                "senderId": "",
+                "templateNamespace": "",
+                "adminSandboxNumber": "",
+                "wabaId": "",
+                "phoneNumberId": "",
+                "accessToken": "",
+                "bspName": "",
+                "bspKey": "",
+                "number": "",
+                "businessAccount": ""
+            },
+            "email": {
+                "status": "unknown",
+                "connectedAt": null,
+                "lastTested": null,
+                "lastValidatedAt": null,
+                "lastTestResult": "unknown",
+                "validatedBy": null,
+                "message": "Not connected",
+                "disabled": false,
+                "available": [],
+                "provider": "",
+                "apiKey": "",
+                "senderId": "",
+                "smtpHost": "",
+                "smtpPort": "",
+                "smtpUsername": "",
+                "smtpPassword": "",
+                "sandboxRecipient": "",
+                "profile": ""
+            }
+        },
+        "gemini": {
+            "validated": false,
+            "message": "Validation pending",
+            "lastValidatedAt": null,
+            "models": []
+        },
+        "lastUpdatedAt": null,
+        "lastUpdatedBy": null,
+        "meta": {
+            "status": "disabled",
+            "connectedAt": null,
+            "lastTested": "2025-11-17T19:08:48+05:30",
+            "lastValidatedAt": null,
+            "lastTestResult": "unknown",
+            "validatedBy": "d.entranchi@gmail.com",
+            "message": "Integration disabled",
+            "disabled": true,
+            "available": [],
+            "businessManagerId": "",
+            "adAccountId": "",
+            "pageId": "",
+            "whatsappNumberId": "",
+            "pixelId": "",
+            "accessToken": "",
+            "tokenExpiresAt": "",
+            "metaUserId": ""
+        },
+        "googleAds": {
+            "status": "disabled",
+            "connectedAt": null,
+            "lastTested": "2025-11-12T09:33:27+05:30",
+            "lastValidatedAt": "2025-11-12T09:33:27+05:30",
+            "lastTestResult": "unknown",
+            "validatedBy": "d.entranchi@gmail.com",
+            "message": "Integration disabled",
+            "disabled": true,
+            "available": [],
+            "managerId": "",
+            "linkedYoutubeChannelId": "",
+            "refreshToken": "",
+            "developerToken": "",
+            "oauthClientId": "",
+            "oauthClientSecret": "",
+            "conversionTrackingId": "",
+            "account": "",
+            "subAccount": ""
+        },
+        "youtube": {
+            "status": "disabled",
+            "connectedAt": null,
+            "lastTested": "2025-11-12T09:33:28+05:30",
+            "lastValidatedAt": "2025-11-12T09:33:28+05:30",
+            "lastTestResult": "unknown",
+            "validatedBy": "d.entranchi@gmail.com",
+            "message": "Integration disabled",
+            "disabled": true,
+            "available": [],
+            "linkedYoutubeChannelId": "",
+            "channel": ""
+        },
+        "whatsapp": {
+            "status": "unknown",
+            "connectedAt": null,
+            "lastTested": null,
+            "lastValidatedAt": null,
+            "lastTestResult": "unknown",
+            "validatedBy": null,
+            "message": "Not connected",
+            "disabled": false,
+            "available": [],
+            "provider": "",
+            "apiKey": "",
+            "senderId": "",
+            "templateNamespace": "",
+            "adminSandboxNumber": "",
+            "wabaId": "",
+            "phoneNumberId": "",
+            "accessToken": "",
+            "bspName": "",
+            "bspKey": "",
+            "number": "",
+            "businessAccount": ""
+        },
+        "email": {
+            "status": "unknown",
+            "connectedAt": null,
+            "lastTested": null,
+            "lastValidatedAt": null,
+            "lastTestResult": "unknown",
+            "validatedBy": null,
+            "message": "Not connected",
+            "disabled": false,
+            "available": [],
+            "provider": "",
+            "apiKey": "",
+            "senderId": "",
+            "smtpHost": "",
+            "smtpPort": "",
+            "smtpUsername": "",
+            "smtpPassword": "",
+            "sandboxRecipient": "",
+            "profile": ""
+        }
+    },
+    "businessProfile": {
+        "brandName": "Dakshayani Enterprises",
+        "tagline": "",
+        "about": "",
+        "primaryContact": "",
+        "supportEmail": "",
+        "whatsappNumber": "",
+        "serviceRegions": [
+            "Jharkhand"
+        ]
+    },
+    "audiences": {
+        "primarySegments": [
+            "homeowners",
+            "solar",
+            "renewable energy"
+        ],
+        "remarketingNotes": "",
+        "exclusions": "existing customers"
+    },
+    "products": {
+        "portfolio": [
+            "Rooftop 3 kW",
+            "Rooftop 5 kW",
+            "PM Surya Ghar"
+        ],
+        "offers": "Book a free subsidy audit today."
+    },
+    "budget": {
+        "dailyCap": 400,
+        "monthlyCap": 10000,
+        "minBid": 0,
+        "targetCpl": 0,
+        "currency": "INR"
+    },
+    "autonomy": {
+        "mode": "review",
+        "reviewRecipients": "",
+        "killSwitchEngaged": false
+    },
+    "compliance": {
+        "policyChecks": true,
+        "brandTone": true,
+        "legalDisclaimers": true,
+        "pmSuryaDisclaimer": "Subsidy subject to MNRE / DISCOM approval.",
+        "notes": ""
+    },
+    "integrations": {
+        "meta": {
+            "status": "disabled",
+            "connectedAt": null,
+            "lastTested": "2025-11-17T19:08:48+05:30",
+            "lastValidatedAt": "2025-11-17T19:08:48+05:30",
+            "lastTestResult": "unknown",
+            "validatedBy": "d.entranchi@gmail.com",
+            "message": "Integration disabled",
+            "disabled": true,
+            "available": [],
+            "businessManagerId": "",
+            "adAccountId": "",
+            "pageId": "",
+            "whatsappNumberId": "",
+            "pixelId": "",
+            "accessToken": "",
+            "tokenExpiresAt": "",
+            "metaUserId": ""
+        },
+        "googleAds": {
+            "status": "disabled",
+            "connectedAt": null,
+            "lastTested": "2025-11-12T09:33:27+05:30",
+            "lastValidatedAt": "2025-11-12T09:33:27+05:30",
+            "lastTestResult": "unknown",
+            "validatedBy": "d.entranchi@gmail.com",
+            "message": "Integration disabled",
+            "disabled": true,
+            "available": [],
+            "managerId": "",
+            "linkedYoutubeChannelId": "",
+            "refreshToken": "",
+            "developerToken": "",
+            "oauthClientId": "",
+            "oauthClientSecret": "",
+            "conversionTrackingId": "",
+            "account": "",
+            "subAccount": ""
+        },
+        "youtube": {
+            "status": "disabled",
+            "connectedAt": null,
+            "lastTested": "2025-11-12T09:33:28+05:30",
+            "lastValidatedAt": "2025-11-12T09:33:28+05:30",
+            "lastTestResult": "unknown",
+            "validatedBy": "d.entranchi@gmail.com",
+            "message": "Integration disabled",
+            "disabled": true,
+            "available": [],
+            "linkedYoutubeChannelId": "",
+            "channel": ""
+        },
+        "whatsapp": {
+            "status": "unknown",
+            "connectedAt": null,
+            "lastTested": null,
+            "lastValidatedAt": null,
+            "lastTestResult": "unknown",
+            "validatedBy": null,
+            "message": "Not connected",
+            "disabled": false,
+            "available": [],
+            "provider": "",
+            "apiKey": "",
+            "senderId": "",
+            "templateNamespace": "",
+            "adminSandboxNumber": "",
+            "wabaId": "",
+            "phoneNumberId": "",
+            "accessToken": "",
+            "bspName": "",
+            "bspKey": "",
+            "number": "",
+            "businessAccount": ""
+        },
+        "email": {
+            "status": "unknown",
+            "connectedAt": null,
+            "lastTested": null,
+            "lastValidatedAt": null,
+            "lastTestResult": "unknown",
+            "validatedBy": null,
+            "message": "Not connected",
+            "disabled": false,
+            "available": [],
+            "provider": "",
+            "apiKey": "",
+            "senderId": "",
+            "smtpHost": "",
+            "smtpPort": "",
+            "smtpUsername": "",
+            "smtpPassword": "",
+            "sandboxRecipient": "",
+            "profile": ""
+        }
+    },
+    "updatedAt": "2025-11-17T19:08:48+05:30"
+}

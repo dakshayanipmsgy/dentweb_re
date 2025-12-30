@@ -1,0 +1,26 @@
+{
+    "budgetLock": {
+        "enabled": false,
+        "cap": 500000,
+        "updatedAt": null
+    },
+    "emergencyStop": {
+        "active": false,
+        "triggeredAt": null,
+        "triggeredBy": null
+    },
+    "policyChecklist": {
+        "pmSuryaClaims": true,
+        "ethicalMessaging": true,
+        "disclaimerPlaced": true,
+        "dataAccuracy": true,
+        "lastReviewed": null,
+        "notes": ""
+    },
+    "dataProtection": {
+        "maskPii": true,
+        "requests": []
+    },
+    "log": [],
+    "updatedAt": "2025-11-11T08:45:34+05:30"
+}

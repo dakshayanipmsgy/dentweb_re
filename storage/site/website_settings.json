@@ -1,0 +1,68 @@
+{
+    "global": {
+        "site_tagline": "\u2b50\ufe0f Smart Solar for Every Home in Jharkhand \u2b50\ufe0f Smart Solar for Every Home in Jharkhand \u2b50\ufe0f",
+        "header_callout": "\u2b50\ufe0f PM Surya Ghar Muft Bijli Yojana specialist for Ranchi & Jharkhand \u2b50\ufe0f PM Surya Ghar Muft Bijli Yojana specialist for Ranchi & Jharkhand \u2b50\ufe0f",
+        "tagline_color": "#DA5100",
+        "tagline_font_size": "large",
+        "tagline_font_weight": "bold",
+        "callout_color": "#4E7A27",
+        "callout_font_size": "large",
+        "callout_font_weight": "bold",
+        "subheader_bg_color": "#000000"
+    },
+    "hero": {
+        "kicker": "Trusted EPC partner in Jharkhand",
+        "title": "Go Solar with Dakshayani Enterprises",
+        "subtitle": "Rooftop solar systems with subsidy, EMI support, and full CMC.",
+        "primary_image": "/images/hero/hero.png",
+        "primary_caption": "Dakshayani engineers on site for a rooftop commissioning.",
+        "primary_button_text": "Book Free Site Visit",
+        "primary_button_link": "/contact.html",
+        "secondary_button_text": "Check Subsidy Eligibility",
+        "secondary_button_link": "/pm-surya-ghar.html",
+        "announcement_badge": "PM Surya Ghar \u2013 Up to 300 units free*",
+        "announcement_text": "Limited window for subsidy applications. Get your documents verified today."
+    },
+    "sections": {
+        "what_our_customers_say_title": "What Our Customers Say",
+        "what_our_customers_say_subtitle": "Homeowners and institutions across Jharkhand trust Dakshayani for hassle-free solar installations.",
+        "seasonal_offer_title": "Seasonal Solar Offers",
+        "seasonal_offer_text": "Festive offers on 3 kW to 10 kW rooftop systems. Extra warranty and free service visits on select packages.",
+        "cta_strip_title": "Ready to lock in 25 years of solar savings?",
+        "cta_strip_text": "Share your latest electricity bill and we will deliver a personalised payback report within 24 hours.",
+        "cta_strip_cta_text": "Email Your Bill",
+        "cta_strip_cta_link": "mailto:connect@dakshayani.co.in"
+    },
+    "testimonials": [
+        {
+            "name": "Rahul Sharma",
+            "location": "Ranchi",
+            "message": "Dakshayani Enterprises handled everything from subsidy paperwork to installation. My bill is now almost zero.",
+            "system_size": "5 kW",
+            "type": "Residential"
+        },
+        {
+            "name": "ITI College Baghmara",
+            "location": "Dhanbad",
+            "message": "Our 20 kW system has significantly reduced diesel generator usage and monthly expenses.",
+            "system_size": "40 kW",
+            "type": "Institutional"
+        }
+    ],
+    "seasonal_offers": [
+        {
+            "label": "Winter Solar Upgrade Offer",
+            "description": "Special pricing for 5 kW+ systems with 5-year CMC included.",
+            "valid_till": "2025-12-31",
+            "cta_text": "Enquire Now",
+            "cta_link": "/contact.html"
+        }
+    ],
+    "theme": {
+        "primary_color": "#76BB40",
+        "secondary_color": "#00A1D8",
+        "accent_color": "#669D34",
+        "button_style": "solid-heavy",
+        "card_style": "strong"
+    }
+}

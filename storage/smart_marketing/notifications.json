@@ -1,0 +1,17 @@
+{
+    "dailyDigest": {
+        "enabled": true,
+        "time": "08:30",
+        "channels": {
+            "email": "connect@dakshayani.co.in",
+            "whatsapp": "+91-7070278178"
+        }
+    },
+    "instant": {
+        "email": true,
+        "whatsapp": true
+    },
+    "lastDigest": null,
+    "log": [],
+    "updatedAt": "2025-11-11T09:27:33+05:30"
+}

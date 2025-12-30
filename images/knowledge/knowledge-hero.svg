@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="520" viewBox="0 0 720 520" role="img" aria-labelledby="title desc">
+  <title id="title">Illustration of Dakshayani Enterprises knowledge hub</title>
+  <desc id="desc">Stylised gradient landscape with solar panels and abstract data visualisations.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e3a8a" />
+      <stop offset="100%" stop-color="#0d9488" />
+    </linearGradient>
+    <linearGradient id="panel" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0ea5e9" />
+      <stop offset="100%" stop-color="#22d3ee" />
+    </linearGradient>
+    <linearGradient id="sun" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#facc15" />
+      <stop offset="100%" stop-color="#f97316" />
+    </linearGradient>
+    <linearGradient id="mountain" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.18)" />
+      <stop offset="100%" stop-color="rgba(255,255,255,0.05)" />
+    </linearGradient>
+  </defs>
+  <rect width="720" height="520" fill="url(#bg)" rx="36" />
+  <circle cx="590" cy="120" r="68" fill="url(#sun)" opacity="0.8" />
+  <g opacity="0.35" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2">
+    <path d="M90 140C210 60 318 60 428 138" />
+    <path d="M100 190C220 110 328 110 438 188" />
+    <path d="M110 240C230 160 338 160 448 238" />
+  </g>
+  <path d="M0 320L120 260L240 340L360 240L520 320L720 280V520H0Z" fill="url(#mountain)" />
+  <g transform="translate(140 270)">
+    <rect x="0" y="0" width="420" height="160" rx="18" fill="rgba(15, 23, 42, 0.72)" />
+    <rect x="24" y="30" width="180" height="70" rx="12" fill="url(#panel)" />
+    <rect x="216" y="30" width="140" height="70" rx="12" fill="rgba(14,197,161,0.32)" />
+    <rect x="368" y="30" width="28" height="70" rx="8" fill="rgba(14,197,161,0.45)" />
+    <path d="M26 128C86 104 146 116 206 90C266 64 326 74 386 52" fill="none" stroke="#facc15" stroke-width="4" stroke-linecap="round" />
+    <circle cx="54" cy="118" r="6" fill="#facc15" />
+    <circle cx="126" cy="106" r="6" fill="#facc15" />
+    <circle cx="198" cy="84" r="6" fill="#facc15" />
+    <circle cx="270" cy="72" r="6" fill="#facc15" />
+    <circle cx="342" cy="62" r="6" fill="#facc15" />
+  </g>
+  <g fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="3" stroke-linecap="round">
+    <path d="M540 340L612 296L650 324L700 290" />
+    <path d="M540 370L590 346L628 366L680 334" />
+    <path d="M540 400L575 382L620 402L670 366" />
+  </g>
+  <g transform="translate(70 120)" opacity="0.55">
+    <rect x="0" y="0" width="100" height="80" rx="16" fill="rgba(255,255,255,0.08)" />
+    <path d="M18 40H82" stroke="#22d3ee" stroke-width="6" stroke-linecap="round" />
+    <path d="M30 56H70" stroke="#facc15" stroke-width="6" stroke-linecap="round" />
+  </g>
+</svg>

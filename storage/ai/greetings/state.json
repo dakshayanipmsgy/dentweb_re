@@ -1,0 +1,8 @@
+{
+    "auto": {
+        "enabled": false,
+        "lead_time_days": 3,
+        "updated_at": null
+    },
+    "drafts": []
+}

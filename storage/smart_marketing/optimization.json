@@ -1,0 +1,48 @@
+{
+    "autoRules": {
+        "pauseUnderperforming": {
+            "enabled": true,
+            "ctrThreshold": 0.015,
+            "cvrThreshold": 0.04
+        },
+        "bidGuardrails": {
+            "enabled": true,
+            "minBid": 30,
+            "maxBid": 60,
+            "step": 0.1
+        },
+        "budgetShift": {
+            "enabled": true,
+            "shiftPercent": 0.12,
+            "targetCpl": 450
+        },
+        "creativeRefresh": {
+            "enabled": true,
+            "decayDays": 7
+        }
+    },
+    "manualPlaybooks": {
+        "lastActionAt": null
+    },
+    "learning": {
+        "tests": [
+            {
+                "id": "TEST-CTA-01",
+                "createdAt": "2025-11-11T08:45:34+05:30",
+                "type": "CTA",
+                "status": "completed",
+                "result": "Variant B (+14% CTR) rolled out to Meta retargeting."
+            },
+            {
+                "id": "TEST-IMAGE-02",
+                "createdAt": "2025-11-11T08:45:34+05:30",
+                "type": "Creative",
+                "status": "queued",
+                "result": "Pending – rooftop night shot vs day shot."
+            }
+        ],
+        "nextBestAction": "Run a Hindi landing page CTA vs WhatsApp chat handoff test."
+    },
+    "history": [],
+    "updatedAt": "2025-11-11T09:27:33+05:30"
+}

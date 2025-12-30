@@ -1,0 +1,440 @@
+[26-Oct-2025 15:39:28 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 DISTINCT aggregates must have exactly one argument in /home/tegwf0aqgwek/public_html/includes/blog.php:220
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/blog.php(220): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/blog/index.php(21): blog_fetch_published()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 220
+[26-Oct-2025 15:39:30 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 DISTINCT aggregates must have exactly one argument in /home/tegwf0aqgwek/public_html/includes/blog.php:220
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/blog.php(220): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/blog/index.php(21): blog_fetch_published()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 220
+[26-Oct-2025 15:39:41 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 DISTINCT aggregates must have exactly one argument in /home/tegwf0aqgwek/public_html/includes/blog.php:220
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/blog.php(220): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/blog/index.php(21): blog_fetch_published()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 220
+[26-Oct-2025 15:43:01 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 DISTINCT aggregates must have exactly one argument in /home/tegwf0aqgwek/public_html/includes/blog.php:220
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/blog.php(220): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/blog/index.php(21): blog_fetch_published()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 220
+[26-Oct-2025 15:45:01 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 DISTINCT aggregates must have exactly one argument in /home/tegwf0aqgwek/public_html/includes/blog.php:220
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/blog.php(220): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/blog/index.php(21): blog_fetch_published()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 220
+[26-Oct-2025 15:52:30 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "{" in /home/tegwf0aqgwek/public_html/includes/blog.php:270
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/blog.php(270): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/blog/post.php(12): blog_get_post_by_slug()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 270
+[26-Oct-2025 15:52:31 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "{" in /home/tegwf0aqgwek/public_html/includes/blog.php:270
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/blog.php(270): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/blog/post.php(12): blog_get_post_by_slug()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 270
+[26-Oct-2025 15:52:34 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "{" in /home/tegwf0aqgwek/public_html/includes/blog.php:270
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/blog.php(270): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/blog/post.php(12): blog_get_post_by_slug()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 270
+[26-Oct-2025 16:07:17 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "{" in /home/tegwf0aqgwek/public_html/includes/blog.php:270
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/blog.php(270): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/blog/post.php(12): blog_get_post_by_slug()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 270
+[26-Oct-2025 16:55:52 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "{" in /home/tegwf0aqgwek/public_html/includes/blog.php:301
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/blog.php(301): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/blog/post.php(12): blog_get_post_by_slug()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 301
+[26-Oct-2025 16:55:54 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 unrecognized token: "{" in /home/tegwf0aqgwek/public_html/includes/blog.php:301
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/blog.php(301): PDO->prepare()
+#1 /home/tegwf0aqgwek/public_html/blog/post.php(12): blog_get_post_by_slug()
+#2 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 301
+[27-Oct-2025 05:43:05 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 07:42:04 UTC] PHP Fatal error:  Cannot redeclare ensure_default_user() (previously declared in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:438) in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 578
+[27-Oct-2025 23:36:12 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:218
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(218): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(94): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 218
+[28-Oct-2025 01:00:27 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:218
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(218): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(94): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 218
+[28-Oct-2025 01:01:13 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:218
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(218): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(94): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 218
+[28-Oct-2025 01:05:44 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:218
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(218): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(94): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 218
+[28-Oct-2025 01:20:09 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:218
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(218): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(94): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 218
+[28-Oct-2025 01:20:26 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:218
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(218): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(94): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 218
+[28-Oct-2025 02:16:38 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:218
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(218): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(94): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 218
+[28-Oct-2025 06:45:22 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:218
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(218): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(94): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 218
+[28-Oct-2025 06:45:27 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:218
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(218): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(94): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 218
+[28-Oct-2025 06:45:35 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:218
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(218): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(94): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 218
+[28-Oct-2025 06:51:41 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:218
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(218): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(94): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 218
+[28-Oct-2025 08:20:21 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:219
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(219): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(95): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 219
+[28-Oct-2025 09:18:41 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:239
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(239): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(95): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 239
+[28-Oct-2025 09:18:44 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:239
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(239): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(95): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/index.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 239
+[28-Oct-2025 09:27:44 UTC] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[28-Oct-2025 09:28:56 UTC] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[28-Oct-2025 10:57:17 UTC] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[28-Oct-2025 11:40:37 UTC] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[28-Oct-2025 12:47:15 UTC] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[28-Oct-2025 14:08:32 UTC] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[28-Oct-2025 20:43:45 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[28-Oct-2025 21:32:57 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[28-Oct-2025 21:43:52 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[28-Oct-2025 23:07:35 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:293
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(293): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(145): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 293
+[28-Oct-2025 23:12:24 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[29-Oct-2025 05:29:43 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[29-Oct-2025 16:49:31 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[29-Oct-2025 16:55:40 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[29-Oct-2025 19:50:29 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:293
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(293): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(145): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 293
+[30-Oct-2025 01:21:47 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[30-Oct-2025 05:53:33 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[30-Oct-2025 10:57:35 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[30-Oct-2025 11:40:49 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[30-Oct-2025 12:46:20 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[30-Oct-2025 15:03:43 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[30-Oct-2025 17:06:57 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[30-Oct-2025 21:11:56 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[31-Oct-2025 01:13:03 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[31-Oct-2025 06:57:16 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[31-Oct-2025 16:41:45 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[31-Oct-2025 19:33:48 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[31-Oct-2025 20:09:01 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[31-Oct-2025 20:09:48 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[31-Oct-2025 20:13:06 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[31-Oct-2025 22:29:10 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[01-Nov-2025 04:36:22 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[01-Nov-2025 05:51:08 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[01-Nov-2025 08:35:46 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[01-Nov-2025 13:59:23 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[03-Nov-2025 01:12:05 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[03-Nov-2025 02:06:16 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[03-Nov-2025 02:06:17 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[04-Nov-2025 07:41:40 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:293
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(293): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(145): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 293
+[04-Nov-2025 09:28:16 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:293
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(293): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(145): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 293
+[07-Nov-2025 08:08:48 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[07-Nov-2025 10:45:30 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[08-Nov-2025 01:25:20 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[08-Nov-2025 02:19:37 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[09-Nov-2025 12:55:31 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[09-Nov-2025 14:34:55 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:292
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(292): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(144): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 292
+[09-Nov-2025 16:46:14 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[09-Nov-2025 19:41:54 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[09-Nov-2025 19:42:02 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[10-Nov-2025 10:46:56 Asia/Kolkata] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY000]: General error: 1 no such column: referrer_id in /home/tegwf0aqgwek/public_html/includes/bootstrap.php:292
+Stack trace:
+#0 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(292): PDO->exec()
+#1 /home/tegwf0aqgwek/public_html/includes/bootstrap.php(144): initialize_schema()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(6): get_db()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/bootstrap.php on line 292
+[10-Nov-2025 11:03:14 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[10-Nov-2025 11:08:36 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[10-Nov-2025 11:08:54 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[10-Nov-2025 11:09:24 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[10-Nov-2025 12:03:39 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[10-Nov-2025 12:57:53 Asia/Kolkata] Blog index unavailable: SQLSTATE[HY000]: General error: 1 no such column: referrer_id
+[10-Nov-2025 18:22:49 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[10-Nov-2025 18:22:53 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[10-Nov-2025 18:48:49 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[10-Nov-2025 19:56:57 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[10-Nov-2025 21:03:09 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[11-Nov-2025 09:08:32 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[11-Nov-2025 15:03:54 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[11-Nov-2025 15:04:24 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[11-Nov-2025 15:04:55 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[11-Nov-2025 15:05:54 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[11-Nov-2025 15:07:24 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[11-Nov-2025 15:10:24 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[11-Nov-2025 15:15:45 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[11-Nov-2025 15:27:06 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[11-Nov-2025 15:44:59 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[11-Nov-2025 15:58:00 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[11-Nov-2025 16:13:41 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[11-Nov-2025 16:13:43 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[13-Nov-2025 22:30:42 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[14-Nov-2025 21:15:40 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[14-Nov-2025 22:34:08 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[15-Nov-2025 17:10:30 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[16-Nov-2025 16:30:57 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[17-Nov-2025 17:59:03 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[17-Nov-2025 17:59:41 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287
+[17-Nov-2025 18:32:51 Asia/Kolkata] PHP Fatal error:  Uncaught TypeError: strtolower(): Argument #1 ($string) must be of type string, array given in /home/tegwf0aqgwek/public_html/includes/blog.php:287
+Stack trace:
+#0 [internal function]: strtolower()
+#1 /home/tegwf0aqgwek/public_html/includes/blog.php(287): array_map()
+#2 /home/tegwf0aqgwek/public_html/blog/post.php(75): blog_related_posts()
+#3 {main}
+  thrown in /home/tegwf0aqgwek/public_html/includes/blog.php on line 287

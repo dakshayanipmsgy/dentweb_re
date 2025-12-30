@@ -1,0 +1,504 @@
+{
+    "updatedAt": "2025-11-11T08:45:34+05:30",
+    "channels": [
+        {
+            "id": "googleAds",
+            "label": "Google Ads",
+            "metrics": {
+                "impressions": 185400,
+                "clicks": 7420,
+                "spend": 178500,
+                "leads": 362,
+                "qualified": 210,
+                "converted": 58,
+                "callConnects": 164,
+                "meetings": 92,
+                "sales": 34
+            },
+            "campaigns": [
+                {
+                    "id": "SRCH-RES",
+                    "label": "Search • Residential Rooftop",
+                    "metrics": {
+                        "impressions": 86400,
+                        "clicks": 3980,
+                        "spend": 91200,
+                        "leads": 214,
+                        "qualified": 132,
+                        "converted": 36,
+                        "callConnects": 98,
+                        "meetings": 54,
+                        "sales": 18
+                    },
+                    "ads": [
+                        {
+                            "id": "SRCH-RES-01",
+                            "label": "Claim PM Surya Ghar subsidy",
+                            "metrics": {
+                                "impressions": 41200,
+                                "clicks": 2050,
+                                "spend": 47200,
+                                "leads": 118,
+                                "qualified": 74,
+                                "converted": 20,
+                                "callConnects": 58,
+                                "meetings": 31,
+                                "sales": 11
+                            }
+                        },
+                        {
+                            "id": "SRCH-RES-02",
+                            "label": "Free rooftop solar audit",
+                            "metrics": {
+                                "impressions": 45200,
+                                "clicks": 1930,
+                                "spend": 44000,
+                                "leads": 96,
+                                "qualified": 58,
+                                "converted": 16,
+                                "callConnects": 40,
+                                "meetings": 23,
+                                "sales": 7
+                            }
+                        }
+                    ]
+                },
+                {
+                    "id": "SRCH-CI",
+                    "label": "Search • C&I Rooftop",
+                    "metrics": {
+                        "impressions": 61200,
+                        "clicks": 1890,
+                        "spend": 61200,
+                        "leads": 92,
+                        "qualified": 54,
+                        "converted": 14,
+                        "callConnects": 42,
+                        "meetings": 26,
+                        "sales": 10
+                    },
+                    "ads": [
+                        {
+                            "id": "SRCH-CI-01",
+                            "label": "Lower factory power bills",
+                            "metrics": {
+                                "impressions": 30200,
+                                "clicks": 980,
+                                "spend": 31200,
+                                "leads": 48,
+                                "qualified": 28,
+                                "converted": 8,
+                                "callConnects": 20,
+                                "meetings": 12,
+                                "sales": 4
+                            }
+                        },
+                        {
+                            "id": "SRCH-CI-02",
+                            "label": "Accelerated depreciation savings",
+                            "metrics": {
+                                "impressions": 31000,
+                                "clicks": 910,
+                                "spend": 30000,
+                                "leads": 44,
+                                "qualified": 26,
+                                "converted": 6,
+                                "callConnects": 22,
+                                "meetings": 14,
+                                "sales": 6
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "meta",
+            "label": "Meta Ads",
+            "metrics": {
+                "impressions": 146200,
+                "clicks": 6120,
+                "spend": 128400,
+                "leads": 286,
+                "qualified": 164,
+                "converted": 42,
+                "callConnects": 120,
+                "meetings": 66,
+                "sales": 18
+            },
+            "campaigns": [
+                {
+                    "id": "META-LA",
+                    "label": "Lead Ads • Subsidy Explainer",
+                    "metrics": {
+                        "impressions": 80200,
+                        "clicks": 3580,
+                        "spend": 72400,
+                        "leads": 182,
+                        "qualified": 106,
+                        "converted": 26,
+                        "callConnects": 78,
+                        "meetings": 38,
+                        "sales": 12
+                    },
+                    "ads": [
+                        {
+                            "id": "META-LA-01",
+                            "label": "Carousel • Rooftop installs",
+                            "metrics": {
+                                "impressions": 38200,
+                                "clicks": 1820,
+                                "spend": 36200,
+                                "leads": 94,
+                                "qualified": 54,
+                                "converted": 14,
+                                "callConnects": 40,
+                                "meetings": 22,
+                                "sales": 8
+                            }
+                        },
+                        {
+                            "id": "META-LA-02",
+                            "label": "Video • Customer testimonial",
+                            "metrics": {
+                                "impressions": 42000,
+                                "clicks": 1760,
+                                "spend": 36200,
+                                "leads": 88,
+                                "qualified": 52,
+                                "converted": 12,
+                                "callConnects": 38,
+                                "meetings": 16,
+                                "sales": 4
+                            }
+                        }
+                    ]
+                },
+                {
+                    "id": "META-RT",
+                    "label": "Retargeting • Site Visitors",
+                    "metrics": {
+                        "impressions": 66000,
+                        "clicks": 2540,
+                        "spend": 56000,
+                        "leads": 104,
+                        "qualified": 58,
+                        "converted": 16,
+                        "callConnects": 42,
+                        "meetings": 28,
+                        "sales": 6
+                    },
+                    "ads": [
+                        {
+                            "id": "META-RT-01",
+                            "label": "Static • Install team photo",
+                            "metrics": {
+                                "impressions": 33800,
+                                "clicks": 1290,
+                                "spend": 27600,
+                                "leads": 54,
+                                "qualified": 32,
+                                "converted": 8,
+                                "callConnects": 22,
+                                "meetings": 12,
+                                "sales": 4
+                            }
+                        },
+                        {
+                            "id": "META-RT-02",
+                            "label": "Reel • Drone walkthrough",
+                            "metrics": {
+                                "impressions": 32200,
+                                "clicks": 1250,
+                                "spend": 28400,
+                                "leads": 50,
+                                "qualified": 26,
+                                "converted": 8,
+                                "callConnects": 20,
+                                "meetings": 16,
+                                "sales": 2
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "whatsapp",
+            "label": "WhatsApp Automation",
+            "metrics": {
+                "impressions": 28400,
+                "clicks": 2140,
+                "spend": 18400,
+                "leads": 146,
+                "qualified": 112,
+                "converted": 28,
+                "callConnects": 104,
+                "meetings": 48,
+                "sales": 12
+            },
+            "campaigns": [
+                {
+                    "id": "WA-FLOW",
+                    "label": "Auto-response • Quote builder",
+                    "metrics": {
+                        "impressions": 15400,
+                        "clicks": 1180,
+                        "spend": 9600,
+                        "leads": 82,
+                        "qualified": 64,
+                        "converted": 16,
+                        "callConnects": 64,
+                        "meetings": 30,
+                        "sales": 8
+                    },
+                    "ads": [
+                        {
+                            "id": "WA-FLOW-01",
+                            "label": "Template • Roof size capture",
+                            "metrics": {
+                                "impressions": 7800,
+                                "clicks": 620,
+                                "spend": 4800,
+                                "leads": 44,
+                                "qualified": 36,
+                                "converted": 10,
+                                "callConnects": 36,
+                                "meetings": 16,
+                                "sales": 5
+                            }
+                        },
+                        {
+                            "id": "WA-FLOW-02",
+                            "label": "Template • Subsidy checklist",
+                            "metrics": {
+                                "impressions": 7600,
+                                "clicks": 560,
+                                "spend": 4800,
+                                "leads": 38,
+                                "qualified": 28,
+                                "converted": 6,
+                                "callConnects": 28,
+                                "meetings": 14,
+                                "sales": 3
+                            }
+                        }
+                    ]
+                },
+                {
+                    "id": "WA-NUDGE",
+                    "label": "Reminder • Site survey follow-ups",
+                    "metrics": {
+                        "impressions": 13000,
+                        "clicks": 960,
+                        "spend": 8800,
+                        "leads": 64,
+                        "qualified": 48,
+                        "converted": 12,
+                        "callConnects": 40,
+                        "meetings": 18,
+                        "sales": 4
+                    },
+                    "ads": [
+                        {
+                            "id": "WA-NUDGE-01",
+                            "label": "Broadcast • Survey reminder",
+                            "metrics": {
+                                "impressions": 6500,
+                                "clicks": 480,
+                                "spend": 4200,
+                                "leads": 30,
+                                "qualified": 22,
+                                "converted": 6,
+                                "callConnects": 18,
+                                "meetings": 8,
+                                "sales": 2
+                            }
+                        },
+                        {
+                            "id": "WA-NUDGE-02",
+                            "label": "Broadcast • Finance options",
+                            "metrics": {
+                                "impressions": 6500,
+                                "clicks": 480,
+                                "spend": 4600,
+                                "leads": 34,
+                                "qualified": 26,
+                                "converted": 6,
+                                "callConnects": 22,
+                                "meetings": 10,
+                                "sales": 2
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "cohorts": {
+        "district": [
+            {
+                "label": "Ranchi",
+                "leads": 146,
+                "cpl": 402,
+                "meetings": 58
+            },
+            {
+                "label": "Bokaro",
+                "leads": 118,
+                "cpl": 388,
+                "meetings": 42
+            },
+            {
+                "label": "Hazaribagh",
+                "leads": 86,
+                "cpl": 362,
+                "meetings": 36
+            }
+        ],
+        "system_size": [
+            {
+                "label": "1 kW",
+                "leads": 44,
+                "cpl": 320,
+                "sales": 12
+            },
+            {
+                "label": "3 kW",
+                "leads": 98,
+                "cpl": 368,
+                "sales": 18
+            },
+            {
+                "label": "5 kW",
+                "leads": 132,
+                "cpl": 412,
+                "sales": 22
+            },
+            {
+                "label": "10 kW",
+                "leads": 60,
+                "cpl": 502,
+                "sales": 12
+            }
+        ],
+        "language": [
+            {
+                "label": "Hindi",
+                "leads": 286,
+                "cpl": 362,
+                "sales": 32
+            },
+            {
+                "label": "English",
+                "leads": 208,
+                "cpl": 418,
+                "sales": 20
+            }
+        ],
+        "creative_theme": [
+            {
+                "label": "Subsidy explainer",
+                "leads": 182,
+                "cpl": 340,
+                "sales": 24
+            },
+            {
+                "label": "Savings calculator",
+                "leads": 134,
+                "cpl": 372,
+                "sales": 16
+            },
+            {
+                "label": "Customer testimonial",
+                "leads": 128,
+                "cpl": 396,
+                "sales": 18
+            }
+        ]
+    },
+    "funnels": {
+        "impressions": 359,
+        "clicks": 157,
+        "leads": 794,
+        "qualified": 486,
+        "converted": 128
+    },
+    "creatives": {
+        "headlines": [
+            {
+                "label": "Claim PM Surya Ghar rooftop subsidy today",
+                "ctr": 0.052,
+                "leads": 132,
+                "cpl": 348
+            },
+            {
+                "label": "Slash power bills with Dakshayani solar",
+                "ctr": 0.048,
+                "leads": 118,
+                "cpl": 362
+            },
+            {
+                "label": "Free rooftop audit + MNRE paperwork",
+                "ctr": 0.044,
+                "leads": 102,
+                "cpl": 354
+            }
+        ],
+        "images": [
+            {
+                "label": "Crew installing 5 kW system",
+                "ctr": 0.036,
+                "leads": 88,
+                "cpl": 338
+            },
+            {
+                "label": "Before/after roof transformation",
+                "ctr": 0.033,
+                "leads": 76,
+                "cpl": 346
+            },
+            {
+                "label": "Savings calculator graphic",
+                "ctr": 0.031,
+                "leads": 68,
+                "cpl": 358
+            }
+        ],
+        "videos": [
+            {
+                "label": "30s customer testimonial",
+                "ctr": 0.042,
+                "leads": 64,
+                "cpl": 352
+            },
+            {
+                "label": "Drone walkthrough of rooftop plant",
+                "ctr": 0.038,
+                "leads": 52,
+                "cpl": 364
+            },
+            {
+                "label": "Installer interview on PM Surya Ghar",
+                "ctr": 0.036,
+                "leads": 48,
+                "cpl": 372
+            }
+        ]
+    },
+    "budget": {
+        "monthlyCap": 500000,
+        "plannedSpend": 468000,
+        "spendToDate": 325300,
+        "pacing": 0.65,
+        "burnRate": 18600,
+        "expectedBurn": 16100,
+        "alerts": []
+    },
+    "alerts": [
+        {
+            "type": "cpl_spike",
+            "message": "Meta retargeting CPL up 12% week-on-week; monitor bids."
+        }
+    ]
+}

@@ -1,0 +1,18 @@
+{
+  "pamphlet": {
+    "default_css": "body{font-family:'Poppins',Arial,sans-serif;background:#f7f9fc;color:#0f172a;} .offline-shell{max-width:900px;margin:0 auto;padding:24px;background:#fff;border-radius:16px;box-shadow:0 18px 40px -32px rgba(15,23,42,0.35);} .offline-hero{border-bottom:1px solid rgba(15,23,42,0.08);padding-bottom:12px;margin-bottom:12px;} .offline-body{line-height:1.6;font-size:15px;} .offline-footer{margin-top:18px;padding-top:12px;border-top:1px dashed rgba(15,23,42,0.15);font-weight:600;}",
+    "html_layout": "<div class=\"offline-shell\"><div class=\"offline-hero\"><h1>{{headline}}</h1><p>{{subheadline}}</p></div><div class=\"offline-body\">{{body_text}}</div><div class=\"offline-offer\"><strong>{{offer_line}}</strong></div><div class=\"offline-footer\">{{contact_block}}<div>{{dimension_notes}}</div></div></div>"
+  },
+  "hoarding": {
+    "default_css": "body{margin:0;padding:0;font-family:'Poppins',Arial,sans-serif;background:#0f172a;color:#fff;} .hoarding{padding:32px;min-height:400px;display:flex;flex-direction:column;gap:14px;} .hoarding h1{margin:0;font-size:32px;} .hoarding h2{margin:0;font-size:22px;color:#cbd5e1;} .hoarding .body{font-size:16px;line-height:1.4;} .hoarding .footer{margin-top:auto;font-weight:700;}",
+    "html_layout": "<div class=\"hoarding\"><h1>{{headline}}</h1><h2>{{subheadline}}</h2><div class=\"body\">{{body_text}}</div><div class=\"offer\">{{offer_line}}</div><div class=\"footer\">{{contact_block}}<div>{{dimension_notes}}</div></div></div>"
+  },
+  "newspaper_ad": {
+    "default_css": "body{font-family:'Times New Roman',serif;background:#fdfbf6;color:#0f172a;} .news-ad{padding:18px;border:1px solid #ddd;max-width:760px;margin:0 auto;} .news-ad h1{margin:0 0 6px;font-size:26px;} .news-ad h2{margin:0 0 10px;font-size:18px;color:#475569;} .news-ad .body{font-size:15px;line-height:1.6;} .news-ad .contact{margin-top:12px;font-weight:700;}",
+    "html_layout": "<article class=\"news-ad\"><h1>{{headline}}</h1><h2>{{subheadline}}</h2><div class=\"body\">{{body_text}}</div><div class=\"offer\">{{offer_line}}</div><div class=\"contact\">{{contact_block}}<div>{{dimension_notes}}</div></div></article>"
+  },
+  "standee": {
+    "default_css": "body{margin:0;padding:0;font-family:'Poppins',Arial,sans-serif;background:#eef2ff;color:#0f172a;} .standee{padding:20px;min-height:500px;display:flex;flex-direction:column;gap:12px;} .standee h1{margin:0;font-size:28px;} .standee h3{margin:0;font-size:18px;color:#475569;} .standee .body{font-size:15px;line-height:1.5;} .standee .footer{margin-top:auto;font-weight:700;}",
+    "html_layout": "<div class=\"standee\"><h1>{{headline}}</h1><h3>{{subheadline}}</h3><div class=\"body\">{{body_text}}</div><div class=\"offer\">{{offer_line}}</div><div class=\"footer\">{{contact_block}}<div>{{dimension_notes}}</div></div></div>"
+  }
+}

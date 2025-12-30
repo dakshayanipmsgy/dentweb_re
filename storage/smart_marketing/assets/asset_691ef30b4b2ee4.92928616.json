@@ -1,0 +1,30 @@
+{
+    "id": "asset_691ef30b4b2ee4.92928616",
+    "type": "greeting",
+    "created_at": "2025-11-20T16:22:59+05:30",
+    "payload": {
+        "id": "greeting_691ef3079aaeb3.02243674",
+        "occasion": "Guru Tegh Bahadur Martyrdom Day",
+        "occasion_date": "2025-11-24",
+        "captions": [],
+        "long_text": "",
+        "sms_text": "",
+        "image": {
+            "path": "storage/ai/generated_images/gemini_691ef2b7a00934.49990190.png",
+            "mimeType": "image/png"
+        },
+        "video": null,
+        "storyboard": null,
+        "source": "AI Studio Festival Greetings",
+        "uses_brand_profile": true,
+        "brand_snapshot": {
+            "company_name": "Dakshayani Enterprises",
+            "tagline": "Reliable Solar for Everyone",
+            "phone": "7070278178",
+            "whatsapp": "",
+            "email": "connect@dakshayani.co.in",
+            "website": "dakshayani.co.in",
+            "cta": "Call Us Now For Anything Solar"
+        }
+    }
+}

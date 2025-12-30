@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" fill="none">
+  <defs>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(200 200) scale(180)">
+      <stop offset="0" stop-color="rgba(20,184,166,0.4)" />
+      <stop offset="1" stop-color="rgba(15,23,42,0)" />
+    </radialGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="400" y2="400">
+      <stop offset="0" stop-color="rgba(148,163,184,0.35)" />
+      <stop offset="1" stop-color="rgba(226,232,240,0.05)" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" fill="#0f172a" />
+  <rect width="400" height="400" fill="url(#glow)" />
+  <g stroke="url(#line)" stroke-width="1">
+    <path d="M0 40H400" opacity="0.25" />
+    <path d="M0 80H400" opacity="0.22" />
+    <path d="M0 120H400" opacity="0.19" />
+    <path d="M0 160H400" opacity="0.16" />
+    <path d="M0 200H400" opacity="0.13" />
+    <path d="M0 240H400" opacity="0.1" />
+    <path d="M0 280H400" opacity="0.08" />
+    <path d="M0 320H400" opacity="0.06" />
+    <path d="M0 360H400" opacity="0.04" />
+    <path d="M40 0V400" opacity="0.25" />
+    <path d="M80 0V400" opacity="0.22" />
+    <path d="M120 0V400" opacity="0.19" />
+    <path d="M160 0V400" opacity="0.16" />
+    <path d="M200 0V400" opacity="0.13" />
+    <path d="M240 0V400" opacity="0.1" />
+    <path d="M280 0V400" opacity="0.08" />
+    <path d="M320 0V400" opacity="0.06" />
+    <path d="M360 0V400" opacity="0.04" />
+  </g>
+  <g stroke="#22d3ee" stroke-width="1.6" opacity="0.5">
+    <path d="M40 280C80 240 120 220 160 240C200 260 240 320 280 300C320 280 360 200 400 220" />
+    <path d="M0 120C40 160 80 180 120 160C160 140 200 60 240 80C280 100 320 200 360 180C380 170 392 160 400 150" />
+  </g>
+  <g fill="#facc15" opacity="0.6">
+    <circle cx="120" cy="90" r="4" />
+    <circle cx="210" cy="150" r="5" />
+    <circle cx="300" cy="110" r="3" />
+    <circle cx="260" cy="280" r="4" />
+    <circle cx="340" cy="250" r="3" />
+  </g>
+</svg>

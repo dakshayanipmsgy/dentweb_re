@@ -1,0 +1,3 @@
+RewriteEngine On
+RewriteRule ^service-workflow\.html$ users/admin/service-workflow.php [L]
+RewriteRule ^crm-portal\.html$ users/admin/crm-portal.php [L]

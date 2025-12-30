@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Knowledge Hub | Dakshayani Enterprises</title>
+  <meta name="description" content="Guides, FAQs, and case studies on rooftop solar, finance pathways, and agricultural solar pumps curated by Dakshayani Enterprises." />
+  <link rel="icon" href="images/favicon.ico" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body data-active-nav="knowledge-hub">
+  <header class="site-header"></header>
+
+  <main>
+    <section class="section hero hero--knowledge">
+      <div class="container hero-grid">
+        <div class="hero-content">
+          <p class="badge badge--on-dark">Knowledge Hub</p>
+          <h1>Solar Playbooks for Homes, MSMEs &amp; Farmers</h1>
+          <p class="lead">
+            Explore bilingual guides, subsidy checklists, and project learnings powered by Dakshayani's installation data and Google Solar API insights.
+          </p>
+          <div class="hero-actions">
+            <button class="btn btn-secondary" data-open-search>
+              <i class="fa-solid fa-search"></i>
+              Search Knowledge Hub
+            </button>
+            <a href="blog/index.php" class="btn btn-primary">
+              <i class="fa-solid fa-newspaper"></i>
+              Visit Blog &amp; News
+            </a>
+          </div>
+        </div>
+        <div class="hero-media">
+          <figure class="hero-media-main">
+            <img
+              src="images/knowledge/knowledge-hero.svg"
+              alt="Dakshayani engineers analysing solar telemetry dashboards"
+              loading="lazy"
+            />
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section alt" aria-labelledby="knowledge-categories-title">
+      <div class="container">
+        <header class="section-head">
+          <h2 id="knowledge-categories-title">Browse by segment</h2>
+          <p>Choose a segment to filter case studies, FAQs, and explainers most relevant to you.</p>
+        </header>
+        <div class="knowledge-filters" data-knowledge-filters></div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="knowledge-articles-title">
+      <div class="container">
+        <header class="section-head">
+          <h2 id="knowledge-articles-title">Latest briefs &amp; explainers</h2>
+          <p>Every article includes project takeaways, subsidy notes, and reading time to keep your teams aligned.</p>
+        </header>
+        <div class="knowledge-articles" data-knowledge-list>
+          <p class="site-search-loading">Loading insights…</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section alt" id="knowledge-subscribe" aria-labelledby="knowledge-subscribe-title">
+      <div class="container knowledge-subscribe">
+        <div>
+          <h2 id="knowledge-subscribe-title">Stay updated with solar policy moves</h2>
+          <p>Subscribe to monthly GA4-backed performance reviews, subsidy deadlines, and new project walkthroughs.</p>
+        </div>
+        <form class="subscribe-form" data-mailchimp-form>
+          <label class="sr-only" for="subscribe-email">Email address</label>
+          <input id="subscribe-email" type="email" name="email" placeholder="you@example.com" required />
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-paper-plane"></i>
+            Subscribe via Mailchimp
+          </button>
+        </form>
+        <p class="subscribe-feedback" data-subscribe-feedback role="status" aria-live="polite"></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"></footer>
+
+  <script src="script.js" defer></script>
+  <script>
+    (function () {
+      const listHost = document.querySelector('[data-knowledge-list]');
+      const filterHost = document.querySelector('[data-knowledge-filters]');
+      const feedback = document.querySelector('[data-subscribe-feedback]');
+      const subscribeForm = document.querySelector('[data-mailchimp-form]');
+
+      function renderFilters(categories) {
+        if (!filterHost) return;
+        filterHost.innerHTML = '';
+        const allButton = document.createElement('button');
+        allButton.type = 'button';
+        allButton.className = 'knowledge-filter is-active';
+        allButton.textContent = 'All';
+        allButton.dataset.segment = '';
+        filterHost.appendChild(allButton);
+
+        categories.forEach((category) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'knowledge-filter';
+          button.textContent = category.name;
+          button.dataset.segment = category.id;
+          button.title = category.description;
+          filterHost.appendChild(button);
+        });
+      }
+
+      function renderArticles(articles) {
+        if (!listHost) return;
+        if (!articles.length) {
+          listHost.innerHTML = '<p class="site-search-empty">No articles available right now. Check back soon!</p>';
+          return;
+        }
+        const list = document.createElement('div');
+        list.className = 'knowledge-grid';
+        articles.forEach((article) => {
+          const card = document.createElement('article');
+          card.className = 'knowledge-card';
+          card.innerHTML = `
+            <div class="knowledge-card-media">
+              <img src="${article.hero}" alt="${article.title}" loading="lazy" />
+            </div>
+            <div class="knowledge-card-body">
+              <div class="knowledge-card-meta">
+                <span><i class="fa-regular fa-clock"></i> ${article.readingTime}</span>
+                <span><i class="fa-regular fa-user"></i> ${article.author}</span>
+                <span><i class="fa-regular fa-calendar"></i> ${article.publishedOn}</span>
+              </div>
+              <h3>${article.title}</h3>
+              <p>${article.summary}</p>
+              <div class="knowledge-card-tags">
+                ${(article.tags || []).map((tag) => `<span class="tag">${tag}</span>`).join('')}
+              </div>
+              <details class="knowledge-sections">
+                <summary>Key takeaways</summary>
+                ${(article.sections || []).map((section) => `
+                  <div class="knowledge-section">
+                    <h4>${section.heading}</h4>
+                    <p>${section.body}</p>
+                  </div>
+                `).join('')}
+              </details>
+            </div>
+          `;
+          list.appendChild(card);
+        });
+        listHost.innerHTML = '';
+        listHost.appendChild(list);
+      }
+
+      function attachFilterHandlers(data) {
+        if (!filterHost) return;
+        filterHost.querySelectorAll('button').forEach((button) => {
+          button.addEventListener('click', () => {
+            filterHost.querySelectorAll('button').forEach((btn) => btn.classList.remove('is-active'));
+            button.classList.add('is-active');
+            const segment = button.dataset.segment || '';
+            const filtered = segment ? data.articles.filter((item) => item.category === segment) : data.articles;
+            renderArticles(filtered);
+          });
+        });
+      }
+
+      function fetchKnowledge() {
+        if (!listHost) return;
+        listHost.innerHTML = '<p class="site-search-loading">Loading insights…</p>';
+        fetch('/api/public/knowledge')
+          .then((response) => {
+            if (!response.ok) throw new Error('Failed to load knowledge hub');
+            return response.json();
+          })
+          .then((data) => {
+            renderFilters(data.categories || []);
+            renderArticles(data.articles || []);
+            attachFilterHandlers(data);
+          })
+          .catch(() => {
+            listHost.innerHTML = '<p class="site-search-empty">Unable to load knowledge content right now.</p>';
+          });
+      }
+
+      if (subscribeForm) {
+        subscribeForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const formData = new FormData(subscribeForm);
+          const email = String(formData.get('email') || '').trim();
+          if (!email) {
+            feedback.textContent = 'Please enter your email address.';
+            return;
+          }
+          feedback.textContent = 'Submitting to Mailchimp…';
+          setTimeout(() => {
+            feedback.textContent = 'Thanks! We will add you to the GA4-backed insights newsletter.';
+            subscribeForm.reset();
+          }, 900);
+        });
+      }
+
+      fetchKnowledge();
+    })();
+  </script>
+</body>
+</html>

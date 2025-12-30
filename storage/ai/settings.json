@@ -1,0 +1,13 @@
+{
+    "enabled": true,
+    "api_key": "AIzaSyDUZbaMUteKJ73c_0DAEdz_BM-WIQ9JmXE",
+    "models": {
+        "text": "gemini-3-pro-preview",
+        "image": "gemini-3-pro-image-preview",
+        "tts": "gemini-2.5-flash-preview-tts",
+        "video": "veo-3.1-generate-preview"
+    },
+    "temperature": 0.8,
+    "max_tokens": 8192,
+    "updated_at": "2025-12-30T16:29:27+05:30"
+}
