@@ -165,6 +165,10 @@ $cardConfigs[] = [
           <i class="fa-solid fa-inbox" aria-hidden="true"></i>
           Requests
         </a>
+        <a href="<?= htmlspecialchars($pathFor('admin-tasks.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
+          <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+          Tasks
+        </a>
         <a href="<?= htmlspecialchars($pathFor('admin-ai-studio.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
           <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
           AI Studio
