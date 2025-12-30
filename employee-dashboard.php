@@ -74,12 +74,13 @@ function employee_tasks_ensure_directory(): void
 
 function load_tasks(): array
 {
-    return tasks_load_all();
+    $warnings = [];
+    return tasks_load_all($warnings);
 }
 
-function save_tasks(array $tasks): void
+function save_tasks(array $tasks, ?array &$errors = null): bool
 {
-    tasks_save_all($tasks);
+    return tasks_save_all($tasks, $errors);
 }
 
 function generate_task_id(): string
@@ -171,8 +172,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'archived_flag' => false,
             ];
 
-            save_tasks($tasks);
-            $taskSuccess = 'Task created successfully.';
+            $saveErrors = [];
+            if (save_tasks($tasks, $saveErrors)) {
+                $taskSuccess = 'Task created successfully.';
+            } else {
+                $taskErrors = array_merge($taskErrors, $saveErrors);
+            }
         }
     } elseif ($action === 'complete_task') {
         $taskId = (string) ($_POST['task_id'] ?? '');
@@ -214,8 +219,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $tasks[$index]['due_date'] = $newDueDate->format('Y-m-d');
             }
 
-            save_tasks($tasks);
-            $taskSuccess = 'Task marked as completed.';
+            $saveErrors = [];
+            if (save_tasks($tasks, $saveErrors)) {
+                $taskSuccess = 'Task marked as completed.';
+            } else {
+                $taskErrors = array_merge($taskErrors, $saveErrors);
+            }
             break;
         }
     }
