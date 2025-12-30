@@ -46,24 +46,11 @@ function tasks_load_all(): array
 /**
  * @param array<int, array<string, mixed>> $tasks
  */
-function tasks_save_all(array $tasks): bool
+function tasks_save_all(array $tasks): void
 {
     tasks_ensure_directory();
     $path = tasks_file_path();
-
-    $encoded = json_encode(array_values($tasks), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    if ($encoded === false) {
-        error_log('Failed to encode tasks payload for storage.');
-        return false;
-    }
-
-    $result = file_put_contents($path, $encoded);
-    if ($result === false) {
-        error_log('Failed to write tasks file at ' . $path);
-        return false;
-    }
-
-    return true;
+    file_put_contents($path, json_encode(array_values($tasks), JSON_PRETTY_PRINT));
 }
 
 function tasks_generate_id(): string
@@ -117,3 +104,4 @@ function tasks_frequency_label(array $task): string
             return 'Once';
     }
 }
+
