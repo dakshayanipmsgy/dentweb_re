@@ -5,6 +5,7 @@ require_once __DIR__ . '/includes/employee_portal.php';
 require_once __DIR__ . '/includes/customer_admin.php';
 require_once __DIR__ . '/includes/customer_complaints.php';
 require_once __DIR__ . '/includes/leads.php';
+require_once __DIR__ . '/includes/tasks_helpers.php';
 
 $employeeStore = new EmployeeFsStore();
 $customerStore = new CustomerFsStore();
@@ -21,6 +22,72 @@ if ($employee === null) {
     header('Location: login.php?login_type=employee');
     exit;
 }
+
+$today = tasks_today_date();
+$tasks = load_tasks();
+$tz = new DateTimeZone(TASKS_TIMEZONE);
+$upcomingWindowEnd = (new DateTimeImmutable('today', $tz))->modify('+7 days')->format('Y-m-d');
+
+$pendingTasksForEmployee = array_values(array_filter($tasks, static function (array $task) use ($employee): bool {
+    if (!empty($task['archived_flag'])) {
+        return false;
+    }
+    if (strcasecmp((string) ($task['status'] ?? ''), 'open') !== 0) {
+        return false;
+    }
+
+    return (string) ($task['assigned_to_id'] ?? '') === (string) ($employee['id'] ?? '');
+}));
+
+usort($pendingTasksForEmployee, static function (array $left, array $right): int {
+    return strcmp(get_effective_due_date($left), get_effective_due_date($right));
+});
+
+$overdueTasks = [];
+$todayTasks = [];
+$upcomingTasks = [];
+
+foreach ($pendingTasksForEmployee as $task) {
+    $due = get_effective_due_date($task);
+    if ($due === '') {
+        continue;
+    }
+    if (is_overdue($task, $today)) {
+        $overdueTasks[] = $task;
+        continue;
+    }
+    if (is_due_today($task, $today)) {
+        $todayTasks[] = $task;
+        continue;
+    }
+    if (strcmp($due, $today) > 0 && strcmp($due, $upcomingWindowEnd) <= 0) {
+        $upcomingTasks[] = $task;
+    }
+}
+
+$overdueTasks = array_slice($overdueTasks, 0, 3);
+$remainingSlots = 6 - count($overdueTasks);
+$todayTasks = array_slice($todayTasks, 0, max(0, min(3, $remainingSlots)));
+$remainingSlots = max(0, 6 - count($overdueTasks) - count($todayTasks));
+$upcomingTasks = array_slice($upcomingTasks, 0, max(0, min(3, $remainingSlots)));
+
+$hasPendingTasks = ($overdueTasks !== [] || $todayTasks !== [] || $upcomingTasks !== []);
+
+$formatTaskDate = static function (string $dateValue) use ($tz): string {
+    if ($dateValue === '') {
+        return 'No due date';
+    }
+
+    try {
+        $dt = DateTimeImmutable::createFromFormat('Y-m-d', $dateValue, $tz);
+        if ($dt === false) {
+            return $dateValue;
+        }
+        return $dt->format('d M Y');
+    } catch (Throwable $exception) {
+        return $dateValue;
+    }
+};
 
 $customers = $customerStore->listCustomers();
 $customers = array_values(array_filter($customers, function (array $customer) use ($searchTerm, $statusFilter, $typeFilter): bool {
@@ -269,6 +336,95 @@ function employee_dashboard_safe(string $value): string
       font-weight: 700;
       text-decoration: none;
     }
+    .tasks-widget {
+      margin: 0.75rem 0 1.25rem;
+      padding: 1rem 1.25rem;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #ffffff;
+      box-shadow: 0 12px 26px rgba(0, 0, 0, 0.05);
+    }
+    .tasks-widget__header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.5rem;
+    }
+    .tasks-widget__title {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #111827;
+    }
+    .tasks-widget__list {
+      list-style: none;
+      padding: 0;
+      margin: 0.5rem 0 0;
+      display: grid;
+      gap: 0.45rem;
+    }
+    .tasks-widget__item {
+      padding: 0.6rem 0.65rem;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      background: #f8fafc;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.35rem 0.75rem;
+      align-items: center;
+    }
+    .tasks-widget__item-title {
+      margin: 0;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .tasks-widget__meta {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #475569;
+    }
+    .tasks-widget__badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.25rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      border: 1px solid #cbd5e1;
+      color: #0f172a;
+      background: #fff;
+    }
+    .tasks-widget__badges {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+    }
+    .tasks-widget__section-title {
+      margin: 0.75rem 0 0.25rem;
+      font-size: 0.95rem;
+      color: #334155;
+      font-weight: 700;
+    }
+    .tasks-widget__empty {
+      margin: 0.25rem 0 0;
+      color: #475569;
+    }
+    .tasks-widget__view-all {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.5rem 0.7rem;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      text-decoration: none;
+      font-weight: 700;
+      color: #1f4b99;
+      background: #f8fafc;
+    }
   </style>
 </head>
 <body>
@@ -310,6 +466,92 @@ function employee_dashboard_safe(string $value): string
           <li>Overdue: <?= number_format((int) $leadStats['overdue_followups']) ?></li>
         </ul>
       </a>
+
+      <div class="tasks-widget" aria-labelledby="pending-tasks-title">
+        <div class="tasks-widget__header">
+          <div>
+            <p id="pending-tasks-title" class="tasks-widget__title">My Pending Tasks</p>
+            <p class="tasks-widget__meta" style="margin:0;color:#475569;">Overdue, due today, and upcoming</p>
+          </div>
+          <a class="tasks-widget__view-all" href="employee-tasks.php">View all tasks</a>
+        </div>
+
+        <?php if (!$hasPendingTasks): ?>
+          <p class="tasks-widget__empty">No pending tasks 🎉</p>
+        <?php else: ?>
+          <?php if ($overdueTasks !== []): ?>
+            <p class="tasks-widget__section-title">Overdue</p>
+            <ul class="tasks-widget__list">
+              <?php foreach ($overdueTasks as $task): ?>
+                <?php
+                  $dueDate = $formatTaskDate(get_effective_due_date($task));
+                  $priority = (string) ($task['priority'] ?? 'Medium');
+                ?>
+                <li class="tasks-widget__item">
+                  <div>
+                    <p class="tasks-widget__item-title"><?= employee_dashboard_safe((string) ($task['title'] ?? 'Task')) ?></p>
+                    <p class="tasks-widget__meta">Due <?= employee_dashboard_safe($dueDate) ?></p>
+                    <div class="tasks-widget__badges">
+                      <span class="tasks-widget__badge"><?= employee_dashboard_safe($priority) ?></span>
+                      <span class="tasks-widget__badge" style="background:#fef2f2;color:#b91c1c;border-color:#fecdd3;">Overdue</span>
+                      <span class="tasks-widget__badge">Open</span>
+                    </div>
+                  </div>
+                  <div aria-hidden="true" style="font-size:1.25rem;color:#b91c1c;">!</div>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endif; ?>
+
+          <?php if ($todayTasks !== []): ?>
+            <p class="tasks-widget__section-title">Due today</p>
+            <ul class="tasks-widget__list">
+              <?php foreach ($todayTasks as $task): ?>
+                <?php
+                  $dueDate = $formatTaskDate(get_effective_due_date($task));
+                  $priority = (string) ($task['priority'] ?? 'Medium');
+                ?>
+                <li class="tasks-widget__item">
+                  <div>
+                    <p class="tasks-widget__item-title"><?= employee_dashboard_safe((string) ($task['title'] ?? 'Task')) ?></p>
+                    <p class="tasks-widget__meta">Due <?= employee_dashboard_safe($dueDate) ?></p>
+                    <div class="tasks-widget__badges">
+                      <span class="tasks-widget__badge"><?= employee_dashboard_safe($priority) ?></span>
+                      <span class="tasks-widget__badge" style="background:#eef2ff;color:#4338ca;border-color:#c7d2fe;">Today</span>
+                      <span class="tasks-widget__badge">Open</span>
+                    </div>
+                  </div>
+                  <div aria-hidden="true" style="font-size:1.2rem;color:#4338ca;">•</div>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endif; ?>
+
+          <?php if ($upcomingTasks !== []): ?>
+            <p class="tasks-widget__section-title">Upcoming (next 7 days)</p>
+            <ul class="tasks-widget__list">
+              <?php foreach ($upcomingTasks as $task): ?>
+                <?php
+                  $dueDate = $formatTaskDate(get_effective_due_date($task));
+                  $priority = (string) ($task['priority'] ?? 'Medium');
+                ?>
+                <li class="tasks-widget__item">
+                  <div>
+                    <p class="tasks-widget__item-title"><?= employee_dashboard_safe((string) ($task['title'] ?? 'Task')) ?></p>
+                    <p class="tasks-widget__meta">Due <?= employee_dashboard_safe($dueDate) ?></p>
+                    <div class="tasks-widget__badges">
+                      <span class="tasks-widget__badge"><?= employee_dashboard_safe($priority) ?></span>
+                      <span class="tasks-widget__badge" style="background:#ecfeff;color:#0f172a;border-color:#bae6fd;">Upcoming</span>
+                      <span class="tasks-widget__badge">Open</span>
+                    </div>
+                  </div>
+                  <div aria-hidden="true" style="font-size:1.2rem;color:#0f172a;">→</div>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endif; ?>
+        <?php endif; ?>
+      </div>
 
       <form class="filters" method="get">
         <div>
