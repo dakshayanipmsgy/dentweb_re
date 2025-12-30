@@ -92,7 +92,7 @@ $today = new DateTimeImmutable('today');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $taskAction = (string) ($_POST['task_action'] ?? '');
-    if ($taskAction === 'admin_create_task') {
+    if (in_array($taskAction, ['admin_assign_task', 'admin_create_task'], true)) {
         $title = trim((string) ($_POST['task_title'] ?? ''));
         $description = trim((string) ($_POST['task_description'] ?? ''));
         $priorityInput = strtolower((string) ($_POST['task_priority'] ?? ''));
@@ -168,8 +168,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'archived_flag' => false,
             ];
 
-            tasks_save_all($tasks);
-            $taskSuccess = 'Task assigned successfully.';
+            if (!tasks_save_all($tasks)) {
+                $taskErrors[] = 'Could not save the new task. Please try again.';
+            } else {
+                set_flash('success', 'Task assigned successfully.');
+                header('Location: admin-dashboard.php#tasks');
+                exit;
+            }
         }
     } elseif ($taskAction === 'admin_complete_task') {
         $taskId = (string) ($_POST['task_id'] ?? '');
@@ -209,8 +214,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $tasks[$index]['status'] = 'Open';
             }
 
-            tasks_save_all($tasks);
-            $taskSuccess = 'Task marked as completed.';
+            if (!tasks_save_all($tasks)) {
+                $taskErrors[] = 'Could not update the task. Please try again.';
+            } else {
+                $taskSuccess = 'Task marked as completed.';
+            }
             break;
         }
     } elseif ($taskAction === 'admin_archive_task') {
@@ -221,8 +229,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $tasks[$index]['archived_flag'] = true;
             $tasks[$index]['updated_at'] = date('Y-m-d H:i:s');
-            tasks_save_all($tasks);
-            $taskSuccess = 'Task archived.';
+            if (!tasks_save_all($tasks)) {
+                $taskErrors[] = 'Could not archive the task. Please try again.';
+            } else {
+                $taskSuccess = 'Task archived.';
+            }
             break;
         }
     }
@@ -661,7 +672,7 @@ $cardConfigs[] = [
       <?php endif; ?>
     </section>
 
-    <section class="admin-task-grid" aria-label="Admin task management">
+    <section id="tasks" class="admin-task-grid" aria-label="Admin task management">
       <div class="admin-task-card">
         <h2>Tasks</h2>
 
@@ -821,7 +832,7 @@ $cardConfigs[] = [
       <div class="admin-task-card">
         <h2>Assign Task</h2>
         <form class="admin-task-form" method="post">
-          <input type="hidden" name="task_action" value="admin_create_task" />
+          <input type="hidden" name="task_action" value="admin_assign_task" />
 
           <label for="admin_assigned_to">Assign to Employee *</label>
           <select id="admin_assigned_to" name="assigned_to_employee" required>
