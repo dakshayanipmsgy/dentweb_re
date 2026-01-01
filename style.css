@@ -14970,7 +14970,7 @@ body.smart-guide-open {
     -webkit-backdrop-filter: blur(20px);
     display: flex;
     flex-direction: column;
-    padding: 6rem 2rem 2rem;
+    padding: 2rem;
     gap: 1.5rem;
     transform: translateX(100%);
     transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
@@ -14980,6 +14980,41 @@ body.smart-guide-open {
     box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1);
     overflow-y: auto;
     /* Ensure scrollable if content is tall */
+  }
+
+  .nav-mobile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  }
+
+  .nav-mobile-header .brand {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--base-900);
+  }
+
+  .nav-mobile-close {
+    background: rgba(15, 23, 42, 0.05);
+    border: none;
+    font-size: 1.25rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    color: var(--base-800);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .nav-mobile-close:hover {
+    background: rgba(15, 23, 42, 0.1);
+    color: var(--primary-dark);
   }
 
   .nav-mobile.show {
