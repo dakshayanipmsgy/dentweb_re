@@ -14964,7 +14964,8 @@ body.smart-guide-open {
     inset: 0;
     width: 100%;
     height: 100dvh;
-    background: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.95);
+    /* Increased opacity for readability */
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     display: flex;
@@ -14977,6 +14978,8 @@ body.smart-guide-open {
     pointer-events: none;
     z-index: 100;
     box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1);
+    overflow-y: auto;
+    /* Ensure scrollable if content is tall */
   }
 
   .nav-mobile.show {
@@ -14989,6 +14992,15 @@ body.smart-guide-open {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+  }
+
+  .nav-mobile-label {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--base-500);
+    font-weight: 700;
+    margin-bottom: 0.25rem;
   }
 
   .nav-mobile a {
