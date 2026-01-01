@@ -745,90 +745,86 @@ $schemaContext = [
       let isDragging = false;
       let startX = 0;
       let startScrollLeft = 0;
+      let animationId = null;
 
       const calculateWidths = () => {
+        // We have duplicated images, so half width is one set.
         slideSetWidth = wrapper.scrollWidth / 2;
       };
 
-      const ensureStart = () => {
-        if (slideSetWidth > 0) {
-          viewport.scrollLeft = slideSetWidth;
+      // Reset to start of first set if at 0, or seamless loop
+      const checkInfiniteLoop = () => {
+        if (slideSetWidth <= 0) return;
+        
+        // If we scrolled past the end of the first set (showing start of second set), reset to start
+        // Actually, usually we show set1 then set2.
+        // To loop infinitely scrolling right (camera moves right), when we reach end of set1, we jump back to 0.
+        // wrapper width = 2 * slideSetWidth.
+        
+        if (viewport.scrollLeft >= slideSetWidth) {
+           viewport.scrollLeft -= slideSetWidth; 
+        } else if (viewport.scrollLeft <= 0) {
+           viewport.scrollLeft += slideSetWidth;
         }
       };
 
       const updateOnLoad = () => {
         calculateWidths();
-        ensureStart();
       };
 
       slides.forEach((slide) => {
         const image = slide.querySelector('img');
-
         if (image && !image.complete) {
           image.addEventListener('load', updateOnLoad, { once: true });
-          image.addEventListener('error', updateOnLoad, { once: true });
         }
       });
 
+      // Initial calculation
       calculateWidths();
-      ensureStart();
 
       const autoScroll = () => {
         if (!isDragging && slideSetWidth > 0) {
-          viewport.scrollLeft -= 0.6;
-
-          if (viewport.scrollLeft <= 0) {
-            viewport.scrollLeft += slideSetWidth;
-          }
+          // Scroll right (camera moves right, items move left)
+          viewport.scrollLeft += 0.8; 
+          checkInfiniteLoop();
         }
-
-        requestAnimationFrame(autoScroll);
+        animationId = requestAnimationFrame(autoScroll);
       };
 
-      autoScroll();
+      // Start looping
+      animationId = requestAnimationFrame(autoScroll);
 
       viewport.addEventListener('pointerdown', (event) => {
         isDragging = true;
         startX = event.clientX;
         startScrollLeft = viewport.scrollLeft;
         viewport.setPointerCapture(event.pointerId);
+        cancelAnimationFrame(animationId); // Pause on drag
       });
 
       viewport.addEventListener('pointermove', (event) => {
         if (!isDragging) return;
-
-        const deltaX = startX - event.clientX;
+        const deltaX = startX - event.clientX; // Drag left (positive delta) -> scroll right
         viewport.scrollLeft = startScrollLeft + deltaX;
+        checkInfiniteLoop();
       });
 
       ['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => {
         viewport.addEventListener(eventName, (event) => {
           if (!isDragging) return;
-
           isDragging = false;
-
           if (viewport.hasPointerCapture(event.pointerId)) {
             viewport.releasePointerCapture(event.pointerId);
           }
-
-          if (slideSetWidth > 0) {
-            if (viewport.scrollLeft <= 0) {
-              viewport.scrollLeft += slideSetWidth;
-            } else if (viewport.scrollLeft >= slideSetWidth * 2) {
-              viewport.scrollLeft -= slideSetWidth;
-            }
-          }
+          // Resume scrolling
+          cancelAnimationFrame(animationId);
+          animationId = requestAnimationFrame(autoScroll);
         });
       });
 
       window.addEventListener('resize', () => {
-        const progress = slideSetWidth ? viewport.scrollLeft / slideSetWidth : 1;
-
         calculateWidths();
-
-        if (slideSetWidth > 0) {
-          viewport.scrollLeft = slideSetWidth * progress;
-        }
+        checkInfiniteLoop();
       });
     });
   </script>

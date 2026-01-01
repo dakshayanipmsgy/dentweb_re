@@ -104,7 +104,6 @@ const INLINE_PARTIALS = {
         </div>
         <div class="nav-mobile-divider" role="presentation"></div>
         <div class="nav-mobile-section" aria-label="Quick actions">
-          <a href="/login.php" class="btn btn-secondary" data-close-mobile>Login Portal</a>
           <p class="nav-mobile-theme" data-site-theme-label hidden></p>
         </div>
       </nav>
