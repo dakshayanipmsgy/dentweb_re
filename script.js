@@ -72,9 +72,6 @@ const INLINE_PARTIALS = {
 
       <nav id="mobile-menu" class="nav-mobile" aria-label="Mobile navigation">
         <div class="nav-mobile-header">
-           <a href="/index.php" class="brand" aria-label="Dakshayani Enterprises home">
-              <span class="brand-text">Dakshayani</span>
-           </a>
            <button type="button" class="nav-mobile-close" data-close-mobile aria-label="Close menu">
              <i class="fa-solid fa-xmark"></i>
            </button>

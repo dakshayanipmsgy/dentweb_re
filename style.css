@@ -14984,7 +14984,7 @@ body.smart-guide-open {
 
   .nav-mobile-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
     margin-bottom: 2rem;
     padding-bottom: 1rem;
