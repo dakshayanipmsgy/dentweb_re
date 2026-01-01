@@ -61,6 +61,14 @@ $global = $ws['global'] ?? [];
   </div>
 
   <nav id="mobile-menu" class="nav-mobile" aria-label="Mobile navigation">
+    <div class="nav-mobile-header">
+      <a href="/index.php" class="brand" aria-label="Dakshayani Enterprises home">
+        <span class="brand-text">Dakshayani</span>
+      </a>
+      <button type="button" class="nav-mobile-close" data-close-mobile aria-label="Close menu">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
     <div class="nav-mobile-section" aria-label="Primary pages">
       <a href="/index.php">Home</a>
       <a href="/about.html">About Us</a>
