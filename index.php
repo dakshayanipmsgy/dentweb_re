@@ -434,7 +434,7 @@ $schemaContext = [
               $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
               $installImages = [];
 
-              if (is_dir($installDir)) {
+                  if (is_dir($installDir)) {
                   $files = array_diff(scandir($installDir), ['.', '..']);
 
                   foreach ($files as $file) {
@@ -445,7 +445,13 @@ $schemaContext = [
                       }
                   }
 
-                  sort($installImages);
+                  // Sort desc to show newest first if named by date, or random
+                  // rsort($installImages); 
+                  
+                  // Limit the number of images to 20 for performance
+                  if (count($installImages) > 20) {
+                      $installImages = array_slice($installImages, 0, 20);
+                  }
               }
 
               $loopImages = array_merge($installImages, $installImages);

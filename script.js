@@ -1688,4 +1688,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   Promise.resolve(footerPromise).catch(() => {});
+  setupScrollAnimations();
 });
+
+function setupScrollAnimations() {
+  const observerOptions = {
+    threshold: 0.1,
+    rootMargin: '0px 0px -50px 0px',
+  };
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('animate-fade-up');
+        entry.target.style.opacity = ''; // Remove inline opacity so animation takes over
+        observer.unobserve(entry.target);
+      }
+    });
+  }, observerOptions);
+
+  const selectors = [
+    '.hero-title',
+    '.hero-sub',
+    '.hero-actions',
+    '.hero-media',
+    '.section h2',
+    '.section p.sub',
+    '.capability-card',
+    '.trust-card',
+    '.solution-card',
+    '.journey-step',
+    '.impact-stats .card',
+    '.testimonial-card',
+    '.contact-card',
+    '.form-card',
+  ];
+
+  document.querySelectorAll(selectors.join(',')).forEach((el) => {
+    el.style.opacity = '0';
+    el.style.willChange = 'opacity, transform';
+    observer.observe(el);
+  });
+}
