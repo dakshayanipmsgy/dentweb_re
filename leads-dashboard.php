@@ -86,6 +86,99 @@ function leads_create_customer_from_lead(CustomerFsStore $customerStore, array $
     return ['created' => false, 'existing' => false, 'mobile' => $leadMobile, 'customer' => null];
 }
 
+function leads_normalize_mobile(string $mobile): string
+{
+    return preg_replace('/\D+/', '', $mobile) ?? '';
+}
+
+function leads_parse_date(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return '';
+    }
+
+    $timestamp = strtotime($value);
+    if ($timestamp === false) {
+        return '';
+    }
+
+    return date('Y-m-d', $timestamp);
+}
+
+function leads_parse_datetime(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return '';
+    }
+
+    $timestamp = strtotime($value);
+    if ($timestamp === false) {
+        return '';
+    }
+
+    return date('Y-m-d H:i:s', $timestamp);
+}
+
+function leads_merge_lead_records(array $primary, array $secondary): array
+{
+    $merged = $primary;
+    $booleanKeys = ['archived_flag', 'customer_created_flag'];
+
+    foreach ($secondary as $key => $value) {
+        if ($key === 'id') {
+            continue;
+        }
+        if ($key === 'activity_log') {
+            $mergedLogs = array_merge((array) ($merged['activity_log'] ?? []), (array) $value);
+            $merged['activity_log'] = $mergedLogs;
+            continue;
+        }
+        if (in_array($key, $booleanKeys, true)) {
+            $merged[$key] = !empty($merged[$key]) || !empty($value);
+            continue;
+        }
+        if (($merged[$key] ?? '') === '' && $value !== '') {
+            $merged[$key] = $value;
+        }
+    }
+
+    $primaryCreated = $primary['created_at'] ?? '';
+    $secondaryCreated = $secondary['created_at'] ?? '';
+    if ($secondaryCreated !== '') {
+        if ($primaryCreated === '' || strtotime($secondaryCreated) < strtotime($primaryCreated)) {
+            $merged['created_at'] = $secondaryCreated;
+        }
+    }
+
+    $merged['updated_at'] = date('Y-m-d H:i:s');
+
+    return $merged;
+}
+
+/**
+ * @return array<string, array<int, array<string, mixed>>>
+ */
+function leads_group_duplicate_mobiles(array $leads): array
+{
+    $groups = [];
+    foreach ($leads as $lead) {
+        $mobileKey = leads_normalize_mobile((string) ($lead['mobile'] ?? ''));
+        if ($mobileKey === '') {
+            continue;
+        }
+        if (!isset($groups[$mobileKey])) {
+            $groups[$mobileKey] = [];
+        }
+        $groups[$mobileKey][] = $lead;
+    }
+
+    return array_filter($groups, static function (array $group): bool {
+        return count($group) > 1;
+    });
+}
+
 $messages = [];
 if (isset($_GET['msg']) && trim((string) $_GET['msg']) !== '') {
     $messages[] = ['type' => 'success', 'text' => (string) $_GET['msg']];
@@ -206,6 +299,119 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $messages[] = ['type' => 'success', 'text' => 'Lead marked as contacted.'];
             }
         }
+    } elseif ($intent === 'import_csv') {
+        if (empty($_FILES['csv_file']) || !is_array($_FILES['csv_file'])) {
+            $messages[] = ['type' => 'error', 'text' => 'Please upload a CSV file.'];
+        } elseif (($_FILES['csv_file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            $messages[] = ['type' => 'error', 'text' => 'CSV upload failed. Please try again.'];
+        } else {
+            $tmpName = (string) ($_FILES['csv_file']['tmp_name'] ?? '');
+            $handle = fopen($tmpName, 'r');
+            if ($handle === false) {
+                $messages[] = ['type' => 'error', 'text' => 'Unable to read the uploaded CSV.'];
+            } else {
+                $actorDetails = leads_actor_details();
+                $rowIndex = 0;
+                $headers = [];
+                $imported = 0;
+                $skipped = 0;
+                $defaultHeader = ['#', 'name', 'mobile', 'city', 'status', 'rating', 'next follow-up', 'assigned to', 'last contacted', 'campaign', 'actions'];
+                while (($row = fgetcsv($handle)) !== false) {
+                    $rowIndex++;
+                    if ($rowIndex === 1) {
+                        $normalized = array_map(static function (string $header): string {
+                            return strtolower(trim($header));
+                        }, $row);
+                        if (in_array('name', $normalized, true) || in_array('mobile', $normalized, true)) {
+                            $headers = $normalized;
+                            continue;
+                        }
+                        $headers = $defaultHeader;
+                    }
+
+                    $rowData = [];
+                    foreach ($headers as $index => $header) {
+                        $rowData[$header] = $row[$index] ?? '';
+                    }
+
+                    $mobile = trim((string) ($rowData['mobile'] ?? ''));
+                    $name = trim((string) ($rowData['name'] ?? ''));
+                    if ($mobile === '' && $name === '') {
+                        $skipped++;
+                        continue;
+                    }
+
+                    $status = trim((string) ($rowData['status'] ?? ''));
+                    $rating = trim((string) ($rowData['rating'] ?? ''));
+                    $assignedTo = trim((string) ($rowData['assigned to'] ?? ''));
+
+                    $leadRecord = [
+                        'name' => $name,
+                        'mobile' => $mobile,
+                        'city' => trim((string) ($rowData['city'] ?? '')),
+                        'status' => $status !== '' ? $status : 'New',
+                        'rating' => $rating !== '' ? $rating : 'Warm',
+                        'next_followup_date' => leads_parse_date((string) ($rowData['next follow-up'] ?? '')),
+                        'assigned_to_name' => $assignedTo !== '' ? $assignedTo : $actorDetails['name'],
+                        'assigned_to_type' => $actorDetails['type'],
+                        'assigned_to_id' => $actorDetails['id'],
+                        'last_contacted_at' => leads_parse_datetime((string) ($rowData['last contacted'] ?? '')),
+                        'source_campaign_name' => trim((string) ($rowData['campaign'] ?? '')),
+                        'lead_source' => 'CSV Import',
+                    ];
+
+                    add_lead($leadRecord);
+                    $imported++;
+                }
+
+                fclose($handle);
+                $messages[] = ['type' => 'success', 'text' => 'Imported ' . $imported . ' lead(s). Skipped ' . $skipped . ' empty row(s).'];
+            }
+        }
+    } elseif ($intent === 'merge_duplicates') {
+        $mobileKey = leads_normalize_mobile((string) ($_POST['mobile_key'] ?? ''));
+        if ($mobileKey !== '') {
+            $leads = load_all_leads();
+            $groups = leads_group_duplicate_mobiles($leads);
+            if (!isset($groups[$mobileKey])) {
+                $messages[] = ['type' => 'error', 'text' => 'No duplicate leads found for that mobile number.'];
+            } else {
+                $group = $groups[$mobileKey];
+                usort($group, static function (array $a, array $b): int {
+                    return strcmp((string) ($a['created_at'] ?? ''), (string) ($b['created_at'] ?? ''));
+                });
+
+                $primary = $group[0];
+                $mergedIds = [];
+                foreach (array_slice($group, 1) as $duplicate) {
+                    $primary = leads_merge_lead_records($primary, $duplicate);
+                    $mergedIds[] = (string) ($duplicate['id'] ?? '');
+                }
+
+                $updatedLeads = [];
+                foreach ($leads as $lead) {
+                    $leadId = (string) ($lead['id'] ?? '');
+                    if ($leadId === (string) ($primary['id'] ?? '')) {
+                        $updatedLeads[] = $primary;
+                        continue;
+                    }
+                    if (!in_array($leadId, $mergedIds, true)) {
+                        $updatedLeads[] = $lead;
+                    }
+                }
+
+                save_all_leads($updatedLeads);
+
+                $actor = audit_current_actor();
+                log_audit_event($actor['actor_type'], (string) $actor['actor_id'], 'lead', (string) ($primary['id'] ?? ''), 'lead_merge', [
+                    'mobile' => $mobileKey,
+                    'merged_ids' => $mergedIds,
+                ]);
+
+                header('Location: leads-dashboard.php?msg=' . urlencode('Merged ' . count($mergedIds) . ' duplicate lead(s) for ' . $mobileKey . '.'));
+                exit;
+            }
+        }
     }
 }
 
@@ -288,6 +494,8 @@ $leadSources = ['Incoming Call', 'WhatsApp', 'Referral', 'Social Media', 'Websit
 $interestTypes = ['Residential Rooftop', 'Commercial', 'Industrial', 'Petrol Pump', 'Irrigation / Agriculture', 'Other'];
 $statuses = ['New', 'Contacted', 'Site Visit Needed', 'Site Visit Done', 'Quotation Sent', 'Negotiation', 'Converted', 'Not Interested'];
 $ratings = ['Hot', 'Warm', 'Cold'];
+$duplicateGroups = leads_group_duplicate_mobiles($leads);
+ksort($duplicateGroups);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -403,6 +611,65 @@ $ratings = ['Hot', 'Warm', 'Cold'];
           <button type="submit" class="btn">Add Lead</button>
         </div>
       </form>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;">Import Leads (CSV)</h2>
+      <p style="margin-top:0;color:#4b5563;">Upload a CSV with columns: #, Name, Mobile, City, Status, Rating, Next Follow-Up, Assigned To, Last Contacted, Campaign, Actions.</p>
+      <form method="post" enctype="multipart/form-data" class="grid" style="grid-template-columns: 1fr auto; align-items:end;">
+        <input type="hidden" name="intent" value="import_csv" />
+        <div>
+          <label for="csv_file">CSV File</label>
+          <input type="file" id="csv_file" name="csv_file" accept=".csv,text/csv" required />
+        </div>
+        <div>
+          <button type="submit" class="btn">Import CSV</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;">Duplicate Mobiles</h2>
+      <p style="margin-top:0;color:#4b5563;">Review leads that share the same mobile number and merge them into one record.</p>
+      <?php if ($duplicateGroups === []): ?>
+        <p style="margin:0;color:#6b7280;">No duplicate mobile numbers detected.</p>
+      <?php else: ?>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Mobile</th>
+                <th>Lead Names</th>
+                <th>Count</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($duplicateGroups as $mobileKey => $group): ?>
+                <tr>
+                  <td><?php echo leads_safe((string) ($group[0]['mobile'] ?? $mobileKey)); ?></td>
+                  <td>
+                    <?php foreach ($group as $index => $lead): ?>
+                      <?php echo leads_safe((string) ($lead['name'] ?? 'Lead')); ?>
+                      <?php if ($index < count($group) - 1): ?>
+                        <span style="color:#9ca3af;">&bull;</span>
+                      <?php endif; ?>
+                    <?php endforeach; ?>
+                  </td>
+                  <td><?php echo count($group); ?></td>
+                  <td>
+                    <form method="post" style="margin:0;">
+                      <input type="hidden" name="intent" value="merge_duplicates" />
+                      <input type="hidden" name="mobile_key" value="<?php echo leads_safe((string) $mobileKey); ?>" />
+                      <button type="submit" class="btn-secondary" onclick="return confirm('Merge all leads with this mobile number?');">Merge</button>
+                    </form>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
     </div>
 
     <div class="card">
