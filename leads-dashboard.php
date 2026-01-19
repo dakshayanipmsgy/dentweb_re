@@ -259,7 +259,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $intent = isset($_POST['intent']) ? (string) $_POST['intent'] : '';
 
-    if ($intent === 'quick_add') {
+    if ($intent === 'bulk_action') {
+        $bulkAction = isset($_POST['bulk_action']) ? (string) $_POST['bulk_action'] : '';
+        $selectedIds = $_POST['lead_ids'] ?? [];
+        if (!is_array($selectedIds)) {
+            $selectedIds = [];
+        }
+        $selectedIds = array_values(array_filter(array_map('strval', $selectedIds)));
+
+        if ($bulkAction === '' || $selectedIds === []) {
+            $messages[] = ['type' => 'error', 'text' => 'Select at least one lead and an action to apply.'];
+        } else {
+            $updatedCount = 0;
+            foreach ($selectedIds as $leadId) {
+                $existingLead = find_lead_by_id($leadId);
+                if ($existingLead === null) {
+                    continue;
+                }
+                $updates = [];
+                if ($bulkAction === 'status_contacted') {
+                    $updates = ['status' => 'Contacted'];
+                } elseif ($bulkAction === 'status_quotation_sent') {
+                    $updates = ['status' => 'Quotation Sent'];
+                } elseif ($bulkAction === 'status_not_interested') {
+                    $updates = [
+                        'status' => 'Not Interested',
+                        'converted_flag' => 'No',
+                        'not_interested_reason' => (string) ($existingLead['not_interested_reason'] ?? ''),
+                    ];
+                } elseif ($bulkAction === 'archive') {
+                    $updates = [
+                        'archived_flag' => true,
+                        'archived_at' => (string) (($existingLead['archived_at'] ?? '') !== '' ? $existingLead['archived_at'] : date('Y-m-d H:i:s')),
+                    ];
+                } elseif ($bulkAction === 'convert') {
+                    $customerResult = leads_create_customer_from_lead($customerStore, $existingLead);
+                    $updates = [
+                        'status' => 'Converted',
+                        'converted_flag' => 'Yes',
+                        'converted_date' => date('Y-m-d'),
+                        'not_interested_reason' => (string) ($existingLead['not_interested_reason'] ?? ''),
+                        'archived_flag' => true,
+                        'archived_at' => date('Y-m-d H:i:s'),
+                    ];
+                    if (($customerResult['mobile'] ?? '') !== '') {
+                        $updates['customer_created_flag'] = true;
+                        $updates['customer_mobile_link'] = $customerResult['mobile'];
+                        if (isset($customerResult['customer']['serial_number'])) {
+                            $updates['customer_id_link'] = (string) $customerResult['customer']['serial_number'];
+                        }
+                    }
+                } elseif ($bulkAction === 'mark_contacted_now') {
+                    $updates = [
+                        'last_contacted_at' => date('Y-m-d H:i:s'),
+                    ];
+                    if (trim((string) ($existingLead['next_followup_date'] ?? '')) === '') {
+                        $updates['next_followup_date'] = date('Y-m-d', strtotime('+3 days'));
+                    }
+                }
+
+                if ($updates !== []) {
+                    $result = update_lead($leadId, $updates);
+                    if ($result !== null) {
+                        $updatedCount++;
+                    }
+                }
+            }
+
+            if ($updatedCount > 0) {
+                $messages[] = ['type' => 'success', 'text' => 'Updated ' . $updatedCount . ' lead(s).'];
+            } else {
+                $messages[] = ['type' => 'error', 'text' => 'No leads were updated.'];
+            }
+        }
+    } elseif ($intent === 'quick_add') {
         $name = trim((string) ($_POST['name'] ?? ''));
         $mobile = trim((string) ($_POST['mobile'] ?? ''));
         $city = trim((string) ($_POST['city'] ?? ''));
@@ -710,10 +783,33 @@ ksort($duplicateGroups);
         <button type="submit" class="btn-secondary">Apply Filters</button>
       </form>
 
+      <form method="post" id="bulk-actions-form" class="lead-filters" style="margin-top:0.75rem;">
+        <input type="hidden" name="intent" value="bulk_action" />
+        <label style="display:flex;align-items:center;gap:0.5rem;">
+          <span style="font-weight:700;">Bulk Actions</span>
+        </label>
+        <select name="bulk_action" required>
+          <option value="">Select action</option>
+          <option value="status_contacted">Contacted</option>
+          <option value="status_quotation_sent">Quotation Sent</option>
+          <option value="status_not_interested">Not Interested</option>
+          <option value="archive">Archive</option>
+          <option value="convert">Converted</option>
+          <option value="mark_contacted_now">Mark Contacted Now</option>
+        </select>
+        <button type="submit" class="btn-secondary" onclick="return confirm('Apply this action to selected leads?');">Apply</button>
+      </form>
+
       <div style="overflow-x:auto;">
         <table>
           <thead>
             <tr>
+              <th>
+                <label style="display:flex;align-items:center;gap:0.35rem;font-weight:700;">
+                  <input type="checkbox" id="select-all-leads" />
+                  All
+                </label>
+              </th>
               <th>#</th>
               <th>Name</th>
               <th>Mobile</th>
@@ -729,7 +825,7 @@ ksort($duplicateGroups);
           </thead>
           <tbody>
             <?php if ($filteredLeads === []): ?>
-              <tr><td colspan="11">No leads match the selected filters.</td></tr>
+              <tr><td colspan="12">No leads match the selected filters.</td></tr>
             <?php else: ?>
               <?php foreach ($filteredLeads as $index => $lead): ?>
                 <?php
@@ -758,6 +854,15 @@ ksort($duplicateGroups);
                   }
                 ?>
                 <tr class="<?= leads_safe($rowClass) ?>">
+                  <td>
+                    <input
+                      type="checkbox"
+                      class="lead-select"
+                      name="lead_ids[]"
+                      value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>"
+                      form="bulk-actions-form"
+                    />
+                  </td>
                   <td><?php echo $index + 1; ?></td>
                   <td><?php echo leads_safe((string) ($lead['name'] ?? '')); ?></td>
                   <td><a href="tel:<?php echo leads_safe((string) ($lead['mobile'] ?? '')); ?>"><?php echo leads_safe((string) ($lead['mobile'] ?? '')); ?></a></td>
@@ -824,5 +929,15 @@ ksort($duplicateGroups);
       </div>
     </div>
   </div>
+  <script>
+    const selectAll = document.getElementById('select-all-leads');
+    if (selectAll) {
+      selectAll.addEventListener('change', () => {
+        document.querySelectorAll('.lead-select').forEach((checkbox) => {
+          checkbox.checked = selectAll.checked;
+        });
+      });
+    }
+  </script>
 </body>
 </html>
