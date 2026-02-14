@@ -46,6 +46,16 @@ function documents_public_media_dir(): string
     return dirname(__DIR__, 2) . '/images/documents';
 }
 
+function documents_public_diagrams_dir(): string
+{
+    return dirname(__DIR__, 2) . '/images/documents/diagrams';
+}
+
+function documents_public_uploads_dir(): string
+{
+    return dirname(__DIR__, 2) . '/images/documents/uploads';
+}
+
 function documents_log(string $message): void
 {
     documents_ensure_structure();
@@ -70,6 +80,8 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_quotations_dir());
     documents_ensure_dir(documents_public_branding_dir());
     documents_ensure_dir(documents_public_backgrounds_dir());
+    documents_ensure_dir(documents_public_diagrams_dir());
+    documents_ensure_dir(documents_public_uploads_dir());
 
     $companyPath = documents_settings_dir() . '/company_profile.json';
     if (!is_file($companyPath)) {
@@ -89,6 +101,11 @@ function documents_ensure_structure(): void
     $templateBlocksPath = documents_templates_dir() . '/template_blocks.json';
     if (!is_file($templateBlocksPath)) {
         json_save($templateBlocksPath, []);
+    }
+
+    $libraryPath = documents_media_dir() . '/library.json';
+    if (!is_file($libraryPath)) {
+        json_save($libraryPath, []);
     }
 
     $logPath = documents_logs_dir() . '/documents.log';
@@ -282,9 +299,9 @@ function documents_handle_image_upload(array $file, string $targetDir, string $p
     }
 
     $size = (int) ($file['size'] ?? 0);
-    if ($size <= 0 || $size > 3 * 1024 * 1024) {
+    if ($size <= 0 || $size > 5 * 1024 * 1024) {
         documents_log('Upload failed: file size out of bounds.');
-        return ['ok' => false, 'error' => 'File must be less than or equal to 3MB.'];
+        return ['ok' => false, 'error' => 'File must be less than or equal to 5MB.'];
     }
 
     $info = @getimagesize($tmp);
@@ -370,6 +387,7 @@ function documents_quote_defaults(): array
         'special_requests_inclusive' => '',
         'special_requests_override_note' => true,
         'annexures_overrides' => [
+            'cover_notes' => '',
             'system_inclusions' => '',
             'payment_terms' => '',
             'warranty' => '',
@@ -378,10 +396,13 @@ function documents_quote_defaults(): array
             'terms_conditions' => '',
             'pm_subsidy_info' => '',
         ],
+        'template_attachments' => documents_template_attachment_defaults(),
         'rendering' => [
             'background_image' => '',
             'background_opacity' => 1.0,
         ],
+        'pdf_path' => '',
+        'pdf_generated_at' => '',
     ];
 }
 
@@ -440,8 +461,156 @@ function documents_calc_pricing(float $grandTotal, string $pricingMode, string $
 function documents_get_template_blocks(): array
 {
     $path = documents_templates_dir() . '/template_blocks.json';
-    $rows = json_load($path, []);
+    $rows = documents_normalize_template_blocks(json_load($path, []));
     return is_array($rows) ? $rows : [];
+}
+
+function documents_template_block_defaults(): array
+{
+    return [
+        'cover_notes' => '',
+        'pm_subsidy_info' => '',
+        'system_inclusions' => '',
+        'payment_terms' => '',
+        'warranty' => '',
+        'system_type_explainer' => '',
+        'transportation' => '',
+        'terms_conditions' => '',
+    ];
+}
+
+function documents_template_attachment_defaults(): array
+{
+    return [
+        'include_ongrid_diagram' => false,
+        'include_hybrid_diagram' => false,
+        'include_offgrid_diagram' => false,
+        'ongrid_diagram_media_id' => '',
+        'hybrid_diagram_media_id' => '',
+        'offgrid_diagram_media_id' => '',
+        'additional_media_ids' => [],
+    ];
+}
+
+function documents_default_template_block_entry(): array
+{
+    return [
+        'blocks' => documents_template_block_defaults(),
+        'attachments' => documents_template_attachment_defaults(),
+        'updated_at' => '',
+    ];
+}
+
+function documents_normalize_template_blocks($rows): array
+{
+    $normalized = [];
+    if (!is_array($rows)) {
+        return $normalized;
+    }
+
+    foreach ($rows as $templateId => $entry) {
+        if (!is_string($templateId) || $templateId === '') {
+            continue;
+        }
+        $base = documents_default_template_block_entry();
+        if (!is_array($entry)) {
+            $normalized[$templateId] = $base;
+            continue;
+        }
+
+        $rawBlocks = is_array($entry['blocks'] ?? null) ? $entry['blocks'] : $entry;
+        foreach ($base['blocks'] as $key => $defaultValue) {
+            $base['blocks'][$key] = is_string($rawBlocks[$key] ?? null) ? (string) $rawBlocks[$key] : $defaultValue;
+        }
+
+        $rawAttachments = is_array($entry['attachments'] ?? null) ? $entry['attachments'] : [];
+        foreach ($base['attachments'] as $key => $defaultValue) {
+            if (is_bool($defaultValue)) {
+                $base['attachments'][$key] = !empty($rawAttachments[$key]);
+                continue;
+            }
+            if (is_array($defaultValue)) {
+                $base['attachments'][$key] = is_array($rawAttachments[$key] ?? null) ? array_values($rawAttachments[$key]) : [];
+                continue;
+            }
+            $base['attachments'][$key] = safe_text($rawAttachments[$key] ?? '');
+        }
+
+        $base['updated_at'] = safe_text($entry['updated_at'] ?? '');
+        $normalized[$templateId] = $base;
+    }
+
+    return $normalized;
+}
+
+function documents_sync_template_block_entries(array $templateSets): array
+{
+    $path = documents_templates_dir() . '/template_blocks.json';
+    $rows = documents_normalize_template_blocks(json_load($path, []));
+    $changed = false;
+    foreach ($templateSets as $template) {
+        if (!is_array($template)) {
+            continue;
+        }
+        $templateId = safe_text($template['id'] ?? '');
+        if ($templateId === '' || isset($rows[$templateId])) {
+            continue;
+        }
+        $rows[$templateId] = documents_default_template_block_entry();
+        $rows[$templateId]['updated_at'] = date('c');
+        $changed = true;
+    }
+
+    if ($changed) {
+        json_save($path, $rows);
+    }
+
+    return $rows;
+}
+
+function documents_quote_annexure_from_template(array $templateBlocks, string $templateSetId): array
+{
+    $annexure = documents_template_block_defaults();
+    $entry = $templateBlocks[$templateSetId] ?? null;
+    if (!is_array($entry) || !is_array($entry['blocks'] ?? null)) {
+        return $annexure;
+    }
+
+    foreach ($annexure as $key => $_) {
+        $annexure[$key] = safe_text($entry['blocks'][$key] ?? '');
+    }
+
+    return $annexure;
+}
+
+function documents_get_media_library(): array
+{
+    $rows = json_load(documents_media_dir() . '/library.json', []);
+    return is_array($rows) ? $rows : [];
+}
+
+function documents_quote_pdf_dir(): string
+{
+    return documents_quotations_dir() . '/pdfs';
+}
+
+function resolve_public_image_to_absolute(string $publicPath): ?string
+{
+    $path = trim($publicPath);
+    if ($path === '') {
+        return null;
+    }
+
+    if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, 'file://')) {
+        return $path;
+    }
+
+    $localPath = dirname(__DIR__, 2) . '/' . ltrim($path, '/');
+    if (!is_file($localPath)) {
+        return null;
+    }
+
+    return $localPath;
 }
 
 function documents_find_customer_by_mobile(string $mobile): ?array

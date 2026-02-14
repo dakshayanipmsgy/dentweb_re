@@ -18,7 +18,7 @@ documents_seed_template_sets_if_empty();
 $templates = array_values(array_filter(json_load(documents_templates_dir() . '/template_sets.json', []), static function ($row): bool {
     return is_array($row) && !($row['archived_flag'] ?? false);
 }));
-$templateBlocks = documents_get_template_blocks();
+$templateBlocks = documents_sync_template_block_entries($templates);
 $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
 
 $redirectWith = static function (string $type, string $msg): void {
@@ -68,6 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $taxType = strtolower($placeOfSupply) === $companyState ? 'CGST_SGST' : 'IGST';
 
         $annexure = [
+            'cover_notes' => safe_text($_POST['ann_cover_notes'] ?? ''),
             'system_inclusions' => safe_text($_POST['ann_system_inclusions'] ?? ''),
             'payment_terms' => safe_text($_POST['ann_payment_terms'] ?? ''),
             'warranty' => safe_text($_POST['ann_warranty'] ?? ''),
@@ -82,10 +83,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$number['ok']) {
                 $redirectWith('error', (string) $number['error']);
             }
-            $blockDefaults = $templateBlocks[$templateSetId] ?? [];
+            $blockDefaults = documents_quote_annexure_from_template($templateBlocks, $templateSetId);
             foreach ($annexure as $k => $v) {
-                if ($v === '' && is_string($blockDefaults[$k] ?? null)) {
-                    $annexure[$k] = safe_text((string) $blockDefaults[$k]);
+                if ($v === '' && $blockDefaults[$k] !== '') {
+                    $annexure[$k] = $blockDefaults[$k];
                 }
             }
 
@@ -123,6 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['special_requests_inclusive'] = trim((string) ($_POST['special_requests_inclusive'] ?? ''));
         $quote['special_requests_override_note'] = true;
         $quote['annexures_overrides'] = $annexure;
+        $quote['template_attachments'] = (($templateBlocks[$templateSetId]['attachments'] ?? null) && is_array($templateBlocks[$templateSetId]['attachments'])) ? $templateBlocks[$templateSetId]['attachments'] : documents_template_attachment_defaults();
         $quote['rendering']['background_image'] = (string) (($selectedTemplate['default_doc_theme']['page_background_image'] ?? '') ?: '');
         $quote['rendering']['background_opacity'] = (float) (($selectedTemplate['default_doc_theme']['page_background_opacity'] ?? 1) ?: 1);
         $quote['updated_at'] = date('c');
@@ -180,7 +182,7 @@ $lookup = $lookupMobile !== '' ? documents_find_customer_by_mobile($lookupMobile
 <div style="grid-column:1/-1"><label>Site Address</label><textarea name="site_address"><?= htmlspecialchars((string)($lookup['site_address'] ?? $editing['site_address']), ENT_QUOTES) ?></textarea></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Customer (Inclusive in the rate)</label><textarea name="special_requests_inclusive"><?= htmlspecialchars((string)$editing['special_requests_inclusive'], ENT_QUOTES) ?></textarea><div class="muted">In case of conflict, Special Requests will be given priority over Annexure inclusions.</div></div>
-<?php foreach (['system_inclusions'=>'System Inclusions','payment_terms'=>'Payment Terms','warranty'=>'Warranty','system_type_explainer'=>'System Type Explainer','transportation'=>'Transportation','terms_conditions'=>'Terms & Conditions','pm_subsidy_info'=>'PM Subsidy Info'] as $key=>$label): ?><div style="grid-column:1/-1"><label><?= $label ?></label><textarea name="ann_<?= $key ?>"><?= htmlspecialchars((string)($editing['annexures_overrides'][$key] ?? ''), ENT_QUOTES) ?></textarea></div><?php endforeach; ?>
+<div style="grid-column:1/-1"><div class="muted">Annexures are based on template snapshot; edit below.</div></div><?php foreach (['cover_notes'=>'Cover Notes','system_inclusions'=>'System Inclusions','payment_terms'=>'Payment Terms','warranty'=>'Warranty','system_type_explainer'=>'System Type Explainer','transportation'=>'Transportation','terms_conditions'=>'Terms & Conditions','pm_subsidy_info'=>'PM Subsidy Info'] as $key=>$label): ?><div style="grid-column:1/-1"><label><?= $label ?></label><textarea name="ann_<?= $key ?>"><?= htmlspecialchars((string)($editing['annexures_overrides'][$key] ?? ''), ENT_QUOTES) ?></textarea></div><?php endforeach; ?>
 </div><br><button class="btn" type="submit">Save Quotation</button></form></div>
 <div class="card"><h2>My Quote List</h2><table><thead><tr><th>Quote No</th><th>Name</th><th>Status</th><th>Amount</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
 <?php foreach ($quotes as $q): ?><tr><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['status'], ENT_QUOTES) ?></td><td>₹<?= number_format((float)$q['calc']['grand_total'],2) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td><td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <a class="btn secondary" href="employee-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a></td></tr><?php endforeach; if ($quotes===[]): ?><tr><td colspan="6">No quotations yet.</td></tr><?php endif; ?></tbody></table></div>
