@@ -31,16 +31,6 @@ function documents_quotations_dir(): string
     return documents_base_dir() . '/quotations';
 }
 
-function documents_proformas_dir(): string
-{
-    return documents_base_dir() . '/proformas';
-}
-
-function documents_agreements_dir(): string
-{
-    return documents_base_dir() . '/agreements';
-}
-
 function documents_public_branding_dir(): string
 {
     return dirname(__DIR__, 2) . '/images/documents/branding';
@@ -88,8 +78,6 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_media_dir());
     documents_ensure_dir(documents_logs_dir());
     documents_ensure_dir(documents_quotations_dir());
-    documents_ensure_dir(documents_proformas_dir());
-    documents_ensure_dir(documents_agreements_dir());
     documents_ensure_dir(documents_public_branding_dir());
     documents_ensure_dir(documents_public_backgrounds_dir());
     documents_ensure_dir(documents_public_diagrams_dir());
@@ -409,15 +397,6 @@ function documents_quote_defaults(): array
             'pm_subsidy_info' => '',
         ],
         'template_attachments' => documents_template_attachment_defaults(),
-        'links' => [
-            'proforma_id' => '',
-            'agreement_id' => '',
-        ],
-        'approval' => [
-            'approved_flag' => false,
-            'approved_by' => '',
-            'approved_at' => '',
-        ],
         'rendering' => [
             'background_image' => '',
             'background_opacity' => 1.0,
@@ -497,7 +476,6 @@ function documents_template_block_defaults(): array
         'system_type_explainer' => '',
         'transportation' => '',
         'terms_conditions' => '',
-        'vendor_consumer_agreement' => '',
     ];
 }
 
@@ -723,16 +701,6 @@ function documents_save_quote(array $quote): array
 
 function documents_generate_quote_number(string $segment): array
 {
-    $generated = documents_generate_document_number('quotation', $segment);
-    if (!$generated['ok']) {
-        return ['ok' => false, 'error' => (string) ($generated['error'] ?? 'Unable to generate quote number.')];
-    }
-
-    return ['ok' => true, 'quote_no' => (string) ($generated['number'] ?? ''), 'error' => ''];
-}
-
-function documents_generate_document_number(string $docType, string $segment): array
-{
     $numberingPath = documents_settings_dir() . '/numbering_rules.json';
     $payload = json_load($numberingPath, documents_numbering_defaults());
     $payload = array_merge(documents_numbering_defaults(), is_array($payload) ? $payload : []);
@@ -747,7 +715,7 @@ function documents_generate_document_number(string $docType, string $segment): a
         if (($rule['archived_flag'] ?? false) || !($rule['active'] ?? false)) {
             continue;
         }
-        if (($rule['doc_type'] ?? '') !== $docType || ($rule['segment'] ?? '') !== $segment) {
+        if (($rule['doc_type'] ?? '') !== 'quotation' || ($rule['segment'] ?? '') !== $segment) {
             continue;
         }
         $selectedIndex = $index;
@@ -755,14 +723,14 @@ function documents_generate_document_number(string $docType, string $segment): a
     }
 
     if ($selectedIndex === null) {
-        return ['ok' => false, 'error' => 'No active numbering rule for ' . $docType . ' and segment ' . $segment . '.'];
+        return ['ok' => false, 'error' => 'No active quotation numbering rule for segment ' . $segment . '.'];
     }
 
     $rule = $rules[$selectedIndex];
     $seqCurrent = max((int) ($rule['seq_start'] ?? 1), (int) ($rule['seq_current'] ?? 1));
     $seq = str_pad((string) $seqCurrent, max(2, (int) ($rule['seq_digits'] ?? 4)), '0', STR_PAD_LEFT);
     $format = (string) ($rule['format'] ?? '{{prefix}}/{{segment}}/{{fy}}/{{seq}}');
-    $number = strtr($format, [
+    $quoteNo = strtr($format, [
         '{{prefix}}' => (string) ($rule['prefix'] ?? ''),
         '{{segment}}' => $segment,
         '{{fy}}' => $fy,
@@ -777,158 +745,5 @@ function documents_generate_document_number(string $docType, string $segment): a
         return ['ok' => false, 'error' => 'Failed to update numbering rule counter.'];
     }
 
-    return ['ok' => true, 'number' => $number, 'error' => ''];
-}
-
-function documents_proforma_defaults(): array
-{
-    return [
-        'id' => '',
-        'proforma_no' => '',
-        'status' => 'Draft',
-        'source_quote_id' => '',
-        'source_quote_no' => '',
-        'template_set_id' => '',
-        'segment' => 'RES',
-        'created_by_id' => '',
-        'created_by_name' => '',
-        'created_at' => '',
-        'updated_at' => '',
-        'customer_mobile' => '',
-        'customer_name' => '',
-        'billing_address' => '',
-        'site_address' => '',
-        'district' => '',
-        'city' => '',
-        'state' => '',
-        'pin' => '',
-        'system_type' => '',
-        'capacity_kwp' => '',
-        'pricing_mode' => 'solar_split_70_30',
-        'tax_type' => 'CGST_SGST',
-        'input_total_gst_inclusive' => 0,
-        'calc' => documents_quote_defaults()['calc'],
-        'notes_top' => '',
-        'notes_bottom' => '',
-        'annexures_snapshot' => documents_template_block_defaults(),
-        'rendering' => ['background_image' => '', 'background_opacity' => 1.0],
-        'pdf_path' => '',
-        'pdf_generated_at' => '',
-    ];
-}
-
-function documents_agreement_defaults(): array
-{
-    return [
-        'id' => '',
-        'agreement_no' => '',
-        'status' => 'Draft',
-        'source_quote_id' => '',
-        'source_quote_no' => '',
-        'source_proforma_id' => '',
-        'source_proforma_no' => '',
-        'template_set_id' => '',
-        'segment' => 'RES',
-        'created_by_id' => '',
-        'created_by_name' => '',
-        'created_at' => '',
-        'updated_at' => '',
-        'customer_mobile' => '',
-        'customer_name' => '',
-        'address' => '',
-        'district' => '',
-        'state' => '',
-        'pin' => '',
-        'system_type' => '',
-        'capacity_kwp' => '',
-        'agreement_text' => '',
-        'special_terms_override' => '',
-        'rendering' => ['background_image' => '', 'background_opacity' => 1.0],
-        'pdf_path' => '',
-        'pdf_generated_at' => '',
-    ];
-}
-
-function documents_list_proformas(): array
-{
-    $files = glob(documents_proformas_dir() . '/*.json') ?: [];
-    $rows = [];
-    foreach ($files as $file) {
-        $row = json_load((string) $file, []);
-        if (is_array($row)) {
-            $rows[] = array_merge(documents_proforma_defaults(), $row);
-        }
-    }
-    usort($rows, static fn(array $a, array $b): int => strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? '')));
-    return $rows;
-}
-
-function documents_get_proforma(string $id): ?array
-{
-    $id = safe_filename($id);
-    if ($id === '') {
-        return null;
-    }
-    $path = documents_proformas_dir() . '/' . $id . '.json';
-    if (!is_file($path)) {
-        return null;
-    }
-    $row = json_load($path, []);
-    return is_array($row) ? array_merge(documents_proforma_defaults(), $row) : null;
-}
-
-function documents_save_proforma(array $row): array
-{
-    $id = safe_filename((string) ($row['id'] ?? ''));
-    if ($id === '') {
-        return ['ok' => false, 'error' => 'Missing proforma ID'];
-    }
-    return json_save(documents_proformas_dir() . '/' . $id . '.json', $row);
-}
-
-function documents_list_agreements(): array
-{
-    $files = glob(documents_agreements_dir() . '/*.json') ?: [];
-    $rows = [];
-    foreach ($files as $file) {
-        $row = json_load((string) $file, []);
-        if (is_array($row)) {
-            $rows[] = array_merge(documents_agreement_defaults(), $row);
-        }
-    }
-    usort($rows, static fn(array $a, array $b): int => strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? '')));
-    return $rows;
-}
-
-function documents_get_agreement(string $id): ?array
-{
-    $id = safe_filename($id);
-    if ($id === '') {
-        return null;
-    }
-    $path = documents_agreements_dir() . '/' . $id . '.json';
-    if (!is_file($path)) {
-        return null;
-    }
-    $row = json_load($path, []);
-    return is_array($row) ? array_merge(documents_agreement_defaults(), $row) : null;
-}
-
-function documents_save_agreement(array $row): array
-{
-    $id = safe_filename((string) ($row['id'] ?? ''));
-    if ($id === '') {
-        return ['ok' => false, 'error' => 'Missing agreement ID'];
-    }
-    return json_save(documents_agreements_dir() . '/' . $id . '.json', $row);
-}
-
-function documents_proforma_pdf_dir(): string
-{
-    return documents_proformas_dir() . '/pdfs';
-}
-
-function documents_agreement_pdf_dir(): string
-{
-    return documents_agreements_dir() . '/pdfs';
+    return ['ok' => true, 'quote_no' => $quoteNo, 'error' => ''];
 }
