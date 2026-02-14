@@ -507,10 +507,6 @@ $cardConfigs[] = [
           <i class="fa-solid fa-folder-open" aria-hidden="true"></i>
           Documents
         </a>
-        <a href="<?= htmlspecialchars($pathFor('admin-docs-deals.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
-          <i class="fa-solid fa-file-contract" aria-hidden="true"></i>
-          Docs Deals
-        </a>
         <a href="<?= htmlspecialchars($pathFor('admin/website-settings/'), ENT_QUOTES) ?>" class="btn btn-ghost">
           <i class="fa-solid fa-palette" aria-hidden="true"></i>
           Website Content &amp; Theme
