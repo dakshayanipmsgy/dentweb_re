@@ -174,6 +174,36 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         $quote['template_attachments'] = (($templateBlocks[$templateSetId]['attachments'] ?? null) && is_array($templateBlocks[$templateSetId]['attachments'])) ? $templateBlocks[$templateSetId]['attachments'] : documents_template_attachment_defaults();
         $quote['rendering']['background_image'] = (string) (($selectedTemplate['default_doc_theme']['page_background_image'] ?? '') ?: '');
         $quote['rendering']['background_opacity'] = (float) (($selectedTemplate['default_doc_theme']['page_background_opacity'] ?? 1) ?: 1);
+        
+        $styleOverride = [
+            'theme' => [],
+            'typography' => [],
+            'layout' => [],
+            'defaults' => [],
+        ];
+        $primary = safe_text($_POST['style_primary_color'] ?? '');
+        $accent = safe_text($_POST['style_accent_color'] ?? '');
+        if ($primary !== '') { $styleOverride['theme']['primary_color'] = $primary; }
+        if ($accent !== '') { $styleOverride['theme']['accent_color'] = $accent; }
+        $baseFont = (int) ($_POST['style_base_font_size_px'] ?? 0);
+        if ($baseFont > 0) { $styleOverride['typography']['base_font_size_px'] = $baseFont; }
+        $bgEnabled = safe_text($_POST['style_page_background_enabled'] ?? '');
+        if (in_array($bgEnabled, ['0','1'], true)) { $styleOverride['layout']['page_background_enabled'] = $bgEnabled === '1'; }
+        $bgImage = safe_text($_POST['style_page_background_image'] ?? '');
+        if ($bgImage !== '') { $styleOverride['layout']['page_background_image'] = $bgImage; }
+        $unitRate = (float) ($_POST['override_unit_rate_rs_per_kwh'] ?? 0);
+        if ($unitRate > 0) { $styleOverride['defaults']['unit_rate_rs_per_kwh'] = $unitRate; }
+        $interestRate = (float) ($_POST['override_interest_rate_percent'] ?? 0);
+        if ($interestRate > 0) { $styleOverride['defaults']['default_bank_interest_rate_percent'] = $interestRate; }
+        $tenureYears = (int) ($_POST['override_loan_tenure_years'] ?? 0);
+        if ($tenureYears > 0) { $styleOverride['defaults']['default_loan_tenure_years'] = $tenureYears; }
+        foreach (['theme','typography','layout','defaults'] as $sectionKey) {
+            if ($styleOverride[$sectionKey] === []) { unset($styleOverride[$sectionKey]); }
+        }
+        $quote['style_override'] = $styleOverride;
+        $quote['financial_inputs']['estimated_monthly_bill_rs'] = (string) safe_text($_POST['estimated_monthly_bill_rs'] ?? '');
+        $quote['financial_inputs']['subsidy_expected_rs'] = (string) safe_text($_POST['subsidy_expected_rs'] ?? '');
+
         $quote['updated_at'] = date('c');
 
         $saved = documents_save_quote($quote);
@@ -259,6 +289,20 @@ if ($lookup !== null) {
 <div><label>Division</label><input name="division_name" value="<?= htmlspecialchars((string)(($editing['division_name'] !== '') ? $editing['division_name'] : ($quoteSnapshot['division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
+
+<div style="grid-column:1/-1"><details><summary><strong>Style overrides (optional)</strong></summary><div class="grid" style="margin-top:8px">
+<div><label>Primary color</label><input type="color" name="style_primary_color" value="<?= htmlspecialchars((string)($editing['style_override']['theme']['primary_color'] ?? '#0b5fff'), ENT_QUOTES) ?>"></div>
+<div><label>Accent color</label><input type="color" name="style_accent_color" value="<?= htmlspecialchars((string)($editing['style_override']['theme']['accent_color'] ?? '#00b894'), ENT_QUOTES) ?>"></div>
+<div><label>Base font size (px)</label><input type="number" min="10" max="20" name="style_base_font_size_px" value="<?= htmlspecialchars((string)($editing['style_override']['typography']['base_font_size_px'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Background enabled</label><select name="style_page_background_enabled"><option value="">Use global</option><option value="1">On</option><option value="0">Off</option></select></div>
+<div><label>Background image path</label><input name="style_page_background_image" value="<?= htmlspecialchars((string)($editing['style_override']['layout']['page_background_image'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Unit rate override (₹/kWh)</label><input type="number" step="0.01" name="override_unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['style_override']['defaults']['unit_rate_rs_per_kwh'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Interest rate override (%)</label><input type="number" step="0.01" name="override_interest_rate_percent" value="<?= htmlspecialchars((string)($editing['style_override']['defaults']['default_bank_interest_rate_percent'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Tenure override (years)</label><input type="number" min="1" name="override_loan_tenure_years" value="<?= htmlspecialchars((string)($editing['style_override']['defaults']['default_loan_tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Estimated monthly bill (₹)</label><input type="number" step="0.01" min="0" name="estimated_monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['financial_inputs']['estimated_monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Expected subsidy (₹)</label><input type="number" step="0.01" min="0" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($editing['financial_inputs']['subsidy_expected_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+</div></details></div>
+
 <div style="grid-column:1/-1"><label>Special Requests From Customer (Inclusive in the rate)</label><textarea name="special_requests_inclusive"><?= htmlspecialchars((string)$editing['special_requests_inclusive'], ENT_QUOTES) ?></textarea><div class="muted">In case of conflict, Special Requests will be given priority over Annexure inclusions.</div></div>
 <div style="grid-column:1/-1"><h3>Annexure Overrides</h3><div class="muted">Annexures are based on template snapshot; edit below.</div></div>
 <?php foreach (['cover_notes'=>'Cover Notes','system_inclusions'=>'System Inclusions','payment_terms'=>'Payment Terms','warranty'=>'Warranty','system_type_explainer'=>'System Type Explainer','transportation'=>'Transportation','terms_conditions'=>'Terms & Conditions','pm_subsidy_info'=>'PM Subsidy Info'] as $key=>$label): ?>
