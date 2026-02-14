@@ -39,100 +39,114 @@ if ($viewerType === 'employee' && ((string) ($quote['created_by_id'] ?? '') !== 
     exit;
 }
 
+$renderForPdf = safe_text($_GET['pdf'] ?? '') === '1';
 $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
+$background = (string) ($quote['rendering']['background_image'] ?? '');
+$bgOpacity = max(0.1, min(1.0, (float) ($quote['rendering']['background_opacity'] ?? 1)));
+$backgroundResolved = $renderForPdf ? (resolve_public_image_to_absolute($background) ?? $background) : $background;
+$isPmTemplate = str_contains(strtolower((string) ($quote['template_set_id'] ?? '')), 'pm') && (string) ($quote['segment'] ?? '') === 'RES';
+$library = documents_get_media_library();
+$mediaMap = [];
+foreach ($library as $item) {
+    if (!is_array($item)) {
+        continue;
+    }
+    $mediaMap[(string) ($item['id'] ?? '')] = $item;
+}
+$attachments = is_array($quote['template_attachments'] ?? null) ? $quote['template_attachments'] : documents_template_attachment_defaults();
 $snapshot = documents_quote_resolve_snapshot($quote);
-$theme = documents_get_effective_doc_theme((string) ($quote['template_set_id'] ?? ''));
-$assumptions = array_merge(documents_quote_assumptions_defaults(), is_array($quote['assumptions'] ?? null) ? $quote['assumptions'] : []);
-$fontScale = (float) ($theme['font_scale'] ?? 1);
-$showBackground = !empty($theme['enable_background']);
-$background = $showBackground ? (string) (($theme['background_media_path'] ?? '') ?: ($quote['rendering']['background_image'] ?? '')) : '';
-$annex = is_array($quote['annexures_overrides'] ?? null) ? $quote['annexures_overrides'] : [];
-
-$f = static fn(string $k): float => (float) ($assumptions[$k] ?? 0);
-$total = (float) ($quote['calc']['grand_total'] ?? 0);
-$tariff = $f('tariff_rs_per_unit');
-$units = $f('avg_monthly_units');
-$bill = $f('avg_monthly_bill_rs');
-if ($units <= 0 && $bill > 0 && $tariff > 0) { $units = $bill / $tariff; }
-if ($bill <= 0 && $units > 0 && $tariff > 0) { $bill = $units * $tariff; }
-$loanSelected = strtolower((string) ($assumptions['loan_selected'] ?? '')) === 'yes';
-$emi = 0.0;
-$emiReady = false;
-if ($loanSelected && $total > 0 && $f('loan_interest_pct_annual') > 0 && $f('loan_tenure_months') > 0) {
-    $p = $total * (1 - ($f('down_payment_pct') / 100));
-    $r = ($f('loan_interest_pct_annual') / 12) / 100;
-    $n = (int) $f('loan_tenure_months');
-    if ($p > 0 && $r > 0 && $n > 0) {
-        $pow = pow(1 + $r, $n);
-        $emi = $p * $r * $pow / ($pow - 1);
-        $emiReady = is_finite($emi) && $emi > 0;
-    }
-}
-$annualSavings = ($units > 0 && $tariff > 0) ? ($units * $tariff * 12) : 0;
-$subsidy = $f('expected_subsidy_rs');
-$netCostAfterSubsidy = max(0, $total - $subsidy);
-$paybackYears = $annualSavings > 0 ? $total / $annualSavings : 0;
-$paybackAfterSubsidy = ($annualSavings > 0 && $subsidy > 0) ? $netCostAfterSubsidy / $annualSavings : 0;
-$gen = $f('expected_annual_generation_kwh');
-if ($gen <= 0 && $f('generation_kwh_per_kwp_per_year') > 0 && (float) ($quote['capacity_kwp'] ?? 0) > 0) {
-    $gen = $f('generation_kwh_per_kwp_per_year') * (float) $quote['capacity_kwp'];
-}
-$co2Factor = $f('co2_factor_kg_per_kwh') ?: (float) ($theme['co2_factor_kg_per_kwh'] ?? 0);
-$treeFactor = $f('trees_factor_kg_per_tree_per_year') ?: (float) ($theme['trees_factor_kg_per_tree_per_year'] ?? 0);
-$co2 = ($gen > 0 && $co2Factor > 0) ? ($gen * $co2Factor) : 0;
-$trees = ($co2 > 0 && $treeFactor > 0) ? ($co2 / $treeFactor) : 0;
-
-$chartSvg = '';
-if ($loanSelected && $emiReady && $bill > 0) {
-    $max = max($emi, $bill, $f('post_solar_bill_rs'));
-    $v1 = (int) round(($emi / $max) * 180);
-    $v2 = (int) round(($bill / $max) * 180);
-    $post = $f('post_solar_bill_rs');
-    $v3 = $post > 0 ? (int) round(($post / $max) * 180) : 0;
-    $chartSvg = '<svg viewBox="0 0 500 240" width="100%"><rect x="90" y="30" width="80" height="'.$v1.'" y="'.(210-$v1).'" fill="#1F7A6B"/><rect x="220" y="30" width="80" height="'.$v2.'" y="'.(210-$v2).'" fill="#0B3A6A"/>' . ($v3>0?'<rect x="350" y="30" width="80" height="'.$v3.'" y="'.(210-$v3).'" fill="#F2B705"/>':'') . '<text x="92" y="225" font-size="12">EMI</text><text x="216" y="225" font-size="12">Current Bill</text>'.($v3>0?'<text x="332" y="225" font-size="12">Post-Solar Bill</text>':'').'</svg>';
-} elseif (!$loanSelected && $annualSavings > 0) {
-    $years = min(8, max(3, (int) ceil($paybackYears + 1)));
-    $bars = '';
-    $max = max($total, $netCostAfterSubsidy, $annualSavings * $years);
-    for ($i=1;$i<=$years;$i++) {
-        $cum = $annualSavings * $i;
-        $h = (int) round(($cum/$max)*170);
-        $x = 40 + ($i-1)*50;
-        $bars .= '<rect x="'.$x.'" y="'.(200-$h).'" width="30" height="'.$h.'" fill="#1F7A6B"/><text x="'.$x.'" y="215" font-size="10">Y'.$i.'</text>';
-    }
-    $chartSvg = '<svg viewBox="0 0 500 230" width="100%">'.$bars.'<line x1="30" y1="200" x2="480" y2="200" stroke="#999"/></svg>';
-}
-$showFinancial = $chartSvg !== '';
-$showImpact = $co2 > 0 || $trees > 0;
-
-$safeHtml = static fn(string $v): string => strip_tags($v, '<p><br><ul><ol><li><strong><em><b><i><u><table><thead><tbody><tr><td><th>');
+$safeHtml = static function (string $value): string {
+    $clean = strip_tags($value, '<p><br><ul><ol><li><strong><em><b><i><u><table><thead><tbody><tr><td><th>');
+    return $clean !== '' ? $clean : '<span style="color:#666">—</span>';
+};
 ?>
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Quotation <?= htmlspecialchars((string) $quote['quote_no'], ENT_QUOTES) ?></title>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Print <?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></title>
 <style>
-@page{size:A4;margin:10mm} body{font-family:Arial,sans-serif;color:<?= htmlspecialchars((string)$theme['text_color'], ENT_QUOTES) ?>;font-size:<?= 13*$fontScale ?>px;margin:0}
-.page{min-height:270mm;page-break-after:always;position:relative;padding:12mm;background:#fff}.page:last-child{page-break-after:auto}
-.bg{position:absolute;inset:0;z-index:0;opacity:.14;background:url('<?= htmlspecialchars($background, ENT_QUOTES) ?>') center/cover no-repeat}.content{position:relative;z-index:1}
-.h1{font-size:<?= 30*$fontScale ?>px;margin:0}.h2{font-size:<?= 22*$fontScale ?>px;margin:0 0 8px;color:<?= htmlspecialchars((string)$theme['primary_color'], ENT_QUOTES) ?>}
-.card{background:<?= htmlspecialchars((string)$theme['box_bg'], ENT_QUOTES) ?>;border-radius:12px;padding:10px;margin:8px 0}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-table{width:100%;border-collapse:collapse}th,td{border:1px solid #d0d7e2;padding:6px}th{background:<?= htmlspecialchars((string)$theme['primary_color'], ENT_QUOTES) ?>;color:#fff}
-.timeline li{margin:10px 0}
-</style></head><body>
-<?php $showBg = $background !== ''; $pageToggles = $theme; ?>
-<?php if (($pageToggles['show_cover_page'] ?? true)): ?><section class="page"><?php if ($showBg): ?><div class="bg"></div><?php endif; ?><div class="content"><h1 class="h1" style="color:<?= htmlspecialchars((string)$theme['primary_color'], ENT_QUOTES) ?>">Solar Energy Proposal</h1><p>PM Surya Ghar: Muft Bijli Yojana – Rooftop Solar</p><div class="card"><strong><?= htmlspecialchars((string)($snapshot['name'] ?: $quote['customer_name']), ENT_QUOTES) ?></strong><br><?= htmlspecialchars((string)($snapshot['mobile'] ?: $quote['customer_mobile']), ENT_QUOTES) ?><br><?= htmlspecialchars((string)($quote['district'] ?: $snapshot['district']), ENT_QUOTES) ?></div><p>Quote: <?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?> | Date: <?= htmlspecialchars(substr((string)$quote['created_at'],0,10), ENT_QUOTES) ?> | Valid: <?= htmlspecialchars((string)$quote['valid_until'], ENT_QUOTES) ?></p></div></section><?php endif; ?>
+@page { size: A4; margin: 16mm 12mm; }
+body{font-family:Arial,sans-serif;color:#111;font-size:12px;line-height:1.4;margin:0}
+.page{position:relative;min-height:260mm;padding:2mm}
+.page-bg-img{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;opacity:<?= htmlspecialchars((string)$bgOpacity, ENT_QUOTES) ?>;z-index:-1}
+.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1d4ed8;padding-bottom:8px;margin-bottom:12px}
+.title{text-align:right}.muted{color:#555}
+table{width:100%;border-collapse:collapse;margin:8px 0}th,td{border:1px solid #999;padding:6px;text-align:left;vertical-align:top}th{background:#f2f4f8}
+.section{margin-top:10px}.annexure{page-break-inside:avoid}.diagram{max-width:100%;max-height:240px;border:1px solid #dbe1ea;padding:4px;border-radius:4px}
+</style></head>
+<body><div class="page">
+<?php if ($backgroundResolved !== ''): ?><img class="page-bg-img" src="<?= htmlspecialchars($backgroundResolved, ENT_QUOTES) ?>" alt="background"><?php endif; ?>
+<div class="header">
+<div>
+<?php if ((string)($company['logo_path'] ?? '') !== ''): ?><img src="<?= htmlspecialchars((string)$company['logo_path'], ENT_QUOTES) ?>" alt="logo" style="max-height:60px"><br><?php endif; ?>
+<strong><?= htmlspecialchars((string)($company['brand_name'] ?: $company['company_name']), ENT_QUOTES) ?></strong><br>
+<?= htmlspecialchars((string)$company['address_line'], ENT_QUOTES) ?>, <?= htmlspecialchars((string)$company['city'], ENT_QUOTES) ?><br>
+<?= htmlspecialchars((string)$company['district'], ENT_QUOTES) ?>, <?= htmlspecialchars((string)$company['state'], ENT_QUOTES) ?> - <?= htmlspecialchars((string)$company['pin'], ENT_QUOTES) ?><br>
+GSTIN: <?= htmlspecialchars((string)$company['gstin'], ENT_QUOTES) ?> | UDYAM: <?= htmlspecialchars((string)$company['udyam'], ENT_QUOTES) ?>
+</div>
+<div class="title"><h2 style="margin:0">Quotation</h2><div><strong><?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></strong></div><div>Valid Until: <?= htmlspecialchars((string)$quote['valid_until'], ENT_QUOTES) ?></div></div>
+</div>
+<div class="section"><strong>To:</strong> <?= htmlspecialchars((string)($snapshot['name'] ?: $quote['customer_name']), ENT_QUOTES) ?> (<?= htmlspecialchars((string)($snapshot['mobile'] ?: $quote['customer_mobile']), ENT_QUOTES) ?>)<br>
+<strong>Site Address:</strong> <?= nl2br(htmlspecialchars((string)($quote['site_address'] ?: $snapshot['address']), ENT_QUOTES)) ?><br>
+<?= htmlspecialchars((string)($quote['district'] ?: $snapshot['district']), ENT_QUOTES) ?>, <?= htmlspecialchars((string)($quote['city'] ?: $snapshot['city']), ENT_QUOTES) ?>, <?= htmlspecialchars((string)($quote['state'] ?: $snapshot['state']), ENT_QUOTES) ?> - <?= htmlspecialchars((string)($quote['pin'] ?: $snapshot['pin_code']), ENT_QUOTES) ?><br>
+<strong>Consumer Account No. (JBVNL):</strong> <?= htmlspecialchars((string)($quote['consumer_account_no'] ?: $snapshot['consumer_account_no']), ENT_QUOTES) ?><br>
+System: <?= htmlspecialchars((string)$quote['system_type'], ENT_QUOTES) ?> | Capacity: <?= htmlspecialchars((string)$quote['capacity_kwp'], ENT_QUOTES) ?> kWp
+</div>
+<div class="section"><table><thead><tr><th>Description</th><th>Basic Amount</th><th><?= $quote['tax_type'] === 'IGST' ? 'IGST' : 'CGST' ?></th><?php if ($quote['tax_type'] !== 'IGST'): ?><th>SGST</th><?php endif; ?><th>Total</th></tr></thead><tbody>
+<tr><td>Solar Power Generation System (5%)</td><td><?= number_format((float)$quote['calc']['bucket_5_basic'],2) ?></td>
+<?php if ($quote['tax_type'] === 'IGST'): ?><td><?= number_format((float)$quote['calc']['gst_split']['igst_5'],2) ?></td><?php else: ?><td><?= number_format((float)$quote['calc']['gst_split']['cgst_5'],2) ?></td><td><?= number_format((float)$quote['calc']['gst_split']['sgst_5'],2) ?></td><?php endif; ?>
+<td><?= number_format((float)$quote['calc']['bucket_5_basic'] + (float)$quote['calc']['bucket_5_gst'],2) ?></td></tr>
+<tr><td>Solar Power Generation System (18%)</td><td><?= number_format((float)$quote['calc']['bucket_18_basic'],2) ?></td>
+<?php if ($quote['tax_type'] === 'IGST'): ?><td><?= number_format((float)$quote['calc']['gst_split']['igst_18'],2) ?></td><?php else: ?><td><?= number_format((float)$quote['calc']['gst_split']['cgst_18'],2) ?></td><td><?= number_format((float)$quote['calc']['gst_split']['sgst_18'],2) ?></td><?php endif; ?>
+<td><?= number_format((float)$quote['calc']['bucket_18_basic'] + (float)$quote['calc']['bucket_18_gst'],2) ?></td></tr>
+<tr><th colspan="<?= $quote['tax_type'] === 'IGST' ? '3' : '4' ?>">Grand Total</th><th><?= number_format((float)$quote['calc']['grand_total'],2) ?></th></tr>
+</tbody></table><div class="muted">Detailed System Inclusions are provided in Annexures.</div><div class="muted" style="margin-top:6px">Application ID: <?= htmlspecialchars((string)($quote['application_id'] ?: $snapshot['application_id']), ENT_QUOTES) ?> | Circle/Division/Sub Division: <?= htmlspecialchars((string)($quote['circle_name'] ?: $snapshot['circle_name']), ENT_QUOTES) ?> / <?= htmlspecialchars((string)($quote['division_name'] ?: $snapshot['division_name']), ENT_QUOTES) ?> / <?= htmlspecialchars((string)($quote['sub_division_name'] ?: $snapshot['sub_division_name']), ENT_QUOTES) ?> | Sanction/Installed kWp: <?= htmlspecialchars((string)($quote['sanction_load_kwp'] ?: $snapshot['sanction_load_kwp']), ENT_QUOTES) ?> / <?= htmlspecialchars((string)($quote['installed_pv_module_capacity_kwp'] ?: $snapshot['installed_pv_module_capacity_kwp']), ENT_QUOTES) ?></div></div>
 
-<?php if (($pageToggles['show_system_overview_page'] ?? true)): ?><section class="page"><?php if ($showBg): ?><div class="bg"></div><?php endif; ?><div class="content"><h2 class="h2">Your Solar System</h2><div class="grid"><div class="card"><strong>Capacity</strong><br><?= htmlspecialchars((string)$quote['capacity_kwp'], ENT_QUOTES) ?> kWp</div><div class="card"><strong>System Type</strong><br><?= htmlspecialchars((string)$quote['system_type'], ENT_QUOTES) ?></div><div class="card"><strong>Warranty</strong><br><?= $safeHtml((string)($annex['warranty'] ?? 'As per selected package.')) ?></div></div><p>What you get: Detailed inclusions are in Annexure.</p></div></section><?php endif; ?>
+<?php if (trim((string) ($quote['annexures_overrides']['cover_notes'] ?? '')) !== ''): ?><div class="section annexure"><h3>Cover Notes</h3><div><?= $safeHtml((string)$quote['annexures_overrides']['cover_notes']) ?></div></div><?php endif; ?>
+<div class="section"><h3>Special Requests From Customer (Inclusive in the rate)</h3>
+<div><?= nl2br(htmlspecialchars((string)$quote['special_requests_inclusive'], ENT_QUOTES)) ?></div>
+<div><em>In case of conflict between Annexure inclusions and Special Requests, Special Requests will be given priority.</em></div>
+</div>
+<?php if ($isPmTemplate && trim((string)($quote['annexures_overrides']['pm_subsidy_info'] ?? '')) !== ''): ?>
+<div class="section annexure"><h3>PM Surya Ghar Subsidy Information</h3><div><?= $safeHtml((string)$quote['annexures_overrides']['pm_subsidy_info']) ?></div></div>
+<?php endif; ?>
+<?php foreach (['system_inclusions'=>'System Inclusions','payment_terms'=>'Payment Terms','warranty'=>'Warranty','transportation'=>'Transportation','system_type_explainer'=>'System Type Explainer','terms_conditions'=>'Terms & Conditions'] as $k=>$heading): ?>
+<div class="section annexure"><h3><?= $heading ?></h3><div><?= $safeHtml((string)($quote['annexures_overrides'][$k] ?? '')) ?></div></div>
+<?php endforeach; ?>
 
-<section class="page"><?php if ($showBg): ?><div class="bg"></div><?php endif; ?><div class="content"><h2 class="h2">Pricing Summary</h2><table><thead><tr><th>Description</th><th>Basic</th><th>GST</th><th>Total</th></tr></thead><tbody><tr><td>Solar (5%)</td><td><?= number_format((float)$quote['calc']['bucket_5_basic'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_5_gst'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_5_basic'] + (float)$quote['calc']['bucket_5_gst'],2) ?></td></tr><tr><td>Solar (18%)</td><td><?= number_format((float)$quote['calc']['bucket_18_basic'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_18_gst'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_18_basic'] + (float)$quote['calc']['bucket_18_gst'],2) ?></td></tr></tbody></table><div class="card"><strong>Total (GST inclusive): ₹<?= number_format($total,2) ?></strong></div><div class="card"><strong>Payment Milestones:</strong><div><?= $safeHtml((string)($annex['payment_terms'] ?? '')) ?></div></div><?php if (trim((string)($annex['pm_subsidy_info'] ?? '')) !== ''): ?><div class="card"><strong>Subsidy Note:</strong> <?= $safeHtml((string)$annex['pm_subsidy_info']) ?></div><?php endif; ?></div></section>
-
-<?php if (($pageToggles['show_financials_page'] ?? true) && $showFinancial): ?><section class="page"><div class="content"><h2 class="h2">Financial Comparison</h2><?= $chartSvg ?><?php if($loanSelected): ?><p>Estimated EMI: ₹<?= number_format($emi,2) ?><?php if($bill>0): ?> vs current bill ₹<?= number_format($bill,2) ?><?php endif; ?></p><?php else: ?><p>Estimated payback: <?= number_format($paybackYears,1) ?> years<?php if($subsidy>0): ?> (after subsidy: <?= number_format($paybackAfterSubsidy,1) ?> years)<?php endif; ?></p><?php endif; ?></div></section><?php endif; ?>
-
-<?php if (($pageToggles['show_impact_page'] ?? true) && $showImpact): ?><section class="page"><div class="content"><h2 class="h2">Impact Metrics</h2><div class="grid"><div class="card"><strong>Annual Generation</strong><br><?= number_format($gen,0) ?> kWh</div><div class="card"><strong>CO₂ Offset</strong><br><?= number_format($co2,0) ?> kg/year</div><div class="card"><strong>Trees Equivalent</strong><br><?= number_format($trees,0) ?> /year</div></div></div></section><?php endif; ?>
-
-<?php if (($pageToggles['show_next_steps_page'] ?? true)): ?><section class="page"><div class="content"><h2 class="h2">Project Timeline / Next Steps</h2><ol class="timeline"><li>Agreement & Permitting</li><li>Installation</li><li>Inspection & Net Meter</li><li>Activation / Commissioning</li></ol></div></section><?php endif; ?>
-<?php if (($pageToggles['show_contact_page'] ?? true)): ?><section class="page"><div class="content"><h2 class="h2">Contact & Support</h2><p><strong><?= htmlspecialchars((string)($company['brand_name'] ?: $company['company_name']), ENT_QUOTES) ?></strong></p><p><?= htmlspecialchars((string)($company['phone_primary'] ?? ''), ENT_QUOTES) ?> | <?= htmlspecialchars((string)($company['email'] ?? ''), ENT_QUOTES) ?><br><?= htmlspecialchars((string)($company['website'] ?? ''), ENT_QUOTES) ?><br><?= htmlspecialchars((string)($company['address_line'] ?? ''), ENT_QUOTES) ?>, <?= htmlspecialchars((string)($company['city'] ?? ''), ENT_QUOTES) ?></p></div></section><?php endif; ?>
-
-<section class="page"><div class="content"><h2 class="h2">Annexure</h2><?php foreach (['system_inclusions'=>'System Inclusions','warranty'=>'Warranty','system_type_explainer'=>'System Type','transportation'=>'Transportation','terms_conditions'=>'Terms'] as $k=>$label): ?><div class="card"><strong><?= htmlspecialchars($label, ENT_QUOTES) ?></strong><div><?= $safeHtml((string)($annex[$k] ?? '')) ?></div></div><?php endforeach; ?><div class="card"><strong>Special Requests From Customer (Inclusive in the rate)</strong><div><?= nl2br(htmlspecialchars((string)$quote['special_requests_inclusive'], ENT_QUOTES)) ?></div><em>In case of conflict between Annexure inclusions and Special Requests, Special Requests will be given priority.</em></div></div></section>
-
+<?php
+$diagramSections = [
+    ['include_ongrid_diagram', 'ongrid_diagram_media_id', 'Ongrid Diagram'],
+    ['include_hybrid_diagram', 'hybrid_diagram_media_id', 'Hybrid Diagram'],
+    ['include_offgrid_diagram', 'offgrid_diagram_media_id', 'Offgrid Diagram'],
+];
+$printedDiagramHeader = false;
+foreach ($diagramSections as [$flagKey, $idKey, $title]) {
+    if (empty($attachments[$flagKey])) {
+        continue;
+    }
+    $mediaId = safe_text($attachments[$idKey] ?? '');
+    if ($mediaId === '' || !isset($mediaMap[$mediaId])) {
+        continue;
+    }
+    $media = $mediaMap[$mediaId];
+    if (($media['archived_flag'] ?? false)) {
+        continue;
+    }
+    $path = (string) ($media['file_path'] ?? '');
+    if ($path === '') {
+        continue;
+    }
+    $resolved = $renderForPdf ? (resolve_public_image_to_absolute($path) ?? $path) : $path;
+    if (!$printedDiagramHeader) {
+        echo '<div class="section annexure"><h3>Visual Representation</h3>';
+        $printedDiagramHeader = true;
+    }
+    echo '<p><strong>' . htmlspecialchars($title, ENT_QUOTES) . '</strong></p>';
+    echo '<img class="diagram" src="' . htmlspecialchars($resolved, ENT_QUOTES) . '" alt="' . htmlspecialchars($title, ENT_QUOTES) . '">';
+}
+if ($printedDiagramHeader) {
+    echo '</div>';
+}
+?>
+</div>
 <script>window.onload=function(){if(location.search.indexOf('autoprint=1')!==-1){window.print();}}</script>
 </body></html>

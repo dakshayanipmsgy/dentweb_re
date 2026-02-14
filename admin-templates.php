@@ -14,7 +14,6 @@ $templates = is_array($templates) ? $templates : [];
 $templateBlocks = documents_sync_template_block_entries($templates);
 $libraryPath = documents_media_dir() . '/library.json';
 $library = documents_get_media_library();
-$docTheme = documents_get_doc_theme_settings();
 
 $redirectWith = static function (string $type, string $msg, string $templateId = ''): void {
     $query = ['status' => $type, 'message' => $msg];
@@ -71,48 +70,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectWith('error', 'Unable to save template blocks.', $selectedTemplateId);
         }
         $redirectWith('success', 'Template blocks saved.', $selectedTemplateId);
-    }
-
-
-    if ($action === 'save_doc_theme') {
-        $settings = documents_get_doc_theme_settings();
-        $target = safe_text($_POST['theme_scope'] ?? 'global');
-        $payload = [
-            'enable_background' => isset($_POST['enable_background']),
-            'font_scale' => max(0.85, min(1.25, (float) ($_POST['font_scale'] ?? 1))),
-            'primary_color' => safe_text($_POST['primary_color'] ?? '#0B3A6A'),
-            'secondary_color' => safe_text($_POST['secondary_color'] ?? '#1F7A6B'),
-            'accent_color' => safe_text($_POST['accent_color'] ?? '#F2B705'),
-            'text_color' => safe_text($_POST['text_color'] ?? '#1B1B1B'),
-            'muted_text_color' => safe_text($_POST['muted_text_color'] ?? '#666666'),
-            'box_bg' => safe_text($_POST['box_bg'] ?? '#F6F8FB'),
-            'background_media_id' => safe_text($_POST['background_media_id'] ?? ''),
-            'show_cover_page' => isset($_POST['show_cover_page']),
-            'show_system_overview_page' => isset($_POST['show_system_overview_page']),
-            'show_financials_page' => isset($_POST['show_financials_page']),
-            'show_impact_page' => isset($_POST['show_impact_page']),
-            'show_next_steps_page' => isset($_POST['show_next_steps_page']),
-            'show_contact_page' => isset($_POST['show_contact_page']),
-            'show_placeholders_when_missing' => isset($_POST['show_placeholders_when_missing']),
-            'co2_factor_kg_per_kwh' => safe_text($_POST['co2_factor_kg_per_kwh'] ?? ''),
-            'trees_factor_kg_per_tree_per_year' => safe_text($_POST['trees_factor_kg_per_tree_per_year'] ?? ''),
-        ];
-        if ($target === 'global') {
-            $settings['global'] = array_merge((array) ($settings['global'] ?? []), $payload);
-        } elseif ($selectedTemplateId !== '') {
-            $settings['per_template_set'][$selectedTemplateId] = array_merge((array) ($settings['per_template_set'][$selectedTemplateId] ?? []), $payload);
-        }
-        foreach ($library as $media) {
-            if (!is_array($media)) { continue; }
-            if ((string) ($media['id'] ?? '') === (string) ($payload['background_media_id'] ?? '')) {
-                $path = (string) ($media['file_path'] ?? '');
-                if ($target === 'global') { $settings['global']['background_media_path'] = $path; }
-                elseif ($selectedTemplateId !== '') { $settings['per_template_set'][$selectedTemplateId]['background_media_path'] = $path; }
-            }
-        }
-        $saved = json_save(documents_doc_theme_path(), $settings);
-        if (!$saved['ok']) { $redirectWith('error', 'Unable to save document theme.', $selectedTemplateId); }
-        $redirectWith('success', 'Document theme saved.', $selectedTemplateId);
     }
 
     if ($action === 'upload_media') {
@@ -223,31 +180,6 @@ $diagramOptions = array_values(array_filter($library, static fn($m): bool => is_
 <div class="card" style="margin-top:10px"><h3>Preview</h3><?php foreach (($selectedBlocks['blocks'] ?? []) as $key=>$value): ?><h4><?= htmlspecialchars(ucwords(str_replace('_', ' ', (string)$key)), ENT_QUOTES) ?></h4><div><?= strip_tags((string)$value, '<p><br><ul><ol><li><strong><em><b><i><u><table><thead><tbody><tr><td><th>') ?></div><?php endforeach; ?></div>
 </div>
 
-
-<?php $effectiveTheme = documents_get_effective_doc_theme($selectedTemplateId); $themeSpecific = is_array($docTheme['per_template_set'][$selectedTemplateId] ?? null) ? $docTheme['per_template_set'][$selectedTemplateId] : []; ?>
-<div class="card"><h2>Document Theme</h2>
-<form method="post" class="grid">
-<input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_doc_theme"><input type="hidden" name="template_set_id" value="<?= htmlspecialchars($selectedTemplateId, ENT_QUOTES) ?>">
-<div><label>Scope</label><select name="theme_scope"><option value="global">Global</option><option value="template" <?= $selectedTemplateId!==''?'selected':'' ?>>Template Specific</option></select></div>
-<div><label><input type="checkbox" name="enable_background" <?= !empty($effectiveTheme['enable_background'])?'checked':'' ?>> Enable Background</label></div>
-<div><label>Font Scale (0.85-1.25)</label><input type="range" min="0.85" max="1.25" step="0.01" name="font_scale" value="<?= htmlspecialchars((string)$effectiveTheme['font_scale'], ENT_QUOTES) ?>"></div>
-<div><label>Primary Color</label><input name="primary_color" value="<?= htmlspecialchars((string)$effectiveTheme['primary_color'], ENT_QUOTES) ?>"></div>
-<div><label>Secondary Color</label><input name="secondary_color" value="<?= htmlspecialchars((string)$effectiveTheme['secondary_color'], ENT_QUOTES) ?>"></div>
-<div><label>Accent Color</label><input name="accent_color" value="<?= htmlspecialchars((string)$effectiveTheme['accent_color'], ENT_QUOTES) ?>"></div>
-<div><label>Text Color</label><input name="text_color" value="<?= htmlspecialchars((string)$effectiveTheme['text_color'], ENT_QUOTES) ?>"></div>
-<div><label>Muted Text</label><input name="muted_text_color" value="<?= htmlspecialchars((string)$effectiveTheme['muted_text_color'], ENT_QUOTES) ?>"></div>
-<div><label>Box BG</label><input name="box_bg" value="<?= htmlspecialchars((string)$effectiveTheme['box_bg'], ENT_QUOTES) ?>"></div>
-<div><label>Background Media</label><select name="background_media_id"><option value="">None</option><?php foreach($library as $item): if(!is_array($item) || (string)($item['type']??'')!=='background' || !empty($item['archived_flag'])) continue; ?><option value="<?= htmlspecialchars((string)$item['id'], ENT_QUOTES) ?>" <?= ((string)($effectiveTheme['background_media_id'] ?? '')===(string)$item['id'])?'selected':'' ?>><?= htmlspecialchars((string)$item['title'], ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-<div><label><input type="checkbox" name="show_cover_page" <?= !array_key_exists('show_cover_page',$effectiveTheme)||!empty($effectiveTheme['show_cover_page'])?'checked':'' ?>> Cover Page</label></div>
-<div><label><input type="checkbox" name="show_system_overview_page" <?= !array_key_exists('show_system_overview_page',$effectiveTheme)||!empty($effectiveTheme['show_system_overview_page'])?'checked':'' ?>> System Overview</label></div>
-<div><label><input type="checkbox" name="show_financials_page" <?= !array_key_exists('show_financials_page',$effectiveTheme)||!empty($effectiveTheme['show_financials_page'])?'checked':'' ?>> Financials</label></div>
-<div><label><input type="checkbox" name="show_impact_page" <?= !array_key_exists('show_impact_page',$effectiveTheme)||!empty($effectiveTheme['show_impact_page'])?'checked':'' ?>> Impact</label></div>
-<div><label><input type="checkbox" name="show_next_steps_page" <?= !array_key_exists('show_next_steps_page',$effectiveTheme)||!empty($effectiveTheme['show_next_steps_page'])?'checked':'' ?>> Next Steps</label></div>
-<div><label><input type="checkbox" name="show_contact_page" <?= !array_key_exists('show_contact_page',$effectiveTheme)||!empty($effectiveTheme['show_contact_page'])?'checked':'' ?>> Contact</label></div>
-<div><label>Default CO2 factor</label><input name="co2_factor_kg_per_kwh" value="<?= htmlspecialchars((string)($effectiveTheme['co2_factor_kg_per_kwh'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Default trees factor</label><input name="trees_factor_kg_per_tree_per_year" value="<?= htmlspecialchars((string)($effectiveTheme['trees_factor_kg_per_tree_per_year'] ?? ''), ENT_QUOTES) ?>"></div>
-<div style="grid-column:1/-1"><button class="btn" type="submit">Save Theme</button></div>
-</form></div>
 <div class="card"><h2>Media Library</h2>
 <form method="post" enctype="multipart/form-data" class="grid">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="action" value="upload_media"><input type="hidden" name="template_set_id" value="<?= htmlspecialchars($selectedTemplateId, ENT_QUOTES) ?>">
