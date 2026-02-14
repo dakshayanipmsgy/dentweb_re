@@ -438,6 +438,7 @@ function employee_dashboard_safe(string $value): string
         <div class="employee-meta">
           <span class="employee-meta__pill">Logged in as <?= employee_dashboard_safe($employee['name'] ?? $employee['login_id'] ?? 'Employee') ?></span>
           <a class="primary-button" href="employee-tasks.php">My Tasks</a>
+          <a class="primary-button" href="employee-docs-deals.php">Docs Deals</a>
           <a class="primary-button" href="admin-users.php?tab=customers">+ Add Customer</a>
           <a class="logout-link" href="logout.php">Log out</a>
         </div>
