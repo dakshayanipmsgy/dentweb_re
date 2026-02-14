@@ -38,6 +38,16 @@ function documents_agreements_dir(): string
     return documents_base_dir() . '/agreements';
 }
 
+function documents_challans_dir(): string
+{
+    return documents_base_dir() . '/challans';
+}
+
+function documents_challan_pdf_dir(): string
+{
+    return documents_challans_dir() . '/pdfs';
+}
+
 function documents_agreement_pdf_dir(): string
 {
     return documents_agreements_dir() . '/pdfs';
@@ -97,6 +107,8 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_quotations_dir());
     documents_ensure_dir(documents_agreements_dir());
     documents_ensure_dir(documents_agreement_pdf_dir());
+    documents_ensure_dir(documents_challans_dir());
+    documents_ensure_dir(documents_challan_pdf_dir());
     documents_ensure_dir(documents_public_branding_dir());
     documents_ensure_dir(documents_public_backgrounds_dir());
     documents_ensure_dir(documents_public_diagrams_dir());
@@ -678,6 +690,152 @@ function documents_agreement_defaults(): array
         'pdf_path' => '',
         'pdf_generated_at' => '',
     ];
+}
+
+function documents_challan_defaults(): array
+{
+    return [
+        'id' => '',
+        'challan_no' => '',
+        'status' => 'Draft',
+        'segment' => 'RES',
+        'template_set_id' => '',
+        'linked_quote_id' => '',
+        'linked_quote_no' => '',
+        'party_type' => 'lead',
+        'customer_snapshot' => documents_customer_snapshot_defaults(),
+        'site_address' => '',
+        'delivery_address' => '',
+        'delivery_date' => '',
+        'vehicle_no' => '',
+        'driver_name' => '',
+        'delivery_notes' => '',
+        'items' => [],
+        'created_by_type' => '',
+        'created_by_id' => '',
+        'created_by_name' => '',
+        'created_at' => '',
+        'updated_at' => '',
+        'rendering' => [
+            'background_image' => '',
+            'background_opacity' => 1.0,
+        ],
+        'pdf_path' => '',
+        'pdf_generated_at' => '',
+    ];
+}
+
+function documents_challan_item_defaults(): array
+{
+    return [
+        'name' => '',
+        'description' => '',
+        'unit' => 'Nos',
+        'qty' => 0,
+        'remarks' => '',
+    ];
+}
+
+function documents_normalize_challan_items(array $items): array
+{
+    $rows = [];
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $row = array_merge(documents_challan_item_defaults(), $item);
+        $row['name'] = safe_text((string) ($row['name'] ?? ''));
+        $row['description'] = safe_text((string) ($row['description'] ?? ''));
+        $row['unit'] = safe_text((string) ($row['unit'] ?? 'Nos')) ?: 'Nos';
+        $row['qty'] = max(0, (float) ($row['qty'] ?? 0));
+        $row['remarks'] = safe_text((string) ($row['remarks'] ?? ''));
+        if ($row['name'] === '' && $row['description'] === '' && $row['qty'] <= 0) {
+            continue;
+        }
+        $rows[] = $row;
+    }
+
+    return $rows;
+}
+
+function documents_challan_has_valid_items(array $challan): bool
+{
+    $items = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
+    foreach ($items as $row) {
+        if ((string) ($row['name'] ?? '') !== '' && (float) ($row['qty'] ?? 0) > 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function documents_generate_challan_number(string $segment): array
+{
+    $number = documents_generate_document_number('challan', $segment);
+    if (!$number['ok']) {
+        return $number;
+    }
+
+    return ['ok' => true, 'challan_no' => (string) ($number['doc_no'] ?? ''), 'error' => ''];
+}
+
+function documents_get_challan(string $id): ?array
+{
+    $id = safe_filename($id);
+    if ($id === '') {
+        return null;
+    }
+
+    $path = documents_challans_dir() . '/' . $id . '.json';
+    if (!is_file($path)) {
+        return null;
+    }
+
+    $row = json_load($path, []);
+    if (!is_array($row)) {
+        return null;
+    }
+
+    $challan = array_merge(documents_challan_defaults(), $row);
+    $challan['customer_snapshot'] = array_merge(documents_customer_snapshot_defaults(), is_array($challan['customer_snapshot'] ?? null) ? $challan['customer_snapshot'] : []);
+    $challan['items'] = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
+    return $challan;
+}
+
+function documents_list_challans(): array
+{
+    documents_ensure_structure();
+    $files = glob(documents_challans_dir() . '/*.json') ?: [];
+    $rows = [];
+    foreach ($files as $file) {
+        if (!is_string($file)) {
+            continue;
+        }
+        $row = json_load($file, []);
+        if (!is_array($row)) {
+            continue;
+        }
+        $challan = array_merge(documents_challan_defaults(), $row);
+        $challan['customer_snapshot'] = array_merge(documents_customer_snapshot_defaults(), is_array($challan['customer_snapshot'] ?? null) ? $challan['customer_snapshot'] : []);
+        $challan['items'] = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
+        $rows[] = $challan;
+    }
+
+    usort($rows, static function (array $a, array $b): int {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+
+    return $rows;
+}
+
+function documents_save_challan(array $challan): array
+{
+    $id = safe_filename((string) ($challan['id'] ?? ''));
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'Missing challan ID'];
+    }
+    return json_save(documents_challans_dir() . '/' . $id . '.json', $challan);
 }
 
 function documents_calc_pricing(float $grandTotal, string $pricingMode, string $taxType): array

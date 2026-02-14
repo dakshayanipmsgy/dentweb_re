@@ -328,6 +328,7 @@ $user = current_user();
       </div>
       <div>
         <a class="btn" href="admin-quotations.php">Quotations</a>
+        <a class="btn" href="admin-challans.php">Challans</a>
         <a class="btn" href="admin-agreements.php">Agreements</a>
         <a class="btn secondary" href="admin-templates.php">Template Blocks &amp; Media</a>
         <a class="btn secondary" href="admin-dashboard.php">Back to Admin Dashboard</a>
@@ -344,6 +345,7 @@ $user = current_user();
       <a class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates">Template Sets</a>
       <a class="tab" href="admin-templates.php">Template Blocks &amp; Media</a>
       <a class="tab" href="admin-quotations.php">Quotation Manager</a>
+      <a class="tab" href="admin-challans.php">Challans</a>
       <a class="tab" href="admin-agreements.php">Agreements</a>
       <span class="tab disabled">CSV Import (Phase 2+)</span>
     </nav>

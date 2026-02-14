@@ -17,7 +17,7 @@ if ($employee === null) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Quotations &amp; Challans</title>
+  <title>Quotations &amp; Delivery Challans</title>
   <style>
     body { margin:0; font-family: Arial, sans-serif; background:#f5f7fb; }
     .wrap { width:100%; max-width:none; box-sizing:border-box; padding:1.5rem; }
@@ -32,13 +32,13 @@ if ($employee === null) {
 <body>
   <main class="wrap">
     <section class="card">
-      <h1>Quotations &amp; Challans</h1>
+      <h1>Quotations &amp; Delivery Challans</h1>
       <p class="muted">Hello <?= htmlspecialchars((string) ($employee['name'] ?? 'Employee'), ENT_QUOTES) ?>.</p>
-      <p>You can create and manage your quotations below. Challans will be enabled in Phase 3.</p>
+      <p>You can create and manage quotations and delivery challans below.</p>
       <a class="btn" href="employee-quotations.php">Quotations</a>
+      <a class="btn" href="employee-challans.php">Delivery Challans</a>
       <a class="btn secondary" href="employee-dashboard.php">Back to Employee Dashboard</a>
       <ul class="disabled-list" aria-label="Accessible modules coming later">
-        <li>Delivery Challan Builder (coming in Phase 3)</li>
         <li>Document History (expanding in next phase)</li>
       </ul>
     </section>
