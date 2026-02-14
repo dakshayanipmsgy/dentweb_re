@@ -33,6 +33,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $agreement['consumer_account_no'] = safe_text($_POST['consumer_account_no'] ?? $agreement['consumer_account_no']);
         $agreement['consumer_address'] = safe_text($_POST['consumer_address'] ?? $agreement['consumer_address']);
         $agreement['site_address'] = safe_text($_POST['site_address'] ?? $agreement['site_address']);
+        $agreement['party_snapshot']['customer_mobile'] = (string) $agreement['customer_mobile'];
+        $agreement['party_snapshot']['customer_name'] = (string) $agreement['customer_name'];
+        $agreement['party_snapshot']['consumer_account_no'] = (string) $agreement['consumer_account_no'];
+        $agreement['party_snapshot']['consumer_address'] = (string) $agreement['consumer_address'];
+        $agreement['party_snapshot']['site_address'] = (string) $agreement['site_address'];
+        $agreement['party_snapshot']['system_capacity_kwp'] = (string) $agreement['system_capacity_kwp'];
+        $agreement['party_snapshot']['total_cost'] = (string) $agreement['total_cost'];
 
         $agreement['overrides']['fields_override']['execution_date'] = safe_text($_POST['override_execution_date'] ?? '');
         $agreement['overrides']['fields_override']['system_capacity_kwp'] = safe_text($_POST['override_system_capacity_kwp'] ?? '');
@@ -113,7 +120,7 @@ $message = safe_text($_GET['message'] ?? '');
         <div><label>Execution Date</label><input type="date" name="execution_date" value="<?= htmlspecialchars((string) $agreement['execution_date'], ENT_QUOTES) ?>"></div>
         <div><label>System Capacity (kWp)</label><input name="system_capacity_kwp" value="<?= htmlspecialchars((string) $agreement['system_capacity_kwp'], ENT_QUOTES) ?>"></div>
         <div><label>Total Cost</label><input name="total_cost" value="<?= htmlspecialchars((string) $agreement['total_cost'], ENT_QUOTES) ?>"></div>
-        <div><label>Consumer Account No</label><input name="consumer_account_no" value="<?= htmlspecialchars((string) $agreement['consumer_account_no'], ENT_QUOTES) ?>"></div>
+        <div><label>Consumer Account No. (JBVNL)</label><input name="consumer_account_no" value="<?= htmlspecialchars((string) $agreement['consumer_account_no'], ENT_QUOTES) ?>"></div>
         <div style="grid-column:1/-1"><label>Consumer Address</label><textarea name="consumer_address"><?= htmlspecialchars((string) $agreement['consumer_address'], ENT_QUOTES) ?></textarea></div>
         <div style="grid-column:1/-1"><label>Consumer Site Address</label><textarea name="site_address"><?= htmlspecialchars((string) $agreement['site_address'], ENT_QUOTES) ?></textarea></div>
       </div>

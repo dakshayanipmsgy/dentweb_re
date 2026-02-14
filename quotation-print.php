@@ -54,6 +54,7 @@ foreach ($library as $item) {
     $mediaMap[(string) ($item['id'] ?? '')] = $item;
 }
 $attachments = is_array($quote['template_attachments'] ?? null) ? $quote['template_attachments'] : documents_template_attachment_defaults();
+$snapshot = documents_quote_resolve_snapshot($quote);
 $safeHtml = static function (string $value): string {
     $clean = strip_tags($value, '<p><br><ul><ol><li><strong><em><b><i><u><table><thead><tbody><tr><td><th>');
     return $clean !== '' ? $clean : '<span style="color:#666">—</span>';
@@ -83,9 +84,10 @@ GSTIN: <?= htmlspecialchars((string)$company['gstin'], ENT_QUOTES) ?> | UDYAM: <
 </div>
 <div class="title"><h2 style="margin:0">Quotation</h2><div><strong><?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></strong></div><div>Valid Until: <?= htmlspecialchars((string)$quote['valid_until'], ENT_QUOTES) ?></div></div>
 </div>
-<div class="section"><strong>To:</strong> <?= htmlspecialchars((string)$quote['customer_name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$quote['customer_mobile'], ENT_QUOTES) ?>)<br>
-<?= nl2br(htmlspecialchars((string)$quote['billing_address'], ENT_QUOTES)) ?><br>
-<?= htmlspecialchars((string)$quote['district'], ENT_QUOTES) ?>, <?= htmlspecialchars((string)$quote['city'], ENT_QUOTES) ?>, <?= htmlspecialchars((string)$quote['state'], ENT_QUOTES) ?> - <?= htmlspecialchars((string)$quote['pin'], ENT_QUOTES) ?><br>
+<div class="section"><strong>To:</strong> <?= htmlspecialchars((string)($snapshot['name'] ?: $quote['customer_name']), ENT_QUOTES) ?> (<?= htmlspecialchars((string)($snapshot['mobile'] ?: $quote['customer_mobile']), ENT_QUOTES) ?>)<br>
+<strong>Site Address:</strong> <?= nl2br(htmlspecialchars((string)($quote['site_address'] ?: $snapshot['address']), ENT_QUOTES)) ?><br>
+<?= htmlspecialchars((string)($quote['district'] ?: $snapshot['district']), ENT_QUOTES) ?>, <?= htmlspecialchars((string)($quote['city'] ?: $snapshot['city']), ENT_QUOTES) ?>, <?= htmlspecialchars((string)($quote['state'] ?: $snapshot['state']), ENT_QUOTES) ?> - <?= htmlspecialchars((string)($quote['pin'] ?: $snapshot['pin_code']), ENT_QUOTES) ?><br>
+<strong>Consumer Account No. (JBVNL):</strong> <?= htmlspecialchars((string)($quote['consumer_account_no'] ?: $snapshot['consumer_account_no']), ENT_QUOTES) ?><br>
 System: <?= htmlspecialchars((string)$quote['system_type'], ENT_QUOTES) ?> | Capacity: <?= htmlspecialchars((string)$quote['capacity_kwp'], ENT_QUOTES) ?> kWp
 </div>
 <div class="section"><table><thead><tr><th>Description</th><th>Basic Amount</th><th><?= $quote['tax_type'] === 'IGST' ? 'IGST' : 'CGST' ?></th><?php if ($quote['tax_type'] !== 'IGST'): ?><th>SGST</th><?php endif; ?><th>Total</th></tr></thead><tbody>
@@ -96,7 +98,7 @@ System: <?= htmlspecialchars((string)$quote['system_type'], ENT_QUOTES) ?> | Cap
 <?php if ($quote['tax_type'] === 'IGST'): ?><td><?= number_format((float)$quote['calc']['gst_split']['igst_18'],2) ?></td><?php else: ?><td><?= number_format((float)$quote['calc']['gst_split']['cgst_18'],2) ?></td><td><?= number_format((float)$quote['calc']['gst_split']['sgst_18'],2) ?></td><?php endif; ?>
 <td><?= number_format((float)$quote['calc']['bucket_18_basic'] + (float)$quote['calc']['bucket_18_gst'],2) ?></td></tr>
 <tr><th colspan="<?= $quote['tax_type'] === 'IGST' ? '3' : '4' ?>">Grand Total</th><th><?= number_format((float)$quote['calc']['grand_total'],2) ?></th></tr>
-</tbody></table><div class="muted">Detailed System Inclusions are provided in Annexures.</div></div>
+</tbody></table><div class="muted">Detailed System Inclusions are provided in Annexures.</div><div class="muted" style="margin-top:6px">Application ID: <?= htmlspecialchars((string)($quote['application_id'] ?: $snapshot['application_id']), ENT_QUOTES) ?> | Circle/Division/Sub Division: <?= htmlspecialchars((string)($quote['circle_name'] ?: $snapshot['circle_name']), ENT_QUOTES) ?> / <?= htmlspecialchars((string)($quote['division_name'] ?: $snapshot['division_name']), ENT_QUOTES) ?> / <?= htmlspecialchars((string)($quote['sub_division_name'] ?: $snapshot['sub_division_name']), ENT_QUOTES) ?> | Sanction/Installed kWp: <?= htmlspecialchars((string)($quote['sanction_load_kwp'] ?: $snapshot['sanction_load_kwp']), ENT_QUOTES) ?> / <?= htmlspecialchars((string)($quote['installed_pv_module_capacity_kwp'] ?: $snapshot['installed_pv_module_capacity_kwp']), ENT_QUOTES) ?></div></div>
 
 <?php if (trim((string) ($quote['annexures_overrides']['cover_notes'] ?? '')) !== ''): ?><div class="section annexure"><h3>Cover Notes</h3><div><?= $safeHtml((string)$quote['annexures_overrides']['cover_notes']) ?></div></div><?php endif; ?>
 <div class="section"><h3>Special Requests From Customer (Inclusive in the rate)</h3>

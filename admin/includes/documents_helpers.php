@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../includes/customer_admin.php';
+
 function documents_base_dir(): string
 {
     return dirname(__DIR__, 2) . '/data/documents';
@@ -143,7 +145,7 @@ function documents_agreement_template_defaults(): array
 <h2 style="text-align:center;margin:0 0 12px 0;">PM Surya Ghar – Vendor Consumer Agreement</h2>
 <p>This Agreement is executed on <strong>{{execution_date}}</strong> between:</p>
 <p><strong>Vendor:</strong> {{vendor_name}}, {{vendor_address}}</p>
-<p><strong>Consumer:</strong> {{consumer_name}}, Consumer Account No. {{consumer_account_no}}, Address: {{consumer_address}}</p>
+<p><strong>Consumer:</strong> {{consumer_name}}, Consumer Account No. {{consumer_account_no}}, Address: {{consumer_address}} ({{consumer_location}})</p>
 <p>Whereas the Consumer has engaged the Vendor for design, supply, installation, testing, and commissioning of rooftop solar photovoltaic system of <strong>{{system_capacity_kwp}} kWp</strong> at the consumer site address: <strong>{{consumer_site_address}}</strong>.</p>
 <p>The total RTS system cost agreed between both parties is <strong>₹{{total_cost}}</strong> (inclusive of applicable taxes, unless otherwise stated in linked quotation/work order).</p>
 <ol>
@@ -175,6 +177,7 @@ HTML;
                 '{{consumer_account_no}}',
                 '{{consumer_address}}',
                 '{{consumer_site_address}}',
+                '{{consumer_location}}',
                 '{{vendor_name}}',
                 '{{vendor_address}}',
                 '{{total_cost}}',
@@ -407,6 +410,29 @@ function documents_handle_image_upload(array $file, string $targetDir, string $p
     return ['ok' => true, 'filename' => $filename, 'error' => ''];
 }
 
+function documents_customer_snapshot_defaults(): array
+{
+    return [
+        'mobile' => '',
+        'name' => '',
+        'address' => '',
+        'city' => '',
+        'district' => '',
+        'pin_code' => '',
+        'state' => '',
+        'meter_number' => '',
+        'meter_serial_number' => '',
+        'consumer_account_no' => '',
+        'application_id' => '',
+        'application_submitted_date' => '',
+        'sanction_load_kwp' => '',
+        'installed_pv_module_capacity_kwp' => '',
+        'circle_name' => '',
+        'division_name' => '',
+        'sub_division_name' => '',
+    ];
+}
+
 function documents_quote_defaults(): array
 {
     return [
@@ -424,12 +450,23 @@ function documents_quote_defaults(): array
         'party_type' => 'lead',
         'customer_mobile' => '',
         'customer_name' => '',
+        'consumer_account_no' => '',
         'billing_address' => '',
         'site_address' => '',
         'district' => '',
         'city' => '',
         'state' => 'Jharkhand',
         'pin' => '',
+        'meter_number' => '',
+        'meter_serial_number' => '',
+        'application_id' => '',
+        'application_submitted_date' => '',
+        'sanction_load_kwp' => '',
+        'installed_pv_module_capacity_kwp' => '',
+        'circle_name' => '',
+        'division_name' => '',
+        'sub_division_name' => '',
+        'customer_snapshot' => documents_customer_snapshot_defaults(),
         'system_type' => 'Ongrid',
         'capacity_kwp' => '',
         'project_summary_line' => '',
@@ -476,6 +513,114 @@ function documents_quote_defaults(): array
     ];
 }
 
+function documents_normalize_consumer_account_no(array $row): string
+{
+    foreach (['jbvnl_account_number', 'consumer_no', 'consumer_number'] as $key) {
+        $value = safe_text((string) ($row[$key] ?? ''));
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    return '';
+}
+
+function documents_map_customer_record(array $customer): array
+{
+    return [
+        'mobile' => normalize_customer_mobile((string) ($customer['mobile'] ?? '')),
+        'name' => safe_text((string) ($customer['name'] ?? '')),
+        'address' => safe_text((string) ($customer['address'] ?? '')),
+        'city' => safe_text((string) ($customer['city'] ?? '')),
+        'district' => safe_text((string) ($customer['district'] ?? '')),
+        'pin_code' => safe_text((string) ($customer['pin_code'] ?? '')),
+        'state' => safe_text((string) ($customer['state'] ?? '')),
+        'meter_number' => safe_text((string) ($customer['meter_number'] ?? '')),
+        'meter_serial_number' => safe_text((string) ($customer['meter_serial_number'] ?? '')),
+        'consumer_account_no' => documents_normalize_consumer_account_no($customer),
+        'application_id' => safe_text((string) ($customer['application_id'] ?? '')),
+        'application_submitted_date' => safe_text((string) ($customer['application_submitted_date'] ?? '')),
+        'sanction_load_kwp' => safe_text((string) ($customer['sanction_load_kwp'] ?? '')),
+        'installed_pv_module_capacity_kwp' => safe_text((string) ($customer['installed_pv_module_capacity_kwp'] ?? '')),
+        'circle_name' => safe_text((string) ($customer['circle_name'] ?? '')),
+        'division_name' => safe_text((string) ($customer['division_name'] ?? '')),
+        'sub_division_name' => safe_text((string) ($customer['sub_division_name'] ?? '')),
+    ];
+}
+
+function documents_snapshot_from_customer(array $customer): array
+{
+    return array_merge(documents_customer_snapshot_defaults(), documents_map_customer_record($customer));
+}
+
+function documents_quote_resolve_snapshot(array $quote): array
+{
+    $snapshot = is_array($quote['customer_snapshot'] ?? null)
+        ? array_merge(documents_customer_snapshot_defaults(), $quote['customer_snapshot'])
+        : documents_customer_snapshot_defaults();
+
+    if ($snapshot['mobile'] === '' && safe_text((string) ($quote['customer_mobile'] ?? '')) !== '') {
+        $snapshot['mobile'] = normalize_customer_mobile((string) ($quote['customer_mobile'] ?? ''));
+    }
+    if ($snapshot['name'] === '' && safe_text((string) ($quote['customer_name'] ?? '')) !== '') {
+        $snapshot['name'] = safe_text((string) ($quote['customer_name'] ?? ''));
+    }
+
+    $hasData = false;
+    foreach ($snapshot as $value) {
+        if (safe_text((string) $value) !== '') {
+            $hasData = true;
+            break;
+        }
+    }
+
+    if (!$hasData) {
+        $customer = documents_find_customer_by_mobile((string) ($quote['customer_mobile'] ?? ''));
+        if (is_array($customer)) {
+            $snapshot = array_merge($snapshot, documents_snapshot_from_customer($customer));
+        }
+    }
+
+    return $snapshot;
+}
+
+function documents_build_quote_snapshot_from_request(array $input, string $partyType, ?array $customer): array
+{
+    $snapshot = documents_customer_snapshot_defaults();
+    if ($customer !== null) {
+        $snapshot = array_merge($snapshot, documents_snapshot_from_customer($customer));
+    }
+
+    $snapshot['mobile'] = normalize_customer_mobile((string) ($input['customer_mobile'] ?? $snapshot['mobile']));
+    $snapshot['name'] = safe_text((string) ($input['customer_name'] ?? $snapshot['name']));
+    $snapshot['address'] = safe_text((string) ($input['site_address'] ?? $snapshot['address']));
+    $snapshot['city'] = safe_text((string) ($input['city'] ?? $snapshot['city']));
+    $snapshot['district'] = safe_text((string) ($input['district'] ?? $snapshot['district']));
+    $snapshot['pin_code'] = safe_text((string) ($input['pin'] ?? $snapshot['pin_code']));
+    $snapshot['state'] = safe_text((string) ($input['state'] ?? $snapshot['state']));
+    $snapshot['meter_number'] = safe_text((string) ($input['meter_number'] ?? $snapshot['meter_number']));
+    $snapshot['meter_serial_number'] = safe_text((string) ($input['meter_serial_number'] ?? $snapshot['meter_serial_number']));
+    $snapshot['consumer_account_no'] = safe_text((string) ($input['consumer_account_no'] ?? $snapshot['consumer_account_no']));
+    $snapshot['application_id'] = safe_text((string) ($input['application_id'] ?? $snapshot['application_id']));
+    $snapshot['application_submitted_date'] = safe_text((string) ($input['application_submitted_date'] ?? $snapshot['application_submitted_date']));
+    $snapshot['sanction_load_kwp'] = safe_text((string) ($input['sanction_load_kwp'] ?? $snapshot['sanction_load_kwp']));
+    $snapshot['installed_pv_module_capacity_kwp'] = safe_text((string) ($input['installed_pv_module_capacity_kwp'] ?? $snapshot['installed_pv_module_capacity_kwp']));
+    $snapshot['circle_name'] = safe_text((string) ($input['circle_name'] ?? $snapshot['circle_name']));
+    $snapshot['division_name'] = safe_text((string) ($input['division_name'] ?? $snapshot['division_name']));
+    $snapshot['sub_division_name'] = safe_text((string) ($input['sub_division_name'] ?? $snapshot['sub_division_name']));
+
+    if ($partyType === 'lead') {
+        $leadSnapshot = documents_customer_snapshot_defaults();
+        $leadSnapshot['mobile'] = $snapshot['mobile'];
+        $leadSnapshot['name'] = $snapshot['name'];
+        $leadSnapshot['address'] = $snapshot['address'];
+        $leadSnapshot['consumer_account_no'] = $snapshot['consumer_account_no'];
+        return $leadSnapshot;
+    }
+
+    return $snapshot;
+}
+
 function documents_agreement_defaults(): array
 {
     return [
@@ -493,6 +638,23 @@ function documents_agreement_defaults(): array
         'total_cost' => '',
         'linked_quote_id' => '',
         'linked_quote_no' => '',
+        'district' => '',
+        'city' => '',
+        'state' => '',
+        'pin_code' => '',
+        'party_snapshot' => [
+            'customer_mobile' => '',
+            'customer_name' => '',
+            'consumer_account_no' => '',
+            'consumer_address' => '',
+            'site_address' => '',
+            'district' => '',
+            'city' => '',
+            'state' => '',
+            'pin_code' => '',
+            'system_capacity_kwp' => '',
+            'total_cost' => '',
+        ],
         'overrides' => [
             'html_override' => '',
             'fields_override' => [
@@ -732,33 +894,13 @@ function documents_find_customer_by_mobile(string $mobile): ?array
         return null;
     }
 
-    $path = dirname(__DIR__, 2) . '/storage/customer-records/records.json';
-    $payload = json_load($path, []);
-    if (!is_array($payload)) {
+    $store = new CustomerFsStore();
+    $record = $store->findByMobile($normalized);
+    if ($record === null) {
         return null;
     }
 
-    $records = isset($payload['records']) && is_array($payload['records']) ? $payload['records'] : [];
-    foreach ($records as $record) {
-        if (!is_array($record)) {
-            continue;
-        }
-        $phone = normalize_customer_mobile((string) ($record['phone'] ?? ($record['mobile_number'] ?? '')));
-        if ($phone !== $normalized) {
-            continue;
-        }
-        return [
-            'customer_name' => safe_text($record['full_name'] ?? $record['consumer_name'] ?? ''),
-            'billing_address' => safe_text($record['address_line'] ?? $record['address'] ?? ''),
-            'site_address' => safe_text($record['address_line'] ?? $record['address'] ?? ''),
-            'district' => safe_text($record['district'] ?? ''),
-            'city' => safe_text($record['city'] ?? ''),
-            'state' => safe_text($record['state_name'] ?? 'Jharkhand'),
-            'pin' => safe_text($record['pin_code'] ?? ''),
-        ];
-    }
-
-    return null;
+    return documents_map_customer_record($record);
 }
 
 function documents_list_quotes(): array
@@ -972,20 +1114,29 @@ function documents_format_money_indian($value): string
 function documents_build_agreement_placeholders(array $agreement, array $company): array
 {
     $override = is_array($agreement['overrides']['fields_override'] ?? null) ? $agreement['overrides']['fields_override'] : [];
+    $partySnapshot = is_array($agreement['party_snapshot'] ?? null) ? $agreement['party_snapshot'] : [];
+
     $executionDate = safe_text((string) ($override['execution_date'] ?? '')) ?: safe_text((string) ($agreement['execution_date'] ?? ''));
-    $capacity = safe_text((string) ($override['system_capacity_kwp'] ?? '')) ?: safe_text((string) ($agreement['system_capacity_kwp'] ?? ''));
-    $totalCost = safe_text((string) ($override['total_cost'] ?? '')) ?: safe_text((string) ($agreement['total_cost'] ?? ''));
-    $accountNo = safe_text((string) ($override['consumer_account_no'] ?? '')) ?: safe_text((string) ($agreement['consumer_account_no'] ?? ''));
-    $consumerAddress = safe_text((string) ($override['consumer_address'] ?? '')) ?: safe_text((string) ($agreement['consumer_address'] ?? ''));
-    $siteAddress = safe_text((string) ($override['site_address'] ?? '')) ?: safe_text((string) ($agreement['site_address'] ?? ''));
+    $capacity = safe_text((string) ($override['system_capacity_kwp'] ?? '')) ?: safe_text((string) ($agreement['system_capacity_kwp'] ?? ($partySnapshot['system_capacity_kwp'] ?? '')));
+    $totalCost = safe_text((string) ($override['total_cost'] ?? '')) ?: safe_text((string) ($agreement['total_cost'] ?? ($partySnapshot['total_cost'] ?? '')));
+    $accountNo = safe_text((string) ($override['consumer_account_no'] ?? '')) ?: safe_text((string) ($agreement['consumer_account_no'] ?? ($partySnapshot['consumer_account_no'] ?? '')));
+    $consumerAddress = safe_text((string) ($override['consumer_address'] ?? '')) ?: safe_text((string) ($agreement['consumer_address'] ?? ($partySnapshot['consumer_address'] ?? '')));
+    $siteAddress = safe_text((string) ($override['site_address'] ?? '')) ?: safe_text((string) ($agreement['site_address'] ?? ($partySnapshot['site_address'] ?? '')));
+
+    $locationParts = array_filter([
+        safe_text((string) ($agreement['district'] ?? ($partySnapshot['district'] ?? ''))),
+        safe_text((string) ($agreement['city'] ?? ($partySnapshot['city'] ?? ''))),
+        safe_text((string) ($agreement['state'] ?? ($partySnapshot['state'] ?? ''))),
+    ], static fn(string $v): bool => $v !== '');
 
     return [
         '{{execution_date}}' => $executionDate,
         '{{system_capacity_kwp}}' => $capacity,
-        '{{consumer_name}}' => safe_text((string) ($agreement['customer_name'] ?? '')),
+        '{{consumer_name}}' => safe_text((string) ($agreement['customer_name'] ?? ($partySnapshot['customer_name'] ?? ''))),
         '{{consumer_account_no}}' => $accountNo,
         '{{consumer_address}}' => $consumerAddress,
         '{{consumer_site_address}}' => $siteAddress,
+        '{{consumer_location}}' => implode(', ', array_values($locationParts)),
         '{{vendor_name}}' => documents_company_vendor_name($company),
         '{{vendor_address}}' => documents_company_vendor_address($company),
         '{{total_cost}}' => $totalCost,

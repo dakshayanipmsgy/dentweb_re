@@ -62,6 +62,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        $quoteSnapshot = $quote !== null ? documents_quote_resolve_snapshot($quote) : null;
+        if ($quoteSnapshot !== null) {
+            $customerMobile = $customerMobile !== '' ? $customerMobile : (string) ($quoteSnapshot['mobile'] ?? '');
+            $customerName = $customerName !== '' ? $customerName : (string) ($quoteSnapshot['name'] ?? '');
+            $consumerAccountNo = $consumerAccountNo !== '' ? $consumerAccountNo : (string) ($quote['consumer_account_no'] ?? ($quoteSnapshot['consumer_account_no'] ?? ''));
+            $siteAddress = $siteAddress !== '' ? $siteAddress : (string) ($quote['site_address'] ?? ($quoteSnapshot['address'] ?? ''));
+            $consumerAddress = $consumerAddress !== '' ? $consumerAddress : $siteAddress;
+            $capacity = $capacity !== '' ? $capacity : safe_text((string) ($quote['capacity_kwp'] ?? ''));
+            $totalCost = $totalCost !== '' ? $totalCost : documents_format_money_indian((float) ($quote['calc']['grand_total'] ?? 0));
+        } else {
+            $lookupCustomer = $customerMobile !== '' ? documents_find_customer_by_mobile($customerMobile) : null;
+            if ($lookupCustomer !== null) {
+                $customerName = $customerName !== '' ? $customerName : (string) ($lookupCustomer['name'] ?? '');
+                $consumerAccountNo = $consumerAccountNo !== '' ? $consumerAccountNo : (string) ($lookupCustomer['consumer_account_no'] ?? '');
+                $siteAddress = $siteAddress !== '' ? $siteAddress : (string) ($lookupCustomer['address'] ?? '');
+                $consumerAddress = $consumerAddress !== '' ? $consumerAddress : $siteAddress;
+            }
+        }
+
         $number = documents_generate_agreement_number('RES');
         if (!$number['ok']) {
             $redirectWith('error', (string) ($number['error'] ?: 'Unable to generate agreement number.'));
@@ -83,6 +102,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $agreement['total_cost'] = $totalCost;
         $agreement['linked_quote_id'] = $linkedQuoteId;
         $agreement['linked_quote_no'] = (string) ($quote['quote_no'] ?? '');
+        $agreement['district'] = (string) (($quoteSnapshot['district'] ?? '') ?: ($lookupCustomer['district'] ?? ''));
+        $agreement['city'] = (string) (($quoteSnapshot['city'] ?? '') ?: ($lookupCustomer['city'] ?? ''));
+        $agreement['state'] = (string) (($quoteSnapshot['state'] ?? '') ?: ($lookupCustomer['state'] ?? ''));
+        $agreement['pin_code'] = (string) (($quoteSnapshot['pin_code'] ?? '') ?: ($lookupCustomer['pin_code'] ?? ''));
+        $agreement['party_snapshot'] = [
+            'customer_mobile' => $customerMobile,
+            'customer_name' => $customerName,
+            'consumer_account_no' => $consumerAccountNo,
+            'consumer_address' => $consumerAddress,
+            'site_address' => $siteAddress,
+            'district' => (string) (($quoteSnapshot['district'] ?? '') ?: ($lookupCustomer['district'] ?? '')),
+            'city' => (string) (($quoteSnapshot['city'] ?? '') ?: ($lookupCustomer['city'] ?? '')),
+            'state' => (string) (($quoteSnapshot['state'] ?? '') ?: ($lookupCustomer['state'] ?? '')),
+            'pin_code' => (string) (($quoteSnapshot['pin_code'] ?? '') ?: ($lookupCustomer['pin_code'] ?? '')),
+            'system_capacity_kwp' => $capacity,
+            'total_cost' => $totalCost,
+        ];
         $agreement['rendering']['background_image'] = $backgroundImage;
         $agreement['rendering']['background_opacity'] = $backgroundOpacity;
         $user = current_user();
@@ -138,6 +174,7 @@ $lookupMobile = normalize_customer_mobile((string) ($_GET['lookup_mobile'] ?? ''
 $lookupCustomer = $lookupMobile !== '' ? documents_find_customer_by_mobile($lookupMobile) : null;
 $selectedQuoteId = safe_text($_GET['quote_id'] ?? '');
 $selectedQuote = $selectedQuoteId !== '' ? documents_get_quote($selectedQuoteId) : null;
+$selectedQuoteSnapshot = $selectedQuote !== null ? documents_quote_resolve_snapshot($selectedQuote) : documents_customer_snapshot_defaults();
 
 $quoteCandidates = [];
 if ($lookupMobile !== '') {
@@ -230,14 +267,14 @@ $message = safe_text($_GET['message'] ?? '');
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>">
       <input type="hidden" name="action" value="create_agreement">
       <div class="grid">
-        <div><label>Customer Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string) ($lookupMobile !== '' ? $lookupMobile : ''), ENT_QUOTES) ?>"></div>
-        <div><label>Customer Name</label><input name="customer_name" required value="<?= htmlspecialchars((string) ($lookupCustomer['customer_name'] ?? ''), ENT_QUOTES) ?>"></div>
-        <div><label>Consumer Account No</label><input name="consumer_account_no" value="<?= htmlspecialchars((string) ($lookupCustomer['consumer_account_no'] ?? ''), ENT_QUOTES) ?>"></div>
+        <div><label>Customer Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string) (($selectedQuoteSnapshot['mobile'] ?? '') ?: ($lookupMobile !== '' ? $lookupMobile : '')), ENT_QUOTES) ?>"></div>
+        <div><label>Customer Name</label><input name="customer_name" required value="<?= htmlspecialchars((string) (($selectedQuoteSnapshot['name'] ?? '') ?: ($lookupCustomer['name'] ?? '')), ENT_QUOTES) ?>"></div>
+        <div><label>Consumer Account No. (JBVNL)</label><input name="consumer_account_no" value="<?= htmlspecialchars((string) (($selectedQuote['consumer_account_no'] ?? '') ?: ($selectedQuoteSnapshot['consumer_account_no'] ?? ($lookupCustomer['consumer_account_no'] ?? ''))), ENT_QUOTES) ?>"></div>
         <div><label>Execution Date</label><input type="date" name="execution_date" required value="<?= htmlspecialchars((string) date('Y-m-d'), ENT_QUOTES) ?>"></div>
         <div><label>System Capacity (kWp)</label><input name="system_capacity_kwp" required value="<?= htmlspecialchars((string) ($selectedQuote['capacity_kwp'] ?? ''), ENT_QUOTES) ?>"></div>
         <div><label>Total RTS Cost</label><input name="total_cost" required value="<?= htmlspecialchars((string) (($selectedQuote['calc']['grand_total'] ?? '') !== '' ? documents_format_money_indian((float) ($selectedQuote['calc']['grand_total'] ?? 0)) : ''), ENT_QUOTES) ?>"></div>
-        <div style="grid-column:1/-1"><label>Consumer Address</label><textarea name="consumer_address"><?= htmlspecialchars((string) ($lookupCustomer['billing_address'] ?? ''), ENT_QUOTES) ?></textarea></div>
-        <div style="grid-column:1/-1"><label>Consumer Site Address</label><textarea name="site_address"><?= htmlspecialchars((string) ($lookupCustomer['site_address'] ?? ''), ENT_QUOTES) ?></textarea></div>
+        <div style="grid-column:1/-1"><label>Consumer Address</label><textarea name="consumer_address"><?= htmlspecialchars((string) (($selectedQuote['site_address'] ?? '') ?: ($selectedQuoteSnapshot['address'] ?? ($lookupCustomer['address'] ?? ''))), ENT_QUOTES) ?></textarea></div>
+        <div style="grid-column:1/-1"><label>Consumer Site Address</label><textarea name="site_address"><?= htmlspecialchars((string) (($selectedQuote['site_address'] ?? '') ?: ($selectedQuoteSnapshot['address'] ?? ($lookupCustomer['address'] ?? ''))), ENT_QUOTES) ?></textarea></div>
 
         <div>
           <label>Link Quotation (Optional)</label>
