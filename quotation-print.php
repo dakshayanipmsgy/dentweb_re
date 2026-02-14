@@ -33,7 +33,6 @@ if ($quote === null) {
     echo 'Quotation not found.';
     exit;
 }
-$quoteSnapshot = documents_quote_snapshot_with_fallback($quote);
 if ($viewerType === 'employee' && ((string) ($quote['created_by_id'] ?? '') !== $viewerId || (string) ($quote['created_by_type'] ?? '') !== 'employee')) {
     http_response_code(403);
     echo 'Access denied.';
@@ -84,11 +83,9 @@ GSTIN: <?= htmlspecialchars((string)$company['gstin'], ENT_QUOTES) ?> | UDYAM: <
 </div>
 <div class="title"><h2 style="margin:0">Quotation</h2><div><strong><?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></strong></div><div>Valid Until: <?= htmlspecialchars((string)$quote['valid_until'], ENT_QUOTES) ?></div></div>
 </div>
-<div class="section"><strong>To:</strong> <?= htmlspecialchars((string)$quoteSnapshot['customer_name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$quoteSnapshot['customer_mobile'], ENT_QUOTES) ?>)<br>
-<strong>Consumer Account No:</strong> <?= htmlspecialchars((string)$quoteSnapshot['consumer_account_no'], ENT_QUOTES) ?><br>
-<?= nl2br(htmlspecialchars((string)$quoteSnapshot['billing_address'], ENT_QUOTES)) ?><br>
-<strong>Site Address:</strong> <?= nl2br(htmlspecialchars((string)$quoteSnapshot['site_address'], ENT_QUOTES)) ?><br>
-<?= htmlspecialchars((string)$quoteSnapshot['district'], ENT_QUOTES) ?>, <?= htmlspecialchars((string)$quoteSnapshot['city'], ENT_QUOTES) ?>, <?= htmlspecialchars((string)$quoteSnapshot['state'], ENT_QUOTES) ?> - <?= htmlspecialchars((string)$quoteSnapshot['pin'], ENT_QUOTES) ?><br>
+<div class="section"><strong>To:</strong> <?= htmlspecialchars((string)$quote['customer_name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$quote['customer_mobile'], ENT_QUOTES) ?>)<br>
+<?= nl2br(htmlspecialchars((string)$quote['billing_address'], ENT_QUOTES)) ?><br>
+<?= htmlspecialchars((string)$quote['district'], ENT_QUOTES) ?>, <?= htmlspecialchars((string)$quote['city'], ENT_QUOTES) ?>, <?= htmlspecialchars((string)$quote['state'], ENT_QUOTES) ?> - <?= htmlspecialchars((string)$quote['pin'], ENT_QUOTES) ?><br>
 System: <?= htmlspecialchars((string)$quote['system_type'], ENT_QUOTES) ?> | Capacity: <?= htmlspecialchars((string)$quote['capacity_kwp'], ENT_QUOTES) ?> kWp
 </div>
 <div class="section"><table><thead><tr><th>Description</th><th>Basic Amount</th><th><?= $quote['tax_type'] === 'IGST' ? 'IGST' : 'CGST' ?></th><?php if ($quote['tax_type'] !== 'IGST'): ?><th>SGST</th><?php endif; ?><th>Total</th></tr></thead><tbody>
