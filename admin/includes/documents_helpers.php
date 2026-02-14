@@ -115,11 +115,6 @@ function documents_ensure_structure(): void
         json_save($templateBlocksPath, []);
     }
 
-    $agreementTemplatesPath = documents_agreement_templates_path();
-    if (!is_file($agreementTemplatesPath)) {
-        json_save($agreementTemplatesPath, documents_default_agreement_templates());
-    }
-
     $libraryPath = documents_media_dir() . '/library.json';
     if (!is_file($libraryPath)) {
         json_save($libraryPath, []);
@@ -665,13 +660,11 @@ function documents_find_customer_by_mobile(string $mobile): ?array
         return [
             'customer_name' => safe_text($record['full_name'] ?? $record['consumer_name'] ?? ''),
             'billing_address' => safe_text($record['address_line'] ?? $record['address'] ?? ''),
-            'site_address' => safe_text($record['site_address'] ?? $record['installation_address'] ?? ($record['address_line'] ?? $record['address'] ?? '')),
+            'site_address' => safe_text($record['address_line'] ?? $record['address'] ?? ''),
             'district' => safe_text($record['district'] ?? ''),
             'city' => safe_text($record['city'] ?? ''),
-            'state' => safe_text($record['state_name'] ?? $record['state'] ?? 'Jharkhand'),
-            'pin' => safe_text($record['pin_code'] ?? $record['pin'] ?? ''),
-            'consumer_account_no' => safe_text($record['jbvnl_account_number'] ?? $record['consumer_no'] ?? ''),
-            'raw' => $record,
+            'state' => safe_text($record['state_name'] ?? 'Jharkhand'),
+            'pin' => safe_text($record['pin_code'] ?? ''),
         ];
     }
 
@@ -829,30 +822,30 @@ function documents_agreement_defaults(): array
     return [
         'id' => '',
         'agreement_no' => '',
-        'template_key' => 'pm_suryaghar_residential',
         'status' => 'Draft',
-        'customer_mobile' => '',
-        'customer_name' => '',
-        'consumer_account_no' => '',
-        'consumer_address' => '',
-        'site_address' => '',
-        'district' => '',
-        'state' => '',
-        'pin' => '',
-        'execution_date' => '',
-        'kwp' => '',
-        'amount_total' => '',
-        'linked_quote_id' => '',
-        'linked_quote_no' => '',
-        'rendering' => ['background_image' => '', 'background_opacity' => 1.0],
-        'generated_html_snapshot' => '',
-        'pdf_path' => '',
-        'pdf_generated_at' => '',
-        'created_by_type' => 'admin',
+        'source_quote_id' => '',
+        'source_quote_no' => '',
+        'source_proforma_id' => '',
+        'source_proforma_no' => '',
+        'template_set_id' => '',
+        'segment' => 'RES',
         'created_by_id' => '',
         'created_by_name' => '',
         'created_at' => '',
         'updated_at' => '',
+        'customer_mobile' => '',
+        'customer_name' => '',
+        'address' => '',
+        'district' => '',
+        'state' => '',
+        'pin' => '',
+        'system_type' => '',
+        'capacity_kwp' => '',
+        'agreement_text' => '',
+        'special_terms_override' => '',
+        'rendering' => ['background_image' => '', 'background_opacity' => 1.0],
+        'pdf_path' => '',
+        'pdf_generated_at' => '',
     ];
 }
 
@@ -928,140 +921,6 @@ function documents_save_agreement(array $row): array
         return ['ok' => false, 'error' => 'Missing agreement ID'];
     }
     return json_save(documents_agreements_dir() . '/' . $id . '.json', $row);
-}
-
-
-function documents_agreement_templates_path(): string
-{
-    return documents_templates_dir() . '/agreement_templates.json';
-}
-
-function documents_default_agreement_template_html(): string
-{
-    return '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5">'
-        . '<h2 style="text-align:center;margin:0 0 12px">VENDOR–CONSUMER AGREEMENT</h2>'
-        . '<p>This agreement is executed on <b>{{execution_date}}</b> between <b>{{vendor_name}}</b>, {{vendor_address}} (hereinafter referred to as Vendor) and <b>{{consumer_name}}</b>, Consumer Account No. <b>{{consumer_account_no}}</b>, residing at {{consumer_address}} (site: {{site_address}}).</p>'
-        . '<p>The consumer agrees to install a rooftop solar plant of <b>{{kwp}} kWp</b> at the above premises under PM Surya Ghar scheme terms and applicable DISCOM/MNRE guidelines.</p>'
-        . '<p>The total project amount agreed is <b>{{amount_total}}</b>.</p>'
-        . '<p>Both parties confirm that they have read and understood all terms and conditions and agree to execute the work and payment obligations accordingly.</p>'
-        . '<br><table style="width:100%;margin-top:22px"><tr><td style="width:45%"><b>For Vendor</b><br><br><br>Signature</td><td></td><td style="width:45%"><b>For Consumer</b><br><br><br>Signature</td></tr></table>'
-        . '</div>';
-}
-
-function documents_default_agreement_templates(): array
-{
-    $now = date('c');
-    return [
-        'pm_suryaghar_residential' => [
-            'name' => 'PM Surya Ghar – Vendor–Consumer Agreement (Residential)',
-            'archived_flag' => false,
-            'template_html' => documents_default_agreement_template_html(),
-            'placeholders' => [
-                '{{execution_date}}',
-                '{{kwp}}',
-                '{{consumer_name}}',
-                '{{consumer_account_no}}',
-                '{{consumer_address}}',
-                '{{site_address}}',
-                '{{vendor_name}}',
-                '{{vendor_address}}',
-                '{{amount_total}}',
-            ],
-            'updated_at' => $now,
-        ],
-    ];
-}
-
-function documents_get_agreement_templates(): array
-{
-    $path = documents_agreement_templates_path();
-    $rows = json_load($path, []);
-    if (!is_array($rows) || $rows === []) {
-        $rows = documents_default_agreement_templates();
-        json_save($path, $rows);
-    }
-
-    return is_array($rows) ? $rows : documents_default_agreement_templates();
-}
-
-function documents_save_agreement_templates(array $templates): array
-{
-    return json_save(documents_agreement_templates_path(), $templates);
-}
-
-function documents_format_indian_currency($amount): string
-{
-    $value = is_numeric($amount) ? (float) $amount : 0.0;
-    return '₹' . number_format($value, 2, '.', ',');
-}
-
-function documents_format_display_date(string $iso): string
-{
-    if ($iso === '') {
-        return '';
-    }
-    $ts = strtotime($iso);
-    if ($ts === false) {
-        return $iso;
-    }
-    return date('d-m-Y', $ts);
-}
-
-function documents_company_vendor_name(array $company): string
-{
-    $brand = safe_text($company['brand_name'] ?? '');
-    if ($brand !== '') {
-        return $brand;
-    }
-    return safe_text($company['company_name'] ?? '');
-}
-
-function documents_company_vendor_address(array $company): string
-{
-    $parts = [
-        safe_text($company['address_line'] ?? ''),
-        safe_text($company['city'] ?? ''),
-        safe_text($company['district'] ?? ''),
-        safe_text($company['state'] ?? ''),
-        safe_text($company['pin'] ?? ''),
-    ];
-    $parts = array_values(array_filter($parts, static fn($v): bool => $v !== ''));
-    return implode(', ', $parts);
-}
-
-function documents_render_agreement_html(array $agreement, ?array $template = null): string
-{
-    $templates = documents_get_agreement_templates();
-    $templateKey = safe_text($agreement['template_key'] ?? 'pm_suryaghar_residential');
-    $entry = $template;
-    if ($entry === null || !is_array($entry)) {
-        $entry = is_array($templates[$templateKey] ?? null) ? $templates[$templateKey] : ($templates['pm_suryaghar_residential'] ?? []);
-    }
-    $templateHtml = is_array($entry) ? (string) ($entry['template_html'] ?? '') : '';
-    if ($templateHtml === '') {
-        $templateHtml = documents_default_agreement_template_html();
-    }
-
-    $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
-    $consumerAddress = safe_text($agreement['consumer_address'] ?? '');
-    $siteAddress = safe_text($agreement['site_address'] ?? '');
-    if ($siteAddress === '') {
-        $siteAddress = $consumerAddress;
-    }
-
-    $map = [
-        '{{execution_date}}' => documents_format_display_date((string) ($agreement['execution_date'] ?? '')),
-        '{{kwp}}' => safe_text($agreement['kwp'] ?? ''),
-        '{{consumer_name}}' => safe_text($agreement['customer_name'] ?? ''),
-        '{{consumer_account_no}}' => safe_text($agreement['consumer_account_no'] ?? ''),
-        '{{consumer_address}}' => $consumerAddress,
-        '{{site_address}}' => $siteAddress,
-        '{{vendor_name}}' => documents_company_vendor_name($company),
-        '{{vendor_address}}' => documents_company_vendor_address($company),
-        '{{amount_total}}' => documents_format_indian_currency($agreement['amount_total'] ?? 0),
-    ];
-
-    return strtr($templateHtml, $map);
 }
 
 function documents_proforma_pdf_dir(): string
