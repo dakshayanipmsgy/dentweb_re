@@ -44,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $partyType = safe_text($_POST['party_type'] ?? 'lead');
         $mobile = normalize_customer_mobile((string) ($_POST['customer_mobile'] ?? ''));
         $customerName = safe_text($_POST['customer_name'] ?? '');
+        $customerRecord = $partyType === 'customer' ? documents_find_customer_by_mobile($mobile) : null;
 
         if ($mobile === '' || $customerName === '') {
             $redirectWith('error', 'Customer mobile and name are required.');
@@ -113,14 +114,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $quote['template_set_id'] = $templateSetId;
         $quote['party_type'] = in_array($partyType, ['customer', 'lead'], true) ? $partyType : 'lead';
+
+        $snapshot = documents_build_quote_snapshot_from_request($_POST, $quote['party_type'], $customerRecord);
+        $quote['customer_snapshot'] = $snapshot;
         $quote['customer_mobile'] = $mobile;
         $quote['customer_name'] = $customerName;
-        $quote['billing_address'] = safe_text($_POST['billing_address'] ?? '');
-        $quote['site_address'] = safe_text($_POST['site_address'] ?? '');
-        $quote['district'] = safe_text($_POST['district'] ?? '');
-        $quote['city'] = safe_text($_POST['city'] ?? '');
-        $quote['state'] = safe_text($_POST['state'] ?? 'Jharkhand');
-        $quote['pin'] = safe_text($_POST['pin'] ?? '');
+        $quote['billing_address'] = safe_text($_POST['billing_address'] ?? '') ?: $snapshot['address'];
+        $quote['site_address'] = safe_text($_POST['site_address'] ?? '') ?: $snapshot['address'];
+        $quote['district'] = safe_text($_POST['district'] ?? '') ?: $snapshot['district'];
+        $quote['city'] = safe_text($_POST['city'] ?? '') ?: $snapshot['city'];
+        $quote['state'] = safe_text($_POST['state'] ?? 'Jharkhand') ?: $snapshot['state'];
+        $quote['pin'] = safe_text($_POST['pin'] ?? '') ?: $snapshot['pin_code'];
+        $quote['meter_number'] = safe_text($_POST['meter_number'] ?? '') ?: $snapshot['meter_number'];
+        $quote['meter_serial_number'] = safe_text($_POST['meter_serial_number'] ?? '') ?: $snapshot['meter_serial_number'];
+        $quote['consumer_account_no'] = safe_text($_POST['consumer_account_no'] ?? '') ?: $snapshot['consumer_account_no'];
+        $quote['application_id'] = safe_text($_POST['application_id'] ?? '') ?: $snapshot['application_id'];
+        $quote['application_submitted_date'] = safe_text($_POST['application_submitted_date'] ?? '') ?: $snapshot['application_submitted_date'];
+        $quote['sanction_load_kwp'] = safe_text($_POST['sanction_load_kwp'] ?? '') ?: $snapshot['sanction_load_kwp'];
+        $quote['installed_pv_module_capacity_kwp'] = safe_text($_POST['installed_pv_module_capacity_kwp'] ?? '') ?: $snapshot['installed_pv_module_capacity_kwp'];
+        $quote['circle_name'] = safe_text($_POST['circle_name'] ?? '') ?: $snapshot['circle_name'];
+        $quote['division_name'] = safe_text($_POST['division_name'] ?? '') ?: $snapshot['division_name'];
+        $quote['sub_division_name'] = safe_text($_POST['sub_division_name'] ?? '') ?: $snapshot['sub_division_name'];
+
+        $quote['customer_snapshot'] = array_merge(documents_customer_snapshot_defaults(), $snapshot, [
+            'mobile' => $quote['customer_mobile'],
+            'name' => $quote['customer_name'],
+            'address' => $quote['site_address'],
+            'city' => $quote['city'],
+            'district' => $quote['district'],
+            'pin_code' => $quote['pin'],
+            'state' => $quote['state'],
+            'meter_number' => $quote['meter_number'],
+            'meter_serial_number' => $quote['meter_serial_number'],
+            'consumer_account_no' => $quote['consumer_account_no'],
+            'application_id' => $quote['application_id'],
+            'application_submitted_date' => $quote['application_submitted_date'],
+            'sanction_load_kwp' => $quote['sanction_load_kwp'],
+            'installed_pv_module_capacity_kwp' => $quote['installed_pv_module_capacity_kwp'],
+            'circle_name' => $quote['circle_name'],
+            'division_name' => $quote['division_name'],
+            'sub_division_name' => $quote['sub_division_name'],
+        ]);
+
         $quote['system_type'] = safe_text($_POST['system_type'] ?? 'Ongrid');
         $quote['capacity_kwp'] = $capacity;
         $quote['project_summary_line'] = safe_text($_POST['project_summary_line'] ?? '');
@@ -161,6 +196,10 @@ $status = safe_text($_GET['status'] ?? '');
 $message = safe_text($_GET['message'] ?? '');
 $lookupMobile = safe_text($_GET['lookup_mobile'] ?? '');
 $lookup = $lookupMobile !== '' ? documents_find_customer_by_mobile($lookupMobile) : null;
+$quoteSnapshot = documents_quote_resolve_snapshot($editing);
+if ($lookup !== null) {
+    $quoteSnapshot = array_merge($quoteSnapshot, $lookup);
+}
 ?>
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Quotations</title>
@@ -180,19 +219,29 @@ $lookup = $lookupMobile !== '' ? documents_find_customer_by_mobile($lookupMobile
 <div><label>Template Set</label><select name="template_set_id" required><?php foreach ($templates as $tpl): ?><option value="<?= htmlspecialchars((string)$tpl['id'], ENT_QUOTES) ?>" <?= ((string)$editing['template_set_id']===(string)$tpl['id'])?'selected':'' ?>><?= htmlspecialchars((string)$tpl['name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$tpl['segment'], ENT_QUOTES) ?>)</option><?php endforeach; ?></select></div>
 <div><label>Party Type</label><select name="party_type"><option value="customer" <?= $editing['party_type']==='customer'?'selected':'' ?>>Customer</option><option value="lead" <?= $editing['party_type']!=='customer'?'selected':'' ?>>Lead</option></select></div>
 <div><label>Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string)(($lookupMobile !== '' && $lookup !== null) ? $lookupMobile : $editing['customer_mobile']), ENT_QUOTES) ?>"></div>
-<div><label>Name</label><input name="customer_name" required value="<?= htmlspecialchars((string)($lookup['customer_name'] ?? $editing['customer_name']), ENT_QUOTES) ?>"></div>
+<div><label>Name</label><input name="customer_name" required value="<?= htmlspecialchars((string)($quoteSnapshot['name'] ?? $editing['customer_name']), ENT_QUOTES) ?>"></div>
+<div><label>Consumer Account No. (JBVNL)</label><input name="consumer_account_no" value="<?= htmlspecialchars((string)(($editing['consumer_account_no'] !== '') ? $editing['consumer_account_no'] : ($quoteSnapshot['consumer_account_no'] ?? '')), ENT_QUOTES) ?>"></div>
+<div><label>Meter Number</label><input name="meter_number" value="<?= htmlspecialchars((string)(($editing['meter_number'] !== '') ? $editing['meter_number'] : ($quoteSnapshot['meter_number'] ?? '')), ENT_QUOTES) ?>"></div>
+<div><label>Meter Serial Number</label><input name="meter_serial_number" value="<?= htmlspecialchars((string)(($editing['meter_serial_number'] !== '') ? $editing['meter_serial_number'] : ($quoteSnapshot['meter_serial_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>System Type</label><select name="system_type"><?php foreach (['Ongrid','Hybrid','Offgrid','Product'] as $t): ?><option value="<?= $t ?>" <?= $editing['system_type']===$t?'selected':'' ?>><?= $t ?></option><?php endforeach; ?></select></div>
 <div><label>Capacity kWp</label><input name="capacity_kwp" required value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>"></div>
 <div><label>Valid Until</label><input type="date" name="valid_until" value="<?= htmlspecialchars((string)$editing['valid_until'], ENT_QUOTES) ?>"></div>
 <div><label>Total (GST Inclusive)</label><input type="number" step="0.01" min="0" required name="input_total_gst_inclusive" value="<?= htmlspecialchars((string)$editing['input_total_gst_inclusive'], ENT_QUOTES) ?>"></div>
 <div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div>
 <div><label>Place of Supply State</label><input name="place_of_supply_state" value="<?= htmlspecialchars((string)$editing['place_of_supply_state'], ENT_QUOTES) ?>"></div>
-<div><label>District</label><input name="district" value="<?= htmlspecialchars((string)($lookup['district'] ?? $editing['district']), ENT_QUOTES) ?>"></div>
-<div><label>City</label><input name="city" value="<?= htmlspecialchars((string)($lookup['city'] ?? $editing['city']), ENT_QUOTES) ?>"></div>
-<div><label>State</label><input name="state" value="<?= htmlspecialchars((string)($lookup['state'] ?? $editing['state']), ENT_QUOTES) ?>"></div>
-<div><label>PIN</label><input name="pin" value="<?= htmlspecialchars((string)($lookup['pin'] ?? $editing['pin']), ENT_QUOTES) ?>"></div>
-<div style="grid-column:1/-1"><label>Billing Address</label><textarea name="billing_address"><?= htmlspecialchars((string)($lookup['billing_address'] ?? $editing['billing_address']), ENT_QUOTES) ?></textarea></div>
-<div style="grid-column:1/-1"><label>Site Address</label><textarea name="site_address"><?= htmlspecialchars((string)($lookup['site_address'] ?? $editing['site_address']), ENT_QUOTES) ?></textarea></div>
+<div><label>District</label><input name="district" value="<?= htmlspecialchars((string)($quoteSnapshot['district'] ?? $editing['district']), ENT_QUOTES) ?>"></div>
+<div><label>City</label><input name="city" value="<?= htmlspecialchars((string)($quoteSnapshot['city'] ?? $editing['city']), ENT_QUOTES) ?>"></div>
+<div><label>State</label><input name="state" value="<?= htmlspecialchars((string)($quoteSnapshot['state'] ?? $editing['state']), ENT_QUOTES) ?>"></div>
+<div><label>PIN</label><input name="pin" value="<?= htmlspecialchars((string)($quoteSnapshot['pin_code'] ?? $editing['pin']), ENT_QUOTES) ?>"></div>
+<div style="grid-column:1/-1"><label>Billing Address</label><textarea name="billing_address"><?= htmlspecialchars((string)((($editing['billing_address'] !== '') ? $editing['billing_address'] : ($quoteSnapshot['address'] ?? ''))), ENT_QUOTES) ?></textarea></div>
+<div style="grid-column:1/-1"><label>Site Address</label><textarea name="site_address"><?= htmlspecialchars((string)((($editing['site_address'] !== '') ? $editing['site_address'] : ($quoteSnapshot['address'] ?? ''))), ENT_QUOTES) ?></textarea></div>
+<div><label>Application ID</label><input name="application_id" value="<?= htmlspecialchars((string)(($editing['application_id'] !== '') ? $editing['application_id'] : ($quoteSnapshot['application_id'] ?? '')), ENT_QUOTES) ?>"></div>
+<div><label>Application Submitted Date</label><input name="application_submitted_date" value="<?= htmlspecialchars((string)(($editing['application_submitted_date'] !== '') ? $editing['application_submitted_date'] : ($quoteSnapshot['application_submitted_date'] ?? '')), ENT_QUOTES) ?>"></div>
+<div><label>Sanction Load (kWp)</label><input name="sanction_load_kwp" value="<?= htmlspecialchars((string)(($editing['sanction_load_kwp'] !== '') ? $editing['sanction_load_kwp'] : ($quoteSnapshot['sanction_load_kwp'] ?? '')), ENT_QUOTES) ?>"></div>
+<div><label>Installed PV Capacity (kWp)</label><input name="installed_pv_module_capacity_kwp" value="<?= htmlspecialchars((string)(($editing['installed_pv_module_capacity_kwp'] !== '') ? $editing['installed_pv_module_capacity_kwp'] : ($quoteSnapshot['installed_pv_module_capacity_kwp'] ?? '')), ENT_QUOTES) ?>"></div>
+<div><label>Circle</label><input name="circle_name" value="<?= htmlspecialchars((string)(($editing['circle_name'] !== '') ? $editing['circle_name'] : ($quoteSnapshot['circle_name'] ?? '')), ENT_QUOTES) ?>"></div>
+<div><label>Division</label><input name="division_name" value="<?= htmlspecialchars((string)(($editing['division_name'] !== '') ? $editing['division_name'] : ($quoteSnapshot['division_name'] ?? '')), ENT_QUOTES) ?>"></div>
+<div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Customer (Inclusive in the rate)</label><textarea name="special_requests_inclusive"><?= htmlspecialchars((string)$editing['special_requests_inclusive'], ENT_QUOTES) ?></textarea><div class="muted">In case of conflict, Special Requests will be given priority over Annexure inclusions.</div></div>
 <div style="grid-column:1/-1"><h3>Annexure Overrides</h3><div class="muted">Annexures are based on template snapshot; edit below.</div></div>
