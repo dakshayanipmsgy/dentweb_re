@@ -1,0 +1,19 @@
+{
+  "pm_suryaghar_residential": {
+    "name": "PM Surya Ghar – Vendor–Consumer Agreement (Residential)",
+    "archived_flag": false,
+    "template_html": "<div style=\"font-family:Arial,sans-serif;font-size:14px;line-height:1.5\"><h2 style=\"text-align:center;margin:0 0 12px\">VENDOR–CONSUMER AGREEMENT</h2><p>This agreement is executed on <b>{{execution_date}}</b> between <b>{{vendor_name}}</b>, {{vendor_address}} (hereinafter referred to as Vendor) and <b>{{consumer_name}}</b>, Consumer Account No. <b>{{consumer_account_no}}</b>, residing at {{consumer_address}} (site: {{site_address}}).</p><p>The consumer agrees to install a rooftop solar plant of <b>{{kwp}} kWp</b> at the above premises under PM Surya Ghar scheme terms and applicable DISCOM/MNRE guidelines.</p><p>The total project amount agreed is <b>{{amount_total}}</b>.</p><p>Both parties confirm that they have read and understood all terms and conditions and agree to execute the work and payment obligations accordingly.</p><br><table style=\"width:100%;margin-top:22px\"><tr><td style=\"width:45%\"><b>For Vendor</b><br><br><br>Signature</td><td></td><td style=\"width:45%\"><b>For Consumer</b><br><br><br>Signature</td></tr></table></div>",
+    "placeholders": [
+      "{{execution_date}}",
+      "{{kwp}}",
+      "{{consumer_name}}",
+      "{{consumer_account_no}}",
+      "{{consumer_address}}",
+      "{{site_address}}",
+      "{{vendor_name}}",
+      "{{vendor_address}}",
+      "{{amount_total}}"
+    ],
+    "updated_at": ""
+  }
+}

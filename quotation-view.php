@@ -100,40 +100,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        $num = documents_generate_document_number('agreement', (string) ($quote['segment'] ?? 'RES'));
+        $num = documents_generate_document_number('agreement', 'RES');
         if (!$num['ok']) {
             header('Location: quotation-view.php?id=' . urlencode($id) . '&err=agreement_numbering');
             exit;
         }
+
         $admin = current_user();
+        $customerLookup = documents_find_customer_by_mobile((string) ($quote['customer_mobile'] ?? ''));
+
         $agreement = documents_agreement_defaults();
         $agreement['id'] = 'agr_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
         $agreement['agreement_no'] = (string) ($num['number'] ?? '');
-        $agreement['source_quote_id'] = (string) ($quote['id'] ?? '');
-        $agreement['source_quote_no'] = (string) ($quote['quote_no'] ?? '');
-        $agreement['source_proforma_id'] = safe_text($quote['links']['proforma_id'] ?? '');
-        $proforma = $agreement['source_proforma_id'] !== '' ? documents_get_proforma($agreement['source_proforma_id']) : null;
-        $agreement['source_proforma_no'] = is_array($proforma) ? (string) ($proforma['proforma_no'] ?? '') : '';
-        $agreement['template_set_id'] = (string) ($quote['template_set_id'] ?? '');
-        $agreement['segment'] = (string) ($quote['segment'] ?? 'RES');
+        $agreement['template_key'] = 'pm_suryaghar_residential';
+        $agreement['linked_quote_id'] = (string) ($quote['id'] ?? '');
+        $agreement['linked_quote_no'] = (string) ($quote['quote_no'] ?? '');
+        $agreement['customer_mobile'] = (string) ($quote['customer_mobile'] ?? '');
+        $agreement['customer_name'] = (string) ($quote['customer_name'] ?? ($customerLookup['customer_name'] ?? ''));
+        $agreement['consumer_account_no'] = (string) ($customerLookup['consumer_account_no'] ?? '');
+        $agreement['consumer_address'] = (string) ($customerLookup['billing_address'] ?? ($quote['billing_address'] ?? ''));
+        $agreement['site_address'] = (string) ($customerLookup['site_address'] ?? ($quote['site_address'] ?? ''));
+        $agreement['district'] = (string) ($customerLookup['district'] ?? ($quote['district'] ?? ''));
+        $agreement['state'] = (string) ($customerLookup['state'] ?? ($quote['state'] ?? 'Jharkhand'));
+        $agreement['pin'] = (string) ($customerLookup['pin'] ?? ($quote['pin'] ?? ''));
+        $agreement['kwp'] = (string) ($quote['capacity_kwp'] ?? '');
+        $agreement['amount_total'] = (string) ($quote['calc']['grand_total'] ?? $quote['input_total_gst_inclusive'] ?? '');
+        $agreement['created_by_type'] = 'admin';
         $agreement['created_by_id'] = (string) ($admin['id'] ?? '');
         $agreement['created_by_name'] = (string) ($admin['full_name'] ?? 'Admin');
         $agreement['created_at'] = date('c');
         $agreement['updated_at'] = date('c');
-        foreach (['customer_mobile','customer_name','district','state','pin','system_type','capacity_kwp','rendering'] as $field) {
-            $agreement[$field] = $quote[$field] ?? $agreement[$field];
-        }
-        $agreement['address'] = (string) ($quote['billing_address'] ?? '');
-        $blocks = documents_get_template_blocks();
-        $entry = $blocks[(string) ($quote['template_set_id'] ?? '')] ?? [];
-        $rawBlocks = is_array($entry['blocks'] ?? null) ? $entry['blocks'] : (is_array($entry) ? $entry : []);
-        $agreement['agreement_text'] = (string) ($rawBlocks['vendor_consumer_agreement'] ?? '');
+        $agreement['generated_html_snapshot'] = documents_render_agreement_html($agreement);
         documents_save_agreement($agreement);
 
         $quote['links']['agreement_id'] = (string) $agreement['id'];
         $quote['updated_at'] = date('c');
         documents_save_quote($quote);
-        header('Location: agreement-view.php?id=' . urlencode((string) $agreement['id']) . '&ok=1');
+        header('Location: agreement-view.php?id=' . urlencode((string) $agreement['id']) . '&message=' . urlencode('Set execution date and confirm amount.'));
         exit;
     }
     if ($action === 'archive_quote') {
