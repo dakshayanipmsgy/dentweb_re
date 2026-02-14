@@ -175,6 +175,8 @@ final class CustomerFsStore
             'password_hash' => isset($input['password_hash']) && is_string($input['password_hash'])
                 ? trim($input['password_hash'])
                 : ($existing['password_hash'] ?? null),
+            'created_from_quote_id' => trim((string) ($input['created_from_quote_id'] ?? ($existing['created_from_quote_id'] ?? ''))),
+            'created_from_quote_no' => trim((string) ($input['created_from_quote_no'] ?? ($existing['created_from_quote_no'] ?? ''))),
             'created_at' => $existing['created_at'] ?? null,
             'updated_at' => $existing['updated_at'] ?? null,
         ];
@@ -417,6 +419,8 @@ final class CustomerFsStore
             'handover_pdf_path' => trim((string) ($customer['handover_pdf_path'] ?? '')),
             'handover_generated_at' => trim((string) ($customer['handover_generated_at'] ?? '')),
             'password_hash' => $customer['password_hash'] ?? null,
+            'created_from_quote_id' => trim((string) ($customer['created_from_quote_id'] ?? '')),
+            'created_from_quote_no' => trim((string) ($customer['created_from_quote_no'] ?? '')),
             'created_at' => $customer['created_at'] ?? null,
             'updated_at' => $customer['updated_at'] ?? null,
         ];

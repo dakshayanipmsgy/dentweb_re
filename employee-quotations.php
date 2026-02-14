@@ -38,6 +38,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($existing !== null && (($existing['created_by_type'] ?? '') !== 'employee' || (string) ($existing['created_by_id'] ?? '') !== (string) ($employee['id'] ?? ''))) {
             $redirectWith('error', 'You can only edit your own quotations.');
         }
+        if ($existing !== null && (string) ($existing['status'] ?? 'Draft') !== 'Draft') {
+            $redirectWith('error', 'Only Draft quotations can be edited.');
+        }
 
         $templateSetId = safe_text($_POST['template_set_id'] ?? '');
         $selectedTemplate = null;
@@ -183,6 +186,9 @@ $editing = $editingId !== '' ? documents_get_quote($editingId) : null;
 if ($editing !== null && ((string) ($editing['created_by_type'] ?? '') !== 'employee' || (string) ($editing['created_by_id'] ?? '') !== (string) ($employee['id'] ?? ''))) {
     $editing = null;
 }
+if ($editing !== null && (string) ($editing['status'] ?? 'Draft') !== 'Draft') {
+    $editing = null;
+}
 if ($editing === null) {
     $editing = documents_quote_defaults();
     $editing['valid_until'] = date('Y-m-d', strtotime('+7 days'));
@@ -235,5 +241,5 @@ if ($lookup !== null) {
 <div style="grid-column:1/-1"><div class="muted">Annexures are based on template snapshot; edit below.</div></div><?php foreach (['cover_notes'=>'Cover Notes','system_inclusions'=>'System Inclusions','payment_terms'=>'Payment Terms','warranty'=>'Warranty','system_type_explainer'=>'System Type Explainer','transportation'=>'Transportation','terms_conditions'=>'Terms & Conditions','pm_subsidy_info'=>'PM Subsidy Info'] as $key=>$label): ?><div style="grid-column:1/-1"><label><?= $label ?></label><textarea name="ann_<?= $key ?>"><?= htmlspecialchars((string)($editing['annexures_overrides'][$key] ?? ''), ENT_QUOTES) ?></textarea></div><?php endforeach; ?>
 </div><br><button class="btn" type="submit">Save Quotation</button></form></div>
 <div class="card"><h2>My Quote List</h2><table><thead><tr><th>Quote No</th><th>Name</th><th>Status</th><th>Amount</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
-<?php foreach ($quotes as $q): ?><tr><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['status'], ENT_QUOTES) ?></td><td>₹<?= number_format((float)$q['calc']['grand_total'],2) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td><td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <a class="btn secondary" href="employee-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a></td></tr><?php endforeach; if ($quotes===[]): ?><tr><td colspan="6">No quotations yet.</td></tr><?php endif; ?></tbody></table></div>
+<?php foreach ($quotes as $q): ?><tr><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'employee'), ENT_QUOTES) ?></td><td>₹<?= number_format((float)$q['calc']['grand_total'],2) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td><td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <?php if (documents_quote_can_edit($q, 'employee', (string) ($employee['id'] ?? ''))): ?><a class="btn secondary" href="employee-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?></td></tr><?php endforeach; if ($quotes===[]): ?><tr><td colspan="6">No quotations yet.</td></tr><?php endif; ?></tbody></table></div>
 </main></body></html>

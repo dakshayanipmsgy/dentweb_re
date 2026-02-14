@@ -27,7 +27,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = safe_text($_POST['action'] ?? '');
     if ($action === 'save_quote') {
         $quoteId = safe_text($_POST['quote_id'] ?? '');
-        $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
+$existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
+        if ($existing !== null && (string) ($existing['status'] ?? 'Draft') !== 'Draft') {
+            $redirectWith('error', 'Only Draft quotations can be edited.');
+        }
 
         $templateSetId = safe_text($_POST['template_set_id'] ?? '');
         $selectedTemplate = null;
@@ -184,8 +187,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $allQuotes = documents_list_quotes();
+$statusFilter = safe_text($_GET['status_filter'] ?? '');
+if ($statusFilter !== '') {
+    $allQuotes = array_values(array_filter($allQuotes, static function (array $q) use ($statusFilter): bool {
+        $status = (string) ($q['status'] ?? 'Draft');
+        if ($statusFilter === 'needs_approval') {
+            return $status === 'Draft' && (string) ($q['created_by_type'] ?? '') === 'employee';
+        }
+        return strtolower($status) === strtolower($statusFilter);
+    }));
+}
 $editingId = safe_text($_GET['edit'] ?? '');
 $editing = $editingId !== '' ? documents_get_quote($editingId) : null;
+if ($editing !== null && (string) ($editing['status'] ?? 'Draft') !== 'Draft') {
+    $editing = null;
+}
 
 if ($editing === null) {
     $editing = documents_quote_defaults();
@@ -250,11 +266,11 @@ if ($lookup !== null) {
 <?php endforeach; ?>
 </div><br><button class="btn" type="submit">Save Quotation</button>
 </form></div>
-<div class="card"><h2>Quotation List</h2>
+<div class="card"><h2>Quotation List</h2><form method="get" style="margin-bottom:10px;display:flex;gap:8px;align-items:end"><div><label>Status Filter</label><select name="status_filter"><option value="">All</option><option value="needs_approval" <?= $statusFilter==='needs_approval'?'selected':'' ?>>Needs Approval</option><option value="Approved" <?= $statusFilter==='Approved'?'selected':'' ?>>Approved</option><option value="Accepted" <?= $statusFilter==='Accepted'?'selected':'' ?>>Accepted</option></select></div><button class="btn secondary" type="submit">Apply</button></form>
 <table><thead><tr><th>Quote No</th><th>Name</th><th>Created By</th><th>Status</th><th>Amount</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
 <?php foreach ($allQuotes as $q): ?><tr>
-<td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['created_by_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['status'], ENT_QUOTES) ?></td><td>₹<?= number_format((float)$q['calc']['grand_total'],2) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td>
-<td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <a class="btn secondary" href="admin-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a></td>
+<td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['created_by_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></td><td>₹<?= number_format((float)$q['calc']['grand_total'],2) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td>
+<td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <?php if (documents_quote_can_edit($q, 'admin')): ?><a class="btn secondary" href="admin-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?></td>
 </tr><?php endforeach; if ($allQuotes===[]): ?><tr><td colspan="7">No quotations yet.</td></tr><?php endif; ?></tbody></table>
 </div>
 </main></body></html>
