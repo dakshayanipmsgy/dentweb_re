@@ -157,10 +157,91 @@ function documents_ensure_structure(): void
         json_save($libraryPath, []);
     }
 
+    $themePath = documents_settings_dir() . '/doc_theme.json';
+    if (!is_file($themePath)) {
+        json_save($themePath, documents_doc_theme_defaults());
+    }
+
     $logPath = documents_logs_dir() . '/documents.log';
     if (!is_file($logPath)) {
         @file_put_contents($logPath, '', LOCK_EX);
     }
+}
+
+function documents_doc_theme_defaults(): array
+{
+    return [
+        'global' => [
+            'primary_color' => '#0B5ED7',
+            'accent_color' => '#16A34A',
+            'muted_color' => '#6B7280',
+            'font_family' => 'system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
+            'base_font_px' => 14,
+            'heading_scale' => 1.25,
+            'card_radius_px' => 14,
+            'table_border_color' => '#E5E7EB',
+            'background_enabled' => true,
+            'background_image_path' => '',
+            'background_opacity' => 0.18,
+        ],
+        'quotation_defaults' => [
+            'use_modern_layout' => true,
+            'show_icons' => true,
+            'show_emojis' => true,
+            'charts_enabled' => true,
+            'page_count_style' => 'multi_page_cards',
+            'cover_page_enabled' => true,
+            'system_overview_page_enabled' => true,
+            'savings_page_enabled' => true,
+            'pricing_page_enabled' => true,
+            'faq_page_enabled' => true,
+            'contact_page_enabled' => true,
+        ],
+        'calc_defaults' => [
+            'analysis_years' => 10,
+            'unit_rate_rs' => 7.0,
+            'annual_gen_per_kw' => 1450,
+            'bill_escalation_pct' => 5,
+            'loan_interest_pct' => 7,
+            'loan_tenure_years' => 5,
+            'down_payment_pct' => 10,
+            'residual_bill_pct' => 20,
+            'ef_kg_per_kwh' => 0.82,
+            'kg_co2_per_tree_per_year' => 20,
+            'finance_mode' => 'loan',
+        ],
+    ];
+}
+
+function documents_get_doc_theme(): array
+{
+    documents_ensure_structure();
+    $raw = json_load(documents_settings_dir() . '/doc_theme.json', documents_doc_theme_defaults());
+    $defaults = documents_doc_theme_defaults();
+    $theme = array_merge($defaults, is_array($raw) ? $raw : []);
+    $theme['global'] = array_merge($defaults['global'], is_array($theme['global'] ?? null) ? $theme['global'] : []);
+    $theme['quotation_defaults'] = array_merge($defaults['quotation_defaults'], is_array($theme['quotation_defaults'] ?? null) ? $theme['quotation_defaults'] : []);
+    $theme['calc_defaults'] = array_merge($defaults['calc_defaults'], is_array($theme['calc_defaults'] ?? null) ? $theme['calc_defaults'] : []);
+    return $theme;
+}
+
+function documents_resolve_rendering_theme(array $rendering): array
+{
+    $theme = documents_get_doc_theme();
+    $global = $theme['global'];
+    return [
+        'background_enabled' => array_key_exists('background_enabled', $rendering) ? (bool) $rendering['background_enabled'] : (bool) $global['background_enabled'],
+        'background_image' => safe_text((string) ($rendering['background_image'] ?? '')) ?: safe_text((string) ($global['background_image_path'] ?? '')),
+        'background_opacity' => max(0.05, min(1.0, (float) (($rendering['background_opacity'] ?? $global['background_opacity']) ?: $global['background_opacity']))),
+        'primary_color' => safe_text((string) ($rendering['primary_color'] ?? '')) ?: (string) $global['primary_color'],
+        'accent_color' => safe_text((string) ($rendering['accent_color'] ?? '')) ?: (string) $global['accent_color'],
+        'base_font_px' => (int) (($rendering['base_font_px'] ?? $global['base_font_px']) ?: $global['base_font_px']),
+        'font_family' => (string) $global['font_family'],
+        'heading_scale' => (float) $global['heading_scale'],
+        'card_radius_px' => (int) $global['card_radius_px'],
+        'table_border_color' => (string) $global['table_border_color'],
+        'muted_color' => (string) $global['muted_color'],
+    ];
 }
 
 function documents_agreement_template_defaults(): array
@@ -606,12 +687,31 @@ function documents_quote_defaults(): array
             'pm_subsidy_info' => '',
         ],
         'template_attachments' => documents_template_attachment_defaults(),
-        'rendering' => [
-            'background_image' => '',
-            'background_opacity' => 1.0,
+        'finance' => [
+            'finance_mode' => '',
+            'current_monthly_bill_rs' => null,
+            'unit_rate_rs' => null,
+            'annual_gen_per_kw' => null,
+            'bill_escalation_pct' => null,
+            'loan_interest_pct' => null,
+            'loan_tenure_years' => null,
+            'down_payment_pct' => null,
+            'analysis_years' => null,
+            'residual_bill_pct' => null,
         ],
-        'pdf_path' => '',
-        'pdf_generated_at' => '',
+        'media' => [
+            'cover_hero_media_id' => '',
+            'system_overview_media_id' => '',
+            'extra_media_ids' => [],
+        ],
+        'rendering' => [
+            'background_enabled' => true,
+            'background_image' => '',
+            'background_opacity' => 0.18,
+            'primary_color' => '',
+            'accent_color' => '',
+            'base_font_px' => null,
+        ],
     ];
 }
 
@@ -806,16 +906,18 @@ function documents_agreement_defaults(): array
             ],
         ],
         'rendering' => [
+            'background_enabled' => true,
             'background_image' => '',
-            'background_opacity' => 1.0,
+            'background_opacity' => 0.18,
+            'primary_color' => '',
+            'accent_color' => '',
+            'base_font_px' => null,
         ],
         'created_by_type' => 'admin',
         'created_by_id' => '',
         'created_by_name' => '',
         'created_at' => '',
         'updated_at' => '',
-        'pdf_path' => '',
-        'pdf_generated_at' => '',
     ];
 }
 
@@ -844,11 +946,13 @@ function documents_challan_defaults(): array
         'created_at' => '',
         'updated_at' => '',
         'rendering' => [
+            'background_enabled' => true,
             'background_image' => '',
-            'background_opacity' => 1.0,
+            'background_opacity' => 0.18,
+            'primary_color' => '',
+            'accent_color' => '',
+            'base_font_px' => null,
         ],
-        'pdf_path' => '',
-        'pdf_generated_at' => '',
     ];
 }
 
