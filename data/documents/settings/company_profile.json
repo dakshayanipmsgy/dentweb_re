@@ -23,5 +23,7 @@
   "upi_id": "",
   "default_cta_line": "",
   "logo_path": "",
-  "updated_at": ""
+  "updated_at": "",
+  "upi_qr_path": "",
+  "pan": ""
 }
