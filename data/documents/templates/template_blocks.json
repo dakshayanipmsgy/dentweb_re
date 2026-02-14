@@ -1,0 +1,38 @@
+{
+  "pm-surya-ghar-residential-ongrid-subsidy": {
+    "system_inclusions": "\n• MNRE approved ALMM solar modules\n• Grid-tied inverter with remote monitoring\n• Hot dip galvanized mounting structure\n• AC/DC protection, earthing and lightning protection\n• Installation, testing and commissioning\n• Net metering support documentation",
+    "payment_terms": "\n1) 70% advance along with work order confirmation.\n2) 20% before dispatch of material at site.\n3) 10% after successful commissioning and handover.",
+    "warranty": "\n• Solar module: As per manufacturer warranty card\n• Inverter: As per manufacturer warranty card\n• Structure: 5 years against manufacturing defects\n• Workmanship/service support: 1 year",
+    "system_type_explainer": "On-grid systems operate with utility grid synchronisation and can export surplus units through net-metering approvals as per DISCOM norms.",
+    "transportation": "Transportation within standard service radius is included. Unloading support and local permissions to be coordinated by customer where required.",
+    "terms_conditions": "All applicable statutory approvals and subsidy timelines are subject to prevailing state/central guidelines. Any civil work beyond standard scope is chargeable extra.",
+    "pm_subsidy_info": "PM Surya Ghar subsidy is subject to beneficiary eligibility, portal approvals and DISCOM processes. Subsidy amount is credited directly to customer account by the government as per current policy."
+  },
+  "residential-hybrid": {
+    "system_inclusions": "",
+    "payment_terms": "",
+    "warranty": "",
+    "system_type_explainer": "",
+    "transportation": "",
+    "terms_conditions": "",
+    "pm_subsidy_info": ""
+  },
+  "commercial-ongrid": {
+    "system_inclusions": "",
+    "payment_terms": "",
+    "warranty": "",
+    "system_type_explainer": "",
+    "transportation": "",
+    "terms_conditions": "",
+    "pm_subsidy_info": ""
+  },
+  "pm-res-ongrid": {
+    "system_inclusions": "",
+    "payment_terms": "",
+    "warranty": "",
+    "system_type_explainer": "",
+    "transportation": "",
+    "terms_conditions": "",
+    "pm_subsidy_info": ""
+  }
+}

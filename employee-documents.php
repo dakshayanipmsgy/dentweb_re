@@ -25,7 +25,8 @@ if ($employee === null) {
     .muted { color:#64748b; }
     .disabled-list { margin-top:1rem; padding-left:1.2rem; }
     .disabled-list li { color:#475569; margin-bottom:0.4rem; }
-    .btn { display:inline-block; margin-top:1rem; text-decoration:none; background:#1d4ed8; color:#fff; padding:0.55rem 0.85rem; border-radius:8px; }
+    .btn { display:inline-block; margin-top:1rem; text-decoration:none; background:#1d4ed8; color:#fff; padding:0.55rem 0.85rem; border-radius:8px; margin-right:0.5rem; }
+    .btn.secondary { background:#fff; color:#1f2937; border:1px solid #cbd5e1; }
   </style>
 </head>
 <body>
@@ -33,13 +34,13 @@ if ($employee === null) {
     <section class="card">
       <h1>Quotations &amp; Challans</h1>
       <p class="muted">Hello <?= htmlspecialchars((string) ($employee['name'] ?? 'Employee'), ENT_QUOTES) ?>.</p>
-      <p>Quotation creation &amp; Delivery challan will be enabled in Phase 2.</p>
-      <ul class="disabled-list" aria-label="Accessible modules coming in phase 2">
-        <li>Quotation Builder (coming in Phase 2)</li>
-        <li>Delivery Challan Builder (coming in Phase 2)</li>
-        <li>Document History (coming in Phase 2)</li>
+      <p>You can create and manage your quotations below. Challans will be enabled in Phase 3.</p>
+      <a class="btn" href="employee-quotations.php">Quotations</a>
+      <a class="btn secondary" href="employee-dashboard.php">Back to Employee Dashboard</a>
+      <ul class="disabled-list" aria-label="Accessible modules coming later">
+        <li>Delivery Challan Builder (coming in Phase 3)</li>
+        <li>Document History (expanding in next phase)</li>
       </ul>
-      <a class="btn" href="employee-dashboard.php">Back to Employee Dashboard</a>
     </section>
   </main>
 </body>
