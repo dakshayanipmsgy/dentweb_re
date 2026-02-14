@@ -26,6 +26,11 @@ function documents_logs_dir(): string
     return documents_base_dir() . '/logs';
 }
 
+function documents_quotations_dir(): string
+{
+    return documents_base_dir() . '/quotations';
+}
+
 function documents_public_branding_dir(): string
 {
     return dirname(__DIR__, 2) . '/images/documents/branding';
@@ -62,6 +67,7 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_templates_dir());
     documents_ensure_dir(documents_media_dir());
     documents_ensure_dir(documents_logs_dir());
+    documents_ensure_dir(documents_quotations_dir());
     documents_ensure_dir(documents_public_branding_dir());
     documents_ensure_dir(documents_public_backgrounds_dir());
 
@@ -78,6 +84,11 @@ function documents_ensure_structure(): void
     $templatesPath = documents_templates_dir() . '/template_sets.json';
     if (!is_file($templatesPath)) {
         json_save($templatesPath, []);
+    }
+
+    $templateBlocksPath = documents_templates_dir() . '/template_blocks.json';
+    if (!is_file($templateBlocksPath)) {
+        json_save($templateBlocksPath, []);
     }
 
     $logPath = documents_logs_dir() . '/documents.log';
@@ -307,4 +318,263 @@ function documents_handle_image_upload(array $file, string $targetDir, string $p
     }
 
     return ['ok' => true, 'filename' => $filename, 'error' => ''];
+}
+
+function documents_quote_defaults(): array
+{
+    return [
+        'id' => '',
+        'quote_no' => '',
+        'revision' => 0,
+        'status' => 'Draft',
+        'template_set_id' => '',
+        'segment' => 'RES',
+        'created_by_type' => '',
+        'created_by_id' => '',
+        'created_by_name' => '',
+        'created_at' => '',
+        'updated_at' => '',
+        'party_type' => 'lead',
+        'customer_mobile' => '',
+        'customer_name' => '',
+        'billing_address' => '',
+        'site_address' => '',
+        'district' => '',
+        'city' => '',
+        'state' => 'Jharkhand',
+        'pin' => '',
+        'system_type' => 'Ongrid',
+        'capacity_kwp' => '',
+        'project_summary_line' => '',
+        'valid_until' => '',
+        'pricing_mode' => 'solar_split_70_30',
+        'place_of_supply_state' => 'Jharkhand',
+        'tax_type' => 'CGST_SGST',
+        'input_total_gst_inclusive' => 0,
+        'calc' => [
+            'basic_total' => 0,
+            'bucket_5_basic' => 0,
+            'bucket_5_gst' => 0,
+            'bucket_18_basic' => 0,
+            'bucket_18_gst' => 0,
+            'gst_split' => [
+                'cgst_5' => 0,
+                'sgst_5' => 0,
+                'cgst_18' => 0,
+                'sgst_18' => 0,
+                'igst_5' => 0,
+                'igst_18' => 0,
+            ],
+            'grand_total' => 0,
+        ],
+        'special_requests_inclusive' => '',
+        'special_requests_override_note' => true,
+        'annexures_overrides' => [
+            'system_inclusions' => '',
+            'payment_terms' => '',
+            'warranty' => '',
+            'system_type_explainer' => '',
+            'transportation' => '',
+            'terms_conditions' => '',
+            'pm_subsidy_info' => '',
+        ],
+        'rendering' => [
+            'background_image' => '',
+            'background_opacity' => 1.0,
+        ],
+    ];
+}
+
+function documents_calc_pricing(float $grandTotal, string $pricingMode, string $taxType): array
+{
+    $grandTotal = max(0, $grandTotal);
+    $pricingMode = in_array($pricingMode, ['solar_split_70_30', 'flat_5'], true) ? $pricingMode : 'solar_split_70_30';
+    $taxType = $taxType === 'IGST' ? 'IGST' : 'CGST_SGST';
+
+    $basicTotal = 0.0;
+    $bucket5Basic = 0.0;
+    $bucket18Basic = 0.0;
+
+    if ($pricingMode === 'flat_5') {
+        $basicTotal = $grandTotal / 1.05;
+        $bucket5Basic = $basicTotal;
+    } else {
+        $basicTotal = $grandTotal / 1.089;
+        $bucket5Basic = 0.70 * $basicTotal;
+        $bucket18Basic = 0.30 * $basicTotal;
+    }
+
+    $bucket5Gst = $bucket5Basic * 0.05;
+    $bucket18Gst = $bucket18Basic * 0.18;
+
+    $calc = [
+        'basic_total' => round($basicTotal, 2),
+        'bucket_5_basic' => round($bucket5Basic, 2),
+        'bucket_5_gst' => round($bucket5Gst, 2),
+        'bucket_18_basic' => round($bucket18Basic, 2),
+        'bucket_18_gst' => round($bucket18Gst, 2),
+        'gst_split' => [
+            'cgst_5' => 0.0,
+            'sgst_5' => 0.0,
+            'cgst_18' => 0.0,
+            'sgst_18' => 0.0,
+            'igst_5' => 0.0,
+            'igst_18' => 0.0,
+        ],
+        'grand_total' => round($grandTotal, 2),
+    ];
+
+    if ($taxType === 'IGST') {
+        $calc['gst_split']['igst_5'] = round($bucket5Gst, 2);
+        $calc['gst_split']['igst_18'] = round($bucket18Gst, 2);
+    } else {
+        $calc['gst_split']['cgst_5'] = round($bucket5Gst / 2, 2);
+        $calc['gst_split']['sgst_5'] = round($bucket5Gst / 2, 2);
+        $calc['gst_split']['cgst_18'] = round($bucket18Gst / 2, 2);
+        $calc['gst_split']['sgst_18'] = round($bucket18Gst / 2, 2);
+    }
+
+    return $calc;
+}
+
+function documents_get_template_blocks(): array
+{
+    $path = documents_templates_dir() . '/template_blocks.json';
+    $rows = json_load($path, []);
+    return is_array($rows) ? $rows : [];
+}
+
+function documents_find_customer_by_mobile(string $mobile): ?array
+{
+    $normalized = normalize_customer_mobile($mobile);
+    if ($normalized === '') {
+        return null;
+    }
+
+    $path = dirname(__DIR__, 2) . '/storage/customer-records/records.json';
+    $payload = json_load($path, []);
+    if (!is_array($payload)) {
+        return null;
+    }
+
+    $records = isset($payload['records']) && is_array($payload['records']) ? $payload['records'] : [];
+    foreach ($records as $record) {
+        if (!is_array($record)) {
+            continue;
+        }
+        $phone = normalize_customer_mobile((string) ($record['phone'] ?? ($record['mobile_number'] ?? '')));
+        if ($phone !== $normalized) {
+            continue;
+        }
+        return [
+            'customer_name' => safe_text($record['full_name'] ?? $record['consumer_name'] ?? ''),
+            'billing_address' => safe_text($record['address_line'] ?? $record['address'] ?? ''),
+            'site_address' => safe_text($record['address_line'] ?? $record['address'] ?? ''),
+            'district' => safe_text($record['district'] ?? ''),
+            'city' => safe_text($record['city'] ?? ''),
+            'state' => safe_text($record['state_name'] ?? 'Jharkhand'),
+            'pin' => safe_text($record['pin_code'] ?? ''),
+        ];
+    }
+
+    return null;
+}
+
+function documents_list_quotes(): array
+{
+    documents_ensure_structure();
+    $files = glob(documents_quotations_dir() . '/*.json') ?: [];
+    $quotes = [];
+    foreach ($files as $file) {
+        if (!is_string($file)) {
+            continue;
+        }
+        $row = json_load($file, []);
+        if (!is_array($row)) {
+            continue;
+        }
+        $quotes[] = array_merge(documents_quote_defaults(), $row);
+    }
+
+    usort($quotes, static function (array $a, array $b): int {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+
+    return $quotes;
+}
+
+function documents_get_quote(string $id): ?array
+{
+    $id = safe_filename($id);
+    if ($id === '') {
+        return null;
+    }
+    $path = documents_quotations_dir() . '/' . $id . '.json';
+    if (!is_file($path)) {
+        return null;
+    }
+    $row = json_load($path, []);
+    if (!is_array($row)) {
+        return null;
+    }
+    return array_merge(documents_quote_defaults(), $row);
+}
+
+function documents_save_quote(array $quote): array
+{
+    $id = safe_filename((string) ($quote['id'] ?? ''));
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'Missing quote ID'];
+    }
+    $path = documents_quotations_dir() . '/' . $id . '.json';
+    return json_save($path, $quote);
+}
+
+function documents_generate_quote_number(string $segment): array
+{
+    $numberingPath = documents_settings_dir() . '/numbering_rules.json';
+    $payload = json_load($numberingPath, documents_numbering_defaults());
+    $payload = array_merge(documents_numbering_defaults(), is_array($payload) ? $payload : []);
+    $rules = isset($payload['rules']) && is_array($payload['rules']) ? $payload['rules'] : [];
+
+    $fy = current_fy_string((int) ($payload['fy_start_month'] ?? 4));
+    $selectedIndex = null;
+    foreach ($rules as $index => $rule) {
+        if (!is_array($rule)) {
+            continue;
+        }
+        if (($rule['archived_flag'] ?? false) || !($rule['active'] ?? false)) {
+            continue;
+        }
+        if (($rule['doc_type'] ?? '') !== 'quotation' || ($rule['segment'] ?? '') !== $segment) {
+            continue;
+        }
+        $selectedIndex = $index;
+        break;
+    }
+
+    if ($selectedIndex === null) {
+        return ['ok' => false, 'error' => 'No active quotation numbering rule for segment ' . $segment . '.'];
+    }
+
+    $rule = $rules[$selectedIndex];
+    $seqCurrent = max((int) ($rule['seq_start'] ?? 1), (int) ($rule['seq_current'] ?? 1));
+    $seq = str_pad((string) $seqCurrent, max(2, (int) ($rule['seq_digits'] ?? 4)), '0', STR_PAD_LEFT);
+    $format = (string) ($rule['format'] ?? '{{prefix}}/{{segment}}/{{fy}}/{{seq}}');
+    $quoteNo = strtr($format, [
+        '{{prefix}}' => (string) ($rule['prefix'] ?? ''),
+        '{{segment}}' => $segment,
+        '{{fy}}' => $fy,
+        '{{seq}}' => $seq,
+    ]);
+
+    $rules[$selectedIndex]['seq_current'] = $seqCurrent + 1;
+    $payload['rules'] = $rules;
+    $payload['updated_at'] = date('c');
+    $saved = json_save($numberingPath, $payload);
+    if (!$saved['ok']) {
+        return ['ok' => false, 'error' => 'Failed to update numbering rule counter.'];
+    }
+
+    return ['ok' => true, 'quote_no' => $quoteNo, 'error' => ''];
 }

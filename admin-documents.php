@@ -326,7 +326,10 @@ $user = current_user();
         <h1>Documents &amp; Billing Control Center</h1>
         <p class="muted">Admin: <?= htmlspecialchars((string) ($user['full_name'] ?? 'Administrator'), ENT_QUOTES) ?></p>
       </div>
-      <a class="btn secondary" href="admin-dashboard.php">Back to Admin Dashboard</a>
+      <div>
+        <a class="btn" href="admin-quotations.php">Quotations</a>
+        <a class="btn secondary" href="admin-dashboard.php">Back to Admin Dashboard</a>
+      </div>
     </div>
 
     <?php if ($message !== '' && ($status === 'success' || $status === 'error')): ?>
@@ -338,7 +341,7 @@ $user = current_user();
       <a class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering">Numbering Rules</a>
       <a class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates">Template Sets</a>
       <span class="tab disabled">Media Library (Phase 2+)</span>
-      <span class="tab disabled">Document Manager (Phase 2+)</span>
+      <a class="tab" href="admin-quotations.php">Quotation Manager</a>
       <span class="tab disabled">CSV Import (Phase 2+)</span>
     </nav>
 
