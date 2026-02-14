@@ -43,6 +43,16 @@ function documents_challans_dir(): string
     return documents_base_dir() . '/challans';
 }
 
+function documents_proformas_dir(): string
+{
+    return documents_base_dir() . '/proformas';
+}
+
+function documents_invoices_dir(): string
+{
+    return documents_base_dir() . '/invoices';
+}
+
 function documents_challan_pdf_dir(): string
 {
     return documents_challans_dir() . '/pdfs';
@@ -109,6 +119,8 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_agreement_pdf_dir());
     documents_ensure_dir(documents_challans_dir());
     documents_ensure_dir(documents_challan_pdf_dir());
+    documents_ensure_dir(documents_proformas_dir());
+    documents_ensure_dir(documents_invoices_dir());
     documents_ensure_dir(documents_public_branding_dir());
     documents_ensure_dir(documents_public_backgrounds_dir());
     documents_ensure_dir(documents_public_diagrams_dir());
@@ -123,6 +135,7 @@ function documents_ensure_structure(): void
     if (!is_file($rulesPath)) {
         json_save($rulesPath, documents_numbering_defaults());
     }
+    documents_ensure_numbering_rules_for_proforma_invoice();
 
     $templatesPath = documents_templates_dir() . '/template_sets.json';
     if (!is_file($templatesPath)) {
@@ -283,6 +296,66 @@ function current_fy_string(int $fyStartMonth = 4): string
     }
 
     return substr((string) $start, -2) . '-' . substr((string) $end, -2);
+}
+
+
+function documents_ensure_numbering_rules_for_proforma_invoice(): void
+{
+    $path = documents_settings_dir() . '/numbering_rules.json';
+    $payload = json_load($path, documents_numbering_defaults());
+    $payload = array_merge(documents_numbering_defaults(), is_array($payload) ? $payload : []);
+    $rules = isset($payload['rules']) && is_array($payload['rules']) ? $payload['rules'] : [];
+
+    $required = [
+        ['doc_type' => 'proforma', 'prefix' => 'PI'],
+        ['doc_type' => 'invoice_public', 'prefix' => 'INV'],
+    ];
+    $segments = ['RES', 'COM', 'IND', 'INST', 'PROD'];
+
+    $changed = false;
+    foreach ($required as $entry) {
+        foreach ($segments as $segment) {
+            $exists = false;
+            foreach ($rules as $rule) {
+                if (!is_array($rule)) {
+                    continue;
+                }
+                if (($rule['doc_type'] ?? '') === $entry['doc_type'] && ($rule['segment'] ?? '') === $segment && !($rule['archived_flag'] ?? false) && ($rule['active'] ?? false)) {
+                    $exists = true;
+                    break;
+                }
+            }
+            if ($exists) {
+                continue;
+            }
+
+            $rules[] = [
+                'id' => safe_slug($entry['doc_type'] . '_' . $segment . '_' . bin2hex(random_bytes(3))),
+                'doc_type' => $entry['doc_type'],
+                'segment' => $segment,
+                'prefix' => $entry['prefix'],
+                'format' => '{{prefix}}/{{segment}}/{{fy}}/{{seq}}',
+                'seq_start' => 1,
+                'seq_current' => 1,
+                'seq_digits' => 4,
+                'active' => true,
+                'archived_flag' => false,
+                'notes' => 'Auto-seeded by workflow.',
+                'created_at' => date('c'),
+                'updated_at' => date('c'),
+            ];
+            $changed = true;
+        }
+    }
+
+    if ($changed) {
+        $payload['rules'] = $rules;
+        $payload['updated_at'] = date('c');
+        $saved = json_save($path, $payload);
+        if (!$saved['ok']) {
+            documents_log('Failed to auto seed proforma/invoice numbering rules.');
+        }
+    }
 }
 
 function documents_company_profile_defaults(): array
@@ -452,6 +525,23 @@ function documents_quote_defaults(): array
         'quote_no' => '',
         'revision' => 0,
         'status' => 'Draft',
+        'approval' => [
+            'approved_by_id' => '',
+            'approved_by_name' => '',
+            'approved_at' => '',
+        ],
+        'acceptance' => [
+            'accepted_by_admin_id' => '',
+            'accepted_by_admin_name' => '',
+            'accepted_at' => '',
+            'accepted_note' => '',
+        ],
+        'links' => [
+            'customer_mobile' => '',
+            'agreement_id' => '',
+            'proforma_id' => '',
+            'invoice_id' => '',
+        ],
         'template_set_id' => '',
         'segment' => 'RES',
         'created_by_type' => '',
@@ -522,6 +612,43 @@ function documents_quote_defaults(): array
         ],
         'pdf_path' => '',
         'pdf_generated_at' => '',
+    ];
+}
+
+function documents_proforma_defaults(): array
+{
+    return [
+        'id' => '',
+        'proforma_no' => '',
+        'status' => 'Draft',
+        'linked_quote_id' => '',
+        'customer_mobile' => '',
+        'customer_snapshot' => documents_customer_snapshot_defaults(),
+        'capacity_kwp' => '',
+        'pricing_mode' => 'solar_split_70_30',
+        'input_total_gst_inclusive' => 0,
+        'calc' => [],
+        'created_at' => '',
+        'updated_at' => '',
+    ];
+}
+
+function documents_invoice_defaults(): array
+{
+    return [
+        'id' => '',
+        'invoice_no' => '',
+        'status' => 'Draft',
+        'invoice_kind' => 'public',
+        'linked_quote_id' => '',
+        'customer_mobile' => '',
+        'customer_snapshot' => documents_customer_snapshot_defaults(),
+        'capacity_kwp' => '',
+        'pricing_mode' => 'solar_split_70_30',
+        'input_total_gst_inclusive' => 0,
+        'calc' => [],
+        'created_at' => '',
+        'updated_at' => '',
     ];
 }
 
@@ -1109,6 +1236,331 @@ function documents_save_quote(array $quote): array
     }
     $path = documents_quotations_dir() . '/' . $id . '.json';
     return json_save($path, $quote);
+}
+
+
+function documents_get_proforma(string $id): ?array
+{
+    $id = safe_filename($id);
+    if ($id === '') {
+        return null;
+    }
+    $path = documents_proformas_dir() . '/' . $id . '.json';
+    if (!is_file($path)) {
+        return null;
+    }
+    $row = json_load($path, []);
+    if (!is_array($row)) {
+        return null;
+    }
+    $doc = array_merge(documents_proforma_defaults(), $row);
+    $doc['customer_snapshot'] = array_merge(documents_customer_snapshot_defaults(), is_array($doc['customer_snapshot'] ?? null) ? $doc['customer_snapshot'] : []);
+    return $doc;
+}
+
+function documents_save_proforma(array $doc): array
+{
+    $id = safe_filename((string) ($doc['id'] ?? ''));
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'Missing proforma ID'];
+    }
+    return json_save(documents_proformas_dir() . '/' . $id . '.json', $doc);
+}
+
+function documents_get_invoice(string $id): ?array
+{
+    $id = safe_filename($id);
+    if ($id === '') {
+        return null;
+    }
+    $path = documents_invoices_dir() . '/' . $id . '.json';
+    if (!is_file($path)) {
+        return null;
+    }
+    $row = json_load($path, []);
+    if (!is_array($row)) {
+        return null;
+    }
+    $doc = array_merge(documents_invoice_defaults(), $row);
+    $doc['customer_snapshot'] = array_merge(documents_customer_snapshot_defaults(), is_array($doc['customer_snapshot'] ?? null) ? $doc['customer_snapshot'] : []);
+    return $doc;
+}
+
+function documents_save_invoice(array $doc): array
+{
+    $id = safe_filename((string) ($doc['id'] ?? ''));
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'Missing invoice ID'];
+    }
+    return json_save(documents_invoices_dir() . '/' . $id . '.json', $doc);
+}
+
+function documents_generate_proforma_number(string $segment): array
+{
+    $number = documents_generate_document_number('proforma', $segment);
+    if (!$number['ok']) {
+        return $number;
+    }
+    return ['ok' => true, 'proforma_no' => (string) ($number['doc_no'] ?? ''), 'error' => ''];
+}
+
+function documents_generate_invoice_public_number(string $segment): array
+{
+    $number = documents_generate_document_number('invoice_public', $segment);
+    if (!$number['ok']) {
+        return $number;
+    }
+    return ['ok' => true, 'invoice_no' => (string) ($number['doc_no'] ?? ''), 'error' => ''];
+}
+
+function documents_status_label(array $quote, string $viewerType = 'admin'): string
+{
+    $status = (string) ($quote['status'] ?? 'Draft');
+    if ($status === 'Draft') {
+        if (($quote['created_by_type'] ?? '') === 'employee') {
+            return $viewerType === 'employee' ? 'Pending Admin Approval' : 'Needs Approval';
+        }
+        return 'Draft';
+    }
+    return $status;
+}
+
+function documents_quote_can_edit(array $quote, string $viewerType, string $viewerId = ''): bool
+{
+    if ((string) ($quote['status'] ?? 'Draft') !== 'Draft') {
+        return false;
+    }
+    if ($viewerType === 'admin') {
+        return true;
+    }
+    if ($viewerType === 'employee') {
+        return ((string) ($quote['created_by_type'] ?? '') === 'employee') && ((string) ($quote['created_by_id'] ?? '') === $viewerId);
+    }
+    return false;
+}
+
+function documents_quote_has_valid_acceptance_data(array $quote): array
+{
+    $snapshot = documents_quote_resolve_snapshot($quote);
+    $name = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
+    $mobile = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+    $siteAddress = safe_text((string) ($quote['site_address'] ?? $snapshot['address'] ?? ''));
+    $capacity = safe_text((string) ($quote['capacity_kwp'] ?? ''));
+    $amount = (float) ($quote['input_total_gst_inclusive'] ?? 0);
+
+    if ($name === '' || $mobile === '' || $siteAddress === '') {
+        return ['ok' => false, 'error' => 'Customer name, mobile, and site address are required before acceptance.'];
+    }
+    if ($capacity === '' || $amount <= 0) {
+        return ['ok' => false, 'error' => 'Capacity and total amount are required before acceptance.'];
+    }
+
+    return ['ok' => true, 'error' => ''];
+}
+
+function documents_upsert_customer_from_quote(array $quote): array
+{
+    $snapshot = documents_quote_resolve_snapshot($quote);
+    $mobile = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+    $name = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
+    if ($mobile === '' || $name === '') {
+        return ['ok' => false, 'error' => 'Cannot create customer without mobile and name.', 'customer' => null];
+    }
+
+    $store = new CustomerFsStore();
+    $existing = $store->findByMobile($mobile);
+
+    $fields = [
+        'mobile' => $mobile,
+        'name' => $name,
+        'address' => safe_text((string) ($quote['site_address'] ?? $snapshot['address'] ?? '')),
+        'city' => safe_text((string) ($quote['city'] ?? $snapshot['city'] ?? '')),
+        'district' => safe_text((string) ($quote['district'] ?? $snapshot['district'] ?? '')),
+        'pin_code' => safe_text((string) ($quote['pin'] ?? $snapshot['pin_code'] ?? '')),
+        'state' => safe_text((string) ($quote['state'] ?? $snapshot['state'] ?? '')),
+        'jbvnl_account_number' => safe_text((string) ($quote['consumer_account_no'] ?? $snapshot['consumer_account_no'] ?? '')),
+        'application_id' => safe_text((string) ($quote['application_id'] ?? $snapshot['application_id'] ?? '')),
+        'application_submitted_date' => safe_text((string) ($quote['application_submitted_date'] ?? $snapshot['application_submitted_date'] ?? '')),
+        'circle_name' => safe_text((string) ($quote['circle_name'] ?? $snapshot['circle_name'] ?? '')),
+        'division_name' => safe_text((string) ($quote['division_name'] ?? $snapshot['division_name'] ?? '')),
+        'sub_division_name' => safe_text((string) ($quote['sub_division_name'] ?? $snapshot['sub_division_name'] ?? '')),
+        'sanction_load_kwp' => safe_text((string) ($quote['sanction_load_kwp'] ?? $snapshot['sanction_load_kwp'] ?? '')),
+        'installed_pv_module_capacity_kwp' => safe_text((string) ($quote['installed_pv_module_capacity_kwp'] ?? $snapshot['installed_pv_module_capacity_kwp'] ?? '')),
+        'created_from_quote_id' => safe_text((string) ($quote['id'] ?? '')),
+        'created_from_quote_no' => safe_text((string) ($quote['quote_no'] ?? '')),
+    ];
+
+    if ($existing === null) {
+        $fields['password_hash'] = password_hash('abcd1234', PASSWORD_DEFAULT);
+        $created = $store->addCustomer($fields);
+        if (!($created['success'] ?? false)) {
+            documents_log('customer creation failed for quote ' . (string) ($quote['id'] ?? '') . ': ' . implode('; ', $created['errors'] ?? []));
+            return ['ok' => false, 'error' => 'Customer creation failed.', 'customer' => null];
+        }
+        return ['ok' => true, 'error' => '', 'customer' => $created['customer'] ?? null];
+    }
+
+    $update = $existing;
+    foreach ($fields as $key => $value) {
+        if (!is_string($value) || $value === '') {
+            continue;
+        }
+        if (!isset($update[$key]) || trim((string) $update[$key]) === '') {
+            $update[$key] = $value;
+        }
+    }
+
+    $saved = $store->updateCustomer($mobile, $update);
+    if (!($saved['success'] ?? false)) {
+        documents_log('customer update failed for quote ' . (string) ($quote['id'] ?? '') . ': ' . implode('; ', $saved['errors'] ?? []));
+        return ['ok' => false, 'error' => 'Customer update failed.', 'customer' => null];
+    }
+    return ['ok' => true, 'error' => '', 'customer' => $saved['customer'] ?? null];
+}
+
+function documents_create_agreement_from_quote(array $quote, array $adminUser): array
+{
+    $links = is_array($quote['links'] ?? null) ? $quote['links'] : [];
+    $existingId = safe_text((string) ($links['agreement_id'] ?? ''));
+    if ($existingId !== '' && documents_get_agreement($existingId) !== null) {
+        return ['ok' => true, 'agreement_id' => $existingId, 'error' => ''];
+    }
+
+    $segment = safe_text((string) ($quote['segment'] ?? 'RES')) ?: 'RES';
+    $number = documents_generate_agreement_number($segment);
+    if (!$number['ok']) {
+        documents_log('numbering rule missing for agreement quote ' . (string) ($quote['id'] ?? ''));
+        return ['ok' => false, 'error' => (string) ($number['error'] ?? 'Unable to generate agreement number.')];
+    }
+
+    $snapshot = documents_quote_resolve_snapshot($quote);
+    $templates = documents_get_agreement_templates();
+    $templateId = isset($templates['default_pm_surya_ghar_agreement']) ? 'default_pm_surya_ghar_agreement' : array_key_first($templates);
+
+    $agreement = documents_agreement_defaults();
+    $agreement['id'] = 'agr_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+    $agreement['agreement_no'] = (string) ($number['agreement_no'] ?? '');
+    $agreement['status'] = 'Draft';
+    $agreement['template_id'] = is_string($templateId) ? $templateId : 'default_pm_surya_ghar_agreement';
+    $agreement['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+    $agreement['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
+    $agreement['consumer_account_no'] = safe_text((string) ($quote['consumer_account_no'] ?? $snapshot['consumer_account_no'] ?? ''));
+    $agreement['consumer_address'] = safe_text((string) ($snapshot['address'] ?? ''));
+    $agreement['site_address'] = safe_text((string) ($quote['site_address'] ?? $snapshot['address'] ?? ''));
+    $agreement['execution_date'] = date('Y-m-d');
+    $agreement['system_capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? ''));
+    $agreement['total_cost'] = documents_format_money_indian((float) ($quote['input_total_gst_inclusive'] ?? 0));
+    $agreement['linked_quote_id'] = safe_text((string) ($quote['id'] ?? ''));
+    $agreement['linked_quote_no'] = safe_text((string) ($quote['quote_no'] ?? ''));
+    $agreement['district'] = safe_text((string) ($quote['district'] ?? $snapshot['district'] ?? ''));
+    $agreement['city'] = safe_text((string) ($quote['city'] ?? $snapshot['city'] ?? ''));
+    $agreement['state'] = safe_text((string) ($quote['state'] ?? $snapshot['state'] ?? ''));
+    $agreement['pin_code'] = safe_text((string) ($quote['pin'] ?? $snapshot['pin_code'] ?? ''));
+    $agreement['party_snapshot'] = [
+        'customer_mobile' => $agreement['customer_mobile'],
+        'customer_name' => $agreement['customer_name'],
+        'consumer_account_no' => $agreement['consumer_account_no'],
+        'consumer_address' => $agreement['consumer_address'],
+        'site_address' => $agreement['site_address'],
+        'district' => $agreement['district'],
+        'city' => $agreement['city'],
+        'state' => $agreement['state'],
+        'pin_code' => $agreement['pin_code'],
+        'system_capacity_kwp' => $agreement['system_capacity_kwp'],
+        'total_cost' => $agreement['total_cost'],
+    ];
+    $agreement['created_by_type'] = 'admin';
+    $agreement['created_by_id'] = safe_text((string) ($adminUser['id'] ?? ''));
+    $agreement['created_by_name'] = safe_text((string) ($adminUser['full_name'] ?? 'Admin'));
+    $agreement['created_at'] = date('c');
+    $agreement['updated_at'] = date('c');
+
+    $saved = documents_save_agreement($agreement);
+    if (!$saved['ok']) {
+        documents_log('file save failed for agreement quote ' . (string) ($quote['id'] ?? ''));
+        return ['ok' => false, 'error' => 'Failed to create agreement draft.'];
+    }
+
+    return ['ok' => true, 'agreement_id' => (string) $agreement['id'], 'error' => ''];
+}
+
+function documents_create_proforma_from_quote(array $quote): array
+{
+    $links = is_array($quote['links'] ?? null) ? $quote['links'] : [];
+    $existingId = safe_text((string) ($links['proforma_id'] ?? ''));
+    if ($existingId !== '' && documents_get_proforma($existingId) !== null) {
+        return ['ok' => true, 'proforma_id' => $existingId, 'error' => ''];
+    }
+
+    $segment = safe_text((string) ($quote['segment'] ?? 'RES')) ?: 'RES';
+    $number = documents_generate_proforma_number($segment);
+    if (!$number['ok']) {
+        documents_log('numbering rule missing for proforma quote ' . (string) ($quote['id'] ?? ''));
+        return ['ok' => false, 'error' => (string) ($number['error'] ?? 'Unable to generate proforma number.')];
+    }
+
+    $snapshot = documents_quote_resolve_snapshot($quote);
+    $doc = documents_proforma_defaults();
+    $doc['id'] = 'pi_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+    $doc['proforma_no'] = (string) ($number['proforma_no'] ?? '');
+    $doc['status'] = 'Draft';
+    $doc['linked_quote_id'] = safe_text((string) ($quote['id'] ?? ''));
+    $doc['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+    $doc['customer_snapshot'] = $snapshot;
+    $doc['capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? ''));
+    $doc['pricing_mode'] = safe_text((string) ($quote['pricing_mode'] ?? 'solar_split_70_30'));
+    $doc['input_total_gst_inclusive'] = (float) ($quote['input_total_gst_inclusive'] ?? 0);
+    $doc['calc'] = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
+    $doc['created_at'] = date('c');
+    $doc['updated_at'] = date('c');
+
+    $saved = documents_save_proforma($doc);
+    if (!$saved['ok']) {
+        documents_log('file save failed for proforma quote ' . (string) ($quote['id'] ?? ''));
+        return ['ok' => false, 'error' => 'Failed to create proforma draft.'];
+    }
+
+    return ['ok' => true, 'proforma_id' => (string) $doc['id'], 'error' => ''];
+}
+
+function documents_create_invoice_from_quote(array $quote): array
+{
+    $links = is_array($quote['links'] ?? null) ? $quote['links'] : [];
+    $existingId = safe_text((string) ($links['invoice_id'] ?? ''));
+    if ($existingId !== '' && documents_get_invoice($existingId) !== null) {
+        return ['ok' => true, 'invoice_id' => $existingId, 'error' => ''];
+    }
+
+    $segment = safe_text((string) ($quote['segment'] ?? 'RES')) ?: 'RES';
+    $number = documents_generate_invoice_public_number($segment);
+    if (!$number['ok']) {
+        documents_log('numbering rule missing for invoice_public quote ' . (string) ($quote['id'] ?? ''));
+        return ['ok' => false, 'error' => (string) ($number['error'] ?? 'Unable to generate invoice number.')];
+    }
+
+    $snapshot = documents_quote_resolve_snapshot($quote);
+    $doc = documents_invoice_defaults();
+    $doc['id'] = 'inv_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+    $doc['invoice_no'] = (string) ($number['invoice_no'] ?? '');
+    $doc['status'] = 'Draft';
+    $doc['invoice_kind'] = 'public';
+    $doc['linked_quote_id'] = safe_text((string) ($quote['id'] ?? ''));
+    $doc['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+    $doc['customer_snapshot'] = $snapshot;
+    $doc['capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? ''));
+    $doc['pricing_mode'] = safe_text((string) ($quote['pricing_mode'] ?? 'solar_split_70_30'));
+    $doc['input_total_gst_inclusive'] = (float) ($quote['input_total_gst_inclusive'] ?? 0);
+    $doc['calc'] = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
+    $doc['created_at'] = date('c');
+    $doc['updated_at'] = date('c');
+
+    $saved = documents_save_invoice($doc);
+    if (!$saved['ok']) {
+        documents_log('file save failed for invoice quote ' . (string) ($quote['id'] ?? ''));
+        return ['ok' => false, 'error' => 'Failed to create invoice draft.'];
+    }
+
+    return ['ok' => true, 'invoice_id' => (string) $doc['id'], 'error' => ''];
 }
 
 function documents_generate_quote_number(string $segment): array

@@ -27,6 +27,11 @@ if ($viewerType === '') {
     exit;
 }
 
+$redirect = static function (string $id, string $type, string $message): void {
+    header('Location: quotation-view.php?' . http_build_query(['id' => $id, 'status' => $type, 'message' => $message]));
+    exit;
+};
+
 $id = safe_text($_GET['id'] ?? '');
 $quote = documents_get_quote($id);
 if ($quote === null) {
@@ -42,62 +47,127 @@ if ($viewerType === 'employee' && ((string) ($quote['created_by_type'] ?? '') !=
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
-        header('Location: quotation-view.php?id=' . urlencode($id) . '&err=csrf');
-        exit;
+        $redirect($id, 'error', 'Security validation failed.');
     }
 
     $action = safe_text($_POST['action'] ?? '');
+    if ($viewerType !== 'admin' && in_array($action, ['approve_quote', 'accept_quote'], true)) {
+        $redirect($id, 'error', 'Only admin can perform this action.');
+    }
+
     if ($action === 'archive_quote') {
         $quote['status'] = 'Archived';
         $quote['updated_at'] = date('c');
         documents_save_quote($quote);
-        header('Location: quotation-view.php?id=' . urlencode($id) . '&ok=1');
-        exit;
+        $redirect($id, 'success', 'Quotation archived.');
     }
-    if ($action === 'mark_final') {
-        $quote['status'] = 'Final';
+
+    if ($action === 'approve_quote') {
+        $status = (string) ($quote['status'] ?? 'Draft');
+        if (in_array($status, ['Approved', 'Accepted'], true)) {
+            $redirect($id, 'success', 'Quotation already approved.');
+        }
+
+        $quote['status'] = 'Approved';
+        $quote['approval']['approved_by_id'] = (string) ($user['id'] ?? '');
+        $quote['approval']['approved_by_name'] = (string) ($user['full_name'] ?? 'Admin');
+        $quote['approval']['approved_at'] = date('c');
         $quote['updated_at'] = date('c');
-        documents_save_quote($quote);
-        header('Location: quotation-view.php?id=' . urlencode($id) . '&ok=1');
-        exit;
+        $saved = documents_save_quote($quote);
+        if (!$saved['ok']) {
+            documents_log('file save failed during approve quote ' . (string) ($quote['id'] ?? ''));
+            $redirect($id, 'error', 'Failed to approve quotation.');
+        }
+        $redirect($id, 'success', 'Quotation approved.');
+    }
+
+    if ($action === 'accept_quote') {
+        if ((string) ($quote['status'] ?? '') !== 'Approved' && (string) ($quote['status'] ?? '') !== 'Accepted') {
+            $redirect($id, 'error', 'Quotation must be Approved before acceptance.');
+        }
+
+        $valid = documents_quote_has_valid_acceptance_data($quote);
+        if (!($valid['ok'] ?? false)) {
+            $redirect($id, 'error', (string) ($valid['error'] ?? 'Validation failed.'));
+        }
+
+        $customer = documents_upsert_customer_from_quote($quote);
+        if (!($customer['ok'] ?? false)) {
+            $redirect($id, 'error', (string) ($customer['error'] ?? 'Customer creation failed.'));
+        }
+
+        $agreement = documents_create_agreement_from_quote($quote, is_array($user) ? $user : []);
+        if (!($agreement['ok'] ?? false)) {
+            $redirect($id, 'error', (string) ($agreement['error'] ?? 'Agreement creation failed.'));
+        }
+
+        $proforma = documents_create_proforma_from_quote($quote);
+        if (!($proforma['ok'] ?? false)) {
+            $redirect($id, 'error', (string) ($proforma['error'] ?? 'Proforma creation failed.'));
+        }
+
+        $invoice = documents_create_invoice_from_quote($quote);
+        if (!($invoice['ok'] ?? false)) {
+            $redirect($id, 'error', (string) ($invoice['error'] ?? 'Invoice creation failed.'));
+        }
+
+        $snapshot = documents_quote_resolve_snapshot($quote);
+        $quote['links']['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+        $quote['links']['agreement_id'] = (string) ($agreement['agreement_id'] ?? ($quote['links']['agreement_id'] ?? ''));
+        $quote['links']['proforma_id'] = (string) ($proforma['proforma_id'] ?? ($quote['links']['proforma_id'] ?? ''));
+        $quote['links']['invoice_id'] = (string) ($invoice['invoice_id'] ?? ($quote['links']['invoice_id'] ?? ''));
+        $quote['status'] = 'Accepted';
+        $quote['acceptance']['accepted_by_admin_id'] = (string) ($user['id'] ?? '');
+        $quote['acceptance']['accepted_by_admin_name'] = (string) ($user['full_name'] ?? 'Admin');
+        $quote['acceptance']['accepted_at'] = date('c');
+        $quote['acceptance']['accepted_note'] = safe_text($_POST['accepted_note'] ?? (string) ($quote['acceptance']['accepted_note'] ?? ''));
+        $quote['updated_at'] = date('c');
+        $saved = documents_save_quote($quote);
+        if (!$saved['ok']) {
+            documents_log('file save failed during accept quote ' . (string) ($quote['id'] ?? ''));
+            $redirect($id, 'error', 'Generated documents but failed to update quotation.');
+        }
+
+        $redirect($id, 'success', 'Quotation accepted and linked drafts generated.');
     }
 }
 
-$editable = ($quote['status'] ?? 'Draft') === 'Draft';
+$editable = documents_quote_can_edit($quote, $viewerType, $viewerId);
 $editLink = ($viewerType === 'admin' ? 'admin-quotations.php' : 'employee-quotations.php') . '?edit=' . urlencode((string) $quote['id']);
 $backLink = $viewerType === 'admin' ? 'admin-quotations.php' : 'employee-quotations.php';
-$ok = isset($_GET['ok']);
-$pdfError = safe_text($_GET['err'] ?? '') === 'pdf_failed';
+$statusMsg = safe_text($_GET['status'] ?? '');
+$message = safe_text($_GET['message'] ?? '');
 $snapshot = documents_quote_resolve_snapshot($quote);
+$links = is_array($quote['links'] ?? null) ? $quote['links'] : [];
 ?>
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quotation <?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></title>
-<style>body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px}.card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe1ea;padding:8px;text-align:left;font-size:13px}h3{margin:8px 0}.btn{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}.btn.secondary{background:#fff;color:#1f2937;border:1px solid #cbd5e1}</style></head>
+<style>body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px}.card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe1ea;padding:8px;text-align:left;font-size:13px}h3{margin:8px 0}.btn{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}.btn.secondary{background:#fff;color:#1f2937;border:1px solid #cbd5e1}.ok{background:#ecfdf5}.err{background:#fef2f2}</style></head>
 <body><main class="wrap">
-<?php if ($ok): ?><div class="card" style="background:#ecfdf5">Saved successfully.</div><?php endif; ?>
-<?php if ($pdfError): ?><div class="card" style="background:#fef2f2;color:#991b1b">PDF generation failed. Please retry or contact admin.</div><?php endif; ?>
+<?php if ($message !== ''): ?><div class="card <?= $statusMsg === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
 <div class="card"><h1>Quotation View</h1>
 <a class="btn secondary" href="<?= htmlspecialchars($backLink, ENT_QUOTES) ?>">Back</a>
 <a class="btn" href="quotation-print.php?id=<?= urlencode((string)$quote['id']) ?>" target="_blank">Print</a>
 <a class="btn" href="quotation-pdf.php?id=<?= urlencode((string)$quote['id']) ?>">Download PDF</a>
-<?php if ($viewerType === 'admin'): ?><button class="btn secondary" type="button" disabled title="Available in next phase">Create Agreement from this Quotation</button><?php endif; ?>
 <?php if ($editable): ?><a class="btn secondary" href="<?= htmlspecialchars($editLink, ENT_QUOTES) ?>">Edit</a><?php endif; ?>
 </div>
-<div class="card"><table><tr><th>Quote No</th><td><?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></td><th>Status</th><td><?= htmlspecialchars((string)$quote['status'], ENT_QUOTES) ?></td></tr><tr><th>Created By</th><td><?= htmlspecialchars((string)$quote['created_by_name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$quote['created_by_type'], ENT_QUOTES) ?>)</td><th>Valid Until</th><td><?= htmlspecialchars((string)$quote['valid_until'], ENT_QUOTES) ?></td></tr><tr><th>Created At</th><td><?= htmlspecialchars((string)$quote['created_at'], ENT_QUOTES) ?></td><th>Updated At</th><td><?= htmlspecialchars((string)$quote['updated_at'], ENT_QUOTES) ?></td></tr></table></div>
-<div class="card"><h3>Customer</h3><p><strong><?= htmlspecialchars((string)($snapshot['name'] ?: $quote['customer_name']), ENT_QUOTES) ?></strong> (<?= htmlspecialchars((string)($snapshot['mobile'] ?: $quote['customer_mobile']), ENT_QUOTES) ?>)</p><p><strong>Site Address:</strong><br><?= nl2br(htmlspecialchars((string)($quote['site_address'] ?: $snapshot['address']), ENT_QUOTES)) ?></p><p><?= htmlspecialchars((string)($quote['district'] ?: $snapshot['district']), ENT_QUOTES) ?>, <?= htmlspecialchars((string)($quote['city'] ?: $snapshot['city']), ENT_QUOTES) ?>, <?= htmlspecialchars((string)($quote['state'] ?: $snapshot['state']), ENT_QUOTES) ?> - <?= htmlspecialchars((string)($quote['pin'] ?: $snapshot['pin_code']), ENT_QUOTES) ?></p><p><strong>Consumer Account No. (JBVNL):</strong> <?= htmlspecialchars((string)($quote['consumer_account_no'] ?: $snapshot['consumer_account_no']), ENT_QUOTES) ?></p></div>
-<div class="card"><h3>System</h3><p><?= htmlspecialchars((string)$quote['system_type'], ENT_QUOTES) ?> | <?= htmlspecialchars((string)$quote['capacity_kwp'], ENT_QUOTES) ?> kWp</p><p><?= htmlspecialchars((string)$quote['project_summary_line'], ENT_QUOTES) ?></p><p><strong>Application ID:</strong> <?= htmlspecialchars((string)($quote['application_id'] ?: $snapshot['application_id']), ENT_QUOTES) ?> | <strong>Circle/Division/Sub Division:</strong> <?= htmlspecialchars((string)($quote['circle_name'] ?: $snapshot['circle_name']), ENT_QUOTES) ?> / <?= htmlspecialchars((string)($quote['division_name'] ?: $snapshot['division_name']), ENT_QUOTES) ?> / <?= htmlspecialchars((string)($quote['sub_division_name'] ?: $snapshot['sub_division_name']), ENT_QUOTES) ?></p><p><strong>Sanction Load:</strong> <?= htmlspecialchars((string)($quote['sanction_load_kwp'] ?: $snapshot['sanction_load_kwp']), ENT_QUOTES) ?> kWp | <strong>Installed Capacity:</strong> <?= htmlspecialchars((string)($quote['installed_pv_module_capacity_kwp'] ?: $snapshot['installed_pv_module_capacity_kwp']), ENT_QUOTES) ?> kWp</p></div>
-<div class="card"><h3>Pricing Summary</h3>
-<table><thead><tr><th>Description</th><th>Basic</th><th>GST</th><th>Total</th></tr></thead><tbody>
+<div class="card"><table><tr><th>Quote No</th><td><?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></td><th>Status</th><td><?= htmlspecialchars(documents_status_label($quote, $viewerType), ENT_QUOTES) ?></td></tr><tr><th>Created By</th><td><?= htmlspecialchars((string)$quote['created_by_name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$quote['created_by_type'], ENT_QUOTES) ?>)</td><th>Valid Until</th><td><?= htmlspecialchars((string)$quote['valid_until'], ENT_QUOTES) ?></td></tr><tr><th>Created At</th><td><?= htmlspecialchars((string)$quote['created_at'], ENT_QUOTES) ?></td><th>Updated At</th><td><?= htmlspecialchars((string)$quote['updated_at'], ENT_QUOTES) ?></td></tr></table></div>
+<?php if ($viewerType === 'admin'): ?><div class="card"><h3>Admin Actions</h3>
+<?php if ((string)($quote['status'] ?? '') === 'Draft'): ?><form method="post" style="display:inline-block"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="approve_quote"><button class="btn" type="submit">Approve Quotation</button></form><?php endif; ?>
+<?php if ((string)($quote['status'] ?? '') === 'Approved' || (string)($quote['status'] ?? '') === 'Accepted'): ?><form method="post" style="display:inline-block"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="accept_quote"><input type="hidden" name="accepted_note" value=""><button class="btn" type="submit">Accepted by Customer</button></form><?php endif; ?>
+</div><?php endif; ?>
+<div class="card"><h3>Linked Documents</h3>
+<p>Agreement: <?php if (safe_text((string)($links['agreement_id'] ?? '')) !== ''): ?><a href="agreement-view.php?id=<?= urlencode((string)$links['agreement_id']) ?>">View Agreement</a><?php else: ?>Not linked<?php endif; ?></p>
+<p>Proforma: <?php if (safe_text((string)($links['proforma_id'] ?? '')) !== ''): ?><a href="admin-proformas.php?id=<?= urlencode((string)$links['proforma_id']) ?>">View Proforma</a><?php else: ?>Not linked<?php endif; ?></p>
+<p>Invoice: <?php if (safe_text((string)($links['invoice_id'] ?? '')) !== ''): ?><a href="admin-invoices.php?id=<?= urlencode((string)$links['invoice_id']) ?>">View Invoice</a><?php else: ?>Not linked<?php endif; ?></p>
+<p><a class="btn secondary" href="admin-challans.php?quote_id=<?= urlencode((string)$quote['id']) ?>">Create Delivery Challan</a></p>
+</div>
+<div class="card"><h3>Customer</h3><p><strong><?= htmlspecialchars((string)($snapshot['name'] ?: $quote['customer_name']), ENT_QUOTES) ?></strong> (<?= htmlspecialchars((string)($snapshot['mobile'] ?: $quote['customer_mobile']), ENT_QUOTES) ?>)</p><p><strong>Site Address:</strong><br><?= nl2br(htmlspecialchars((string)($quote['site_address'] ?: $snapshot['address']), ENT_QUOTES)) ?></p></div>
+<div class="card"><h3>System</h3><p><?= htmlspecialchars((string)$quote['system_type'], ENT_QUOTES) ?> | <?= htmlspecialchars((string)$quote['capacity_kwp'], ENT_QUOTES) ?> kWp</p></div>
+<div class="card"><h3>Pricing Summary</h3><table><thead><tr><th>Description</th><th>Basic</th><th>GST</th><th>Total</th></tr></thead><tbody>
 <tr><td>Solar Power Generation System (5%)</td><td><?= number_format((float)$quote['calc']['bucket_5_basic'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_5_gst'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_5_basic'] + (float)$quote['calc']['bucket_5_gst'],2) ?></td></tr>
 <tr><td>Solar Power Generation System (18%)</td><td><?= number_format((float)$quote['calc']['bucket_18_basic'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_18_gst'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_18_basic'] + (float)$quote['calc']['bucket_18_gst'],2) ?></td></tr>
 <tr><th colspan="3">Grand Total</th><th><?= number_format((float)$quote['calc']['grand_total'],2) ?></th></tr>
 </tbody></table></div>
-<div class="card"><h3>Special Requests From Customer (Inclusive in the rate)</h3><p><?= nl2br(htmlspecialchars((string)$quote['special_requests_inclusive'], ENT_QUOTES)) ?></p><p><em>In case of conflict between Annexure inclusions and Special Requests, Special Requests will be given priority.</em></p></div>
-<div class="card"><h3>Annexures</h3>
-<?php foreach (['system_inclusions'=>'System Inclusions','payment_terms'=>'Payment Terms','warranty'=>'Warranty','transportation'=>'Transportation','system_type_explainer'=>'System Type Explainer','terms_conditions'=>'Terms & Conditions'] as $k=>$label): ?><h4><?= $label ?></h4><p><?= nl2br(htmlspecialchars((string)($quote['annexures_overrides'][$k] ?? ''), ENT_QUOTES)) ?></p><?php endforeach; ?>
-</div>
-<div class="card">
-<form method="post" style="display:inline-block"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="mark_final"><button class="btn" type="submit">Mark Final</button></form>
-<form method="post" style="display:inline-block"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_quote"><button class="btn secondary" type="submit">Archive</button></form>
-</div>
+<?php if ($viewerType === 'admin'): ?><div class="card"><form method="post" style="display:inline-block"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_quote"><button class="btn secondary" type="submit">Archive</button></form></div><?php endif; ?>
 </main></body></html>
