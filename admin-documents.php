@@ -328,8 +328,6 @@ $user = current_user();
       </div>
       <div>
         <a class="btn" href="admin-quotations.php">Quotations</a>
-        <a class="btn secondary" href="admin-proformas.php">Proforma Invoices</a>
-        <a class="btn secondary" href="admin-agreements.php">Agreements</a>
         <a class="btn secondary" href="admin-templates.php">Template Blocks &amp; Media</a>
         <a class="btn secondary" href="admin-dashboard.php">Back to Admin Dashboard</a>
       </div>
@@ -343,10 +341,8 @@ $user = current_user();
       <a class="tab <?= $activeTab === 'company' ? 'active' : '' ?>" href="?tab=company">Company Profile &amp; Branding</a>
       <a class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering">Numbering Rules</a>
       <a class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates">Template Sets</a>
-      <a class="tab" href="admin-quotations.php">Quotations</a>
-      <a class="tab" href="admin-proformas.php">Proforma Invoices</a>
-      <a class="tab" href="admin-agreements.php">Agreements</a>
       <a class="tab" href="admin-templates.php">Template Blocks &amp; Media</a>
+      <a class="tab" href="admin-quotations.php">Quotation Manager</a>
       <span class="tab disabled">CSV Import (Phase 2+)</span>
     </nav>
 

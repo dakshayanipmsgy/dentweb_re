@@ -1,43 +1,6 @@
 {
   "financial_year_mode": "FY",
   "fy_start_month": 4,
-  "rules": [
-    {
-      "id": "quotation-res-default",
-      "doc_type": "quotation",
-      "segment": "RES",
-      "prefix": "DE",
-      "format": "{{prefix}}/{{segment}}/{{fy}}/{{seq}}",
-      "seq_digits": 4,
-      "seq_start": 1,
-      "seq_current": 1,
-      "active": true,
-      "archived_flag": false
-    },
-    {
-      "id": "proforma-res-default",
-      "doc_type": "proforma",
-      "segment": "RES",
-      "prefix": "PI",
-      "format": "{{prefix}}/{{segment}}/{{fy}}/{{seq}}",
-      "seq_digits": 4,
-      "seq_start": 1,
-      "seq_current": 1,
-      "active": true,
-      "archived_flag": false
-    },
-    {
-      "id": "agreement-res-default",
-      "doc_type": "agreement",
-      "segment": "RES",
-      "prefix": "AGR",
-      "format": "{{prefix}}/{{segment}}/{{fy}}/{{seq}}",
-      "seq_digits": 4,
-      "seq_start": 1,
-      "seq_current": 1,
-      "active": true,
-      "archived_flag": false
-    }
-  ],
+  "rules": [],
   "updated_at": ""
 }
