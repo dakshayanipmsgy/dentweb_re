@@ -13,6 +13,7 @@ $templates = array_values(array_filter(json_load(documents_templates_dir() . '/t
 }));
 $templateBlocks = documents_sync_template_block_entries($templates);
 $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
+$docTheme = documents_get_doc_theme();
 
 $redirectWith = static function (string $type, string $msg): void {
     header('Location: admin-quotations.php?' . http_build_query(['status' => $type, 'message' => $msg]));
@@ -172,8 +173,24 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         $quote['special_requests_override_note'] = true;
         $quote['annexures_overrides'] = $annexure;
         $quote['template_attachments'] = (($templateBlocks[$templateSetId]['attachments'] ?? null) && is_array($templateBlocks[$templateSetId]['attachments'])) ? $templateBlocks[$templateSetId]['attachments'] : documents_template_attachment_defaults();
-        $quote['rendering']['background_image'] = (string) (($selectedTemplate['default_doc_theme']['page_background_image'] ?? '') ?: '');
-        $quote['rendering']['background_opacity'] = (float) (($selectedTemplate['default_doc_theme']['page_background_opacity'] ?? 1) ?: 1);
+
+        $quote['finance']['finance_mode'] = in_array(safe_text($_POST['finance_mode'] ?? ''), ['loan', 'cash'], true) ? safe_text($_POST['finance_mode']) : (string) ($docTheme['calc_defaults']['finance_mode'] ?? 'loan');
+        foreach (['current_monthly_bill_rs','unit_rate_rs','annual_gen_per_kw','bill_escalation_pct','loan_interest_pct','loan_tenure_years','down_payment_pct','analysis_years','residual_bill_pct'] as $field) {
+            $raw = safe_text($_POST[$field] ?? '');
+            $quote['finance'][$field] = $raw === '' ? null : (float) $raw;
+        }
+
+        $quote['rendering']['background_enabled'] = isset($_POST['rendering_background_enabled']);
+        $quote['rendering']['background_image'] = safe_text($_POST['rendering_background_image'] ?? '');
+        $quote['rendering']['background_opacity'] = max(0.05, min(1.0, (float) ($_POST['rendering_background_opacity'] ?? 0.18)));
+        $quote['rendering']['primary_color'] = safe_text($_POST['rendering_primary_color'] ?? '');
+        $quote['rendering']['accent_color'] = safe_text($_POST['rendering_accent_color'] ?? '');
+        $font = safe_text($_POST['rendering_base_font_px'] ?? '');
+        $quote['rendering']['base_font_px'] = $font === '' ? null : max(12, min(18, (int) $font));
+
+        $quote['media']['cover_hero_media_id'] = safe_text($_POST['cover_hero_media_id'] ?? '');
+        $quote['media']['system_overview_media_id'] = safe_text($_POST['system_overview_media_id'] ?? '');
+
         $quote['updated_at'] = date('c');
 
         $saved = documents_save_quote($quote);
@@ -259,6 +276,28 @@ if ($lookup !== null) {
 <div><label>Division</label><input name="division_name" value="<?= htmlspecialchars((string)(($editing['division_name'] !== '') ? $editing['division_name'] : ($quoteSnapshot['division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
+<div style="grid-column:1/-1"><h3>Savings &amp; Impact Calculator (Optional)</h3><div class="muted">Use global defaults by leaving optional fields blank.</div></div>
+<div><label>Finance Mode</label><select name="finance_mode"><option value="loan" <?= (($editing['finance']['finance_mode'] ?? '')==='loan')?'selected':'' ?>>Loan</option><option value="cash" <?= (($editing['finance']['finance_mode'] ?? '')==='cash')?'selected':'' ?>>Cash</option></select></div>
+<div><label>Current Monthly Bill (₹)</label><input type="number" step="0.01" name="current_monthly_bill_rs" placeholder="for savings chart" value="<?= htmlspecialchars((string)($editing['finance']['current_monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Unit Rate ₹/kWh</label><input type="number" step="0.01" name="unit_rate_rs" value="<?= htmlspecialchars((string)($editing['finance']['unit_rate_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Annual Generation per kW</label><input type="number" step="0.01" name="annual_gen_per_kw" value="<?= htmlspecialchars((string)($editing['finance']['annual_gen_per_kw'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Bill Escalation %</label><input type="number" step="0.01" name="bill_escalation_pct" value="<?= htmlspecialchars((string)($editing['finance']['bill_escalation_pct'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Loan Interest %</label><input type="number" step="0.01" name="loan_interest_pct" value="<?= htmlspecialchars((string)($editing['finance']['loan_interest_pct'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Loan Tenure Years</label><input type="number" step="1" name="loan_tenure_years" value="<?= htmlspecialchars((string)($editing['finance']['loan_tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Down Payment %</label><input type="number" step="0.01" name="down_payment_pct" value="<?= htmlspecialchars((string)($editing['finance']['down_payment_pct'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Analysis Years</label><input type="number" step="1" name="analysis_years" value="<?= htmlspecialchars((string)($editing['finance']['analysis_years'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Residual Bill %</label><input type="number" step="0.01" name="residual_bill_pct" value="<?= htmlspecialchars((string)($editing['finance']['residual_bill_pct'] ?? ''), ENT_QUOTES) ?>"></div>
+
+<div style="grid-column:1/-1"><h3>Design Overrides (Optional)</h3></div>
+<div><label><input type="checkbox" name="rendering_background_enabled" <?= !isset($editing['rendering']['background_enabled']) || !empty($editing['rendering']['background_enabled'])?'checked':'' ?>> Background enabled</label></div>
+<div><label>Background image path</label><input name="rendering_background_image" value="<?= htmlspecialchars((string)($editing['rendering']['background_image'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Background opacity</label><input type="number" min="0.05" max="1" step="0.01" name="rendering_background_opacity" value="<?= htmlspecialchars((string)($editing['rendering']['background_opacity'] ?? 0.18), ENT_QUOTES) ?>"></div>
+<div><label>Base font size override</label><input type="number" min="12" max="18" step="1" name="rendering_base_font_px" value="<?= htmlspecialchars((string)($editing['rendering']['base_font_px'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Primary color override</label><input name="rendering_primary_color" placeholder="#0B5ED7" value="<?= htmlspecialchars((string)($editing['rendering']['primary_color'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Accent color override</label><input name="rendering_accent_color" placeholder="#16A34A" value="<?= htmlspecialchars((string)($editing['rendering']['accent_color'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Cover hero media ID</label><input name="cover_hero_media_id" value="<?= htmlspecialchars((string)($editing['media']['cover_hero_media_id'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>System overview media ID</label><input name="system_overview_media_id" value="<?= htmlspecialchars((string)($editing['media']['system_overview_media_id'] ?? ''), ENT_QUOTES) ?>"></div>
+
 <div style="grid-column:1/-1"><label>Special Requests From Customer (Inclusive in the rate)</label><textarea name="special_requests_inclusive"><?= htmlspecialchars((string)$editing['special_requests_inclusive'], ENT_QUOTES) ?></textarea><div class="muted">In case of conflict, Special Requests will be given priority over Annexure inclusions.</div></div>
 <div style="grid-column:1/-1"><h3>Annexure Overrides</h3><div class="muted">Annexures are based on template snapshot; edit below.</div></div>
 <?php foreach (['cover_notes'=>'Cover Notes','system_inclusions'=>'System Inclusions','payment_terms'=>'Payment Terms','warranty'=>'Warranty','system_type_explainer'=>'System Type Explainer','transportation'=>'Transportation','terms_conditions'=>'Terms & Conditions','pm_subsidy_info'=>'PM Subsidy Info'] as $key=>$label): ?>
