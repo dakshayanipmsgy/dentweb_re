@@ -1,0 +1,20 @@
+{
+    "default_pm_surya_ghar_agreement": {
+        "id": "default_pm_surya_ghar_agreement",
+        "name": "PM Surya Ghar – Vendor Consumer Agreement (Default)",
+        "archived_flag": false,
+        "html_template": "<h2 style=\"text-align:center;margin:0 0 12px 0;\">PM Surya Ghar – Vendor Consumer Agreement</h2>\n<p>This Agreement is executed on <strong>{{execution_date}}</strong> between:</p>\n<p><strong>Vendor:</strong> {{vendor_name}}, {{vendor_address}}</p>\n<p><strong>Consumer:</strong> {{consumer_name}}, Consumer Account No. {{consumer_account_no}}, Address: {{consumer_address}}</p>\n<p>Whereas the Consumer has engaged the Vendor for design, supply, installation, testing, and commissioning of rooftop solar photovoltaic system of <strong>{{system_capacity_kwp}} kWp</strong> at the consumer site address: <strong>{{consumer_site_address}}</strong>.</p>\n<p>The total RTS system cost agreed between both parties is <strong>₹{{total_cost}}</strong> (inclusive of applicable taxes, unless otherwise stated in linked quotation/work order).</p>\n<ol>\n  <li>The Vendor shall execute the work as per approved technical standards, DISCOM norms, and applicable PM Surya Ghar guidelines.</li>\n  <li>The Consumer shall provide site readiness, access, and required statutory documents for execution and subsidy-related processing.</li>\n  <li>Any subsidy is subject to government policy, portal validation, and discom approval, and will be credited to consumer account as per applicable process.</li>\n  <li>Payment milestones, material specifications, and commercial conditions shall follow the accepted quotation and mutually agreed written terms.</li>\n  <li>Post-installation support, warranty, and service commitments shall be as per issued handover/warranty documents and accepted quotation.</li>\n</ol>\n<p>This Agreement is read, understood, and accepted by both parties.</p>\n<table style=\"width:100%; margin-top:24px; border-collapse:collapse;\">\n  <tr>\n    <td style=\"width:50%; vertical-align:top; padding-top:24px;\">For Vendor<br><strong>{{vendor_name}}</strong><br>Authorized Signatory</td>\n    <td style=\"width:50%; vertical-align:top; padding-top:24px;\">For Consumer<br><strong>{{consumer_name}}</strong><br>Signature</td>\n  </tr>\n</table>",
+        "placeholders": [
+            "{{execution_date}}",
+            "{{system_capacity_kwp}}",
+            "{{consumer_name}}",
+            "{{consumer_account_no}}",
+            "{{consumer_address}}",
+            "{{consumer_site_address}}",
+            "{{vendor_name}}",
+            "{{vendor_address}}",
+            "{{total_cost}}"
+        ],
+        "updated_at": ""
+    }
+}

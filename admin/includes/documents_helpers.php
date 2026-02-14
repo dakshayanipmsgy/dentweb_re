@@ -31,6 +31,21 @@ function documents_quotations_dir(): string
     return documents_base_dir() . '/quotations';
 }
 
+function documents_agreements_dir(): string
+{
+    return documents_base_dir() . '/agreements';
+}
+
+function documents_agreement_pdf_dir(): string
+{
+    return documents_agreements_dir() . '/pdfs';
+}
+
+function documents_agreement_templates_path(): string
+{
+    return documents_templates_dir() . '/agreement_templates.json';
+}
+
 function documents_public_branding_dir(): string
 {
     return dirname(__DIR__, 2) . '/images/documents/branding';
@@ -78,6 +93,8 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_media_dir());
     documents_ensure_dir(documents_logs_dir());
     documents_ensure_dir(documents_quotations_dir());
+    documents_ensure_dir(documents_agreements_dir());
+    documents_ensure_dir(documents_agreement_pdf_dir());
     documents_ensure_dir(documents_public_branding_dir());
     documents_ensure_dir(documents_public_backgrounds_dir());
     documents_ensure_dir(documents_public_diagrams_dir());
@@ -103,6 +120,11 @@ function documents_ensure_structure(): void
         json_save($templateBlocksPath, []);
     }
 
+    $agreementTemplatesPath = documents_agreement_templates_path();
+    if (!is_file($agreementTemplatesPath)) {
+        json_save($agreementTemplatesPath, documents_agreement_template_defaults());
+    }
+
     $libraryPath = documents_media_dir() . '/library.json';
     if (!is_file($libraryPath)) {
         json_save($libraryPath, []);
@@ -112,6 +134,54 @@ function documents_ensure_structure(): void
     if (!is_file($logPath)) {
         @file_put_contents($logPath, '', LOCK_EX);
     }
+}
+
+function documents_agreement_template_defaults(): array
+{
+    $now = date('c');
+    $html = <<<'HTML'
+<h2 style="text-align:center;margin:0 0 12px 0;">PM Surya Ghar – Vendor Consumer Agreement</h2>
+<p>This Agreement is executed on <strong>{{execution_date}}</strong> between:</p>
+<p><strong>Vendor:</strong> {{vendor_name}}, {{vendor_address}}</p>
+<p><strong>Consumer:</strong> {{consumer_name}}, Consumer Account No. {{consumer_account_no}}, Address: {{consumer_address}}</p>
+<p>Whereas the Consumer has engaged the Vendor for design, supply, installation, testing, and commissioning of rooftop solar photovoltaic system of <strong>{{system_capacity_kwp}} kWp</strong> at the consumer site address: <strong>{{consumer_site_address}}</strong>.</p>
+<p>The total RTS system cost agreed between both parties is <strong>₹{{total_cost}}</strong> (inclusive of applicable taxes, unless otherwise stated in linked quotation/work order).</p>
+<ol>
+  <li>The Vendor shall execute the work as per approved technical standards, DISCOM norms, and applicable PM Surya Ghar guidelines.</li>
+  <li>The Consumer shall provide site readiness, access, and required statutory documents for execution and subsidy-related processing.</li>
+  <li>Any subsidy is subject to government policy, portal validation, and discom approval, and will be credited to consumer account as per applicable process.</li>
+  <li>Payment milestones, material specifications, and commercial conditions shall follow the accepted quotation and mutually agreed written terms.</li>
+  <li>Post-installation support, warranty, and service commitments shall be as per issued handover/warranty documents and accepted quotation.</li>
+</ol>
+<p>This Agreement is read, understood, and accepted by both parties.</p>
+<table style="width:100%; margin-top:24px; border-collapse:collapse;">
+  <tr>
+    <td style="width:50%; vertical-align:top; padding-top:24px;">For Vendor<br><strong>{{vendor_name}}</strong><br>Authorized Signatory</td>
+    <td style="width:50%; vertical-align:top; padding-top:24px;">For Consumer<br><strong>{{consumer_name}}</strong><br>Signature</td>
+  </tr>
+</table>
+HTML;
+
+    return [
+        'default_pm_surya_ghar_agreement' => [
+            'id' => 'default_pm_surya_ghar_agreement',
+            'name' => 'PM Surya Ghar – Vendor Consumer Agreement (Default)',
+            'archived_flag' => false,
+            'html_template' => $html,
+            'placeholders' => [
+                '{{execution_date}}',
+                '{{system_capacity_kwp}}',
+                '{{consumer_name}}',
+                '{{consumer_account_no}}',
+                '{{consumer_address}}',
+                '{{consumer_site_address}}',
+                '{{vendor_name}}',
+                '{{vendor_address}}',
+                '{{total_cost}}',
+            ],
+            'updated_at' => $now,
+        ],
+    ];
 }
 
 function safe_text($s): string
@@ -401,6 +471,48 @@ function documents_quote_defaults(): array
             'background_image' => '',
             'background_opacity' => 1.0,
         ],
+        'pdf_path' => '',
+        'pdf_generated_at' => '',
+    ];
+}
+
+function documents_agreement_defaults(): array
+{
+    return [
+        'id' => '',
+        'agreement_no' => '',
+        'status' => 'Draft',
+        'template_id' => 'default_pm_surya_ghar_agreement',
+        'customer_mobile' => '',
+        'customer_name' => '',
+        'consumer_account_no' => '',
+        'consumer_address' => '',
+        'site_address' => '',
+        'execution_date' => '',
+        'system_capacity_kwp' => '',
+        'total_cost' => '',
+        'linked_quote_id' => '',
+        'linked_quote_no' => '',
+        'overrides' => [
+            'html_override' => '',
+            'fields_override' => [
+                'execution_date' => '',
+                'system_capacity_kwp' => '',
+                'total_cost' => '',
+                'consumer_account_no' => '',
+                'consumer_address' => '',
+                'site_address' => '',
+            ],
+        ],
+        'rendering' => [
+            'background_image' => '',
+            'background_opacity' => 1.0,
+        ],
+        'created_by_type' => 'admin',
+        'created_by_id' => '',
+        'created_by_name' => '',
+        'created_at' => '',
+        'updated_at' => '',
         'pdf_path' => '',
         'pdf_generated_at' => '',
     ];
@@ -701,6 +813,24 @@ function documents_save_quote(array $quote): array
 
 function documents_generate_quote_number(string $segment): array
 {
+    $number = documents_generate_document_number('quotation', $segment);
+    if (!$number['ok']) {
+        return $number;
+    }
+    return ['ok' => true, 'quote_no' => (string) ($number['doc_no'] ?? ''), 'error' => ''];
+}
+
+function documents_generate_agreement_number(string $segment = 'RES'): array
+{
+    $number = documents_generate_document_number('agreement', $segment);
+    if (!$number['ok']) {
+        return $number;
+    }
+    return ['ok' => true, 'agreement_no' => (string) ($number['doc_no'] ?? ''), 'error' => ''];
+}
+
+function documents_generate_document_number(string $docType, string $segment): array
+{
     $numberingPath = documents_settings_dir() . '/numbering_rules.json';
     $payload = json_load($numberingPath, documents_numbering_defaults());
     $payload = array_merge(documents_numbering_defaults(), is_array($payload) ? $payload : []);
@@ -715,7 +845,7 @@ function documents_generate_quote_number(string $segment): array
         if (($rule['archived_flag'] ?? false) || !($rule['active'] ?? false)) {
             continue;
         }
-        if (($rule['doc_type'] ?? '') !== 'quotation' || ($rule['segment'] ?? '') !== $segment) {
+        if (($rule['doc_type'] ?? '') !== $docType || ($rule['segment'] ?? '') !== $segment) {
             continue;
         }
         $selectedIndex = $index;
@@ -723,14 +853,14 @@ function documents_generate_quote_number(string $segment): array
     }
 
     if ($selectedIndex === null) {
-        return ['ok' => false, 'error' => 'No active quotation numbering rule for segment ' . $segment . '.'];
+        return ['ok' => false, 'error' => 'No active ' . $docType . ' numbering rule for segment ' . $segment . '.'];
     }
 
     $rule = $rules[$selectedIndex];
     $seqCurrent = max((int) ($rule['seq_start'] ?? 1), (int) ($rule['seq_current'] ?? 1));
     $seq = str_pad((string) $seqCurrent, max(2, (int) ($rule['seq_digits'] ?? 4)), '0', STR_PAD_LEFT);
     $format = (string) ($rule['format'] ?? '{{prefix}}/{{segment}}/{{fy}}/{{seq}}');
-    $quoteNo = strtr($format, [
+    $docNo = strtr($format, [
         '{{prefix}}' => (string) ($rule['prefix'] ?? ''),
         '{{segment}}' => $segment,
         '{{fy}}' => $fy,
@@ -745,5 +875,134 @@ function documents_generate_quote_number(string $segment): array
         return ['ok' => false, 'error' => 'Failed to update numbering rule counter.'];
     }
 
-    return ['ok' => true, 'quote_no' => $quoteNo, 'error' => ''];
+    return ['ok' => true, 'doc_no' => $docNo, 'error' => ''];
+}
+
+function documents_list_agreements(): array
+{
+    documents_ensure_structure();
+    $files = glob(documents_agreements_dir() . '/*.json') ?: [];
+    $rows = [];
+    foreach ($files as $file) {
+        if (!is_string($file) || str_ends_with($file, '/agreement_templates.json')) {
+            continue;
+        }
+        $row = json_load($file, []);
+        if (!is_array($row)) {
+            continue;
+        }
+        $rows[] = array_merge(documents_agreement_defaults(), $row);
+    }
+
+    usort($rows, static function (array $a, array $b): int {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+
+    return $rows;
+}
+
+function documents_get_agreement(string $id): ?array
+{
+    $id = safe_filename($id);
+    if ($id === '') {
+        return null;
+    }
+    $path = documents_agreements_dir() . '/' . $id . '.json';
+    if (!is_file($path)) {
+        return null;
+    }
+    $row = json_load($path, []);
+    if (!is_array($row)) {
+        return null;
+    }
+    return array_merge(documents_agreement_defaults(), $row);
+}
+
+function documents_save_agreement(array $agreement): array
+{
+    $id = safe_filename((string) ($agreement['id'] ?? ''));
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'Missing agreement ID'];
+    }
+    return json_save(documents_agreements_dir() . '/' . $id . '.json', $agreement);
+}
+
+function documents_get_agreement_templates(): array
+{
+    documents_ensure_structure();
+    $rows = json_load(documents_agreement_templates_path(), documents_agreement_template_defaults());
+    if (!is_array($rows) || $rows === []) {
+        $rows = documents_agreement_template_defaults();
+    }
+    return $rows;
+}
+
+function documents_save_agreement_templates(array $templates): array
+{
+    return json_save(documents_agreement_templates_path(), $templates);
+}
+
+function documents_company_vendor_name(array $company): string
+{
+    $brand = safe_text($company['brand_name'] ?? '');
+    if ($brand !== '') {
+        return $brand;
+    }
+    return safe_text($company['company_name'] ?? '');
+}
+
+function documents_company_vendor_address(array $company): string
+{
+    $parts = [
+        safe_text($company['address_line'] ?? ''),
+        safe_text($company['city'] ?? ''),
+        safe_text($company['district'] ?? ''),
+        safe_text($company['state'] ?? ''),
+        safe_text($company['pin'] ?? ''),
+    ];
+    $parts = array_values(array_filter($parts, static fn(string $v): bool => $v !== ''));
+    return implode(', ', $parts);
+}
+
+function documents_format_money_indian($value): string
+{
+    return number_format((float) $value, 2, '.', '');
+}
+
+function documents_build_agreement_placeholders(array $agreement, array $company): array
+{
+    $override = is_array($agreement['overrides']['fields_override'] ?? null) ? $agreement['overrides']['fields_override'] : [];
+    $executionDate = safe_text((string) ($override['execution_date'] ?? '')) ?: safe_text((string) ($agreement['execution_date'] ?? ''));
+    $capacity = safe_text((string) ($override['system_capacity_kwp'] ?? '')) ?: safe_text((string) ($agreement['system_capacity_kwp'] ?? ''));
+    $totalCost = safe_text((string) ($override['total_cost'] ?? '')) ?: safe_text((string) ($agreement['total_cost'] ?? ''));
+    $accountNo = safe_text((string) ($override['consumer_account_no'] ?? '')) ?: safe_text((string) ($agreement['consumer_account_no'] ?? ''));
+    $consumerAddress = safe_text((string) ($override['consumer_address'] ?? '')) ?: safe_text((string) ($agreement['consumer_address'] ?? ''));
+    $siteAddress = safe_text((string) ($override['site_address'] ?? '')) ?: safe_text((string) ($agreement['site_address'] ?? ''));
+
+    return [
+        '{{execution_date}}' => $executionDate,
+        '{{system_capacity_kwp}}' => $capacity,
+        '{{consumer_name}}' => safe_text((string) ($agreement['customer_name'] ?? '')),
+        '{{consumer_account_no}}' => $accountNo,
+        '{{consumer_address}}' => $consumerAddress,
+        '{{consumer_site_address}}' => $siteAddress,
+        '{{vendor_name}}' => documents_company_vendor_name($company),
+        '{{vendor_address}}' => documents_company_vendor_address($company),
+        '{{total_cost}}' => $totalCost,
+    ];
+}
+
+function documents_render_agreement_body_html(array $agreement, array $company): string
+{
+    $templates = documents_get_agreement_templates();
+    $templateId = safe_text((string) ($agreement['template_id'] ?? 'default_pm_surya_ghar_agreement'));
+    $template = $templates[$templateId] ?? $templates['default_pm_surya_ghar_agreement'] ?? null;
+    if (!is_array($template)) {
+        $fallback = documents_agreement_template_defaults();
+        $template = $fallback['default_pm_surya_ghar_agreement'];
+    }
+
+    $htmlOverride = safe_text((string) ($agreement['overrides']['html_override'] ?? ''));
+    $html = $htmlOverride !== '' ? $htmlOverride : (string) ($template['html_template'] ?? '');
+    return strtr($html, documents_build_agreement_placeholders($agreement, $company));
 }
