@@ -155,13 +155,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $challan['driver_name'] = safe_text($_POST['driver_name'] ?? '');
     $challan['delivery_notes'] = safe_text($_POST['delivery_notes'] ?? '');
     $challan['items'] = documents_normalize_challan_items($items);
-    $challan['rendering']['background_enabled'] = isset($_POST['background_enabled']);
     $challan['rendering']['background_image'] = safe_text($_POST['background_image'] ?? ($challan['rendering']['background_image'] ?? ''));
-    $challan['rendering']['background_opacity'] = max(0.05, min(1.0, (float) ($_POST['background_opacity'] ?? ($challan['rendering']['background_opacity'] ?? 0.18))));
-    $challan['rendering']['primary_color'] = safe_text($_POST['primary_color'] ?? ($challan['rendering']['primary_color'] ?? ''));
-    $challan['rendering']['accent_color'] = safe_text($_POST['accent_color'] ?? ($challan['rendering']['accent_color'] ?? ''));
-    $font = safe_text($_POST['base_font_px'] ?? '');
-    $challan['rendering']['base_font_px'] = $font === '' ? ($challan['rendering']['base_font_px'] ?? null) : max(12, min(18, (int) $font));
+    $challan['rendering']['background_opacity'] = max(0.1, min(1.0, (float) ($_POST['background_opacity'] ?? ($challan['rendering']['background_opacity'] ?? 1))));
 
     if ($snapshot['mobile'] === '' || $snapshot['name'] === '') {
         $redirectWith('error', 'Customer mobile and name are required.');
@@ -277,12 +272,8 @@ $quotes = array_values(array_filter($allQuotes, static function (array $q) use (
       <div><label>State</label><input name="state" value="Jharkhand"></div>
       <div><label>Vehicle No</label><input name="vehicle_no"></div>
       <div><label>Driver Name</label><input name="driver_name"></div>
-      <div><label><input type="checkbox" name="background_enabled" checked> Background enabled</label></div>
       <div><label>Background image path (optional)</label><input name="background_image"></div>
-      <div><label>Background opacity</label><input type="number" min="0.05" max="1" step="0.05" name="background_opacity" value="0.18"></div>
-      <div><label>Primary color</label><input name="primary_color" placeholder="#0B5ED7"></div>
-      <div><label>Accent color</label><input name="accent_color" placeholder="#16A34A"></div>
-      <div><label>Base font size</label><input type="number" min="12" max="18" step="1" name="base_font_px"></div>
+      <div><label>Background opacity</label><input type="number" min="0.1" max="1" step="0.05" name="background_opacity" value="1"></div>
       <div style="grid-column:1/-1"><label>Customer Address</label><textarea name="customer_address"></textarea></div>
       <div style="grid-column:1/-1"><label>Site Address</label><textarea name="site_address"></textarea></div>
       <div style="grid-column:1/-1"><label>Delivery Address</label><textarea name="delivery_address"></textarea></div>
