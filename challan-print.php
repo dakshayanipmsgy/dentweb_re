@@ -40,14 +40,25 @@ if ($viewerType === 'employee' && ((string) ($challan['created_by_type'] ?? '') 
 }
 
 $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
-$resolvedTheme = documents_resolve_rendering_theme(is_array($challan['rendering'] ?? null) ? $challan['rendering'] : []);
-$bg = (string) $resolvedTheme['background_image'];
-$opacity = (float) $resolvedTheme['background_opacity'];
+$bg = safe_text((string) ($challan['rendering']['background_image'] ?? ''));
+if ($bg === '') {
+    $templates = json_load(documents_templates_dir() . '/template_sets.json', []);
+    if (is_array($templates)) {
+        foreach ($templates as $tpl) {
+            if (!is_array($tpl) || (string) ($tpl['id'] ?? '') !== (string) ($challan['template_set_id'] ?? '')) {
+                continue;
+            }
+            $bg = safe_text((string) ($tpl['default_doc_theme']['page_background_image'] ?? ''));
+            break;
+        }
+    }
+}
+$opacity = max(0.1, min(1.0, (float) ($challan['rendering']['background_opacity'] ?? 1)));
 ?>
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delivery Challan <?= htmlspecialchars((string) $challan['challan_no'], ENT_QUOTES) ?></title>
 <style>
 @page { size:A4; margin:14mm; }
-body { font-family: <?= htmlspecialchars((string) $resolvedTheme['font_family'], ENT_QUOTES) ?>; font-size:<?= (int) $resolvedTheme['base_font_px'] ?>px; color:#111; }
+body { font-family: Arial, sans-serif; font-size:12px; color:#111; }
 .page-bg { position:fixed; inset:0; z-index:-1; opacity:<?= htmlspecialchars((string) $opacity, ENT_QUOTES) ?>; background: <?= $bg !== '' ? 'url(' . htmlspecialchars($bg, ENT_QUOTES) . ') center/cover no-repeat' : 'none' ?>; }
 .header { display:flex; justify-content:space-between; border-bottom:2px solid #111; margin-bottom:10px; padding-bottom:8px; }
 .title { font-size:24px; font-weight:700; margin:8px 0; text-align:center; }
@@ -57,7 +68,7 @@ table { width:100%; border-collapse:collapse; margin-top:10px; }
 th,td { border:1px solid #444; padding:6px; vertical-align:top; }
 .sign { margin-top:40px; display:grid; grid-template-columns:1fr 1fr; gap:24px; }
 </style></head><body>
-<?php if (!empty($resolvedTheme['background_enabled']) && $bg !== ''): ?><div class="page-bg"></div><?php endif; ?>
+<?php if ($bg !== ''): ?><div class="page-bg"></div><?php endif; ?>
 <div class="header"><div><strong><?= htmlspecialchars((string) ($company['brand_name'] ?: $company['company_name'] ?: 'Dakshayani Enterprises'), ENT_QUOTES) ?></strong><br><?= htmlspecialchars((string) ($company['address_line'] ?? ''), ENT_QUOTES) ?><br><?= htmlspecialchars((string) ($company['phone_primary'] ?? ''), ENT_QUOTES) ?></div><div><strong>Challan No:</strong> <?= htmlspecialchars((string) $challan['challan_no'], ENT_QUOTES) ?><br><strong>Date:</strong> <?= htmlspecialchars((string) $challan['delivery_date'], ENT_QUOTES) ?></div></div>
 <div class="title">Delivery Challan</div>
 <div class="grid"><div class="box"><strong>Customer:</strong> <?= htmlspecialchars((string) ($challan['customer_snapshot']['name'] ?? ''), ENT_QUOTES) ?><br><strong>Mobile:</strong> <?= htmlspecialchars((string) ($challan['customer_snapshot']['mobile'] ?? ''), ENT_QUOTES) ?><br><strong>Consumer Account No:</strong> <?= htmlspecialchars((string) ($challan['customer_snapshot']['consumer_account_no'] ?? ''), ENT_QUOTES) ?></div><div class="box"><strong>Delivery Address:</strong><br><?= nl2br(htmlspecialchars((string) $challan['delivery_address'], ENT_QUOTES)) ?><br><strong>Vehicle No:</strong> <?= htmlspecialchars((string) $challan['vehicle_no'], ENT_QUOTES) ?><br><strong>Driver:</strong> <?= htmlspecialchars((string) $challan['driver_name'], ENT_QUOTES) ?></div></div>

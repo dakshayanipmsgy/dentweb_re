@@ -331,7 +331,6 @@ $user = current_user();
         <a class="btn" href="admin-challans.php">Challans</a>
         <a class="btn" href="admin-agreements.php">Agreements</a>
         <a class="btn secondary" href="admin-templates.php">Template Blocks &amp; Media</a>
-        <a class="btn secondary" href="admin-document-theme.php">Document Theme</a>
         <a class="btn secondary" href="admin-dashboard.php">Back to Admin Dashboard</a>
       </div>
     </div>
@@ -348,7 +347,6 @@ $user = current_user();
       <a class="tab" href="admin-quotations.php">Quotation Manager</a>
       <a class="tab" href="admin-challans.php">Challans</a>
       <a class="tab" href="admin-agreements.php">Agreements</a>
-      <a class="tab" href="admin-document-theme.php">Document Theme</a>
       <span class="tab disabled">CSV Import (Phase 2+)</span>
     </nav>
 

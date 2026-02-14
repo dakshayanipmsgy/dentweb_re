@@ -49,13 +49,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $agreement['overrides']['fields_override']['site_address'] = safe_text($_POST['override_site_address'] ?? '');
 
         $agreement['overrides']['html_override'] = trim((string) ($_POST['html_override'] ?? ''));
-        $agreement['rendering']['background_enabled'] = isset($_POST['background_enabled']);
         $agreement['rendering']['background_image'] = safe_text($_POST['background_image'] ?? '');
-        $agreement['rendering']['background_opacity'] = max(0.05, min(1.0, (float) ($_POST['background_opacity'] ?? 0.18)));
-        $agreement['rendering']['primary_color'] = safe_text($_POST['primary_color'] ?? '');
-        $agreement['rendering']['accent_color'] = safe_text($_POST['accent_color'] ?? '');
-        $font = safe_text($_POST['base_font_px'] ?? '');
-        $agreement['rendering']['base_font_px'] = $font === '' ? null : max(12, min(18, (int) $font));
+        $agreement['rendering']['background_opacity'] = max(0.1, min(1.0, (float) ($_POST['background_opacity'] ?? 1)));
 
         if ($action === 'mark_final') {
             $agreement['status'] = 'Final';
@@ -111,7 +106,7 @@ $message = safe_text($_GET['message'] ?? '');
     <p><strong><?= htmlspecialchars((string) $agreement['agreement_no'], ENT_QUOTES) ?></strong> · Status: <?= htmlspecialchars((string) $agreement['status'], ENT_QUOTES) ?></p>
     <a class="btn secondary" href="admin-agreements.php">Back to Agreements</a>
     <a class="btn" target="_blank" href="agreement-print.php?id=<?= urlencode((string) $agreement['id']) ?>">Print</a>
-    
+    <a class="btn" href="agreement-pdf.php?id=<?= urlencode((string) $agreement['id']) ?>">Download PDF</a>
   </div>
 
   <form method="post">
@@ -133,7 +128,7 @@ $message = safe_text($_GET['message'] ?? '');
 
     <div class="card">
       <h2 style="margin-top:0">Field Overrides (optional)</h2>
-      <p class="muted">If override is non-empty, it is used in print placeholders.</p>
+      <p class="muted">If override is non-empty, it is used in print/PDF placeholders.</p>
       <div class="grid">
         <div><label>Override Execution Date</label><input name="override_execution_date" value="<?= htmlspecialchars((string) ($agreement['overrides']['fields_override']['execution_date'] ?? ''), ENT_QUOTES) ?>"></div>
         <div><label>Override kWp</label><input name="override_system_capacity_kwp" value="<?= htmlspecialchars((string) ($agreement['overrides']['fields_override']['system_capacity_kwp'] ?? ''), ENT_QUOTES) ?>"></div>
@@ -149,12 +144,8 @@ $message = safe_text($_GET['message'] ?? '');
       <textarea name="html_override" style="min-height:220px"><?= htmlspecialchars((string) ($agreement['overrides']['html_override'] ?? ''), ENT_QUOTES) ?></textarea>
       <p class="muted">Leave empty to use default template. Placeholders remain supported.</p>
       <div class="grid">
-        <div><label><input type="checkbox" name="background_enabled" <?= !isset($agreement['rendering']['background_enabled']) || !empty($agreement['rendering']['background_enabled'])?'checked':'' ?>> Background enabled</label></div>
         <div><label>Background Image</label><input name="background_image" value="<?= htmlspecialchars((string) ($agreement['rendering']['background_image'] ?? ''), ENT_QUOTES) ?>"></div>
-        <div><label>Background Opacity</label><input name="background_opacity" type="number" min="0.05" max="1" step="0.05" value="<?= htmlspecialchars((string) ($agreement['rendering']['background_opacity'] ?? 0.18), ENT_QUOTES) ?>"></div>
-        <div><label>Primary Color</label><input name="primary_color" value="<?= htmlspecialchars((string) ($agreement['rendering']['primary_color'] ?? ''), ENT_QUOTES) ?>"></div>
-        <div><label>Accent Color</label><input name="accent_color" value="<?= htmlspecialchars((string) ($agreement['rendering']['accent_color'] ?? ''), ENT_QUOTES) ?>"></div>
-        <div><label>Base Font Size</label><input type="number" min="12" max="18" step="1" name="base_font_px" value="<?= htmlspecialchars((string) ($agreement['rendering']['base_font_px'] ?? ''), ENT_QUOTES) ?>"></div>
+        <div><label>Background Opacity</label><input name="background_opacity" type="number" min="0.1" max="1" step="0.05" value="<?= htmlspecialchars((string) ($agreement['rendering']['background_opacity'] ?? 1), ENT_QUOTES) ?>"></div>
       </div>
     </div>
 
