@@ -326,10 +326,7 @@ $user = current_user();
         <h1>Documents &amp; Billing Control Center</h1>
         <p class="muted">Admin: <?= htmlspecialchars((string) ($user['full_name'] ?? 'Administrator'), ENT_QUOTES) ?></p>
       </div>
-      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
-        <a class="btn" href="admin-quotations.php">Quotations</a>
-        <a class="btn secondary" href="admin-dashboard.php">Back to Admin Dashboard</a>
-      </div>
+      <a class="btn secondary" href="admin-dashboard.php">Back to Admin Dashboard</a>
     </div>
 
     <?php if ($message !== '' && ($status === 'success' || $status === 'error')): ?>
