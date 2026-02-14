@@ -503,6 +503,10 @@ $cardConfigs[] = [
           <i class="fa-solid fa-file-signature" aria-hidden="true"></i>
           Handover Templates
         </a>
+        <a href="<?= htmlspecialchars($pathFor('admin-documents.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
+          <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
+          Documents &amp; Billing
+        </a>
         <a href="<?= htmlspecialchars($pathFor('admin/website-settings/'), ENT_QUOTES) ?>" class="btn btn-ghost">
           <i class="fa-solid fa-palette" aria-hidden="true"></i>
           Website Content &amp; Theme
