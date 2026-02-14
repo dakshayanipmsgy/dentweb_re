@@ -81,6 +81,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $redirect($id, 'success', 'Quotation approved.');
     }
 
+
+    if ($action === 'save_financial_inputs') {
+        if (!$editable) {
+            $redirect($id, 'error', 'This quotation is not editable.');
+        }
+
+        $estimatedMonthlyBill = (string) safe_text($_POST['estimated_monthly_bill_rs'] ?? '');
+        $subsidyExpectedInput = (string) safe_text($_POST['subsidy_expected_rs'] ?? ($_POST['subsidy_amount_rs'] ?? ''));
+        $subsidyExpected = (float) ($subsidyExpectedInput !== '' ? $subsidyExpectedInput : ($quote['subsidy_amount_rs'] ?? ($quote['financial_inputs']['subsidy_expected_rs'] ?? 0)));
+
+        $quote['financial_inputs']['estimated_monthly_bill_rs'] = $estimatedMonthlyBill;
+        $quote['financial_inputs']['subsidy_expected_rs'] = $subsidyExpected > 0 ? (string) round($subsidyExpected, 2) : '';
+        $quote['financial_inputs']['unit_rate_rs_per_kwh'] = (string) safe_text($_POST['unit_rate_rs_per_kwh'] ?? '');
+        $quote['financial_inputs']['interest_rate_percent'] = (string) safe_text($_POST['interest_rate_percent'] ?? '');
+        $quote['financial_inputs']['loan_tenure_years'] = (string) safe_text($_POST['loan_tenure_years'] ?? '');
+        $quote['financial_inputs']['annual_generation_per_kw'] = (string) safe_text($_POST['annual_generation_per_kw'] ?? '');
+        $quote['financial_inputs']['min_monthly_bill_after_solar_rs'] = (string) safe_text($_POST['min_monthly_bill_after_solar_rs'] ?? '300');
+        $analysisMode = safe_text($_POST['analysis_mode'] ?? 'simple_monthly');
+        $quote['financial_inputs']['analysis_mode'] = in_array($analysisMode, ['simple_monthly', 'advanced_10y_monthly'], true) ? $analysisMode : 'simple_monthly';
+        $yearsForCumulative = (int) ($_POST['years_for_cumulative_chart'] ?? 25);
+        $quote['financial_inputs']['years_for_cumulative_chart'] = $yearsForCumulative > 0 ? $yearsForCumulative : 25;
+        $quote['subsidy_expected_rs'] = $subsidyExpected > 0 ? round($subsidyExpected, 2) : 0;
+        $quote['updated_at'] = date('c');
+
+        $saved = documents_save_quote($quote);
+        if (!($saved['ok'] ?? false)) {
+            $redirect($id, 'error', 'Failed to save financial inputs.');
+        }
+
+        $redirect($id, 'success', 'Financial inputs saved.');
+    }
+
     if ($action === 'accept_quote') {
         if ((string) ($quote['status'] ?? '') !== 'Approved' && (string) ($quote['status'] ?? '') !== 'Accepted') {
             $redirect($id, 'error', 'Quotation must be Approved before acceptance.');
@@ -164,6 +196,24 @@ $links = is_array($quote['links'] ?? null) ? $quote['links'] : [];
 </div>
 <div class="card"><h3>Customer</h3><p><strong><?= htmlspecialchars((string)($snapshot['name'] ?: $quote['customer_name']), ENT_QUOTES) ?></strong> (<?= htmlspecialchars((string)($snapshot['mobile'] ?: $quote['customer_mobile']), ENT_QUOTES) ?>)</p><p><strong>Site Address:</strong><br><?= nl2br(htmlspecialchars((string)($quote['site_address'] ?: $snapshot['address']), ENT_QUOTES)) ?></p></div>
 <div class="card"><h3>System</h3><p><?= htmlspecialchars((string)$quote['system_type'], ENT_QUOTES) ?> | <?= htmlspecialchars((string)$quote['capacity_kwp'], ENT_QUOTES) ?> kWp</p></div>
+
+<div class="card"><h3>Savings & EMI Calculator Inputs (required for graphs)</h3>
+<?php $financialInputs = is_array($quote['financial_inputs'] ?? null) ? $quote['financial_inputs'] : []; ?>
+<form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_financial_inputs">
+<table>
+<tr><th>Estimated Monthly Electricity Bill (₹) *</th><td><input type="number" step="0.01" min="0" name="estimated_monthly_bill_rs" value="<?= htmlspecialchars((string)($financialInputs['estimated_monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td></tr>
+<tr><th>Unit Rate (₹/kWh)</th><td><input type="number" step="0.01" min="0" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($financialInputs['unit_rate_rs_per_kwh'] ?? ''), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td></tr>
+<tr><th>Interest Rate (%)</th><td><input type="number" step="0.01" min="0" name="interest_rate_percent" value="<?= htmlspecialchars((string)($financialInputs['interest_rate_percent'] ?? ''), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td></tr>
+<tr><th>Loan Tenure (years)</th><td><input type="number" min="1" name="loan_tenure_years" value="<?= htmlspecialchars((string)($financialInputs['loan_tenure_years'] ?? ''), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td></tr>
+<tr><th>Annual Generation per kW (kWh/year)</th><td><input type="number" step="0.01" min="0" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($financialInputs['annual_generation_per_kw'] ?? ''), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td></tr>
+<tr><th>Minimum Monthly Bill after Solar (₹)</th><td><input type="number" step="0.01" min="0" name="min_monthly_bill_after_solar_rs" value="<?= htmlspecialchars((string)($financialInputs['min_monthly_bill_after_solar_rs'] ?? 300), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td></tr>
+<tr><th>Mode</th><td><select name="analysis_mode" <?= $editable ? '' : 'disabled' ?>><option value="simple_monthly" <?= (($financialInputs['analysis_mode'] ?? 'simple_monthly') === 'simple_monthly') ? 'selected' : '' ?>>Simple (Typical month comparison)</option><option value="advanced_10y_monthly" <?= (($financialInputs['analysis_mode'] ?? '') === 'advanced_10y_monthly') ? 'selected' : '' ?>>Advanced (120 months view)</option></select></td></tr>
+<tr><th>Years for cumulative chart</th><td><input type="number" min="1" max="40" name="years_for_cumulative_chart" value="<?= htmlspecialchars((string)($financialInputs['years_for_cumulative_chart'] ?? 25), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td></tr>
+<tr><th>Expected subsidy (₹)</th><td><input type="number" step="0.01" min="0" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($financialInputs['subsidy_expected_rs'] ?? ($quote['subsidy_expected_rs'] ?? '')), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td></tr>
+</table>
+<?php if ($editable): ?><p><button class="btn" type="submit">Save Financial Inputs</button></p><?php else: ?><p>Financial inputs are locked after quotation leaves Draft status.</p><?php endif; ?>
+</form></div>
+
 <div class="card"><h3>Pricing Summary</h3><table><thead><tr><th>Description</th><th>Basic</th><th>GST</th><th>Total</th></tr></thead><tbody>
 <tr><td>Solar Power Generation System (5%)</td><td><?= number_format((float)$quote['calc']['bucket_5_basic'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_5_gst'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_5_basic'] + (float)$quote['calc']['bucket_5_gst'],2) ?></td></tr>
 <tr><td>Solar Power Generation System (18%)</td><td><?= number_format((float)$quote['calc']['bucket_18_basic'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_18_gst'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_18_basic'] + (float)$quote['calc']['bucket_18_gst'],2) ?></td></tr>
