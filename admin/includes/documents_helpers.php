@@ -13,6 +13,11 @@ function documents_settings_dir(): string
     return documents_base_dir() . '/settings';
 }
 
+function documents_doc_theme_path(): string
+{
+    return documents_settings_dir() . '/doc_theme.json';
+}
+
 function documents_templates_dir(): string
 {
     return documents_base_dir() . '/templates';
@@ -136,6 +141,11 @@ function documents_ensure_structure(): void
         json_save($rulesPath, documents_numbering_defaults());
     }
     documents_ensure_numbering_rules_for_proforma_invoice();
+
+    $themePath = documents_doc_theme_path();
+    if (!is_file($themePath)) {
+        json_save($themePath, documents_doc_theme_defaults());
+    }
 
     $templatesPath = documents_templates_dir() . '/template_sets.json';
     if (!is_file($templatesPath)) {
@@ -593,6 +603,7 @@ function documents_quote_defaults(): array
             ],
             'grand_total' => 0,
         ],
+        'assumptions' => documents_quote_assumptions_defaults(),
         'special_requests_inclusive' => '',
         'special_requests_override_note' => true,
         'annexures_overrides' => [
@@ -610,9 +621,90 @@ function documents_quote_defaults(): array
             'background_image' => '',
             'background_opacity' => 1.0,
         ],
-        'pdf_path' => '',
-        'pdf_generated_at' => '',
     ];
+}
+
+function documents_doc_theme_defaults(): array
+{
+    return [
+        'global' => [
+            'enable_background' => true,
+            'font_scale' => 1.0,
+            'primary_color' => '#0B3A6A',
+            'secondary_color' => '#1F7A6B',
+            'accent_color' => '#F2B705',
+            'text_color' => '#1B1B1B',
+            'muted_text_color' => '#666666',
+            'box_bg' => '#F6F8FB',
+            'co2_factor_kg_per_kwh' => '',
+            'trees_factor_kg_per_tree_per_year' => '',
+            'show_placeholders_when_missing' => false,
+        ],
+        'per_template_set' => [],
+    ];
+}
+
+function documents_get_doc_theme_settings(): array
+{
+    documents_ensure_structure();
+    $raw = json_load(documents_doc_theme_path(), documents_doc_theme_defaults());
+    if (!is_array($raw)) {
+        return documents_doc_theme_defaults();
+    }
+    return array_replace_recursive(documents_doc_theme_defaults(), $raw);
+}
+
+function documents_get_effective_doc_theme(string $templateSetId = ''): array
+{
+    $settings = documents_get_doc_theme_settings();
+    $global = is_array($settings['global'] ?? null) ? $settings['global'] : [];
+    $effective = array_merge(documents_doc_theme_defaults()['global'], $global);
+    if ($templateSetId !== '') {
+        $per = is_array($settings['per_template_set'][$templateSetId] ?? null) ? $settings['per_template_set'][$templateSetId] : [];
+        $effective = array_merge($effective, $per);
+    }
+    $effective['font_scale'] = max(0.85, min(1.25, (float) ($effective['font_scale'] ?? 1.0)));
+    $effective['enable_background'] = !empty($effective['enable_background']);
+    return $effective;
+}
+
+function documents_quote_assumptions_defaults(): array
+{
+    return [
+        'tariff_rs_per_unit' => '',
+        'avg_monthly_units' => '',
+        'avg_monthly_bill_rs' => '',
+        'annual_tariff_escalation_pct' => '',
+        'loan_selected' => '',
+        'loan_interest_pct_annual' => '',
+        'loan_tenure_months' => '',
+        'down_payment_pct' => '',
+        'processing_fee_rs' => '',
+        'expected_subsidy_rs' => '',
+        'subsidy_receivable_months' => '',
+        'co2_factor_kg_per_kwh' => '',
+        'trees_factor_kg_per_tree_per_year' => '',
+        'post_solar_bill_rs' => '',
+        'expected_annual_generation_kwh' => '',
+        'generation_kwh_per_kwp_per_year' => '',
+    ];
+}
+
+function documents_quote_parse_assumptions(array $input): array
+{
+    $assumptions = documents_quote_assumptions_defaults();
+    foreach ($assumptions as $key => $_) {
+        $assumptions[$key] = safe_text((string) ($input['assumption_' . $key] ?? ''));
+    }
+    if (($input['assumption_auto_defaults'] ?? '') === '1') {
+        $assumptions = array_merge($assumptions, [
+            'tariff_rs_per_unit' => '7.0',
+            'annual_tariff_escalation_pct' => '3',
+            'co2_factor_kg_per_kwh' => '0.82',
+            'trees_factor_kg_per_tree_per_year' => '21',
+        ]);
+    }
+    return $assumptions;
 }
 
 function documents_proforma_defaults(): array
@@ -814,8 +906,6 @@ function documents_agreement_defaults(): array
         'created_by_name' => '',
         'created_at' => '',
         'updated_at' => '',
-        'pdf_path' => '',
-        'pdf_generated_at' => '',
     ];
 }
 
@@ -847,8 +937,6 @@ function documents_challan_defaults(): array
             'background_image' => '',
             'background_opacity' => 1.0,
         ],
-        'pdf_path' => '',
-        'pdf_generated_at' => '',
     ];
 }
 
@@ -1201,7 +1289,9 @@ function documents_list_quotes(): array
         if (!is_array($row)) {
             continue;
         }
-        $quotes[] = array_merge(documents_quote_defaults(), $row);
+        $quote = array_merge(documents_quote_defaults(), $row);
+        $quote['assumptions'] = array_merge(documents_quote_assumptions_defaults(), is_array($quote['assumptions'] ?? null) ? $quote['assumptions'] : []);
+        $quotes[] = $quote;
     }
 
     usort($quotes, static function (array $a, array $b): int {
@@ -1225,7 +1315,9 @@ function documents_get_quote(string $id): ?array
     if (!is_array($row)) {
         return null;
     }
-    return array_merge(documents_quote_defaults(), $row);
+    $quote = array_merge(documents_quote_defaults(), $row);
+    $quote['assumptions'] = array_merge(documents_quote_assumptions_defaults(), is_array($quote['assumptions'] ?? null) ? $quote['assumptions'] : []);
+    return $quote;
 }
 
 function documents_save_quote(array $quote): array

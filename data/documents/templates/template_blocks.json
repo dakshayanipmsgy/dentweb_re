@@ -1,12 +1,14 @@
 {
   "pm-surya-ghar-residential-ongrid-subsidy": {
-    "system_inclusions": "\n• MNRE approved ALMM solar modules\n• Grid-tied inverter with remote monitoring\n• Hot dip galvanized mounting structure\n• AC/DC protection, earthing and lightning protection\n• Installation, testing and commissioning\n• Net metering support documentation",
+    "system_inclusions": "\n\u2022 MNRE approved ALMM solar modules\n\u2022 Grid-tied inverter with remote monitoring\n\u2022 Hot dip galvanized mounting structure\n\u2022 AC/DC protection, earthing and lightning protection\n\u2022 Installation, testing and commissioning\n\u2022 Net metering support documentation",
     "payment_terms": "\n1) 70% advance along with work order confirmation.\n2) 20% before dispatch of material at site.\n3) 10% after successful commissioning and handover.",
-    "warranty": "\n• Solar module: As per manufacturer warranty card\n• Inverter: As per manufacturer warranty card\n• Structure: 5 years against manufacturing defects\n• Workmanship/service support: 1 year",
+    "warranty": "\n\u2022 Solar module: As per manufacturer warranty card\n\u2022 Inverter: As per manufacturer warranty card\n\u2022 Structure: 5 years against manufacturing defects\n\u2022 Workmanship/service support: 1 year",
     "system_type_explainer": "On-grid systems operate with utility grid synchronisation and can export surplus units through net-metering approvals as per DISCOM norms.",
     "transportation": "Transportation within standard service radius is included. Unloading support and local permissions to be coordinated by customer where required.",
     "terms_conditions": "All applicable statutory approvals and subsidy timelines are subject to prevailing state/central guidelines. Any civil work beyond standard scope is chargeable extra.",
-    "pm_subsidy_info": "PM Surya Ghar subsidy is subject to beneficiary eligibility, portal approvals and DISCOM processes. Subsidy amount is credited directly to customer account by the government as per current policy."
+    "pm_subsidy_info": "PM Surya Ghar subsidy is subject to beneficiary eligibility, portal approvals and DISCOM processes. Subsidy amount is credited directly to customer account by the government as per current policy.",
+    "project_timeline": "<ol><li>Agreement & Permitting</li><li>Installation</li><li>Inspection & Net Meter</li><li>Activation / Commissioning</li></ol>",
+    "contact_support": "<p>For support, contact our team using details in company profile.</p>"
   },
   "residential-hybrid": {
     "system_inclusions": "",
@@ -15,7 +17,9 @@
     "system_type_explainer": "",
     "transportation": "",
     "terms_conditions": "",
-    "pm_subsidy_info": ""
+    "pm_subsidy_info": "",
+    "project_timeline": "<ol><li>Agreement & Permitting</li><li>Installation</li><li>Inspection & Net Meter</li><li>Activation / Commissioning</li></ol>",
+    "contact_support": "<p>For support, contact our team using details in company profile.</p>"
   },
   "commercial-ongrid": {
     "system_inclusions": "",
@@ -24,7 +28,9 @@
     "system_type_explainer": "",
     "transportation": "",
     "terms_conditions": "",
-    "pm_subsidy_info": ""
+    "pm_subsidy_info": "",
+    "project_timeline": "<ol><li>Agreement & Permitting</li><li>Installation</li><li>Inspection & Net Meter</li><li>Activation / Commissioning</li></ol>",
+    "contact_support": "<p>For support, contact our team using details in company profile.</p>"
   },
   "pm-res-ongrid": {
     "system_inclusions": "",
@@ -33,6 +39,8 @@
     "system_type_explainer": "",
     "transportation": "",
     "terms_conditions": "",
-    "pm_subsidy_info": ""
+    "pm_subsidy_info": "",
+    "project_timeline": "<ol><li>Agreement & Permitting</li><li>Installation</li><li>Inspection & Net Meter</li><li>Activation / Commissioning</li></ol>",
+    "contact_support": "<p>For support, contact our team using details in company profile.</p>"
   }
 }
