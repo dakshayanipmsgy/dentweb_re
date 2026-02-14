@@ -34,6 +34,7 @@ if ($quote === null) {
     echo 'Quotation not found.';
     exit;
 }
+$quoteSnapshot = documents_quote_snapshot_with_fallback($quote);
 if ($viewerType === 'employee' && ((string) ($quote['created_by_type'] ?? '') !== 'employee' || (string) ($quote['created_by_id'] ?? '') !== $viewerId)) {
     http_response_code(403);
     echo 'Access denied.';
@@ -83,7 +84,7 @@ $pdfError = safe_text($_GET['err'] ?? '') === 'pdf_failed';
 <?php if ($editable): ?><a class="btn secondary" href="<?= htmlspecialchars($editLink, ENT_QUOTES) ?>">Edit</a><?php endif; ?>
 </div>
 <div class="card"><table><tr><th>Quote No</th><td><?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></td><th>Status</th><td><?= htmlspecialchars((string)$quote['status'], ENT_QUOTES) ?></td></tr><tr><th>Created By</th><td><?= htmlspecialchars((string)$quote['created_by_name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$quote['created_by_type'], ENT_QUOTES) ?>)</td><th>Valid Until</th><td><?= htmlspecialchars((string)$quote['valid_until'], ENT_QUOTES) ?></td></tr><tr><th>Created At</th><td><?= htmlspecialchars((string)$quote['created_at'], ENT_QUOTES) ?></td><th>Updated At</th><td><?= htmlspecialchars((string)$quote['updated_at'], ENT_QUOTES) ?></td></tr></table></div>
-<div class="card"><h3>Customer</h3><p><strong><?= htmlspecialchars((string)$quote['customer_name'], ENT_QUOTES) ?></strong> (<?= htmlspecialchars((string)$quote['customer_mobile'], ENT_QUOTES) ?>)</p><p><?= nl2br(htmlspecialchars((string)$quote['billing_address'], ENT_QUOTES)) ?></p><p><?= htmlspecialchars((string)$quote['district'], ENT_QUOTES) ?>, <?= htmlspecialchars((string)$quote['city'], ENT_QUOTES) ?>, <?= htmlspecialchars((string)$quote['state'], ENT_QUOTES) ?> - <?= htmlspecialchars((string)$quote['pin'], ENT_QUOTES) ?></p></div>
+<div class="card"><h3>Customer</h3><p><strong><?= htmlspecialchars((string)$quoteSnapshot['customer_name'], ENT_QUOTES) ?></strong> (<?= htmlspecialchars((string)$quoteSnapshot['customer_mobile'], ENT_QUOTES) ?>)</p><p><strong>Consumer Account No:</strong> <?= htmlspecialchars((string)$quoteSnapshot['consumer_account_no'], ENT_QUOTES) ?></p><p><?= nl2br(htmlspecialchars((string)$quoteSnapshot['billing_address'], ENT_QUOTES)) ?></p><p><strong>Site Address:</strong> <?= nl2br(htmlspecialchars((string)$quoteSnapshot['site_address'], ENT_QUOTES)) ?></p><p><?= htmlspecialchars((string)$quoteSnapshot['district'], ENT_QUOTES) ?>, <?= htmlspecialchars((string)$quoteSnapshot['city'], ENT_QUOTES) ?>, <?= htmlspecialchars((string)$quoteSnapshot['state'], ENT_QUOTES) ?> - <?= htmlspecialchars((string)$quoteSnapshot['pin'], ENT_QUOTES) ?></p></div>
 <div class="card"><h3>System</h3><p><?= htmlspecialchars((string)$quote['system_type'], ENT_QUOTES) ?> | <?= htmlspecialchars((string)$quote['capacity_kwp'], ENT_QUOTES) ?> kWp</p><p><?= htmlspecialchars((string)$quote['project_summary_line'], ENT_QUOTES) ?></p></div>
 <div class="card"><h3>Pricing Summary</h3>
 <table><thead><tr><th>Description</th><th>Basic</th><th>GST</th><th>Total</th></tr></thead><tbody>

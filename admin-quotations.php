@@ -44,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $partyType = safe_text($_POST['party_type'] ?? 'lead');
         $mobile = normalize_customer_mobile((string) ($_POST['customer_mobile'] ?? ''));
         $customerName = safe_text($_POST['customer_name'] ?? '');
+        $consumerAccountNo = safe_text($_POST['consumer_account_no'] ?? ($_POST['jbvnl_account_number'] ?? ''));
 
         if ($mobile === '' || $customerName === '') {
             $redirectWith('error', 'Customer mobile and name are required.');
@@ -115,6 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['party_type'] = in_array($partyType, ['customer', 'lead'], true) ? $partyType : 'lead';
         $quote['customer_mobile'] = $mobile;
         $quote['customer_name'] = $customerName;
+        $quote['consumer_account_no'] = $consumerAccountNo;
         $quote['billing_address'] = safe_text($_POST['billing_address'] ?? '');
         $quote['site_address'] = safe_text($_POST['site_address'] ?? '');
         $quote['district'] = safe_text($_POST['district'] ?? '');
@@ -143,6 +145,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectWith('error', 'Failed to save quotation.');
         }
 
+        if ($quote['party_type'] === 'customer') {
+            documents_patch_customer_missing_fields($mobile, [
+                'jbvnl_account_number' => $quote['consumer_account_no'],
+                'site_address' => $quote['site_address'],
+            ]);
+        }
+
         header('Location: quotation-view.php?id=' . urlencode((string) $quote['id']) . '&ok=1');
         exit;
     }
@@ -161,6 +170,7 @@ $status = safe_text($_GET['status'] ?? '');
 $message = safe_text($_GET['message'] ?? '');
 $lookupMobile = safe_text($_GET['lookup_mobile'] ?? '');
 $lookup = $lookupMobile !== '' ? documents_find_customer_by_mobile($lookupMobile) : null;
+$lookupStatus = $lookupMobile === '' ? '' : ($lookup !== null ? 'found' : 'not_found');
 ?>
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Quotations</title>
@@ -173,6 +183,7 @@ $lookup = $lookupMobile !== '' ? documents_find_customer_by_mobile($lookupMobile
 <form method="get" style="margin-bottom:10px">
 <label>Customer Lookup by Mobile</label><div style="display:flex;gap:8px"><input type="text" name="lookup_mobile" value="<?= htmlspecialchars($lookupMobile, ENT_QUOTES) ?>"><button class="btn secondary" type="submit">Lookup</button></div>
 </form>
+<?php if ($lookupStatus === 'found'): ?><div class="alert ok">Customer found. Full profile fields loaded.</div><?php elseif ($lookupStatus === 'not_found'): ?><div class="alert err">Customer not found. You can continue as lead/prospect.</div><?php endif; ?>
 <form method="post">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
 <input type="hidden" name="action" value="save_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string) $editing['id'], ENT_QUOTES) ?>">
@@ -181,6 +192,7 @@ $lookup = $lookupMobile !== '' ? documents_find_customer_by_mobile($lookupMobile
 <div><label>Party Type</label><select name="party_type"><option value="customer" <?= $editing['party_type']==='customer'?'selected':'' ?>>Customer</option><option value="lead" <?= $editing['party_type']!=='customer'?'selected':'' ?>>Lead</option></select></div>
 <div><label>Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string)(($lookupMobile !== '' && $lookup !== null) ? $lookupMobile : $editing['customer_mobile']), ENT_QUOTES) ?>"></div>
 <div><label>Name</label><input name="customer_name" required value="<?= htmlspecialchars((string)($lookup['customer_name'] ?? $editing['customer_name']), ENT_QUOTES) ?>"></div>
+<div><label>Consumer Account No (JBVNL)</label><input name="consumer_account_no" value="<?= htmlspecialchars((string)($lookup['consumer_account_no'] ?? $editing['consumer_account_no']), ENT_QUOTES) ?>"></div>
 <div><label>System Type</label><select name="system_type"><?php foreach (['Ongrid','Hybrid','Offgrid','Product'] as $t): ?><option value="<?= $t ?>" <?= $editing['system_type']===$t?'selected':'' ?>><?= $t ?></option><?php endforeach; ?></select></div>
 <div><label>Capacity kWp</label><input name="capacity_kwp" required value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>"></div>
 <div><label>Valid Until</label><input type="date" name="valid_until" value="<?= htmlspecialchars((string)$editing['valid_until'], ENT_QUOTES) ?>"></div>

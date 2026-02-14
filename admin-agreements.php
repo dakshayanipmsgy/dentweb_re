@@ -45,6 +45,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($customerMobile === '' || $customerName === '') {
             $redirectWith('error', 'Customer mobile and customer name are required.');
         }
+
+        $existingCustomer = get_customer_by_mobile($customerMobile);
+        if ($existingCustomer === null) {
+            $redirectWith('error', 'Agreement requires an existing customer. Please select a registered customer mobile.');
+        }
         if ($executionDate === '' || $capacity === '' || $totalCost === '') {
             $redirectWith('error', 'Execution date, kWp, and total cost are required.');
         }
@@ -57,6 +62,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quote = documents_get_quote($linkedQuoteId);
             if ($quote !== null) {
                 $linkedQuoteId = (string) ($quote['id'] ?? '');
+                $consumerAccountNo = safe_text((string) ($quote['consumer_account_no'] ?? '')) ?: $consumerAccountNo;
+                $consumerAddress = safe_text((string) ($quote['billing_address'] ?? '')) ?: $consumerAddress;
+                $siteAddress = safe_text((string) ($quote['site_address'] ?? '')) ?: $siteAddress;
+                $customerName = safe_text((string) ($quote['customer_name'] ?? '')) ?: $customerName;
+                $customerMobile = normalize_customer_mobile((string) ($quote['customer_mobile'] ?? '')) ?: $customerMobile;
             } else {
                 $linkedQuoteId = '';
             }
@@ -138,6 +148,26 @@ $lookupMobile = normalize_customer_mobile((string) ($_GET['lookup_mobile'] ?? ''
 $lookupCustomer = $lookupMobile !== '' ? documents_find_customer_by_mobile($lookupMobile) : null;
 $selectedQuoteId = safe_text($_GET['quote_id'] ?? '');
 $selectedQuote = $selectedQuoteId !== '' ? documents_get_quote($selectedQuoteId) : null;
+
+$lookupStatus = $lookupMobile === '' ? '' : ($lookupCustomer !== null ? 'found' : 'not_found');
+$quoteSnapshot = $selectedQuote !== null ? merge_snapshot(documents_quote_defaults(), $selectedQuote) : [];
+$agreementSeed = merge_snapshot($lookupCustomer ?? [], [
+    'customer_mobile' => $lookupMobile,
+    'customer_name' => $lookupCustomer['customer_name'] ?? '',
+]);
+if ($quoteSnapshot !== []) {
+    $agreementSeed = merge_snapshot($agreementSeed, [
+        'customer_mobile' => $quoteSnapshot['customer_mobile'] ?? '',
+        'customer_name' => $quoteSnapshot['customer_name'] ?? '',
+        'consumer_account_no' => $quoteSnapshot['consumer_account_no'] ?? '',
+        'billing_address' => $quoteSnapshot['billing_address'] ?? '',
+        'site_address' => $quoteSnapshot['site_address'] ?? '',
+        'city' => $quoteSnapshot['city'] ?? '',
+        'district' => $quoteSnapshot['district'] ?? '',
+        'pin' => $quoteSnapshot['pin'] ?? '',
+        'state' => $quoteSnapshot['state'] ?? '',
+    ]);
+}
 
 $quoteCandidates = [];
 if ($lookupMobile !== '') {
@@ -225,23 +255,24 @@ $message = safe_text($_GET['message'] ?? '');
       </div>
       <div style="align-self:end"><button class="btn secondary" type="submit">Search</button></div>
     </form>
+    <?php if ($lookupStatus === 'found'): ?><div class="banner success">Customer found. Full profile fields loaded.</div><?php elseif ($lookupStatus === 'not_found'): ?><div class="banner error">Customer not found. Agreements can only be created for existing customers.</div><?php endif; ?>
 
     <form method="post">
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>">
       <input type="hidden" name="action" value="create_agreement">
       <div class="grid">
-        <div><label>Customer Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string) ($lookupMobile !== '' ? $lookupMobile : ''), ENT_QUOTES) ?>"></div>
-        <div><label>Customer Name</label><input name="customer_name" required value="<?= htmlspecialchars((string) ($lookupCustomer['customer_name'] ?? ''), ENT_QUOTES) ?>"></div>
-        <div><label>Consumer Account No</label><input name="consumer_account_no" value="<?= htmlspecialchars((string) ($lookupCustomer['consumer_account_no'] ?? ''), ENT_QUOTES) ?>"></div>
+        <div><label>Customer Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string) ($agreementSeed['customer_mobile'] ?? ''), ENT_QUOTES) ?>"></div>
+        <div><label>Customer Name</label><input name="customer_name" required value="<?= htmlspecialchars((string) ($agreementSeed['customer_name'] ?? ''), ENT_QUOTES) ?>"></div>
+        <div><label>Consumer Account No</label><input name="consumer_account_no" value="<?= htmlspecialchars((string) ($agreementSeed['consumer_account_no'] ?? ''), ENT_QUOTES) ?>"></div>
         <div><label>Execution Date</label><input type="date" name="execution_date" required value="<?= htmlspecialchars((string) date('Y-m-d'), ENT_QUOTES) ?>"></div>
         <div><label>System Capacity (kWp)</label><input name="system_capacity_kwp" required value="<?= htmlspecialchars((string) ($selectedQuote['capacity_kwp'] ?? ''), ENT_QUOTES) ?>"></div>
         <div><label>Total RTS Cost</label><input name="total_cost" required value="<?= htmlspecialchars((string) (($selectedQuote['calc']['grand_total'] ?? '') !== '' ? documents_format_money_indian((float) ($selectedQuote['calc']['grand_total'] ?? 0)) : ''), ENT_QUOTES) ?>"></div>
-        <div style="grid-column:1/-1"><label>Consumer Address</label><textarea name="consumer_address"><?= htmlspecialchars((string) ($lookupCustomer['billing_address'] ?? ''), ENT_QUOTES) ?></textarea></div>
-        <div style="grid-column:1/-1"><label>Consumer Site Address</label><textarea name="site_address"><?= htmlspecialchars((string) ($lookupCustomer['site_address'] ?? ''), ENT_QUOTES) ?></textarea></div>
+        <div style="grid-column:1/-1"><label>Consumer Address</label><textarea name="consumer_address"><?= htmlspecialchars((string) ($agreementSeed['billing_address'] ?? ''), ENT_QUOTES) ?></textarea></div>
+        <div style="grid-column:1/-1"><label>Consumer Site Address</label><textarea name="site_address"><?= htmlspecialchars((string) ($agreementSeed['site_address'] ?? ''), ENT_QUOTES) ?></textarea></div>
 
         <div>
           <label>Link Quotation (Optional)</label>
-          <select name="linked_quote_id" onchange="if(this.value){window.location='admin-agreements.php?lookup_mobile=<?= urlencode($lookupMobile) ?>&quote_id='+encodeURIComponent(this.value)}">
+          <select name="linked_quote_id" onchange="window.location='admin-agreements.php?lookup_mobile=<?= urlencode($lookupMobile) ?>&quote_id='+encodeURIComponent(this.value)">
             <option value="">-- none --</option>
             <?php foreach ($quoteCandidates as $q): ?>
               <option value="<?= htmlspecialchars((string) $q['id'], ENT_QUOTES) ?>" <?= ((string) ($selectedQuote['id'] ?? '') === (string) ($q['id'] ?? '')) ? 'selected' : '' ?>>
