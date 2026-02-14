@@ -344,7 +344,6 @@ $message = safe_text($_GET['message'] ?? '');
           <td>
             <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) $row['id']) ?>">View/Edit</a>
             <a class="btn secondary" target="_blank" href="agreement-print.php?id=<?= urlencode((string) $row['id']) ?>">Print</a>
-            <a class="btn secondary" href="agreement-pdf.php?id=<?= urlencode((string) $row['id']) ?>">PDF</a>
             <?php if ((string) $row['status'] !== 'Archived'): ?>
             <form method="post" style="display:inline-block">
               <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>">

@@ -1,0 +1,31 @@
+{
+  "global": {
+    "enable_background": true,
+    "font_scale": 1,
+    "primary_color": "#0B3A6A",
+    "secondary_color": "#1F7A6B",
+    "accent_color": "#F2B705",
+    "text_color": "#1B1B1B",
+    "muted_text_color": "#666666",
+    "box_bg": "#F6F8FB",
+    "co2_factor_kg_per_kwh": "",
+    "trees_factor_kg_per_tree_per_year": "",
+    "show_placeholders_when_missing": false
+  },
+  "per_template_set": {
+    "pm-res-ongrid": {
+      "enable_background": true,
+      "font_scale": 1,
+      "primary_color": "#0B3A6A",
+      "secondary_color": "#1F7A6B",
+      "accent_color": "#F2B705",
+      "background_media_id": "",
+      "show_cover_page": true,
+      "show_system_overview_page": true,
+      "show_financials_page": true,
+      "show_impact_page": true,
+      "show_next_steps_page": true,
+      "show_contact_page": true
+    }
+  }
+}
