@@ -327,7 +327,11 @@ $tab = safe_text($_GET['tab'] ?? 'quotations');
 if (!in_array($tab, ['quotations','archived','settings'], true)) { $tab = 'quotations'; }
 if ($tab === 'archived') {
     $allQuotes = array_values(array_filter($allQuotes, static function (array $q): bool {
-        return documents_quote_normalize_status((string)($q['status'] ?? 'draft')) === 'archived' || !empty($q['archived_flag']);
+        return documents_is_archived($q);
+    }));
+} else {
+    $allQuotes = array_values(array_filter($allQuotes, static function (array $q): bool {
+        return !documents_is_archived($q);
     }));
 }
 if ($statusFilter !== '') {

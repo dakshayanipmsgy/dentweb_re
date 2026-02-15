@@ -41,11 +41,7 @@ $redirectDocuments = static function (string $tab, string $type, string $msg, ar
 };
 
 $isArchivedRecord = static function (array $row): bool {
-    if (!empty($row['archived_flag'])) {
-        return true;
-    }
-    $status = strtolower(trim((string) ($row['status'] ?? '')));
-    return $status === 'archived';
+    return documents_is_archived($row);
 };
 
 $inr = static function (float $amount): string {
@@ -343,18 +339,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $redirectDocuments($tab, 'error', 'Quotation not found.', $view !== '' ? ['view' => $view] : []);
             }
             if ($shouldArchive) {
-                $quote['status'] = 'archived';
-                $quote['archived_flag'] = true;
-                $quote['archived_at'] = date('c');
-                $quote['archived_by'] = [
+                $quote = documents_set_archived($quote, [
                     'type' => 'admin',
                     'id' => (string) ($user['id'] ?? ''),
                     'name' => (string) ($user['full_name'] ?? 'Admin'),
-                ];
+                ]);
             } else {
-                $quote['archived_flag'] = false;
-                $quote['archived_at'] = '';
-                $quote['archived_by'] = ['type' => '', 'id' => '', 'name' => ''];
+                $quote = documents_set_unarchived($quote);
                 $quote['status'] = !empty($quote['accepted_at']) ? 'accepted' : 'approved';
             }
             $quote['updated_at'] = date('c');
@@ -363,6 +354,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $redirectDocuments($tab, 'error', 'Unable to update quotation archive state.', $view !== '' ? ['view' => $view] : []);
             }
             $redirectDocuments($tab, 'success', $shouldArchive ? 'Quotation archived.' : 'Quotation unarchived.', $view !== '' ? ['view' => $view] : []);
+        }
+
+        if ($docType === 'agreement') {
+            $agreement = documents_get_agreement($docId);
+            if ($agreement !== null) {
+                if ($shouldArchive) {
+                    $agreement = documents_set_archived($agreement, [
+                        'type' => 'admin',
+                        'id' => (string) ($user['id'] ?? ''),
+                        'name' => (string) ($user['full_name'] ?? 'Admin'),
+                    ]);
+                    $agreement['status'] = 'Archived';
+                } else {
+                    $agreement = documents_set_unarchived($agreement);
+                    $agreement['status'] = 'Draft';
+                }
+                $agreement['updated_at'] = date('c');
+                $savedAgreement = documents_save_agreement($agreement);
+                if (!$savedAgreement['ok']) {
+                    $redirectDocuments($tab, 'error', 'Unable to update agreement archive state.', $view !== '' ? ['view' => $view] : []);
+                }
+                $redirectDocuments($tab, 'success', $shouldArchive ? 'Agreement archived.' : 'Agreement unarchived.', $view !== '' ? ['view' => $view] : []);
+            }
         }
 
         $mappedType = $documentTypeMap[$docType] ?? '';
@@ -376,21 +390,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($shouldArchive) {
-            $document['archived_flag'] = true;
-            $document['archived_at'] = date('c');
-            $document['archived_by'] = [
+            $document = documents_set_archived($document, [
                 'type' => 'admin',
                 'id' => (string) ($user['id'] ?? ''),
                 'name' => (string) ($user['full_name'] ?? 'Admin'),
-            ];
-            $document['status'] = 'archived';
+            ]);
         } else {
-            $document['archived_flag'] = false;
-            $document['archived_at'] = '';
-            $document['archived_by'] = ['type' => '', 'id' => '', 'name' => ''];
-            if (strtolower((string) ($document['status'] ?? '')) === 'archived') {
-                $document['status'] = 'active';
-            }
+            $document = documents_set_unarchived($document);
         }
         $document['updated_at'] = date('c');
         $saved = documents_save_sales_document($mappedType, $document);
@@ -451,11 +457,12 @@ foreach ($quotes as $quote) {
         continue;
     }
     $statusNormalized = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
-    if ($statusNormalized !== 'accepted') {
-        continue;
-    }
     $isArchived = $isArchivedRecord($quote);
-    if ($isArchived && !$includeArchivedAccepted) {
+    if ($isArchived) {
+        if (!$includeArchivedAccepted) {
+            continue;
+        }
+    } elseif ($statusNormalized !== 'accepted') {
         continue;
     }
     $mobile = normalize_customer_mobile((string) ($quote['customer_mobile'] ?? ''));
@@ -522,6 +529,22 @@ foreach ($quotes as $quote) {
         'quotation_id' => (string) ($quote['id'] ?? ''),
         'amount' => (float) ($quote['calc']['gross_payable'] ?? 0),
         'archived_at' => (string) ($quote['archived_at'] ?? ''),
+    ];
+}
+
+$agreements = documents_list_agreements();
+foreach ($agreements as $agreement) {
+    if (!is_array($agreement) || !$isArchivedRecord($agreement)) {
+        continue;
+    }
+    $archivedRows[] = [
+        'type' => 'agreement',
+        'doc_id' => (string) ($agreement['id'] ?? ''),
+        'customer' => (string) ($agreement['customer_name'] ?? ''),
+        'mobile' => (string) ($agreement['customer_mobile'] ?? ''),
+        'quotation_id' => (string) ($agreement['linked_quote_id'] ?? ''),
+        'amount' => (float) preg_replace('/[^0-9.]/', '', (string) ($agreement['total_cost'] ?? '')),
+        'archived_at' => (string) ($agreement['archived_at'] ?? $agreement['updated_at'] ?? ''),
     ];
 }
 
@@ -803,7 +826,7 @@ usort($archivedRows, static function (array $a, array $b): int {
                 <td><?= htmlspecialchars($inr((float) ($row['amount'] ?? 0)), ENT_QUOTES) ?></td>
                 <td><?= htmlspecialchars((string) ($row['archived_at'] ?? ''), ENT_QUOTES) ?></td>
                 <td class="row-actions">
-                  <?php if ((string) ($row['quotation_id'] ?? '') !== ''): ?><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string) ($row['quotation_id'] ?? '')) ?>" target="_blank" rel="noopener">View</a><?php endif; ?>
+                  <?php if ((string) ($row['type'] ?? '') === 'agreement'): ?><a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['doc_id'] ?? '')) ?>" target="_blank" rel="noopener">View</a><?php elseif ((string) ($row['quotation_id'] ?? '') !== ''): ?><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string) ($row['quotation_id'] ?? '')) ?>" target="_blank" rel="noopener">View</a><?php endif; ?>
                   <?php if ($isAdmin): ?>
                     <form class="inline-form" method="post">
                       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />

@@ -1081,6 +1081,9 @@ function documents_agreement_defaults(): array
         'id' => '',
         'agreement_no' => '',
         'status' => 'Draft',
+        'archived_flag' => false,
+        'archived_at' => '',
+        'archived_by' => ['type' => '', 'id' => '', 'name' => ''],
         'template_id' => 'default_pm_surya_ghar_agreement',
         'customer_mobile' => '',
         'customer_name' => '',
@@ -1132,6 +1135,38 @@ function documents_agreement_defaults(): array
         'pdf_path' => '',
         'pdf_generated_at' => '',
     ];
+}
+
+function documents_is_archived(array $record): bool
+{
+    if (!empty($record['archived_flag']) || !empty($record['is_archived'])) {
+        return true;
+    }
+    return strtolower(trim((string) ($record['status'] ?? ''))) === 'archived';
+}
+
+function documents_set_archived(array $record, array $byUser = []): array
+{
+    $record['archived_flag'] = true;
+    $record['archived_at'] = date('c');
+    $record['archived_by'] = [
+        'type' => (string) ($byUser['type'] ?? 'admin'),
+        'id' => (string) ($byUser['id'] ?? ''),
+        'name' => (string) ($byUser['name'] ?? 'Admin'),
+    ];
+    $record['status'] = 'archived';
+    return $record;
+}
+
+function documents_set_unarchived(array $record): array
+{
+    $record['archived_flag'] = false;
+    $record['archived_at'] = '';
+    $record['archived_by'] = ['type' => '', 'id' => '', 'name' => ''];
+    if (strtolower(trim((string) ($record['status'] ?? ''))) === 'archived') {
+        $record['status'] = 'active';
+    }
+    return $record;
 }
 
 function documents_challan_defaults(): array
@@ -2242,7 +2277,7 @@ function documents_quote_prepare(array $quote): array
     $quote['workflow'] = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
     $quote['accepted_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['accepted_by'] ?? null) ? $quote['accepted_by'] : []);
     $quote['archived_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['archived_by'] ?? null) ? $quote['archived_by'] : []);
-    $quote['archived_flag'] = !empty($quote['archived_flag']) || $quote['status'] === 'archived';
+    $quote['archived_flag'] = documents_is_archived($quote);
     return $quote;
 }
 
