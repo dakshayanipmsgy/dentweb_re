@@ -23,9 +23,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $d['global']['typography']['base_font_px'] = (int)($_POST['base_font_px'] ?? 14);
     $d['global']['typography']['heading_scale'] = (float)($_POST['heading_scale'] ?? 1);
     $d['global']['typography']['density'] = safe_text($_POST['density'] ?? 'comfortable');
-    $d['global']['quotation_defaults']['default_hsn'] = safe_text($_POST['default_hsn'] ?? '8541') ?: '8541';
-    $d['global']['quotation_defaults']['default_gst_mode'] = safe_text($_POST['default_gst_mode'] ?? 'SOLAR_70_30');
-    $d['global']['quotation_defaults']['default_igst_mode'] = isset($_POST['default_igst_mode']);
 
     foreach (['RES','COM','IND','INST'] as $seg) {
         $d['segments'][$seg]['unit_rate_rs_per_kwh'] = (float)($_POST['unit_rate_' . $seg] ?? ($d['segments'][$seg]['unit_rate_rs_per_kwh'] ?? 0));
@@ -75,9 +72,6 @@ $d = documents_get_quote_defaults_settings();
 <div><label>Base font px</label><input type="number" name="base_font_px" value="<?= htmlspecialchars((string)$d['global']['typography']['base_font_px'], ENT_QUOTES) ?>"></div>
 <div><label>Heading scale</label><input type="number" step="0.1" name="heading_scale" value="<?= htmlspecialchars((string)$d['global']['typography']['heading_scale'], ENT_QUOTES) ?>"></div>
 <div><label>Density</label><select name="density"><?php foreach(['compact','comfortable','spacious'] as $dn): ?><option value="<?= $dn ?>" <?= ($d['global']['typography']['density']??'comfortable')===$dn?'selected':'' ?>><?= $dn ?></option><?php endforeach; ?></select></div>
-<div><label>Default HSN</label><input name="default_hsn" value="<?= htmlspecialchars((string)($d['global']['quotation_defaults']['default_hsn'] ?? '8541'), ENT_QUOTES) ?>"></div>
-<div><label>Default GST mode</label><select name="default_gst_mode"><option value="SOLAR_70_30" <?= (($d['global']['quotation_defaults']['default_gst_mode'] ?? 'SOLAR_70_30')==='SOLAR_70_30')?'selected':'' ?>>SOLAR_70_30</option><option value="GST_5" <?= (($d['global']['quotation_defaults']['default_gst_mode'] ?? '')==='GST_5')?'selected':'' ?>>GST_5</option></select></div>
-<div><label><input type="checkbox" name="default_igst_mode" <?= !empty($d['global']['quotation_defaults']['default_igst_mode'])?'checked':'' ?>> Default IGST mode</label></div>
 <?php foreach(['RES','COM','IND','INST'] as $seg): ?><div><label><?= $seg ?> unit rate ₹/kWh</label><input type="number" step="0.01" name="unit_rate_<?= $seg ?>" value="<?= htmlspecialchars((string)$d['segments'][$seg]['unit_rate_rs_per_kwh'], ENT_QUOTES) ?>"></div><?php endforeach; ?>
 <div><label>RES annual generation per kW</label><input type="number" step="0.01" name="res_annual_generation_per_kw" value="<?= htmlspecialchars((string)($d['segments']['RES']['annual_generation_per_kw'] ?? 1450), ENT_QUOTES) ?>"></div>
 <div><label>RES subsidy cap 2kW (₹)</label><input type="number" step="0.01" name="res_subsidy_cap_2kw" value="<?= htmlspecialchars((string)($d['segments']['RES']['subsidy']['cap_2kw'] ?? 60000), ENT_QUOTES) ?>"></div>
