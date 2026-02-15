@@ -237,10 +237,21 @@ function documents_quote_defaults_settings(): array
                 'emission_factor_kg_per_kwh' => 0.82,
                 'tree_absorption_kg_per_tree_per_year' => 20,
             ],
+            'quotation_ui' => [
+                'show_decimals' => false,
+                'qr_target' => 'quotation',
+                'footer_disclaimer' => 'Values are indicative and subject to site conditions, DISCOM approvals, and policy updates.',
+                'why_dakshayani_points' => [
+                    'Local Jharkhand EPC team',
+                    'DISCOM process and net-metering experience',
+                    'In-house design, installation, and commissioning',
+                    'Strong post-installation service support',
+                ],
+            ],
         ],
         'defaults' => [
             'hsn_solar' => '8541',
-            'cover_note_template' => '🌞 Thank you for considering Dakshayani Enterprises. We are pleased to share a clear and practical solar proposal tailored for your site.',
+            'cover_note_template' => '<p>Namaste! Thank you for considering Dakshayani Enterprises for your rooftop solar journey.</p><p>As a Jharkhand-based EPC partner, we handle complete design, installation, and support with local execution accountability.</p><p>Our team will also guide you through DISCOM approvals, net-metering paperwork, and PM Surya Ghar process steps so your transition stays smooth and transparent.</p>',
         ],
         'segments' => [
             'RES' => [
