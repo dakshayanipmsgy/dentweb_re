@@ -175,11 +175,14 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         $quote['finance_inputs']['monthly_bill_rs'] = safe_text($_POST['monthly_bill_rs'] ?? '');
         $quote['finance_inputs']['unit_rate_rs_per_kwh'] = safe_text($_POST['unit_rate_rs_per_kwh'] ?? '');
         $quote['finance_inputs']['annual_generation_per_kw'] = safe_text($_POST['annual_generation_per_kw'] ?? '');
-        $quote['finance_inputs']['loan']['enabled'] = isset($_POST['loan_enabled']);
-        $quote['finance_inputs']['loan']['interest_pct'] = safe_text($_POST['loan_interest_pct'] ?? '');
-        $quote['finance_inputs']['loan']['tenure_years'] = safe_text($_POST['loan_tenure_years'] ?? '');
-        $quote['finance_inputs']['loan']['margin_pct'] = safe_text($_POST['loan_margin_pct'] ?? '');
-        $quote['finance_inputs']['loan']['loan_amount'] = safe_text($_POST['loan_amount'] ?? '');
+        $quote['finance_inputs']['estimated_bill_after_solar_rs'] = safe_text($_POST['estimated_bill_after_solar_rs'] ?? '200');
+        $quote['finance_inputs']['self_financed']['enabled'] = isset($_POST['self_enabled']);
+        $quote['finance_inputs']['bank_financed']['enabled'] = isset($_POST['loan_enabled']);
+        $quote['finance_inputs']['bank_financed']['interest_pct'] = safe_text($_POST['loan_interest_pct'] ?? '');
+        $quote['finance_inputs']['bank_financed']['tenure_years'] = safe_text($_POST['loan_tenure_years'] ?? '');
+        $quote['finance_inputs']['bank_financed']['margin_pct'] = safe_text($_POST['loan_margin_pct'] ?? '');
+        $quote['finance_inputs']['bank_financed']['margin_amount_rs'] = safe_text($_POST['loan_margin_amount_rs'] ?? '');
+        $quote['finance_inputs']['bank_financed']['loan_amount_rs'] = safe_text($_POST['loan_amount'] ?? '');
         $quote['finance_inputs']['subsidy_expected_rs'] = safe_text($_POST['subsidy_expected_rs'] ?? '');
         $quote['finance_inputs']['transportation_rs'] = safe_text($_POST['transportation_rs'] ?? '');
         $quote['finance_inputs']['notes_for_customer'] = trim((string) ($_POST['notes_for_customer'] ?? ''));
@@ -283,11 +286,11 @@ if ($lookup !== null) {
 <div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($editing['finance_inputs']['annual_generation_per_kw'] ?: ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Transportation ₹</label><input type="number" step="0.01" name="transportation_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['transportation_rs'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Subsidy expected ₹</label><input type="number" step="0.01" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['subsidy_expected_rs'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Loan amount ₹</label><input type="number" step="0.01" name="loan_amount" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['loan_amount'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label><input type="checkbox" name="loan_enabled" <?= !empty($editing['finance_inputs']['loan']['enabled']) ? 'checked' : '' ?>> Loan enabled</label></div>
-<div><label>Loan interest %</label><input type="number" step="0.01" name="loan_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['interest_pct'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Loan tenure years</label><input type="number" step="1" name="loan_tenure_years" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Margin money %</label><input type="number" step="0.01" name="loan_margin_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['margin_pct'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Loan amount ₹</label><input type="number" step="0.01" name="loan_amount" value="<?= htmlspecialchars((string)(($editing['finance_inputs']['bank_financed']['loan_amount_rs'] ?? ($editing['finance_inputs']['loan']['loan_amount'] ?? ''))), ENT_QUOTES) ?>"></div>
+<div><label><input type="checkbox" name="loan_enabled" <?= !empty(($editing['finance_inputs']['bank_financed']['enabled'] ?? ($editing['finance_inputs']['loan']['enabled'] ?? false))) ? 'checked' : '' ?>> Loan enabled</label></div>
+<div><label>Loan interest %</label><input type="number" step="0.01" name="loan_interest_pct" value="<?= htmlspecialchars((string)(($editing['finance_inputs']['bank_financed']['interest_pct'] ?? ($editing['finance_inputs']['loan']['interest_pct'] ?? ''))), ENT_QUOTES) ?>"></div>
+<div><label>Loan tenure years</label><input type="number" step="1" name="loan_tenure_years" value="<?= htmlspecialchars((string)(($editing['finance_inputs']['bank_financed']['tenure_years'] ?? ($editing['finance_inputs']['loan']['tenure_years'] ?? ''))), ENT_QUOTES) ?>"></div>
+<div><label>Margin money %</label><input type="number" step="0.01" name="loan_margin_pct" value="<?= htmlspecialchars((string)(($editing['finance_inputs']['bank_financed']['margin_pct'] ?? ($editing['finance_inputs']['loan']['margin_pct'] ?? ''))), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Notes for customer</label><textarea name="notes_for_customer"><?= htmlspecialchars((string)($editing['finance_inputs']['notes_for_customer'] ?? ''), ENT_QUOTES) ?></textarea></div>
 <div style="grid-column:1/-1"><h3>Typography & Watermark Overrides</h3></div>
 <div><label>Base font px</label><input type="number" step="1" name="style_base_font_px" value="<?= htmlspecialchars((string)($editing['style_overrides']['typography']['base_font_px'] ?? ''), ENT_QUOTES) ?>"></div>

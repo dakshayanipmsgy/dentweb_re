@@ -185,6 +185,11 @@ function documents_quote_defaults_settings(): array
                 'logo_path' => '',
                 'tagline' => '',
                 'contact_line' => '',
+                'header_badges' => [
+                    'MNRE-Compliance EPC',
+                    'JREDA / JBVNL Assistance',
+                    'End-to-End Subsidy Support',
+                ],
                 'watermark' => [
                     'enabled' => true,
                     'image_path' => '',
@@ -455,6 +460,48 @@ function documents_company_profile_defaults(): array
     ];
 }
 
+
+function documents_get_company_profile(): array
+{
+    $base = documents_company_profile_defaults();
+    $companyPath = documents_settings_dir() . '/company_profile.json';
+    $company = json_load($companyPath, []);
+    if (is_array($company)) {
+        $base = array_replace($base, $company);
+    }
+
+    $brandPath = dirname(__DIR__, 2) . '/data/marketing/brand_profile.json';
+    $brand = json_load($brandPath, []);
+    if (is_array($brand)) {
+        if (($base['brand_name'] ?? '') === '' && (string) ($brand['firm_name'] ?? '') !== '') {
+            $base['brand_name'] = (string) $brand['firm_name'];
+        }
+        if (($base['phone_primary'] ?? '') === '' && (string) ($brand['primary_contact_number'] ?? '') !== '') {
+            $base['phone_primary'] = (string) $brand['primary_contact_number'];
+        }
+        if (($base['phone_secondary'] ?? '') === '' && (string) ($brand['whatsapp_number'] ?? '') !== '') {
+            $base['phone_secondary'] = (string) $brand['whatsapp_number'];
+        }
+        if (($base['email_primary'] ?? '') === '' && (string) ($brand['email'] ?? '') !== '') {
+            $base['email_primary'] = (string) $brand['email'];
+        }
+        if (($base['website'] ?? '') === '' && (string) ($brand['website_url'] ?? '') !== '') {
+            $base['website'] = (string) $brand['website_url'];
+        }
+        if (($base['address_line'] ?? '') === '' && (string) ($brand['physical_address'] ?? '') !== '') {
+            $base['address_line'] = (string) $brand['physical_address'];
+        }
+        if (($base['default_cta_line'] ?? '') === '' && (string) ($brand['default_cta_line'] ?? '') !== '') {
+            $base['default_cta_line'] = (string) $brand['default_cta_line'];
+        }
+        if (($base['logo_path'] ?? '') === '' && (string) ($brand['logo_path'] ?? '') !== '') {
+            $base['logo_path'] = (string) $brand['logo_path'];
+        }
+    }
+
+    return $base;
+}
+
 function documents_numbering_defaults(): array
 {
     return [
@@ -676,12 +723,18 @@ function documents_quote_defaults(): array
             'monthly_bill_rs' => '',
             'unit_rate_rs_per_kwh' => '',
             'annual_generation_per_kw' => '',
-            'loan' => [
+            'estimated_bill_after_solar_rs' => '200',
+            'self_financed' => [
+                'enabled' => true,
+            ],
+            'bank_financed' => [
                 'enabled' => true,
                 'interest_pct' => '',
                 'tenure_years' => '',
+                'loan_amount_rs' => '',
                 'margin_pct' => '',
-                'loan_amount' => '',
+                'margin_amount_rs' => '',
+                'slab_hint' => '',
             ],
             'subsidy_expected_rs' => '',
             'transportation_rs' => '',
