@@ -54,52 +54,40 @@ $segmentRateKey = [
 ];
 $segment = (string) ($quote['segment'] ?? 'RES');
 $defaultUnitRate = (float) ($style['defaults'][$segmentRateKey[$segment] ?? 'residential_unit_rate_rs_per_kwh'] ?? 7);
-
-$capacity = (float) ($quote['capacity_kwp'] ?? 0);
-$quoteTotalCost = (float) ($quote['input_total_gst_inclusive'] ?? ($quote['calc']['grand_total'] ?? 0));
-$grandTotal = $quoteTotalCost;
-$financialSubsidy = (float) ($financial['subsidy_expected_rs'] ?? 0);
-$rootSubsidy = (float) ($quote['subsidy_expected_rs'] ?? ($quote['subsidy_amount_rs'] ?? 0));
-$subsidy = $financialSubsidy > 0 ? $financialSubsidy : $rootSubsidy;
-$monthlyBill = (float) ($financial['estimated_monthly_bill_rs'] ?? 0);
-
-$unitRate = (float) (($financial['unit_rate_rs_per_kwh'] ?? '') !== '' ? $financial['unit_rate_rs_per_kwh'] : (($style['defaults']['unit_rate_rs_per_kwh'] ?? 0) ?: $defaultUnitRate));
-$interestRate = (float) (($financial['interest_rate_percent'] ?? '') !== '' ? $financial['interest_rate_percent'] : ($style['defaults']['default_bank_interest_rate_percent'] ?? 10));
-$tenureYears = (int) (($financial['loan_tenure_years'] ?? '') !== '' ? $financial['loan_tenure_years'] : ($style['defaults']['default_loan_tenure_years'] ?? 10));
+$unitRate = (float) (($style['defaults']['unit_rate_rs_per_kwh'] ?? 0) ?: $defaultUnitRate);
+$interestRate = (float) ($style['defaults']['default_bank_interest_rate_percent'] ?? 10);
+$tenureYears = (int) ($style['defaults']['default_loan_tenure_years'] ?? 10);
 $annualGenerationPerKw = (float) (($financial['annual_generation_per_kw'] ?? '') !== '' ? $financial['annual_generation_per_kw'] : ($style['defaults']['default_annual_generation_per_kw'] ?? 1450));
-$minMonthlyBillAfterSolar = (float) (($financial['min_monthly_bill_after_solar_rs'] ?? '') !== '' ? $financial['min_monthly_bill_after_solar_rs'] : 300);
-$analysisMode = (string) ($financial['analysis_mode'] ?? 'simple_monthly');
-if (!in_array($analysisMode, ['simple_monthly', 'advanced_10y_monthly'], true)) {
-    $analysisMode = 'simple_monthly';
-}
-$yearsForCumulative = (int) ($financial['years_for_cumulative_chart'] ?? 25);
-if ($yearsForCumulative < 1) {
-    $yearsForCumulative = 25;
-}
-
-$annualBill = $monthlyBill * 12;
-$annualKwh = $capacity * $annualGenerationPerKw;
-$annualSavings = $annualKwh * $unitRate;
-$residualBill = max($monthlyBill - ($annualSavings / 12), $minMonthlyBillAfterSolar);
-$netProjectCost = max(0, $quoteTotalCost - $subsidy);
-$upfrontNetCost = $netProjectCost;
-
-$nMonths = max(1, $tenureYears * 12);
-$monthlyRate = ($interestRate / 100) / 12;
-$emi = $monthlyRate > 0
-    ? ($netProjectCost * $monthlyRate * pow(1 + $monthlyRate, $nMonths)) / (pow(1 + $monthlyRate, $nMonths) - 1)
-    : ($netProjectCost / $nMonths);
-
-$case1Outflow = $monthlyBill;
-$case2Outflow = $emi + $residualBill;
-$case3Outflow = $minMonthlyBillAfterSolar;
-$graphsEnabled = $monthlyBill > 0;
-
-$annualSavingsEffective = max(min($annualSavings, $annualBill - ($minMonthlyBillAfterSolar * 12)), 0);
-$paybackYears = $annualSavingsEffective > 0 ? ($netProjectCost / $annualSavingsEffective) : null;
-
 $emissionFactor = (float) (($financial['emission_factor_kg_per_kwh'] ?? '') !== '' ? $financial['emission_factor_kg_per_kwh'] : ($style['defaults']['default_emission_factor_kg_per_kwh'] ?? 0.82));
 $treeFactor = (float) (($financial['kg_co2_absorbed_per_tree_per_year'] ?? '') !== '' ? $financial['kg_co2_absorbed_per_tree_per_year'] : ($style['defaults']['kg_co2_absorbed_per_tree_per_year'] ?? 20));
+
+$capacity = (float) ($quote['capacity_kwp'] ?? 0);
+$grandTotal = (float) ($quote['calc']['grand_total'] ?? 0);
+$subsidy = (float) ($financial['subsidy_expected_rs'] ?? 0);
+$monthlyBill = (float) ($financial['estimated_monthly_bill_rs'] ?? 0);
+$annualKwh = $capacity * $annualGenerationPerKw;
+$annualSavings = $annualKwh * $unitRate;
+$upfrontNetCost = max(0, $grandTotal - $subsidy);
+
+$noSolar10y = $monthlyBill * 12 * 10;
+$annualBill = $monthlyBill * 12;
+$annualAfterSolar = max($annualBill - $annualSavings, 0);
+$self10y = $upfrontNetCost + ($annualAfterSolar * 10);
+
+$nMonths = max(1, $tenureYears * 12);
+$monthlyRate = ($interestRate / 12) / 100;
+$emi = $monthlyRate > 0
+    ? ($upfrontNetCost * $monthlyRate * pow(1 + $monthlyRate, $nMonths)) / (pow(1 + $monthlyRate, $nMonths) - 1)
+    : ($upfrontNetCost / $nMonths);
+$loan10y = ($emi * $nMonths) + ($annualAfterSolar * 10);
+
+$paybackYear = null;
+for ($y = 1; $y <= 15; $y++) {
+    if (($annualSavings * $y) >= $upfrontNetCost) {
+        $paybackYear = $y;
+        break;
+    }
+}
 
 $co2KgYear = $annualKwh * $emissionFactor;
 $co2TonYear = $co2KgYear / 1000;
@@ -128,7 +116,7 @@ h1{font-size:<?= (int)$style['typography']['h1_px'] ?>px;margin:0}h2{font-size:<
 table{width:100%;border-collapse:collapse}th,td{border:1px solid var(--border);padding:8px}th{background:#fff}
 .highlight{background:#fff7ed;border:1px solid #fb923c;padding:10px;border-radius:10px}
 .timeline{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.step{background:#fff;padding:10px;border-radius:10px;border:1px dashed var(--primary);text-align:center}
-canvas{width:100%;max-width:700px;height:260px;background:#fff;border:1px solid var(--border);border-radius:10px;display:block}.stat-chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin:10px 0}.stat-chip{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;font-weight:600}.payback-table td,.payback-table th{border:1px solid var(--border);padding:8px}
+canvas{width:100%;max-width:100%;height:220px;background:#fff;border:1px solid var(--border);border-radius:10px}
 @media print{.noprint{display:none}}
 </style></head><body><div class="page"><?php if ($bgEnabled && $bgImg !== ''): ?><div class="bg"></div><?php endif; ?>
 
@@ -144,17 +132,7 @@ canvas{width:100%;max-width:700px;height:260px;background:#fff;border:1px solid 
 
 <div class="card"><h2>💰 Pricing Summary</h2><table><tr><th>Final Price (GST)</th><td>₹<?= number_format($grandTotal,2) ?></td><th>Subsidy Expected</th><td>₹<?= number_format($subsidy,2) ?></td></tr><tr><th>Net Cost After Subsidy</th><td colspan="3">₹<?= number_format($upfrontNetCost,2) ?></td></tr></table></div>
 
-<div class="card"><h2>📈 Savings & Payback</h2>
-<div class="stat-chips"><div class="stat-chip">Monthly Bill: ₹<?= number_format($case1Outflow,0) ?></div><div class="stat-chip">EMI: ₹<?= number_format($emi,0) ?></div><div class="stat-chip">After Loan: ₹<?= number_format($case3Outflow,0) ?>/month</div><div class="stat-chip">Estimated annual savings: ₹<?= number_format($annualSavings,0) ?></div></div>
-<?php if (!$graphsEnabled): ?>
-<div class="muted">Enter monthly bill to unlock savings graphs.</div>
-<?php else: ?>
-<h3>📉 Monthly Outflow</h3><div class="muted">Without solar you pay the bill forever. With solar, EMI replaces bill—and after loan it drops to minimum.</div><label class="muted" style="display:block;margin-bottom:6px"><input id="advancedToggle" type="checkbox" <?= $analysisMode === 'advanced_10y_monthly' ? 'checked' : '' ?>> Show advanced (Year 1–10)</label><canvas id="monthlyOutflowChart"></canvas><div id="monthlyModeText" class="muted"></div><div class="muted">Minimum bill shown as ₹<?= number_format($minMonthlyBillAfterSolar,0) ?> (typical fixed charges).</div>
-<h3>📈 Lifetime Cost</h3><canvas id="lifetimeCostChart"></canvas><div class="muted">Solar savings assumed from estimated bill and generation.</div>
-<h3>✅ Payback Snapshot</h3>
-<table class="payback-table" style="width:100%;border-collapse:collapse;background:#fff"><tr><th>System cost (net after subsidy)</th><td>₹<?= number_format($netProjectCost,2) ?></td></tr><tr><th>Estimated annual savings</th><td>₹<?= number_format($annualSavingsEffective,2) ?></td></tr><tr><th>Payback period (years)</th><td><?= $paybackYears === null ? 'N/A' : number_format($paybackYears,1) ?></td></tr></table>
-<?php endif; ?>
-</div>
+<div class="card"><h2>📈 Savings & Payback</h2><div class="muted">Assumptions: monthly bill ₹<?= number_format($monthlyBill,2) ?>, unit rate ₹<?= number_format($unitRate,2) ?>/kWh, tenure <?= $tenureYears ?>y, interest <?= number_format($interestRate,2) ?>%.</div><canvas id="bars"></canvas><div>No Solar (10y): ₹<?= number_format($noSolar10y,2) ?> · Solar-EMI (10y): ₹<?= number_format($loan10y,2) ?> · Solar-Self (10y): ₹<?= number_format($self10y,2) ?></div><br><canvas id="line"></canvas><div><strong>Estimated payback:</strong> <?= $paybackYear === null ? '&gt; 15 years' : $paybackYear . ' years' ?></div></div>
 
 <div class="card"><h2>🌿 Environmental Impact</h2><div class="grid"><div class="pill">🌿 CO₂/year: <strong><?= number_format($co2TonYear,2) ?> tons</strong></div><div class="pill">🌳 Trees/year: <strong><?= number_format($treesYear,0) ?></strong></div><div class="pill">🌿 CO₂/25y: <strong><?= number_format($co2Ton25,2) ?> tons</strong></div><div class="pill">🌳 Trees/25y: <strong><?= number_format($trees25,0) ?></strong></div></div></div>
 
@@ -167,35 +145,9 @@ canvas{width:100%;max-width:700px;height:260px;background:#fff;border:1px solid 
 </div>
 <script>
 (function(){
-const data = {
-  graphsEnabled: <?= json_encode($graphsEnabled) ?>,
-  analysisMode: <?= json_encode($analysisMode) ?>,
-  yearsForCumulative: <?= json_encode($yearsForCumulative) ?>,
-  loanTenureYears: <?= json_encode($tenureYears) ?>,
-  monthlyBill: <?= json_encode(round($case1Outflow, 2)) ?>,
-  solarLoanOutflow: <?= json_encode(round($case2Outflow, 2)) ?>,
-  afterLoanOutflow: <?= json_encode(round($case3Outflow, 2)) ?>,
-  annualBill: <?= json_encode(round($annualBill, 2)) ?>,
-  annualLoanSpend: <?= json_encode(round($case2Outflow * 12, 2)) ?>,
-  annualAfterLoanSpend: <?= json_encode(round($case3Outflow * 12, 2)) ?>,
-  netProjectCost: <?= json_encode(round($netProjectCost, 2)) ?>,
-  emi: <?= json_encode(round($emi, 2)) ?>,
-  residualBill: <?= json_encode(round($residualBill, 2)) ?>,
-};
-const rupees=v=>'₹'+Math.round(v).toLocaleString('en-IN');
-function setupCanvas(canvas){if(!canvas)return null;const ratio=window.devicePixelRatio||1;const w=Math.min(700,canvas.clientWidth||700);const h=260;canvas.width=Math.floor(w*ratio);canvas.height=Math.floor(h*ratio);const ctx=canvas.getContext('2d');ctx.setTransform(ratio,0,0,ratio,0,0);return {ctx,w,h};}
-function drawBars(){const el=document.getElementById('monthlyOutflowChart');const c=setupCanvas(el);if(!c)return;const {ctx,w,h}=c;const adv=document.getElementById('advancedToggle');const isAdvanced=!!(adv&&adv.checked);const labels=['No Solar','With Solar + Loan','After Loan'];const values=[data.monthlyBill,data.solarLoanOutflow,data.afterLoanOutflow];const colors=['#dc2626','#f59e0b','#16a34a'];const max=Math.max(...values,1)*1.2;const left=56,bottom=h-42,top=22,barW=80,gap=36;ctx.clearRect(0,0,w,h);ctx.font='12px Arial';ctx.fillStyle='#111';ctx.fillText('Monthly Outflow Comparison (₹/month)',left,14);
-values.forEach((v,i)=>{const x=left+i*(barW+gap);const bh=((bottom-top)*v)/max;ctx.fillStyle=colors[i];ctx.fillRect(x,bottom-bh,barW,bh);ctx.fillStyle='#111';ctx.fillText(rupees(v),x,bottom-bh-8);ctx.fillText(labels[i],x,bottom+16);if(i===1){ctx.fillStyle='#6b7280';ctx.fillText(`EMI ${rupees(data.emi)} + Bill ${rupees(data.residualBill)}`,x-10,bottom+30);}});const t=document.getElementById('monthlyModeText');if(t){t.textContent=isAdvanced?'Year 1–10 (Loan Period) grouped comparison shown.':'Typical Month comparison shown.';}
-}
-function drawLines(){const el=document.getElementById('lifetimeCostChart');const c=setupCanvas(el);if(!c)return;const {ctx,w,h}=c;const years=data.yearsForCumulative;const x0=44,y0=h-30,plotW=w-68,plotH=h-56;const no=[],bank=[],self=[];let bankCum=0;for(let y=0;y<=years;y++){no.push(data.annualBill*y);if(y===0){bank.push(0);}else{bankCum += y<=data.loanTenureYears ? data.annualLoanSpend : data.annualAfterLoanSpend;bank.push(bankCum);}self.push(data.netProjectCost + (data.annualAfterLoanSpend*y));}
-const max=Math.max(...no,...bank,...self,1);ctx.clearRect(0,0,w,h);ctx.strokeStyle='#d1d5db';ctx.beginPath();ctx.moveTo(x0,16);ctx.lineTo(x0,y0);ctx.lineTo(w-20,y0);ctx.stroke();
-for(let g=1;g<=4;g++){const gy=16+(plotH*g/4);ctx.strokeStyle='#eef2f7';ctx.beginPath();ctx.moveTo(x0,gy);ctx.lineTo(w-20,gy);ctx.stroke();}
-function line(series,color){ctx.strokeStyle=color;ctx.beginPath();series.forEach((v,i)=>{const x=x0+(plotW*(i/years));const y=y0-(plotH*(v/max));if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();}
-line(no,'#dc2626');line(bank,'#f59e0b');line(self,'#16a34a');ctx.fillStyle='#111';ctx.fillText('Total Money Spent Over Time (₹)',x0,12);ctx.fillStyle='#dc2626';ctx.fillText('■ Without solar',x0,y0+16);ctx.fillStyle='#f59e0b';ctx.fillText('■ Solar + bank',x0+120,y0+16);ctx.fillStyle='#16a34a';ctx.fillText('■ Solar self financed',x0+230,y0+16);
-}
-function render(){if(!data.graphsEnabled)return;drawBars();drawLines();}
-window.addEventListener('load',render);window.addEventListener('resize',render);const adv=document.getElementById('advancedToggle');if(adv){adv.addEventListener('change',drawBars);}
-window.onload=function(){render();if(location.search.indexOf('autoprint=1')!==-1){window.print();}};
+const bars=document.getElementById('bars');if(bars){const c=bars.getContext('2d');const vals=[<?= json_encode(round($noSolar10y,2)) ?>,<?= json_encode(round($loan10y,2)) ?>,<?= json_encode(round($self10y,2)) ?>];const labels=['No Solar','Solar EMI','Solar Self'];const w=bars.width=bars.clientWidth*2,h=bars.height=220*2;c.scale(2,2);const max=Math.max(...vals,1);vals.forEach((v,i)=>{const bw=80,g=40,x=30+i*(bw+g),bh=(v/max)*140;c.fillStyle=['#ef4444','#2563eb','#16a34a'][i];c.fillRect(x,180-bh,bw,bh);c.fillStyle='#111';c.fillText(labels[i],x,200);});}
+const line=document.getElementById('line');if(line){const c=line.getContext('2d');const w=line.width=line.clientWidth*2,h=line.height=220*2;c.scale(2,2);const net=<?= json_encode(round($upfrontNetCost,2)) ?>,annual=<?= json_encode(round($annualSavings,2)) ?>;c.strokeStyle='#999';c.beginPath();c.moveTo(20,20);c.lineTo(20,190);c.lineTo(520,190);c.stroke();let max=Math.max(net,annual*15,1);c.strokeStyle='#10b981';c.beginPath();for(let y=0;y<=15;y++){let x=20+y*30,val=annual*y,py=190-(val/max)*160;if(y===0)c.moveTo(x,py);else c.lineTo(x,py);}c.stroke();c.strokeStyle='#ef4444';let netY=190-(net/max)*160;c.beginPath();c.moveTo(20,netY);c.lineTo(500,netY);c.stroke();}
 })();
+window.onload=function(){if(location.search.indexOf('autoprint=1')!==-1){window.print();}};
 </script>
 </body></html>
