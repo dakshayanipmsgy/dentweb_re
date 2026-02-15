@@ -67,7 +67,11 @@
         "h3_px": 16,
         "line_height": 1.6
       },
-      "border_radius": 12
+      "border_radius": 12,
+      "header_footer": {
+        "header_text_color": "#ffffff",
+        "footer_text_color": "#ffffff"
+      }
     }
   },
   "segments": {
@@ -105,7 +109,7 @@
       "loan_info": {
         "slab2_interest_pct": 8.15,
         "slab2_min_margin_pct": 20,
-        "slab2_range": "₹2L–₹6L"
+        "slab2_range": "\u20b92L\u2013\u20b96L"
       }
     },
     "COM": {

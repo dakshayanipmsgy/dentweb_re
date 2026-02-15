@@ -232,6 +232,10 @@ function documents_quote_defaults_settings(): array
                     'header' => ['enabled' => true, 'a' => '#0ea5e9', 'b' => '#22c55e', 'direction' => 'to right'],
                     'footer' => ['enabled' => true, 'a' => '#0ea5e9', 'b' => '#22c55e', 'direction' => 'to right'],
                 ],
+                'header_footer' => [
+                    'header_text_color' => '#ffffff',
+                    'footer_text_color' => '#ffffff',
+                ],
                 'shadow' => 'soft',
                 'typography' => [
                     'base_px' => 14,
