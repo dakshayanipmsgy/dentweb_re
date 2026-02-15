@@ -61,13 +61,23 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
  }
 
  if($action==='archive_quote' && $viewerType==='admin'){
-    $saved = documents_move_quote_to_archive((string)($quote['id'] ?? ''), ['type'=>$viewerType,'id'=>$viewerId,'name'=>$viewerName]);
-    $redirect(($saved['ok'] ?? false) ? 'success' : 'error', ($saved['ok'] ?? false) ? 'Quotation archived.' : (string)($saved['error'] ?? 'Unable to archive.'));
+    $quote['status']='archived';
+    $quote['archived_flag']=true;
+    $quote['archived_at']=date('c');
+    $quote['archived_by']=['type'=>$viewerType,'id'=>$viewerId,'name'=>$viewerName];
+    $quote['updated_at']=date('c');
+    documents_save_quote($quote);
+    $redirect('success','Quotation archived.');
  }
 
  if($action==='unarchive_quote' && $viewerType==='admin'){
-    $saved = documents_move_quote_to_active((string)($quote['id'] ?? ''));
-    $redirect(($saved['ok'] ?? false) ? 'success' : 'error', ($saved['ok'] ?? false) ? 'Quotation unarchived.' : (string)($saved['error'] ?? 'Unable to unarchive.'));
+    $quote['status']=documents_quote_normalize_status((string)($quote['accepted_at'] ?? '')) !== '' ? 'accepted' : 'approved';
+    $quote['archived_flag']=false;
+    $quote['archived_at']='';
+    $quote['archived_by']=['type'=>'','id'=>'','name'=>''];
+    $quote['updated_at']=date('c');
+    documents_save_quote($quote);
+    $redirect('success','Quotation unarchived.');
  }
 
  if($action==='share_update'){

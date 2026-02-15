@@ -290,13 +290,15 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
             }
             $statusNorm = documents_quote_normalize_status((string)($q['status'] ?? 'draft'));
             if ($bulkAction === 'archive') {
-                $saved = documents_move_quote_to_archive((string)$q['id'], ['type' => 'admin', 'id' => (string)((current_user()['id'] ?? '')), 'name' => (string)((current_user()['full_name'] ?? 'Admin'))]);
-                if ($saved['ok']) { $updated++; }
-                continue;
+                $q['status'] = 'archived';
+                $q['archived_flag'] = true;
+                $q['archived_at'] = date('c');
+                $q['archived_by'] = ['type' => 'admin', 'id' => (string)((current_user()['id'] ?? '')), 'name' => (string)((current_user()['full_name'] ?? 'Admin'))];
             } elseif ($bulkAction === 'unarchive') {
-                $saved = documents_move_quote_to_active((string)$q['id']);
-                if ($saved['ok']) { $updated++; }
-                continue;
+                $q['archived_flag'] = false;
+                $q['archived_at'] = '';
+                $q['archived_by'] = ['type' => '', 'id' => '', 'name' => ''];
+                $q['status'] = (string)($q['accepted_at'] ?? '') !== '' ? 'accepted' : ($statusNorm === 'archived' ? 'approved' : $statusNorm);
             } elseif ($bulkAction === 'set_approved') {
                 $q['status'] = 'approved';
             } elseif ($bulkAction === 'set_accepted') {
@@ -317,37 +319,16 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         $redirectWith('success', 'Bulk action applied on ' . $updated . ' quotation(s).');
     }
 
-    if ($action === 'pack_doc_archive' || $action === 'pack_doc_unarchive') {
-        $docType = safe_text($_POST['doc_type'] ?? '');
-        $docId = safe_text($_POST['doc_id'] ?? '');
-        $qid = safe_text($_POST['quotation_id'] ?? '');
-        if ($docType === '' || $docId === '' || $qid === '') {
-            header('Location: admin-quotations.php?tab=pack&quotation_id=' . urlencode($qid) . '&status=error&message=' . urlencode('Invalid archive request.'));
-            exit;
-        }
-
-        $result = $action === 'pack_doc_archive'
-            ? documents_archive_sales_document($docType, $docId, ['type' => 'admin', 'id' => (string)((current_user()['id'] ?? '')), 'name' => (string)((current_user()['full_name'] ?? 'Admin'))])
-            : documents_unarchive_sales_document($docType, $docId);
-
-        $type = ($result['ok'] ?? false) ? 'success' : 'error';
-        $msg = ($result['ok'] ?? false)
-            ? ($action === 'pack_doc_archive' ? 'Document archived.' : 'Document unarchived.')
-            : (string)($result['error'] ?? 'Unable to move document.');
-        header('Location: admin-quotations.php?tab=pack&quotation_id=' . urlencode($qid) . '&status=' . urlencode($type) . '&message=' . urlencode($msg));
-        exit;
-    }
-
 }
 
 $allQuotes = documents_list_quotes();
 $statusFilter = safe_text($_GET['status_filter'] ?? '');
 $tab = safe_text($_GET['tab'] ?? 'quotations');
-if (!in_array($tab, ['quotations','archived','accepted_customers','pack','settings'], true)) { $tab = 'quotations'; }
+if (!in_array($tab, ['quotations','archived','settings'], true)) { $tab = 'quotations'; }
 if ($tab === 'archived') {
-    $allQuotes = documents_list_quotes('archived');
-} elseif ($tab === 'quotations' || $tab === 'accepted_customers' || $tab === 'pack') {
-    $allQuotes = documents_list_quotes('active');
+    $allQuotes = array_values(array_filter($allQuotes, static function (array $q): bool {
+        return documents_quote_normalize_status((string)($q['status'] ?? 'draft')) === 'archived' || !empty($q['archived_flag']);
+    }));
 }
 if ($statusFilter !== '') {
     $allQuotes = array_values(array_filter($allQuotes, static function (array $q) use ($statusFilter): bool {
@@ -374,50 +355,6 @@ if ($editing === null) {
 $status = safe_text($_GET['status'] ?? '');
 $message = safe_text($_GET['message'] ?? '');
 $lookupMobile = safe_text($_GET['lookup_mobile'] ?? '');
-$packQuoteId = safe_text($_GET['quotation_id'] ?? '');
-$showArchivedPack = isset($_GET['show_archived']) && $_GET['show_archived'] === '1';
-
-$acceptedRows = [];
-if ($tab === 'accepted_customers') {
-    $acceptedQuotes = array_values(array_filter(documents_list_quotes('active'), static function (array $q): bool {
-        return documents_quote_normalize_status((string)($q['status'] ?? 'draft')) === 'accepted';
-    }));
-
-    $receiptsByQuote = [];
-    foreach (documents_list_sales_documents('receipt') as $receipt) {
-        $qid = (string)($receipt['quotation_id'] ?? '');
-        if ($qid === '') {
-            continue;
-        }
-        $receiptsByQuote[$qid] = ($receiptsByQuote[$qid] ?? 0.0) + (float)($receipt['amount_received'] ?? 0);
-    }
-
-    foreach ($acceptedQuotes as $quote) {
-        $qid = (string)($quote['id'] ?? '');
-        $amount = (float)($quote['calc']['gross_payable'] ?? 0);
-        $received = (float)($receiptsByQuote[$qid] ?? 0);
-        $acceptedRows[] = [
-            'quote' => $quote,
-            'customer_name' => (string)($quote['customer_name'] ?? ''),
-            'quotation_amount' => $amount,
-            'payment_received' => $received,
-            'receivables' => max($amount - $received, 0),
-        ];
-    }
-}
-
-$packQuote = null;
-$packDocuments = [];
-if ($tab === 'pack' && $packQuoteId !== '') {
-    $packQuote = documents_get_quote($packQuoteId);
-    if ($packQuote !== null && documents_quote_normalize_status((string)($packQuote['status'] ?? 'draft')) === 'accepted') {
-        foreach (['agreement','receipt','delivery_challan','proforma','invoice'] as $dtype) {
-            $activeDocs = array_values(array_filter(documents_list_sales_documents($dtype), static fn(array $row): bool => (string)($row['quotation_id'] ?? '') === (string)($packQuote['id'] ?? '')));
-            $archivedDocs = array_values(array_filter(documents_list_archived_sales_documents($dtype), static fn(array $row): bool => (string)($row['quotation_id'] ?? '') === (string)($packQuote['id'] ?? '')));
-            $packDocuments[$dtype] = ['active' => $activeDocs, 'archived' => $archivedDocs];
-        }
-    }
-}
 $lookup = $lookupMobile !== '' ? documents_find_customer_by_mobile($lookupMobile) : null;
 $quoteSnapshot = documents_quote_resolve_snapshot($editing);
 if ($lookup !== null) {
@@ -428,7 +365,7 @@ if ($lookup !== null) {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Quotations</title>
 <style>body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px}.card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}label{font-size:12px;font-weight:700;display:block;margin-bottom:4px}input,select,textarea{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box}textarea{min-height:70px}.btn{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}.btn.secondary{background:#fff;color:#1f2937;border:1px solid #cbd5e1}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe1ea;padding:8px;text-align:left;font-size:13px}.muted{color:#64748b}.alert{padding:8px;border-radius:8px;margin-bottom:12px}.ok{background:#ecfdf5}.err{background:#fef2f2}</style></head>
 <body><main class="wrap">
-<div class="card"><h1>Quotations</h1><a class="btn secondary" href="admin-documents.php">Back to Documents</a> <a class="btn secondary" href="admin-quotations.php?tab=quotations">Quotations</a> <a class="btn secondary" href="admin-quotations.php?tab=accepted_customers">Accepted Customers</a> <a class="btn secondary" href="admin-quotations.php?tab=archived">Archived</a> <a class="btn" href="admin-quotations.php?tab=settings">Settings</a> <a class="btn" href="admin-quotations.php?tab=quotations">Create New</a></div>
+<div class="card"><h1>Quotations</h1><a class="btn secondary" href="admin-documents.php">Back to Documents</a> <a class="btn secondary" href="admin-quotations.php?tab=quotations">Quotations</a> <a class="btn secondary" href="admin-quotations.php?tab=archived">Archived</a> <a class="btn" href="admin-quotations.php?tab=settings">Settings</a> <a class="btn" href="admin-quotations.php?tab=quotations">Create New</a></div>
 <?php if ($message !== ''): ?><div class="alert <?= $status === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
 <div class="card">
 <h2><?= $editing['id'] === '' ? 'Create Quotation' : 'Edit Quotation' ?></h2>
@@ -509,49 +446,4 @@ if ($lookup !== null) {
 <?php foreach ($allQuotes as $q): ?><tr><td><input type="checkbox" name="selected_ids[]" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"></td><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td></tr><?php endforeach; ?>
 </tbody></table>
 </form></div>
-<?php if ($tab === 'accepted_customers'): ?>
-<div class="card"><h2>Accepted Customers</h2>
-<table><thead><tr><th>Sr No</th><th>Customer Name</th><th>View</th><th>Quotation Amount</th><th>Payment Received</th><th>Receivables</th></tr></thead><tbody>
-<?php if ($acceptedRows === []): ?>
-<tr><td colspan="6" class="muted">No accepted customers found.</td></tr>
-<?php else: ?>
-<?php foreach ($acceptedRows as $index => $row): $q = $row['quote']; ?>
-<tr>
-<td><?= (int)($index + 1) ?></td>
-<td><?= htmlspecialchars((string)$row['customer_name'], ENT_QUOTES) ?></td>
-<td><a class="btn secondary" href="admin-quotations.php?tab=pack&amp;quotation_id=<?= urlencode((string)($q['id'] ?? '')) ?>">View</a></td>
-<td><?= htmlspecialchars('₹' . number_format((float)$row['quotation_amount'], 0, '.', ','), ENT_QUOTES) ?></td>
-<td><?= htmlspecialchars('₹' . number_format((float)$row['payment_received'], 0, '.', ','), ENT_QUOTES) ?></td>
-<td><?= htmlspecialchars('₹' . number_format((float)$row['receivables'], 0, '.', ','), ENT_QUOTES) ?></td>
-</tr>
-<?php endforeach; ?>
-<?php endif; ?>
-</tbody></table></div>
-<?php endif; ?>
-
-<?php if ($tab === 'pack'): ?>
-<div class="card"><h2>Document Pack</h2>
-<?php if ($packQuote === null): ?>
-<p class="muted">Accepted quotation not found.</p>
-<?php else: ?>
-<?php $snap = documents_quote_resolve_snapshot($packQuote); ?>
-<div class="grid" style="margin-bottom:10px"><div><label>Customer Name</label><div><?= htmlspecialchars((string)($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></div></div><div><label>Mobile</label><div><?= htmlspecialchars((string)($packQuote['customer_mobile'] ?? ''), ENT_QUOTES) ?></div></div><div><label>Address</label><div><?= htmlspecialchars((string)($snap['address'] ?? ''), ENT_QUOTES) ?></div></div><div><label>Consumer/Account Number</label><div><?= htmlspecialchars((string)($packQuote['consumer_account_no'] ?? ''), ENT_QUOTES) ?></div></div></div>
-<div class="card" style="margin:0 0 10px 0"><strong>Quotation</strong><div>Status: <?= htmlspecialchars(documents_status_label($packQuote, 'admin'), ENT_QUOTES) ?> | Accepted At: <?= htmlspecialchars((string)($packQuote['accepted_at'] ?? ''), ENT_QUOTES) ?></div><a class="btn secondary" href="quotation-public.php?token=<?= urlencode((string)($packQuote['share']['public_token'] ?? '')) ?>" target="_blank">Open quotation (share view)</a></div>
-<?php $labels = ['agreement' => 'Vendor Consumer Agreement','receipt' => 'Payment Receipts','delivery_challan' => 'Delivery Challans','proforma' => 'Proforma Invoice','invoice' => 'Invoice']; ?>
-<?php foreach ($labels as $dtype => $label): $activeDocs = $packDocuments[$dtype]['active'] ?? []; $archivedDocs = $packDocuments[$dtype]['archived'] ?? []; ?>
-<div class="card" style="margin:0 0 10px 0"><h3><?= htmlspecialchars($label, ENT_QUOTES) ?></h3>
-<?php if ($activeDocs === []): ?><p class="muted">No active documents.</p><?php else: ?>
-<table><thead><tr><th>Doc ID</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-<?php foreach ($activeDocs as $doc): ?>
-<tr><td><?= htmlspecialchars((string)($doc['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($doc['updated_at'] ?? $doc['created_at'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($doc['status'] ?? ''), ENT_QUOTES) ?></td><td><form method="post" style="display:inline"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="pack_doc_archive"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars((string)($packQuote['id'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="doc_type" value="<?= htmlspecialchars($dtype, ENT_QUOTES) ?>"><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string)($doc['id'] ?? ''), ENT_QUOTES) ?>"><button class="btn secondary" type="submit">Archive</button></form></td></tr>
-<?php endforeach; ?></tbody></table><?php endif; ?>
-<?php if ($showArchivedPack && $archivedDocs !== []): ?>
-<div style="margin-top:8px"><strong>Archived</strong><table><thead><tr><th>Doc ID</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody><?php foreach ($archivedDocs as $doc): ?><tr><td><?= htmlspecialchars((string)($doc['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($doc['updated_at'] ?? $doc['created_at'] ?? ''), ENT_QUOTES) ?></td><td>Archived</td><td><form method="post" style="display:inline"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="pack_doc_unarchive"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars((string)($packQuote['id'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="doc_type" value="<?= htmlspecialchars($dtype, ENT_QUOTES) ?>"><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string)($doc['id'] ?? ''), ENT_QUOTES) ?>"><button class="btn secondary" type="submit">Unarchive</button></form></td></tr><?php endforeach; ?></tbody></table></div>
-<?php endif; ?>
-</div>
-<?php endforeach; ?>
-<a class="btn secondary" href="admin-quotations.php?tab=pack&amp;quotation_id=<?= urlencode((string)($packQuote['id'] ?? '')) ?>&amp;show_archived=<?= $showArchivedPack ? '0' : '1' ?>"><?= $showArchivedPack ? 'Hide archived documents' : 'Show archived documents' ?></a>
-<?php endif; ?>
-</div>
-<?php endif; ?>
 <script>document.addEventListener('click',function(e){if(e.target&&e.target.id==='addItemBtn'){const tb=document.querySelector('#itemsTable tbody');if(!tb)return;const tr=document.createElement('tr');const dH='<?= htmlspecialchars((string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>';tr.innerHTML='<td></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="'+dH+'"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';tb.appendChild(tr);ren();}if(e.target&&e.target.classList.contains('rm-item')){e.target.closest('tr')?.remove();ren();}});function ren(){document.querySelectorAll('#itemsTable tbody tr').forEach((tr,i)=>{const td=tr.querySelector('td');if(td)td.textContent=String(i+1);});}ren();(function(){const settingsForm=document.querySelector('form.grid input[name="action"][value="save_settings"]')?.form;if(!settingsForm)return;const normalizeHex=(value)=>{const v=String(value||'').trim().toUpperCase();const short=v.match(/^#([0-9A-F]{3})$/);if(short){const c=short[1];return '#'+c[0]+c[0]+c[1]+c[1]+c[2]+c[2];}if(/^#[0-9A-F]{6}$/.test(v)){return v;}return '';};settingsForm.querySelectorAll('div').forEach((pair)=>{const picker=pair.querySelector('input[type="color"]');const hex=pair.querySelector('input[name$="_hex"]');if(!picker||!hex)return;picker.dataset.role='picker';hex.dataset.role='hex';picker.addEventListener('input',()=>{hex.value=String(picker.value||'').toUpperCase();hex.setCustomValidity('');});hex.addEventListener('input',()=>{const normalized=normalizeHex(hex.value);if(normalized===''){hex.setCustomValidity('Invalid hex color');return;}hex.setCustomValidity('');if(picker.value.toUpperCase()!==normalized){picker.value=normalized;}});const initial=normalizeHex(hex.value)||normalizeHex(picker.value);if(initial!==''){picker.value=initial;hex.value=initial;}});})();</script></main></body></html>
