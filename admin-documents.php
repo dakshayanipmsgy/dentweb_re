@@ -12,7 +12,6 @@ $segments = ['RES', 'COM', 'IND', 'INST', 'PROD'];
 $companyPath = documents_settings_dir() . '/company_profile.json';
 $numberingPath = documents_settings_dir() . '/numbering_rules.json';
 $templatePath = documents_templates_dir() . '/template_sets.json';
-$documentStylePath = documents_settings_dir() . '/document_style.json';
 
 documents_ensure_structure();
 documents_seed_template_sets_if_empty();
@@ -61,41 +60,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $redirectWith('company', 'success', 'Company profile saved successfully.');
-    }
-
-
-    if ($action === 'save_document_style') {
-        $settings = documents_get_document_style_settings();
-        $settings['theme']['primary_color'] = safe_text($_POST['primary_color'] ?? $settings['theme']['primary_color']);
-        $settings['theme']['accent_color'] = safe_text($_POST['accent_color'] ?? $settings['theme']['accent_color']);
-        $settings['theme']['text_color'] = safe_text($_POST['text_color'] ?? $settings['theme']['text_color']);
-        $settings['theme']['muted_text_color'] = safe_text($_POST['muted_text_color'] ?? $settings['theme']['muted_text_color']);
-        $settings['theme']['bg_color'] = safe_text($_POST['bg_color'] ?? $settings['theme']['bg_color']);
-        $settings['theme']['card_bg'] = safe_text($_POST['card_bg'] ?? $settings['theme']['card_bg']);
-        $settings['theme']['border_color'] = safe_text($_POST['border_color'] ?? $settings['theme']['border_color']);
-
-        $settings['typography']['base_font_size_px'] = max(10, min(20, (int) ($_POST['base_font_size_px'] ?? $settings['typography']['base_font_size_px'])));
-        $settings['typography']['h1_px'] = max(16, min(40, (int) ($_POST['h1_px'] ?? $settings['typography']['h1_px'])));
-        $settings['typography']['h2_px'] = max(14, min(34, (int) ($_POST['h2_px'] ?? $settings['typography']['h2_px'])));
-        $settings['typography']['h3_px'] = max(12, min(28, (int) ($_POST['h3_px'] ?? $settings['typography']['h3_px'])));
-        $settings['typography']['line_height'] = max(1.1, min(2.0, (float) ($_POST['line_height'] ?? $settings['typography']['line_height'])));
-
-        $settings['layout']['page_background_enabled'] = isset($_POST['page_background_enabled']);
-        $settings['layout']['show_cover_page'] = isset($_POST['show_cover_page']);
-        $settings['layout']['continuous_flow'] = isset($_POST['continuous_flow']);
-        $settings['layout']['page_background_image'] = safe_text($_POST['page_background_image'] ?? $settings['layout']['page_background_image']);
-        $settings['layout']['page_background_opacity'] = max(0, min(1, (float) ($_POST['page_background_opacity'] ?? $settings['layout']['page_background_opacity'])));
-
-        foreach (['residential_unit_rate_rs_per_kwh','commercial_unit_rate_rs_per_kwh','industrial_unit_rate_rs_per_kwh','institutional_unit_rate_rs_per_kwh','default_bank_interest_rate_percent','default_annual_generation_per_kw','default_emission_factor_kg_per_kwh','kg_co2_absorbed_per_tree_per_year'] as $k) {
-            $settings['defaults'][$k] = (float) ($_POST[$k] ?? $settings['defaults'][$k]);
-        }
-        $settings['defaults']['default_loan_tenure_years'] = max(1, (int) ($_POST['default_loan_tenure_years'] ?? $settings['defaults']['default_loan_tenure_years']));
-
-        $saved = json_save($documentStylePath, $settings);
-        if (!$saved['ok']) {
-            $redirectWith('styles', 'error', 'Unable to save document style settings.');
-        }
-        $redirectWith('styles', 'success', 'Document style settings saved.');
     }
 
     if ($action === 'save_numbering_rule') {
@@ -303,7 +267,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $activeTab = safe_text($_GET['tab'] ?? 'company');
-if (!in_array($activeTab, ['company', 'numbering', 'templates', 'styles'], true)) {
+if (!in_array($activeTab, ['company', 'numbering', 'templates'], true)) {
     $activeTab = 'company';
 }
 
@@ -319,7 +283,6 @@ $numbering['rules'] = is_array($numbering['rules']) ? $numbering['rules'] : [];
 
 $templates = json_load($templatePath, []);
 $templates = is_array($templates) ? $templates : [];
-$documentStyle = documents_get_document_style_settings();
 
 $user = current_user();
 ?>
@@ -380,7 +343,6 @@ $user = current_user();
       <a class="tab <?= $activeTab === 'company' ? 'active' : '' ?>" href="?tab=company">Company Profile &amp; Branding</a>
       <a class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering">Numbering Rules</a>
       <a class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates">Template Sets</a>
-      <a class="tab <?= $activeTab === 'styles' ? 'active' : '' ?>" href="?tab=styles">Document Style &amp; Defaults</a>
       <a class="tab" href="admin-templates.php">Template Blocks &amp; Media</a>
       <a class="tab" href="admin-quotations.php">Quotation Manager</a>
       <a class="tab" href="admin-challans.php">Challans</a>
@@ -464,43 +426,6 @@ $user = current_user();
           <div><label>Current Number</label><input type="number" name="seq_current" min="1" value="1" /></div>
           <div><label>Status</label><label><input type="checkbox" name="active" checked /> Active</label></div>
           <div><button class="btn" type="submit">Save Numbering Rule</button></div>
-        </form>
-      </section>
-    <?php endif; ?>
-
-
-    <?php if ($activeTab === 'styles'): ?>
-      <section class="panel">
-        <form method="post" class="grid">
-          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
-          <input type="hidden" name="action" value="save_document_style" />
-          <div><label>Primary color</label><input type="color" name="primary_color" value="<?= htmlspecialchars((string) $documentStyle['theme']['primary_color'], ENT_QUOTES) ?>" /></div>
-          <div><label>Accent color</label><input type="color" name="accent_color" value="<?= htmlspecialchars((string) $documentStyle['theme']['accent_color'], ENT_QUOTES) ?>" /></div>
-          <div><label>Text color</label><input type="color" name="text_color" value="<?= htmlspecialchars((string) $documentStyle['theme']['text_color'], ENT_QUOTES) ?>" /></div>
-          <div><label>Muted text color</label><input type="color" name="muted_text_color" value="<?= htmlspecialchars((string) $documentStyle['theme']['muted_text_color'], ENT_QUOTES) ?>" /></div>
-          <div><label>Background color</label><input type="color" name="bg_color" value="<?= htmlspecialchars((string) $documentStyle['theme']['bg_color'], ENT_QUOTES) ?>" /></div>
-          <div><label>Card background</label><input type="color" name="card_bg" value="<?= htmlspecialchars((string) $documentStyle['theme']['card_bg'], ENT_QUOTES) ?>" /></div>
-          <div><label>Border color</label><input type="color" name="border_color" value="<?= htmlspecialchars((string) $documentStyle['theme']['border_color'], ENT_QUOTES) ?>" /></div>
-          <div><label>Base font size</label><input type="range" min="10" max="20" name="base_font_size_px" value="<?= (int) $documentStyle['typography']['base_font_size_px'] ?>" /></div>
-          <div><label>H1 px</label><input type="number" name="h1_px" value="<?= (int) $documentStyle['typography']['h1_px'] ?>" /></div>
-          <div><label>H2 px</label><input type="number" name="h2_px" value="<?= (int) $documentStyle['typography']['h2_px'] ?>" /></div>
-          <div><label>H3 px</label><input type="number" name="h3_px" value="<?= (int) $documentStyle['typography']['h3_px'] ?>" /></div>
-          <div><label>Line height</label><input type="number" step="0.05" name="line_height" value="<?= htmlspecialchars((string) $documentStyle['typography']['line_height'], ENT_QUOTES) ?>" /></div>
-          <div><label><input type="checkbox" name="page_background_enabled" <?= !empty($documentStyle['layout']['page_background_enabled']) ? 'checked' : '' ?> /> Enable background</label></div>
-          <div><label>Background image path</label><input name="page_background_image" value="<?= htmlspecialchars((string) $documentStyle['layout']['page_background_image'], ENT_QUOTES) ?>" /></div>
-          <div><label>Background opacity</label><input type="number" min="0" max="1" step="0.01" name="page_background_opacity" value="<?= htmlspecialchars((string) $documentStyle['layout']['page_background_opacity'], ENT_QUOTES) ?>" /></div>
-          <div><label><input type="checkbox" name="show_cover_page" <?= !empty($documentStyle['layout']['show_cover_page']) ? 'checked' : '' ?> /> Show cover page</label></div>
-          <div><label><input type="checkbox" name="continuous_flow" <?= !empty($documentStyle['layout']['continuous_flow']) ? 'checked' : '' ?> /> Continuous flow</label></div>
-          <div><label>Residential unit rate</label><input type="number" step="0.01" name="residential_unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string) $documentStyle['defaults']['residential_unit_rate_rs_per_kwh'], ENT_QUOTES) ?>" /></div>
-          <div><label>Commercial unit rate</label><input type="number" step="0.01" name="commercial_unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string) $documentStyle['defaults']['commercial_unit_rate_rs_per_kwh'], ENT_QUOTES) ?>" /></div>
-          <div><label>Industrial unit rate</label><input type="number" step="0.01" name="industrial_unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string) $documentStyle['defaults']['industrial_unit_rate_rs_per_kwh'], ENT_QUOTES) ?>" /></div>
-          <div><label>Institutional unit rate</label><input type="number" step="0.01" name="institutional_unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string) $documentStyle['defaults']['institutional_unit_rate_rs_per_kwh'], ENT_QUOTES) ?>" /></div>
-          <div><label>Default interest rate (%)</label><input type="number" step="0.01" name="default_bank_interest_rate_percent" value="<?= htmlspecialchars((string) $documentStyle['defaults']['default_bank_interest_rate_percent'], ENT_QUOTES) ?>" /></div>
-          <div><label>Loan tenure years</label><input type="number" name="default_loan_tenure_years" value="<?= (int) $documentStyle['defaults']['default_loan_tenure_years'] ?>" /></div>
-          <div><label>Annual generation per kW</label><input type="number" step="0.01" name="default_annual_generation_per_kw" value="<?= htmlspecialchars((string) $documentStyle['defaults']['default_annual_generation_per_kw'], ENT_QUOTES) ?>" /></div>
-          <div><label>Emission factor kg/kWh</label><input type="number" step="0.01" name="default_emission_factor_kg_per_kwh" value="<?= htmlspecialchars((string) $documentStyle['defaults']['default_emission_factor_kg_per_kwh'], ENT_QUOTES) ?>" /></div>
-          <div><label>kg CO₂ absorbed/tree/year</label><input type="number" step="0.01" name="kg_co2_absorbed_per_tree_per_year" value="<?= htmlspecialchars((string) $documentStyle['defaults']['kg_co2_absorbed_per_tree_per_year'], ENT_QUOTES) ?>" /></div>
-          <div><button class="btn" type="submit">Save Document Style &amp; Defaults</button></div>
         </form>
       </section>
     <?php endif; ?>
