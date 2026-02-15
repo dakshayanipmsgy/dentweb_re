@@ -180,19 +180,14 @@ function documents_quote_defaults_settings(): array
         'global' => [
             'branding' => [
                 'primary_color' => '#0f766e',
+                'secondary_color' => '#22c55e',
                 'accent_color' => '#f59e0b',
-                'text_color' => '#0f172a',
-                'muted_text_color' => '#64748b',
-                'page_bg_color' => '#eef3f9',
-                'card_bg_color' => '#ffffff',
-                'border_color' => '#dbe1ea',
-                'shadow_strength' => 'soft',
-                'shadow_color' => 'rgba(15, 23, 42, 0.12)',
-                'header_gradient_start' => '#0f766e',
-                'header_gradient_end' => '#22c55e',
-                'footer_gradient_start' => '#0f172a',
-                'footer_gradient_end' => '#1e293b',
-                'gradient_direction' => 'to right',
+                'header_bg' => '#0f766e',
+                'header_text' => '#ecfeff',
+                'footer_bg' => '#0f172a',
+                'footer_text' => '#e2e8f0',
+                'chip_bg' => '#ccfbf1',
+                'chip_text' => '#134e4a',
                 'logo_path' => '',
                 'tagline' => '',
                 'contact_line' => '',
@@ -204,17 +199,13 @@ function documents_quote_defaults_settings(): array
             ],
             'typography' => [
                 'base_font_px' => 14,
-                'h1_size_px' => 28,
-                'h2_size_px' => 22,
-                'h3_size_px' => 18,
-                'line_height' => 1.6,
+                'heading_scale' => 1.0,
+                'density' => 'comfortable',
             ],
             'energy_defaults' => [
                 'annual_generation_per_kw' => 1450,
                 'emission_factor_kg_per_kwh' => 0.82,
                 'tree_absorption_kg_per_tree_per_year' => 20,
-                'bestcase_interest_pct' => 6,
-                'bestcase_tenure_years' => 10,
             ],
         ],
         'defaults' => [
@@ -696,18 +687,11 @@ function documents_quote_defaults(): array
         'tax_type' => 'CGST_SGST',
         'input_total_gst_inclusive' => 0,
         'calc' => [
-            'system_total_incl_gst' => 0,
             'basic_total' => 0,
-            'basic_70' => 0,
-            'basic_30' => 0,
             'bucket_5_basic' => 0,
             'bucket_5_gst' => 0,
             'bucket_18_basic' => 0,
             'bucket_18_gst' => 0,
-            'gst_5' => 0,
-            'gst_18' => 0,
-            'gst_total' => 0,
-            'computed_total_check' => 0,
             'gst_split' => [
                 'cgst_5' => 0,
                 'sgst_5' => 0,
@@ -1133,6 +1117,8 @@ function documents_quote_item_defaults(): array
         'hsn' => '8541',
         'qty' => 1,
         'unit' => 'set',
+        'gst_slab' => '5',
+        'basic_amount' => 0,
     ];
 }
 
@@ -1147,7 +1133,10 @@ function documents_normalize_quote_items(array $items, string $systemType = 'Ong
         $item['hsn'] = safe_text((string) ($item['hsn'] ?? '')) ?: $defaultHsn;
         $item['qty'] = (float) ($item['qty'] ?? 0);
         $item['unit'] = safe_text((string) ($item['unit'] ?? ''));
-        if ($item['name'] === '') { continue; }
+        $slab = strtoupper(safe_text((string) ($item['gst_slab'] ?? '5')));
+        $item['gst_slab'] = in_array($slab, ['5', '18', 'NA'], true) ? $slab : '5';
+        $item['basic_amount'] = round((float) ($item['basic_amount'] ?? 0), 2);
+        if ($item['name'] === '' && $item['basic_amount'] <= 0) { continue; }
         $rows[] = $item;
     }
 
@@ -1159,6 +1148,8 @@ function documents_normalize_quote_items(array $items, string $systemType = 'Ong
             'hsn' => $defaultHsn,
             'qty' => $capacityKwp > 0 ? $capacityKwp : 1,
             'unit' => $capacityKwp > 0 ? 'kWp' : 'set',
+            'gst_slab' => '5',
+            'basic_amount' => 0,
         ];
     }
 
@@ -1167,43 +1158,34 @@ function documents_normalize_quote_items(array $items, string $systemType = 'Ong
 
 function documents_calc_pricing_from_items(array $items, string $pricingMode, string $taxType, float $transportationRs = 0.0, float $subsidyExpectedRs = 0.0): array
 {
-    return documents_calc_pricing_from_total(0, $pricingMode, $taxType, $transportationRs, $subsidyExpectedRs);
-}
-
-function documents_calc_pricing_from_total(float $systemTotalInclGst, string $pricingMode, string $taxType, float $transportationRs = 0.0, float $subsidyExpectedRs = 0.0): array
-{
     $pricingMode = in_array($pricingMode, ['solar_split_70_30', 'flat_5'], true) ? $pricingMode : 'solar_split_70_30';
     $taxType = $taxType === 'IGST' ? 'IGST' : 'CGST_SGST';
-    $systemTotalInclGst = max(0, $systemTotalInclGst);
+    $baseTotal = 0.0;
+    foreach ($items as $item) {
+        if (!is_array($item)) { continue; }
+        $baseTotal += max(0, (float) ($item['basic_amount'] ?? 0));
+    }
 
     if ($pricingMode === 'flat_5') {
-        $baseTotal = $systemTotalInclGst / 1.05;
         $bucket5Basic = $baseTotal;
         $bucket18Basic = 0.0;
     } else {
-        $baseTotal = $systemTotalInclGst / 1.089;
         $bucket5Basic = $baseTotal * 0.70;
         $bucket18Basic = $baseTotal * 0.30;
     }
     $bucket5Gst = $bucket5Basic * 0.05;
     $bucket18Gst = $bucket18Basic * 0.18;
+    $finalPrice = $baseTotal + $bucket5Gst + $bucket18Gst;
     $transportationRs = max(0, $transportationRs);
-    $grossPayable = $systemTotalInclGst + $transportationRs;
+    $grossPayable = $finalPrice + $transportationRs;
     $subsidyExpectedRs = max(0, $subsidyExpectedRs);
 
     $calc = [
-        'system_total_incl_gst' => round($systemTotalInclGst, 2),
         'basic_total' => round($baseTotal, 2),
-        'basic_70' => round($bucket5Basic, 2),
-        'basic_30' => round($bucket18Basic, 2),
         'bucket_5_basic' => round($bucket5Basic, 2),
         'bucket_5_gst' => round($bucket5Gst, 2),
         'bucket_18_basic' => round($bucket18Basic, 2),
         'bucket_18_gst' => round($bucket18Gst, 2),
-        'gst_5' => round($bucket5Gst, 2),
-        'gst_18' => round($bucket18Gst, 2),
-        'gst_total' => round($bucket5Gst + $bucket18Gst, 2),
-        'computed_total_check' => round($baseTotal + $bucket5Gst + $bucket18Gst, 2),
         'gst_split' => [
             'cgst_5' => 0.0,
             'sgst_5' => 0.0,
@@ -1212,8 +1194,8 @@ function documents_calc_pricing_from_total(float $systemTotalInclGst, string $pr
             'igst_5' => 0.0,
             'igst_18' => 0.0,
         ],
-        'grand_total' => round($systemTotalInclGst, 2),
-        'final_price_incl_gst' => round($systemTotalInclGst, 2),
+        'grand_total' => round($finalPrice, 2),
+        'final_price_incl_gst' => round($finalPrice, 2),
         'transportation_rs' => round($transportationRs, 2),
         'gross_payable' => round($grossPayable, 2),
         'subsidy_expected_rs' => round($subsidyExpectedRs, 2),
@@ -1234,7 +1216,54 @@ function documents_calc_pricing_from_total(float $systemTotalInclGst, string $pr
 
 function documents_calc_pricing(float $grandTotal, string $pricingMode, string $taxType): array
 {
-    return documents_calc_pricing_from_total($grandTotal, $pricingMode, $taxType);
+    $grandTotal = max(0, $grandTotal);
+    $pricingMode = in_array($pricingMode, ['solar_split_70_30', 'flat_5'], true) ? $pricingMode : 'solar_split_70_30';
+    $taxType = $taxType === 'IGST' ? 'IGST' : 'CGST_SGST';
+
+    $basicTotal = 0.0;
+    $bucket5Basic = 0.0;
+    $bucket18Basic = 0.0;
+
+    if ($pricingMode === 'flat_5') {
+        $basicTotal = $grandTotal / 1.05;
+        $bucket5Basic = $basicTotal;
+    } else {
+        $basicTotal = $grandTotal / 1.089;
+        $bucket5Basic = 0.70 * $basicTotal;
+        $bucket18Basic = 0.30 * $basicTotal;
+    }
+
+    $bucket5Gst = $bucket5Basic * 0.05;
+    $bucket18Gst = $bucket18Basic * 0.18;
+
+    $calc = [
+        'basic_total' => round($basicTotal, 2),
+        'bucket_5_basic' => round($bucket5Basic, 2),
+        'bucket_5_gst' => round($bucket5Gst, 2),
+        'bucket_18_basic' => round($bucket18Basic, 2),
+        'bucket_18_gst' => round($bucket18Gst, 2),
+        'gst_split' => [
+            'cgst_5' => 0.0,
+            'sgst_5' => 0.0,
+            'cgst_18' => 0.0,
+            'sgst_18' => 0.0,
+            'igst_5' => 0.0,
+            'igst_18' => 0.0,
+        ],
+        'grand_total' => round($grandTotal, 2),
+    ];
+
+    if ($taxType === 'IGST') {
+        $calc['gst_split']['igst_5'] = round($bucket5Gst, 2);
+        $calc['gst_split']['igst_18'] = round($bucket18Gst, 2);
+    } else {
+        $calc['gst_split']['cgst_5'] = round($bucket5Gst / 2, 2);
+        $calc['gst_split']['sgst_5'] = round($bucket5Gst / 2, 2);
+        $calc['gst_split']['cgst_18'] = round($bucket18Gst / 2, 2);
+        $calc['gst_split']['sgst_18'] = round($bucket18Gst / 2, 2);
+    }
+
+    return $calc;
 }
 
 function documents_get_template_blocks(): array
