@@ -28,39 +28,6 @@
       "annual_generation_per_kw": 1450,
       "emission_factor_kg_per_kwh": 0.82,
       "tree_absorption_kg_per_tree_per_year": 20
-    },
-    "theme": {
-      "primary_color": "#0f766e",
-      "accent_color": "#f59e0b",
-      "text_color": "#0f172a",
-      "muted_text_color": "#475569",
-      "background_color": "#eef3f9",
-      "card_background_color": "#ffffff",
-      "border_color": "#dbe1ea",
-      "shadow_strength": "soft",
-      "border_radius_px": 14,
-      "base_font_px": 14,
-      "h1_px": 24,
-      "h2_px": 18,
-      "h3_px": 15,
-      "line_height": 1.5,
-      "header_gradient_enabled": false,
-      "header_gradient_from": "#0f766e",
-      "header_gradient_to": "#22c55e",
-      "footer_gradient_enabled": false,
-      "footer_gradient_from": "#0f172a",
-      "footer_gradient_to": "#1e293b"
-    },
-    "calculation_defaults": {
-      "unit_rate_residential": 8,
-      "unit_rate_industrial": 11,
-      "unit_rate_commercial": 10,
-      "unit_rate_institutional": 9,
-      "loan_bestcase_interest_pct": 6,
-      "loan_bestcase_tenure_years": 10,
-      "annual_generation_per_kw": 1450,
-      "emission_factor_kg_per_kwh": 0.82,
-      "tree_absorption_kg_per_tree_per_year": 20
     }
   },
   "segments": {
