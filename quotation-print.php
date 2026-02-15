@@ -256,17 +256,6 @@ $upiQrPath = (string) ($company['upi_qr_path'] ?? '');
 $whatsAppNumber = '7070278178';
 $whatsAppLink = 'https://wa.me/91' . $whatsAppNumber;
 
-$headerIdentityLine = implode(' | ', $identityParts);
-$licenseLine = !empty($licenses) ? ('Licences: ' . implode(' • ', $licenses)) : '';
-$headerWebEmail = implode(' | ', array_filter([
-    $websiteDisplay !== '' ? ('🌐 ' . $websiteDisplay) : '',
-    !empty($headerEmails) ? ('✉️ ' . implode(', ', $headerEmails)) : '',
-]));
-$headerBankUpi = implode(' | ', array_filter([
-    !empty($bankDetails) ? implode(' | ', $bankDetails) : '',
-    $upiId !== '' ? ('UPI: ' . $upiId) : '',
-]));
-
 $coverNotesHtml = $sectionHtml($ann, 'cover_notes', $safeHtml);
 $systemInclusionsHtml = $sectionHtml($ann, 'system_inclusions', $safeHtml);
 $paymentTermsHtml = $sectionHtml($ann, 'payment_terms', $safeHtml);
@@ -287,120 +276,96 @@ $whyIdealBullets = [
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Print <?= htmlspecialchars((string) $quote['quote_no'], ENT_QUOTES) ?></title>
 <style>
 :root{
-  --primary:<?= htmlspecialchars((string)($theme['primary_color'] ?? '#0b5fff'), ENT_QUOTES) ?>;
-  --secondary:<?= htmlspecialchars((string)($theme['accent_color'] ?? '#00b894'), ENT_QUOTES) ?>;
-  --mutedText:<?= htmlspecialchars((string)(($theme['brand_muted_color'] ?? $theme['muted_text_color']) ?? '#6b7280'), ENT_QUOTES) ?>;
-  --bgColor:<?= htmlspecialchars((string)($theme['bg_color'] ?? '#ffffff'), ENT_QUOTES) ?>;
-  --cardBg:<?= htmlspecialchars((string)($theme['card_bg'] ?? '#f8fafc'), ENT_QUOTES) ?>;
-  --border:<?= htmlspecialchars((string)($theme['border_color'] ?? '#e5e7eb'), ENT_QUOTES) ?>;
-  --text:<?= htmlspecialchars((string)($theme['text_color'] ?? '#111827'), ENT_QUOTES) ?>;
-  --success:<?= htmlspecialchars((string)(($theme['success_color'] ?? $theme['chart_green_color']) ?? '#16a34a'), ENT_QUOTES) ?>;
-  --warning:<?= htmlspecialchars((string)(($theme['warning_color'] ?? $theme['chart_yellow_color']) ?? '#f59e0b'), ENT_QUOTES) ?>;
-  --danger:<?= htmlspecialchars((string)(($theme['danger_color'] ?? $theme['chart_red_color']) ?? '#dc2626'), ENT_QUOTES) ?>;
-}
-
-/* ===== Print + A4 foundation ===== */
-:root{
-  --base-font: <?= (int)($type['base_font_size_px'] ?? 11) ?>px;
-  --print-font: <?= (int)($type['print_base_font_size_px'] ?? 10) ?>px;
-  --line: <?= (float)($type['line_height'] ?? 1.45) ?>;
-  --page-w: 210mm;
-  --page-h: 297mm;
-  --print-pad: 6mm;
+  --brand-primary:<?= htmlspecialchars((string)($theme['primary_color'] ?? '#0b5fff'), ENT_QUOTES) ?>;
+  --brand-accent:<?= htmlspecialchars((string)($theme['accent_color'] ?? '#00b894'), ENT_QUOTES) ?>;
+  --brand-muted:<?= htmlspecialchars((string)(($theme['brand_muted_color'] ?? $theme['muted_text_color']) ?? '#6b7280'), ENT_QUOTES) ?>;
+  --brand-bg:<?= htmlspecialchars((string)($theme['bg_color'] ?? '#ffffff'), ENT_QUOTES) ?>;
+  --brand-card:<?= htmlspecialchars((string)($theme['card_bg'] ?? '#f8fafc'), ENT_QUOTES) ?>;
+  --brand-border:<?= htmlspecialchars((string)($theme['border_color'] ?? '#e5e7eb'), ENT_QUOTES) ?>;
+  --brand-text:<?= htmlspecialchars((string)($theme['text_color'] ?? '#111827'), ENT_QUOTES) ?>;
+  --brand-success:<?= htmlspecialchars((string)(($theme['success_color'] ?? $theme['chart_green_color']) ?? '#16a34a'), ENT_QUOTES) ?>;
+  --brand-warning:<?= htmlspecialchars((string)(($theme['warning_color'] ?? $theme['chart_yellow_color']) ?? '#f59e0b'), ENT_QUOTES) ?>;
+  --brand-danger:<?= htmlspecialchars((string)(($theme['danger_color'] ?? $theme['chart_red_color']) ?? '#dc2626'), ENT_QUOTES) ?>;
+  --font-base-screen: <?= (int)($type['base_font_size_px'] ?? 11) ?>px;
+  --font-base-print: <?= (int)($type['print_base_font_size_px'] ?? 10) ?>px;
+  --print-scale: <?= htmlspecialchars((string)($style['layout']['print_scale'] ?? 0.92), ENT_QUOTES) ?>;
+  --a4-content-width: 190mm;
   --compact-multiplier: <?= !empty($style['layout']['compact_print_mode']) ? '0.84' : '1' ?>;
-  --brand: var(--primary, #0ea5e9);
-  --brand2: var(--secondary, #22c55e);
-  --ink: var(--text, #0f172a);
-  --muted: var(--mutedText, #475569);
-  --card: var(--cardBg, #ffffff);
-  --stroke: var(--border, #e5e7eb);
-}
+  --print-bg: <?= !empty($style['layout']['print_backgrounds_enabled']) ? 'exact' : 'economy' ?>;
 
-html, body{width:100%;height:auto;margin:0;padding:0}
-body{background:var(--bgColor);color:var(--ink);font-family:"Inter","Roboto","Arial",sans-serif;font-size:var(--base-font);line-height:var(--line);-webkit-font-smoothing:antialiased;text-rendering:geometricPrecision;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
-*{box-sizing:border-box;max-width:100%}
-.print-safe{padding:16px}
-.doc-a4{width:calc(var(--page-w) - (var(--print-pad) * 2));margin:0 auto;padding:0}
-.section-card,.badge-pill,.orange-strip,.kv,.icon-card,.table th,.table td,.graph-card canvas,.soft-note,.footer,.hero-header,.warranty-badge,.graph-card,.contact-right{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
-.section-card{background:var(--card);border:1px solid var(--stroke);border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:0 1px 5px rgba(2,6,23,.04);height:auto !important;min-height:0 !important;overflow:visible}
-.section-title{margin:0 0 10px;color:var(--brand);font-size:<?= (int)($type['h3_px'] ?? 16) ?>px;border-left:3px solid var(--brand2);padding-left:10px;break-after:avoid;page-break-after:avoid}
-.hero-header{border-top:4px solid var(--brand);background:linear-gradient(180deg,color-mix(in srgb, var(--brand) 8%, white), var(--card))}
-.head-grid{display:grid;grid-template-columns:minmax(96px,140px) 1fr minmax(180px,240px);gap:12px;align-items:center}
-.contact-right{text-align:right;font-size:12px;color:var(--muted)}
-.head-meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;font-size:11px;color:var(--muted)}
-.authority{font-size:<?= (int)($type['h2_px'] ?? 20) ?>px;font-weight:800;color:var(--brand);margin:8px 0 2px}
-.sub-authority{font-size:14px;color:var(--brand2);font-weight:700}
+  --brandPrimary:var(--brand-primary);--brandAccent:var(--brand-accent);--brandGreen:var(--brand-success);--brandOrange:var(--brand-warning);--brandRed:var(--brand-danger);
+  --text:var(--brand-text);--muted:var(--brand-muted);--bg:var(--brand-bg);--card:var(--brand-card);--border:var(--brand-border);--heading:var(--brand-primary);
+}
+html,body{margin:0;padding:0;background:var(--brand-bg);color:var(--brand-text);font-family:"Inter","Roboto","Arial",sans-serif;font-size:var(--font-base-screen);line-height:<?= (float)($type['line_height'] ?? 1.45) ?>; -webkit-print-color-adjust:var(--print-bg) !important; print-color-adjust:var(--print-bg) !important;}
+.wrap{max-width:800px;width:100%;margin:0 auto;padding:16px}
+.quote-wrap{width:100%}
+.section-card,.badge-pill,.orange-strip,.kv,.icon-card,.table th,.table td,.graph-card canvas,.soft-note,.footer,.hero-header,.warranty-badge,.graph-card,.contact-right{-webkit-print-color-adjust:var(--print-bg) !important;print-color-adjust:var(--print-bg) !important;}
+.section-card{background:var(--brand-card);border:1px solid var(--brand-border);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(2,6,23,.05);break-inside:avoid;page-break-inside:avoid}
+.section-title{margin:0 0 10px;color:var(--brand-primary);font-size:<?= (int)($type['h3_px'] ?? 16) ?>px;border-left:4px solid var(--brand-accent);padding-left:10px;break-after:avoid;page-break-after:avoid}
+.hero-header{border-top:5px solid var(--brand-primary);background:linear-gradient(180deg,color-mix(in srgb, var(--brand-primary) 4%, white), var(--brand-card))}
+.head-grid{display:grid;grid-template-columns:140px 1fr auto;gap:12px;align-items:center}
+.contact-right{text-align:right;font-size:12px;color:var(--brand-muted)}
+.authority{font-size:<?= (int)($type['h2_px'] ?? 20) ?>px;font-weight:800;color:var(--brand-primary);margin:10px 0 2px}
+.sub-authority{font-size:14px;color:var(--brand-accent);font-weight:700}
 .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.badge-pill{border:1px solid color-mix(in srgb, var(--brand) 30%, white);background:color-mix(in srgb, var(--brand2) 8%, white);border-radius:999px;padding:5px 10px;font-size:11px;font-weight:700;color:var(--brand);white-space:normal}
+.badge-pill{border:1px solid color-mix(in srgb, var(--brand-primary) 30%, white);background:color-mix(in srgb, var(--brand-accent) 8%, white);border-radius:999px;padding:5px 10px;font-size:11px;font-weight:700;color:var(--brand-primary)}
 .hero-grid{display:grid;grid-template-columns:2fr 1fr;gap:10px}
 .key-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .kv{border-radius:12px;padding:9px}
-.kv .k{font-size:11px;color:var(--muted)} .kv .v{font-size:16px;font-weight:800;margin-top:3px}
-.orange-strip{background:color-mix(in srgb, var(--warning) 12%, white);border:1px solid color-mix(in srgb, var(--warning) 45%, white);border-radius:12px;padding:10px}
-.small-muted{font-size:11px;color:var(--muted)}
+.kv .k{font-size:11px;color:var(--brand-muted)} .kv .v{font-size:16px;font-weight:800;margin-top:3px}
+.orange-strip{background:color-mix(in srgb, var(--brand-warning) 12%, white);border:1px solid color-mix(in srgb, var(--brand-warning) 45%, white);border-radius:12px;padding:10px}
+.small-muted{font-size:11px;color:var(--brand-muted)}
 .cards-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.icon-card{border:1px solid var(--stroke);background:var(--card);border-radius:12px;padding:10px;break-inside:avoid;page-break-inside:avoid}
+.icon-card{border:1px solid var(--brand-border);background:var(--brand-card);border-radius:12px;padding:10px;break-inside:avoid;page-break-inside:avoid}
 .icon-card .v{font-size:17px;font-weight:800;margin-top:4px}
-.warranty-card{grid-column:1 / -1}
-.warranty-badge{display:inline-block;margin-top:8px;border-radius:999px;padding:4px 12px;background:color-mix(in srgb, var(--success) 16%, white);border:1px solid color-mix(in srgb, var(--success) 45%, white);color:var(--success);font-size:12px;font-weight:700}
-.table{width:100%;table-layout:fixed;border-collapse:collapse;break-inside:auto;page-break-inside:auto}
-.table th,.table td{border:1px solid var(--stroke);padding:8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
-.table th{background:var(--card)} .table td:last-child,.table th:last-child{text-align:right}
-.money-pop{font-size:1.08em;font-weight:800;color:var(--brand)}
-.big-benefit{font-size:22px;font-weight:900;color:var(--success)}
+.warranty-card{grid-column:span 2;min-height:96px}
+.warranty-badge{display:inline-block;margin-top:8px;border-radius:999px;padding:4px 12px;background:color-mix(in srgb, var(--brand-success) 16%, white);border:1px solid color-mix(in srgb, var(--brand-success) 45%, white);color:#166534;font-size:12px;font-weight:700}
+.table{width:100%;border-collapse:collapse;break-inside:auto;page-break-inside:auto}
+.table th,.table td{border:1px solid var(--brand-border);padding:8px;text-align:left;vertical-align:top}
+.table th{background:var(--brand-card)} .table td:last-child,.table th:last-child{text-align:right}
+.money-pop{font-size:1.08em;font-weight:800;color:var(--brand-primary)}
+.big-benefit{font-size:22px;font-weight:900;color:var(--brand-success)}
 .graph-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.graph-card{break-inside:avoid;page-break-inside:avoid;overflow:hidden}
-.graph-card canvas,.graph-card img.chart-print-image{max-width:100% !important;width:100%;height:280px;border:1px solid var(--stroke);border-radius:14px;background:white;display:block}
-.soft-note{background:var(--card);border:1px dashed var(--stroke);border-radius:12px;padding:10px;color:var(--muted)}
-.footer{margin-top:8px;font-size:11px;color:var(--muted);text-align:center;padding:12px;border-top:1px solid var(--stroke)}
-.wrap-anywhere{overflow-wrap:anywhere;word-break:break-word}
-.nowrap{white-space:nowrap}
+.graph-card{break-inside:avoid;page-break-inside:avoid}
+.graph-card canvas,.graph-card img.chart-print-image{width:100%;height:300px;border:1px solid var(--brand-border);border-radius:14px;background:white;display:block}
+.soft-note{background:var(--brand-card);border:1px dashed var(--brand-border);border-radius:12px;padding:10px;color:var(--brand-muted)}
+.footer{margin-top:8px;font-size:11px;color:var(--brand-muted);text-align:center;padding:12px;border-top:1px solid var(--brand-border)}
 h2,h3{break-after:avoid;page-break-after:avoid}
 .avoid-break{break-inside:avoid;page-break-inside:avoid}
-@media (max-width:900px){.head-grid,.hero-grid,.cards-3,.graph-grid,.key-values,.head-meta{grid-template-columns:1fr}.contact-right{text-align:left}}
+@media (max-width:900px){.head-grid,.hero-grid,.cards-3,.graph-grid,.key-values{grid-template-columns:1fr}.contact-right{text-align:left}.warranty-card{grid-column:auto}}
+@page { size: A4; margin: 10mm; }
 @media print{
-  @page{size:A4;margin:0}
-  html,body{width:var(--page-w);background:#fff}
-  body{font-size:var(--print-font)}
-  .print-safe{padding:var(--print-pad)}
-  .doc-a4{width:calc(var(--page-w) - (var(--print-pad) * 2))}
-  .section-card{padding:calc(14px * var(--compact-multiplier));margin-bottom:calc(10px * var(--compact-multiplier));box-shadow:none;border-color:color-mix(in srgb, var(--stroke) 70%, #fff)}
+  html,body{font-size:var(--font-base-print);background:#fff}
+  .wrap{max-width:190mm;width:190mm;padding:0;margin:0 auto}
+  .quote-wrap{zoom:var(--print-scale);width:calc(100% / var(--print-scale));margin:0 auto;transform-origin:top left}
+  @supports not (zoom: 1){
+    .quote-wrap{transform:scale(var(--print-scale));transform-origin:top left;width:calc(100% / var(--print-scale));}
+  }
+  .section-card{padding:calc(14px * var(--compact-multiplier));margin-bottom:calc(10px * var(--compact-multiplier));box-shadow:none;border-color:color-mix(in srgb, var(--brand-border) 70%, #fff)}
   .badge-pill,.icon-card,.kv,.orange-strip,.soft-note{padding:calc(8px * var(--compact-multiplier))}
   .badges,.cards-3,.graph-grid,.hero-grid,.key-values{gap:calc(8px * var(--compact-multiplier))}
   .authority{font-size:18px}
   .sub-authority{font-size:12px}
   .section-title{font-size:14px;font-weight:800}
   .icon-card .v,.kv .v{font-size:15px;font-weight:800}
-  .head-grid{grid-template-columns:minmax(90px,120px) 1fr minmax(150px,210px)}
-  .head-meta{grid-template-columns:1fr 1fr}
-  .graph-card canvas,.graph-card img.chart-print-image{height:220px}
-  .chart-wrap{break-inside:avoid;page-break-inside:avoid;overflow:hidden}
   a{text-decoration:none;color:inherit}
-  a[href]:after{content:""}
 }
 </style></head>
-<body><div class="print-safe"><div class="doc-a4">
+<body><div class="quote-wrap wrap">
 <div class="section-card hero-header">
   <div class="head-grid">
     <div><?php if ((string)($company['logo_path'] ?? '') !== ''): ?><img src="<?= htmlspecialchars((string)$company['logo_path'], ENT_QUOTES) ?>" alt="Logo" style="max-width:130px;max-height:70px"><?php endif; ?></div>
     <div>
-      <strong class="wrap-anywhere"><?= htmlspecialchars($companyName, ENT_QUOTES) ?></strong>
-      <?php if ($companyAddress !== ''): ?><div class="small-muted wrap-anywhere">Address: <?= htmlspecialchars($companyAddress, ENT_QUOTES) ?></div><?php endif; ?>
-      <div class="head-meta">
-        <div><strong>Quotation No</strong><div class="nowrap"><?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></div></div>
-        <div><strong>Prepared</strong><div class="nowrap"><?= htmlspecialchars($preparedOnDisplay, ENT_QUOTES) ?></div></div>
-        <div><strong>Valid till</strong><div class="nowrap"><?= htmlspecialchars($validUntilDisplay, ENT_QUOTES) ?></div></div>
-      </div>
+      <strong><?= htmlspecialchars($companyName, ENT_QUOTES) ?></strong>
+      <div class="small-muted">Quotation No: <?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?> | Prepared: <?= htmlspecialchars($preparedOnDisplay, ENT_QUOTES) ?> | Valid till: <?= htmlspecialchars($validUntilDisplay, ENT_QUOTES) ?></div>
+      <?php if ($companyAddress !== ''): ?><div class="small-muted"><?= htmlspecialchars($companyAddress, ENT_QUOTES) ?></div><?php endif; ?>
     </div>
     <div class="contact-right">
       <?php if (!empty($headerPhones)): ?><div>📞 <?= htmlspecialchars(implode(', ', $headerPhones), ENT_QUOTES) ?></div><?php endif; ?>
       <div>💬 <a href="<?= htmlspecialchars($whatsAppLink, ENT_QUOTES) ?>" target="_blank" rel="noopener">WhatsApp: <?= htmlspecialchars($whatsAppNumber, ENT_QUOTES) ?></a></div>
-      <?php if ($websiteDisplay !== ''): ?><div class="wrap-anywhere">🌐 <?= htmlspecialchars($websiteDisplay, ENT_QUOTES) ?></div><?php endif; ?>
+      <?php if ($websiteDisplay !== ''): ?><div>🌐 <?= htmlspecialchars($websiteDisplay, ENT_QUOTES) ?></div><?php endif; ?>
     </div>
   </div>
-  <div class="small-muted wrap-anywhere" style="margin-top:8px"><?php if ($headerIdentityLine !== ''): ?><?= htmlspecialchars($headerIdentityLine, ENT_QUOTES) ?><?php endif; ?><?php if ($licenseLine !== ''): ?><?= $headerIdentityLine !== '' ? ' | ' : '' ?><?= htmlspecialchars($licenseLine, ENT_QUOTES) ?><?php endif; ?></div>
-  <?php if ($headerWebEmail !== ''): ?><div class="small-muted wrap-anywhere"><?= htmlspecialchars($headerWebEmail, ENT_QUOTES) ?></div><?php endif; ?>
-  <?php if ($headerBankUpi !== ''): ?><div class="small-muted wrap-anywhere"><?= htmlspecialchars($headerBankUpi, ENT_QUOTES) ?></div><?php endif; ?>
   <div class="authority">Jharkhand’s Trusted Solar EPC Partner under PM Surya Ghar Yojana</div>
   <div class="sub-authority">PM Surya Ghar: Muft Bijli Yojana Specialist</div>
   <div class="badges">
@@ -427,7 +392,7 @@ h2,h3{break-after:avoid;page-break-after:avoid}
       <div class="kv"><div class="k">Payback</div><div class="v"><?= $paybackYears === null ? 'To be confirmed' : number_format($paybackYears, 1) . ' years' ?></div></div>
     </div>
     <div class="orange-strip">
-      <div style="font-size:18px;font-weight:800;color:var(--warning)">Estimated EMI: ₹<?= number_format($emi, 0) ?> / month</div>
+      <div style="font-size:18px;font-weight:800;color:var(--brandOrange)">Estimated EMI: ₹<?= number_format($emi, 0) ?> / month</div>
       <ul>
         <li>In many cases, EMI is lower than current electricity bill.</li>
         <li>10-year finance options available.</li>
@@ -463,7 +428,7 @@ h2,h3{break-after:avoid;page-break-after:avoid}
   <h2 class="section-title">Pricing Summary + Subsidy + Transportation</h2>
   <table class="table">
     <tr><th>Final Price (GST)</th><td class="money-pop">₹<?= number_format($quoteTotalCost,2) ?></td></tr>
-    <tr><th>Transportation</th><td><?= $transportMode === 'extra' ? ('₹' . number_format($transportExtra,2)) : ($transportMode === 'included' ? 'Included (₹0.00)' : 'Not applicable') ?></td></tr>
+    <?php if ($transportExtra > 0): ?><tr><th>Transportation</th><td>₹<?= number_format($transportExtra,2) ?></td></tr><?php endif; ?>
     <tr><th>Grand Total (GST)</th><td class="money-pop">₹<?= number_format($grandTotalWithTransport,2) ?></td></tr>
     <tr><th>Subsidy Expected</th><td>₹<?= number_format($subsidy,2) ?></td></tr>
     <tr><th>Net Cost After Subsidy</th><td><strong>₹<?= number_format($netCostAfterSubsidy,2) ?></strong></td></tr>
@@ -490,9 +455,9 @@ h2,h3{break-after:avoid;page-break-after:avoid}
   <h2 class="section-title">Savings Graphs</h2>
   <?php if ($hasSavingsInputs): ?>
     <div class="graph-grid">
-      <div class="graph-card avoid-break chart-wrap"><h3>Graph 1 — Monthly Spend Comparison</h3><canvas id="graph1Monthly"></canvas><div class="small-muted">Solar starts saving from Year 1 ✅</div></div>
-      <div class="graph-card avoid-break chart-wrap"><h3>Graph 2 — Cumulative Spend Over Years</h3><canvas id="graph2Cumulative"></canvas></div>
-      <div class="graph-card avoid-break chart-wrap" style="grid-column:1/-1"><h3>Graph 3 — Payback Meter</h3><canvas id="graph3Payback"></canvas></div>
+      <div class="graph-card"><h3>Graph 1 — Monthly Spend Comparison</h3><canvas id="graph1Monthly"></canvas><div class="small-muted">Solar starts saving from Year 1 ✅</div></div>
+      <div class="graph-card"><h3>Graph 2 — Cumulative Spend Over Years</h3><canvas id="graph2Cumulative"></canvas></div>
+      <div class="graph-card" style="grid-column:1/-1"><h3>Graph 3 — Payback Meter</h3><canvas id="graph3Payback"></canvas></div>
     </div>
   <?php else: ?>
     <div class="soft-note">Final savings will be confirmed after last 3 electricity bills.</div>
@@ -537,17 +502,6 @@ h2,h3{break-after:avoid;page-break-after:avoid}
 <?php if ($showSection('warranty', $sectionsEnabled, $warrantyHtml)): ?><div class="section-card"><h2 class="section-title">Warranty</h2><div><?= $warrantyHtml ?></div></div><?php endif; ?>
 <?php if ($showSection('terms_conditions', $sectionsEnabled, $termsHtml)): ?><div class="section-card"><h2 class="section-title">Terms &amp; Conditions</h2><div><?= $termsHtml ?></div></div><?php endif; ?>
 
-<div class="section-card avoid-break">
-  <h2 class="section-title">Next Steps</h2>
-  <div class="badges">
-    <span class="badge-pill">1) Confirm quotation</span>
-    <span class="badge-pill">2) Book survey</span>
-    <span class="badge-pill">3) Sign agreement</span>
-    <span class="badge-pill">4) Install &amp; net meter</span>
-    <span class="badge-pill">5) Subsidy processing</span>
-  </div>
-</div>
-
 <div class="section-card">
   <h2 class="section-title">For Dakshayani Enterprises</h2>
   <div>Authorized Signatory</div>
@@ -563,7 +517,7 @@ h2,h3{break-after:avoid;page-break-after:avoid}
   <?php if ($upiQrPath !== ''): ?><div style="margin-top:6px"><img src="<?= htmlspecialchars($upiQrPath, ENT_QUOTES) ?>" alt="UPI QR" style="max-height:72px;max-width:72px"></div><?php endif; ?>
 </div>
 
-</div></div>
+</div>
 <script>
 (function(){
 const data={
@@ -580,9 +534,9 @@ const data={
   netCostAfterSubsidy: <?= json_encode(round($netCostAfterSubsidy,2)) ?>,
   annualSavings: <?= json_encode(round($annualSavings,2)) ?>,
   paybackYears: <?= json_encode($paybackYears) ?>,
-  chartRed: getComputedStyle(document.documentElement).getPropertyValue('--danger').trim() || '#dc2626',
-  chartOrange: getComputedStyle(document.documentElement).getPropertyValue('--warning').trim() || '#f59e0b',
-  chartGreen: getComputedStyle(document.documentElement).getPropertyValue('--success').trim() || '#16a34a',
+  chartRed: getComputedStyle(document.documentElement).getPropertyValue('--brand-danger').trim() || '#dc2626',
+  chartOrange: getComputedStyle(document.documentElement).getPropertyValue('--brand-warning').trim() || '#f59e0b',
+  chartGreen: getComputedStyle(document.documentElement).getPropertyValue('--brand-success').trim() || '#16a34a',
 };
 const printCanvasState=[];
 const rupees=v=>'₹'+Math.round(v).toLocaleString('en-IN');
