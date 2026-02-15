@@ -1,58 +1,18 @@
 <?php
 declare(strict_types=1);
-
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
-
 require_admin();
 documents_ensure_structure();
-
 $id = safe_text($_GET['id'] ?? '');
 $agreement = documents_get_agreement($id);
-if ($agreement === null) {
-    http_response_code(404);
-    echo 'Agreement not found.';
-    exit;
-}
-
-$renderForPdf = safe_text($_GET['pdf'] ?? '') === '1';
+if ($agreement === null) { http_response_code(404); echo 'Agreement not found.'; exit; }
 $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
-$html = documents_render_agreement_body_html($agreement, $company);
-
-$background = safe_text((string) ($agreement['rendering']['background_image'] ?? ''));
-$bgOpacity = max(0.1, min(1.0, (float) ($agreement['rendering']['background_opacity'] ?? 1)));
-$backgroundResolved = $renderForPdf ? (resolve_public_image_to_absolute($background) ?? $background) : $background;
+$appearance = documents_load_document_appearance();
+$fontScale = max(0.8, min(1.3, (float) ($appearance['global']['font_scale'] ?? 1)));
+$html = documents_agreement_render_html($agreement, $company);
 ?>
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Agreement Print <?= htmlspecialchars((string) $agreement['agreement_no'], ENT_QUOTES) ?></title>
-  <style>
-    @page { size: A4; margin: 16mm 14mm; }
-    body{font-family:Arial,sans-serif;color:#111;font-size:12.5px;line-height:1.5;margin:0}
-    .page{position:relative;min-height:260mm;padding:2mm}
-    .page-bg-img{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;opacity:<?= htmlspecialchars((string) $bgOpacity, ENT_QUOTES) ?>;z-index:-1}
-    .meta{display:flex;justify-content:space-between;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #94a3b8}
-    .meta .right{text-align:right}
-  </style>
-</head>
-<body>
-<div class="page">
-  <?php if ($backgroundResolved !== ''): ?><img class="page-bg-img" src="<?= htmlspecialchars($backgroundResolved, ENT_QUOTES) ?>" alt="background"><?php endif; ?>
-  <div class="meta">
-    <div>
-      <strong>Agreement No:</strong> <?= htmlspecialchars((string) $agreement['agreement_no'], ENT_QUOTES) ?><br>
-      <strong>Status:</strong> <?= htmlspecialchars((string) $agreement['status'], ENT_QUOTES) ?>
-    </div>
-    <div class="right">
-      <strong>Customer:</strong> <?= htmlspecialchars((string) $agreement['customer_name'], ENT_QUOTES) ?><br>
-      <strong>Mobile:</strong> <?= htmlspecialchars((string) $agreement['customer_mobile'], ENT_QUOTES) ?>
-    </div>
-  </div>
-  <?= $html ?>
-</div>
-<script>window.onload=function(){if(location.search.indexOf('autoprint=1')!==-1){window.print();}}</script>
-</body>
-</html>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agreement <?= htmlspecialchars((string)$agreement['agreement_no'], ENT_QUOTES) ?></title>
+<style>
+html{font-size:calc(16px * <?= htmlspecialchars((string)$fontScale, ENT_QUOTES) ?>)}body{font-family:Arial,sans-serif;background:#fff;margin:0;padding:14px;color:#111}.card{max-width:900px;margin:0 auto}.meta{display:flex;justify-content:space-between;border-bottom:2px solid #1e3a8a;padding-bottom:8px;margin-bottom:10px}@media print{.print-watermark{display:block;position:fixed;inset:0;z-index:0;background-image:url('<?= htmlspecialchars((string)($appearance['print_watermark']['image_path'] ?? ''), ENT_QUOTES) ?>');background-position:center;background-repeat:<?= htmlspecialchars((string)($appearance['print_watermark']['repeat'] ?? 'no-repeat'), ENT_QUOTES) ?>;background-size:<?= (int)($appearance['print_watermark']['size_percent'] ?? 70) ?>%;opacity:<?= htmlspecialchars((string)($appearance['print_watermark']['opacity'] ?? 0.08), ENT_QUOTES) ?>}body>*{position:relative;z-index:1}}
+</style></head><body><div class="print-watermark"></div><div class="card"><div class="meta"><div><strong><?= htmlspecialchars((string)$agreement['agreement_no'], ENT_QUOTES) ?></strong></div><div><?= htmlspecialchars((string)$agreement['customer_name'], ENT_QUOTES) ?></div></div><?= $html ?></div></body></html>

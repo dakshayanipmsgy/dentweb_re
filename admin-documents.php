@@ -266,8 +266,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+
+    if ($action === 'save_document_appearance') {
+        $appearance = documents_load_document_appearance();
+        $appearance['global']['font_scale'] = max(0.8, min(1.3, (float) ($_POST['font_scale'] ?? 1)));
+        $appearance['global']['base_font_family'] = safe_text($_POST['base_font_family'] ?? 'system') ?: 'system';
+        $appearance['global']['primary_color'] = safe_text($_POST['primary_color'] ?? '#0b5') ?: '#0b5';
+        $appearance['global']['accent_color'] = safe_text($_POST['accent_color'] ?? '#0a58ca') ?: '#0a58ca';
+        $appearance['global']['muted_color'] = safe_text($_POST['muted_color'] ?? '#6c757d') ?: '#6c757d';
+        $appearance['print_watermark']['enabled'] = isset($_POST['wm_enabled']);
+        $appearance['print_watermark']['opacity'] = max(0.0, min(0.5, (float) ($_POST['wm_opacity'] ?? 0.08)));
+        $appearance['print_watermark']['size_percent'] = max(30, min(120, (int) ($_POST['wm_size_percent'] ?? 70)));
+        $appearance['print_watermark']['repeat'] = safe_text($_POST['wm_repeat'] ?? 'no-repeat') === 'repeat' ? 'repeat' : 'no-repeat';
+
+        if (isset($_FILES['watermark_upload']) && (int) ($_FILES['watermark_upload']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            $upload = documents_handle_image_upload($_FILES['watermark_upload'], documents_public_watermarks_dir(), 'wm_');
+            if (!$upload['ok']) {
+                $redirectWith('appearance', 'error', (string) $upload['error']);
+            }
+            $appearance['print_watermark']['image_path'] = '/images/documents/watermarks/' . $upload['filename'];
+        }
+
+        $saved = json_save(documents_settings_dir() . '/document_appearance.json', $appearance);
+        if (!$saved['ok']) {
+            $redirectWith('appearance', 'error', 'Unable to save document appearance settings.');
+        }
+        $redirectWith('appearance', 'success', 'Document appearance saved.');
+    }
+
+    if ($action === 'save_quotation_assumptions') {
+        $payload = documents_load_quotation_assumptions();
+        foreach (['RES','COM','IND','INST'] as $segment) {
+            foreach (array_keys($payload['defaults_by_segment'][$segment]) as $field) {
+                $key = 'ass_' . $segment . '_' . $field;
+                $payload['defaults_by_segment'][$segment][$field] = (float) ($_POST[$key] ?? $payload['defaults_by_segment'][$segment][$field]);
+            }
+        }
+        $saved = json_save(documents_settings_dir() . '/quotation_assumptions.json', $payload);
+        if (!$saved['ok']) {
+            $redirectWith('appearance', 'error', 'Unable to save quotation assumptions.');
+        }
+        $redirectWith('appearance', 'success', 'Quotation assumptions saved.');
+    }
+
 $activeTab = safe_text($_GET['tab'] ?? 'company');
-if (!in_array($activeTab, ['company', 'numbering', 'templates'], true)) {
+if (!in_array($activeTab, ['company', 'numbering', 'templates', 'appearance'], true)) {
     $activeTab = 'company';
 }
 
@@ -343,6 +386,7 @@ $user = current_user();
       <a class="tab <?= $activeTab === 'company' ? 'active' : '' ?>" href="?tab=company">Company Profile &amp; Branding</a>
       <a class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering">Numbering Rules</a>
       <a class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates">Template Sets</a>
+      <a class="tab <?= $activeTab === 'appearance' ? 'active' : '' ?>" href="?tab=appearance">Document Appearance</a>
       <a class="tab" href="admin-templates.php">Template Blocks &amp; Media</a>
       <a class="tab" href="admin-quotations.php">Quotation Manager</a>
       <a class="tab" href="admin-challans.php">Challans</a>
@@ -426,6 +470,44 @@ $user = current_user();
           <div><label>Current Number</label><input type="number" name="seq_current" min="1" value="1" /></div>
           <div><label>Status</label><label><input type="checkbox" name="active" checked /> Active</label></div>
           <div><button class="btn" type="submit">Save Numbering Rule</button></div>
+        </form>
+      </section>
+    <?php endif; ?>
+
+
+    <?php if ($activeTab === 'appearance'): ?>
+      <section class="panel">
+        <h3>Global Document Appearance</h3>
+        <form method="post" enctype="multipart/form-data" class="grid">
+          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+          <input type="hidden" name="action" value="save_document_appearance" />
+          <div><label>Global font scale</label><input type="number" min="0.8" max="1.3" step="0.01" name="font_scale" value="<?= htmlspecialchars((string) ($appearance['global']['font_scale'] ?? 1), ENT_QUOTES) ?>" /></div>
+          <div><label>Base font family</label><input type="text" name="base_font_family" value="<?= htmlspecialchars((string) ($appearance['global']['base_font_family'] ?? 'system'), ENT_QUOTES) ?>" /></div>
+          <div><label>Primary color</label><input type="text" name="primary_color" value="<?= htmlspecialchars((string) ($appearance['global']['primary_color'] ?? '#0b5'), ENT_QUOTES) ?>" /></div>
+          <div><label>Accent color</label><input type="text" name="accent_color" value="<?= htmlspecialchars((string) ($appearance['global']['accent_color'] ?? '#0a58ca'), ENT_QUOTES) ?>" /></div>
+          <div><label>Muted color</label><input type="text" name="muted_color" value="<?= htmlspecialchars((string) ($appearance['global']['muted_color'] ?? '#6c757d'), ENT_QUOTES) ?>" /></div>
+          <div><label><input type="checkbox" name="wm_enabled" <?= !empty($appearance['print_watermark']['enabled']) ? 'checked' : '' ?> /> Enable print watermark</label></div>
+          <div><label>Watermark upload (png/jpg/webp, max 5MB)</label><input type="file" name="watermark_upload" accept="image/png,image/jpeg,image/webp" /></div>
+          <div><label>Watermark opacity (0-0.5)</label><input type="number" min="0" max="0.5" step="0.01" name="wm_opacity" value="<?= htmlspecialchars((string) ($appearance['print_watermark']['opacity'] ?? 0.08), ENT_QUOTES) ?>" /></div>
+          <div><label>Watermark size percent</label><input type="number" min="30" max="120" step="1" name="wm_size_percent" value="<?= htmlspecialchars((string) ($appearance['print_watermark']['size_percent'] ?? 70), ENT_QUOTES) ?>" /></div>
+          <div><label>Watermark repeat</label><select name="wm_repeat"><option value="no-repeat" <?= (($appearance['print_watermark']['repeat'] ?? '') === 'no-repeat') ? 'selected' : '' ?>>No repeat</option><option value="repeat" <?= (($appearance['print_watermark']['repeat'] ?? '') === 'repeat') ? 'selected' : '' ?>>Repeat</option></select></div>
+          <div><button class="btn" type="submit">Save Appearance</button></div>
+        </form>
+        <?php if (safe_text((string) ($appearance['print_watermark']['image_path'] ?? '')) !== ''): ?><p class="muted">Current watermark:</p><img class="logo-preview" src="<?= htmlspecialchars((string) $appearance['print_watermark']['image_path'], ENT_QUOTES) ?>" alt="watermark preview"><?php endif; ?>
+        <hr>
+        <h3>Quotation Assumptions Defaults</h3>
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+          <input type="hidden" name="action" value="save_quotation_assumptions" />
+          <?php foreach (['RES','COM','IND','INST'] as $segment): ?>
+            <h4><?= htmlspecialchars($segment, ENT_QUOTES) ?></h4>
+            <div class="grid">
+              <?php foreach (($quotationAssumptions['defaults_by_segment'][$segment] ?? []) as $field => $val): ?>
+                <div><label><?= htmlspecialchars($field, ENT_QUOTES) ?></label><input type="number" step="0.01" name="ass_<?= htmlspecialchars($segment, ENT_QUOTES) ?>_<?= htmlspecialchars($field, ENT_QUOTES) ?>" value="<?= htmlspecialchars((string) $val, ENT_QUOTES) ?>"></div>
+              <?php endforeach; ?>
+            </div>
+          <?php endforeach; ?>
+          <p><button class="btn" type="submit">Save Assumptions</button></p>
         </form>
       </section>
     <?php endif; ?>
