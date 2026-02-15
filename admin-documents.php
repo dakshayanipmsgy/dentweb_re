@@ -6,6 +6,8 @@ require_once __DIR__ . '/admin/includes/documents_helpers.php';
 
 require_admin();
 
+$isAdmin = true;
+
 $docTypes = ['quotation', 'proforma', 'agreement', 'challan', 'invoice_public', 'invoice_internal', 'receipt', 'sales_return'];
 $segments = ['RES', 'COM', 'IND', 'INST', 'PROD'];
 
@@ -16,6 +18,8 @@ $templatePath = documents_templates_dir() . '/template_sets.json';
 documents_ensure_structure();
 documents_seed_template_sets_if_empty();
 
+$user = current_user();
+
 $redirectWith = static function (string $tab, string $type, string $msg): void {
     $query = http_build_query([
         'tab' => $tab,
@@ -25,6 +29,56 @@ $redirectWith = static function (string $tab, string $type, string $msg): void {
     header('Location: admin-documents.php?' . $query);
     exit;
 };
+
+$redirectDocuments = static function (string $tab, string $type, string $msg, array $extra = []): void {
+    $query = array_merge([
+        'tab' => $tab,
+        'status' => $type,
+        'message' => $msg,
+    ], $extra);
+    header('Location: admin-documents.php?' . http_build_query($query));
+    exit;
+};
+
+$isArchivedRecord = static function (array $row): bool {
+    if (!empty($row['archived_flag'])) {
+        return true;
+    }
+    $status = strtolower(trim((string) ($row['status'] ?? '')));
+    return $status === 'archived';
+};
+
+$inr = static function (float $amount): string {
+    $negative = $amount < 0;
+    $amount = abs($amount);
+    $parts = explode('.', number_format($amount, 2, '.', ''));
+    $int = $parts[0];
+    $decimal = $parts[1] ?? '00';
+    $last3 = substr($int, -3);
+    $rest = substr($int, 0, -3);
+    if ($rest !== '') {
+        $rest = preg_replace('/\B(?=(\d{2})+(?!\d))/', ',', $rest) ?? $rest;
+        $int = $rest . ',' . $last3;
+    }
+    return ($negative ? '-₹' : '₹') . $int . '.' . $decimal;
+};
+
+$documentTypeMap = [
+    'agreement' => 'agreement',
+    'receipt' => 'receipt',
+    'delivery_challan' => 'delivery_challan',
+    'proforma' => 'proforma',
+    'invoice' => 'invoice',
+];
+
+$documentTypeLabel = [
+    'quotation' => 'Quotation',
+    'agreement' => 'Agreement',
+    'receipt' => 'Receipt',
+    'delivery_challan' => 'Delivery Challan',
+    'proforma' => 'Proforma Invoice',
+    'invoice' => 'Invoice',
+];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
@@ -273,10 +327,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $redirectWith('templates', 'success', $action === 'archive_template_set' ? 'Template archived.' : 'Template unarchived.');
     }
+
+
+    if ($action === 'set_archive_state') {
+        $tab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
+        $view = safe_text($_POST['return_view'] ?? '');
+        $docType = safe_text($_POST['doc_type'] ?? '');
+        $docId = safe_text($_POST['doc_id'] ?? '');
+        $archiveState = safe_text($_POST['archive_state'] ?? 'archive');
+        $shouldArchive = $archiveState !== 'unarchive';
+
+        if ($docType === 'quotation') {
+            $quote = documents_get_quote($docId);
+            if ($quote === null) {
+                $redirectDocuments($tab, 'error', 'Quotation not found.', $view !== '' ? ['view' => $view] : []);
+            }
+            if ($shouldArchive) {
+                $quote['status'] = 'archived';
+                $quote['archived_flag'] = true;
+                $quote['archived_at'] = date('c');
+                $quote['archived_by'] = [
+                    'type' => 'admin',
+                    'id' => (string) ($user['id'] ?? ''),
+                    'name' => (string) ($user['full_name'] ?? 'Admin'),
+                ];
+            } else {
+                $quote['archived_flag'] = false;
+                $quote['archived_at'] = '';
+                $quote['archived_by'] = ['type' => '', 'id' => '', 'name' => ''];
+                $quote['status'] = !empty($quote['accepted_at']) ? 'accepted' : 'approved';
+            }
+            $quote['updated_at'] = date('c');
+            $saved = documents_save_quote($quote);
+            if (!$saved['ok']) {
+                $redirectDocuments($tab, 'error', 'Unable to update quotation archive state.', $view !== '' ? ['view' => $view] : []);
+            }
+            $redirectDocuments($tab, 'success', $shouldArchive ? 'Quotation archived.' : 'Quotation unarchived.', $view !== '' ? ['view' => $view] : []);
+        }
+
+        $mappedType = $documentTypeMap[$docType] ?? '';
+        if ($mappedType === '') {
+            $redirectDocuments($tab, 'error', 'Invalid document type.', $view !== '' ? ['view' => $view] : []);
+        }
+
+        $document = documents_get_sales_document($mappedType, $docId);
+        if ($document === null) {
+            $redirectDocuments($tab, 'error', 'Document not found.', $view !== '' ? ['view' => $view] : []);
+        }
+
+        if ($shouldArchive) {
+            $document['archived_flag'] = true;
+            $document['archived_at'] = date('c');
+            $document['archived_by'] = [
+                'type' => 'admin',
+                'id' => (string) ($user['id'] ?? ''),
+                'name' => (string) ($user['full_name'] ?? 'Admin'),
+            ];
+            $document['status'] = 'archived';
+        } else {
+            $document['archived_flag'] = false;
+            $document['archived_at'] = '';
+            $document['archived_by'] = ['type' => '', 'id' => '', 'name' => ''];
+            if (strtolower((string) ($document['status'] ?? '')) === 'archived') {
+                $document['status'] = 'active';
+            }
+        }
+        $document['updated_at'] = date('c');
+        $saved = documents_save_sales_document($mappedType, $document);
+        if (!$saved['ok']) {
+            $redirectDocuments($tab, 'error', 'Unable to update archive state.', $view !== '' ? ['view' => $view] : []);
+        }
+        $redirectDocuments($tab, 'success', $shouldArchive ? 'Document archived.' : 'Document unarchived.', $view !== '' ? ['view' => $view] : []);
+    }
+
 }
 
 $activeTab = safe_text($_GET['tab'] ?? 'company');
-if (!in_array($activeTab, ['company', 'numbering', 'templates'], true)) {
+if (!in_array($activeTab, ['company', 'numbering', 'templates', 'accepted_customers', 'archived'], true)) {
     $activeTab = 'company';
 }
 
@@ -292,7 +419,149 @@ $numbering['rules'] = is_array($numbering['rules']) ? $numbering['rules'] : [];
 $templates = json_load($templatePath, []);
 $templates = is_array($templates) ? $templates : [];
 
-$user = current_user();
+$includeArchivedAccepted = isset($_GET['include_archived_accepted']) && $_GET['include_archived_accepted'] === '1';
+$acceptedSearch = strtolower(trim(safe_text($_GET['accepted_q'] ?? '')));
+$packViewId = safe_text($_GET['view'] ?? '');
+$includeArchivedPack = isset($_GET['include_archived_pack']) && $_GET['include_archived_pack'] === '1';
+$archiveTypeFilter = safe_text($_GET['archive_type'] ?? 'all');
+$archiveSearch = strtolower(trim(safe_text($_GET['archive_q'] ?? '')));
+
+$quotes = documents_list_quotes();
+$salesAgreements = documents_list_sales_documents('agreement');
+$salesReceipts = documents_list_sales_documents('receipt');
+$salesChallans = documents_list_sales_documents('delivery_challan');
+$salesProformas = documents_list_sales_documents('proforma');
+$salesInvoices = documents_list_sales_documents('invoice');
+
+$receiptsByQuote = [];
+foreach ($salesReceipts as $receipt) {
+    if (!is_array($receipt)) {
+        continue;
+    }
+    $qid = (string) ($receipt['quotation_id'] ?? '');
+    if ($qid === '') {
+        continue;
+    }
+    $receiptsByQuote[$qid][] = $receipt;
+}
+
+$acceptedRows = [];
+foreach ($quotes as $quote) {
+    if (!is_array($quote)) {
+        continue;
+    }
+    $statusNormalized = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
+    if ($statusNormalized !== 'accepted') {
+        continue;
+    }
+    $isArchived = $isArchivedRecord($quote);
+    if ($isArchived && !$includeArchivedAccepted) {
+        continue;
+    }
+    $mobile = normalize_customer_mobile((string) ($quote['customer_mobile'] ?? ''));
+    $name = (string) ($quote['customer_name'] ?? '');
+    $hay = strtolower($name . ' ' . $mobile);
+    if ($acceptedSearch !== '' && !str_contains($hay, $acceptedSearch)) {
+        continue;
+    }
+    $quotationAmount = (float) ($quote['calc']['gross_payable'] ?? $quote['calc']['final_price_incl_gst'] ?? $quote['calc']['grand_total'] ?? 0);
+    $received = 0.0;
+    foreach (($receiptsByQuote[(string) ($quote['id'] ?? '')] ?? []) as $receipt) {
+        if ($isArchivedRecord($receipt) && !$includeArchivedAccepted) {
+            continue;
+        }
+        $receiptStatus = strtolower(trim((string) ($receipt['status'] ?? '')));
+        if (in_array($receiptStatus, ['void', 'cancelled', 'canceled'], true)) {
+            continue;
+        }
+        $received += (float) ($receipt['amount_received'] ?? $receipt['amount'] ?? 0);
+    }
+    $receivable = max(0, $quotationAmount - $received);
+    $acceptedRows[] = [
+        'quote' => $quote,
+        'quotation_amount' => $quotationAmount,
+        'payment_received' => $received,
+        'receivables' => $receivable,
+        'advance' => $received > $quotationAmount,
+        'is_archived' => $isArchived,
+    ];
+}
+
+$packQuote = null;
+if ($packViewId !== '') {
+    $packQuote = documents_get_quote($packViewId);
+}
+
+$collectByQuote = static function (array $rows, string $quoteId, bool $includeArchived) use ($isArchivedRecord): array {
+    $list = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if ((string) ($row['quotation_id'] ?? '') !== $quoteId) {
+            continue;
+        }
+        if (!$includeArchived && $isArchivedRecord($row)) {
+            continue;
+        }
+        $list[] = $row;
+    }
+    return $list;
+};
+
+$archivedRows = [];
+foreach ($quotes as $quote) {
+    if (!is_array($quote) || !$isArchivedRecord($quote)) {
+        continue;
+    }
+    $archivedRows[] = [
+        'type' => 'quotation',
+        'doc_id' => (string) ($quote['id'] ?? ''),
+        'customer' => (string) ($quote['customer_name'] ?? ''),
+        'mobile' => (string) ($quote['customer_mobile'] ?? ''),
+        'quotation_id' => (string) ($quote['id'] ?? ''),
+        'amount' => (float) ($quote['calc']['gross_payable'] ?? 0),
+        'archived_at' => (string) ($quote['archived_at'] ?? ''),
+    ];
+}
+
+foreach (['agreement' => $salesAgreements, 'receipt' => $salesReceipts, 'delivery_challan' => $salesChallans, 'proforma' => $salesProformas, 'invoice' => $salesInvoices] as $type => $rows) {
+    foreach ($rows as $row) {
+        if (!is_array($row) || !$isArchivedRecord($row)) {
+            continue;
+        }
+        $amount = (float) ($row['amount_received'] ?? $row['amount'] ?? $row['pricing_snapshot']['gross_payable'] ?? 0);
+        $archivedRows[] = [
+            'type' => $type,
+            'doc_id' => (string) ($row['id'] ?? ''),
+            'customer' => (string) ($row['customer_name'] ?? ''),
+            'mobile' => (string) ($row['customer_mobile'] ?? ''),
+            'quotation_id' => (string) ($row['quotation_id'] ?? ''),
+            'amount' => $amount,
+            'archived_at' => (string) ($row['archived_at'] ?? ''),
+        ];
+    }
+}
+
+$archivedRows = array_values(array_filter($archivedRows, static function (array $row) use ($archiveTypeFilter, $archiveSearch): bool {
+    if ($archiveTypeFilter !== 'all' && $archiveTypeFilter !== (string) ($row['type'] ?? '')) {
+        return false;
+    }
+    if ($archiveSearch === '') {
+        return true;
+    }
+    $hay = strtolower((string) ($row['type'] ?? '') . ' ' . (string) ($row['doc_id'] ?? '') . ' ' . (string) ($row['customer'] ?? '') . ' ' . (string) ($row['mobile'] ?? '') . ' ' . (string) ($row['quotation_id'] ?? ''));
+    return str_contains($hay, $archiveSearch);
+}));
+usort($archivedRows, static function (array $a, array $b): int {
+    $typeCmp = strcmp((string) ($a['type'] ?? ''), (string) ($b['type'] ?? ''));
+    if ($typeCmp !== 0) {
+        return $typeCmp;
+    }
+    return strcmp((string) ($b['archived_at'] ?? ''), (string) ($a['archived_at'] ?? ''));
+});
+
+
 ?>
 <!doctype html>
 <html lang="en">
@@ -325,6 +594,11 @@ $user = current_user();
     th { background:#f8fafc; }
     .logo-preview { max-height:90px; display:block; margin-top:0.5rem; }
     .muted { color:#64748b; font-size:0.86rem; }
+    .pill { display:inline-block; padding:0.15rem 0.45rem; border-radius:999px; font-size:0.72rem; font-weight:700; }
+    .pill.archived { background:#fee2e2; color:#991b1b; }
+    .pill.warn { background:#fef3c7; color:#92400e; }
+    .row-actions { display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center; }
+    .inline-form { display:inline-block; margin:0; }
   </style>
 </head>
 <body>
@@ -351,12 +625,204 @@ $user = current_user();
       <a class="tab <?= $activeTab === 'company' ? 'active' : '' ?>" href="?tab=company">Company Profile &amp; Branding</a>
       <a class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering">Numbering Rules</a>
       <a class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates">Template Sets</a>
+      <a class="tab <?= $activeTab === 'accepted_customers' ? 'active' : '' ?>" href="?tab=accepted_customers">Accepted Customers</a>
+      <a class="tab <?= $activeTab === 'archived' ? 'active' : '' ?>" href="?tab=archived">Archived</a>
       <a class="tab" href="admin-templates.php">Template Blocks &amp; Media</a>
       <a class="tab" href="admin-quotations.php">Quotation Manager</a>
       <a class="tab" href="admin-challans.php">Challans</a>
       <a class="tab" href="admin-agreements.php">Agreements</a>
       <span class="tab disabled">CSV Import (Phase 2+)</span>
     </nav>
+
+    <?php if ($activeTab === 'accepted_customers'): ?>
+      <section class="panel">
+        <?php if ($packQuote !== null): ?>
+          <?php
+            $packQuoteId = (string) ($packQuote['id'] ?? '');
+            $packAgreements = $collectByQuote($salesAgreements, $packQuoteId, $includeArchivedPack);
+            $packReceipts = $collectByQuote($salesReceipts, $packQuoteId, $includeArchivedPack);
+            $packChallans = $collectByQuote($salesChallans, $packQuoteId, $includeArchivedPack);
+            $packProformas = $collectByQuote($salesProformas, $packQuoteId, $includeArchivedPack);
+            $packInvoices = $collectByQuote($salesInvoices, $packQuoteId, $includeArchivedPack);
+          ?>
+          <p><a class="btn secondary" href="?tab=accepted_customers">&larr; Back to Accepted Customers</a></p>
+          <h2 style="margin-top:0;">Document Pack: <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></h2>
+          <form method="get" style="margin-bottom:1rem;">
+            <input type="hidden" name="tab" value="accepted_customers" />
+            <input type="hidden" name="view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+            <label><input type="checkbox" name="include_archived_pack" value="1" <?= $includeArchivedPack ? 'checked' : '' ?> onchange="this.form.submit()" /> Include Archived in Pack</label>
+          </form>
+
+          <h3>A) Quotation</h3>
+          <p>
+            <a class="btn secondary" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">View Quotation</a>
+            <?php if ($isArchivedRecord($packQuote)): ?><span class="pill archived">ARCHIVED</span><?php endif; ?>
+          </p>
+
+          <h3>B) Vendor Consumer Agreement</h3>
+          <?php if ($packAgreements === []): ?>
+            <p class="muted">No agreement found. <a class="btn" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">Create Agreement</a></p>
+          <?php else: ?>
+            <table>
+              <thead><tr><th>ID</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody>
+                <?php foreach ($packAgreements as $row): ?>
+                  <tr>
+                    <td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td>
+                    <td><?= htmlspecialchars((string) ($row['execution_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) ($row['status'] ?? 'active'), ENT_QUOTES) ?></td>
+                    <td class="row-actions">
+                      <a class="btn secondary" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">View / Edit</a>
+                      <?php if ($isAdmin): ?>
+                        <form class="inline-form" method="post">
+                          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                          <input type="hidden" name="action" value="set_archive_state" />
+                          <input type="hidden" name="doc_type" value="agreement" />
+                          <input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" />
+                          <input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" />
+                          <input type="hidden" name="return_tab" value="accepted_customers" />
+                          <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+                          <button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button>
+                        </form>
+                      <?php endif; ?>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          <?php endif; ?>
+
+          <h3>C) Payment Receipts</h3>
+          <p><a class="btn" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">Add Receipt</a></p>
+          <table>
+            <thead><tr><th>ID</th><th>Date</th><th>Amount</th><th>Mode/Ref</th><th>Actions</th></tr></thead>
+            <tbody>
+              <?php foreach ($packReceipts as $row): ?>
+                <tr>
+                  <td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td>
+                  <td><?= htmlspecialchars((string) ($row['receipt_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars($inr((float) ($row['amount_received'] ?? $row['amount'] ?? 0)), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) ($row['mode'] ?? ''), ENT_QUOTES) ?> <?= htmlspecialchars((string) ($row['reference'] ?? ''), ENT_QUOTES) ?></td>
+                  <td class="row-actions">
+                    <a class="btn secondary" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">View/Edit</a>
+                    <?php if ($isAdmin): ?>
+                      <form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="receipt" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form>
+                    <?php endif; ?>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+              <?php if ($packReceipts === []): ?><tr><td colspan="5" class="muted">No receipts available.</td></tr><?php endif; ?>
+            </tbody>
+          </table>
+
+          <h3>D) Delivery Challans</h3>
+          <p><a class="btn" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">Create DC</a></p>
+          <table><thead><tr><th>ID</th><th>Date</th><th>Items</th><th>Actions</th></tr></thead><tbody>
+          <?php foreach ($packChallans as $row): ?>
+            <tr>
+              <td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td>
+              <td><?= htmlspecialchars((string) ($row['challan_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td>
+              <td><?= count(is_array($row['items'] ?? null) ? $row['items'] : []) ?></td>
+              <td class="row-actions"><a class="btn secondary" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="delivery_challan" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td>
+            </tr>
+          <?php endforeach; ?>
+          <?php if ($packChallans === []): ?><tr><td colspan="4" class="muted">No delivery challans available.</td></tr><?php endif; ?>
+          </tbody></table>
+
+          <h3>E) Proforma Invoice (PI)</h3>
+          <p><a class="btn" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">Create PI</a></p>
+          <table><thead><tr><th>ID</th><th>Date</th><th>Actions</th></tr></thead><tbody>
+          <?php foreach ($packProformas as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['pi_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="proforma" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
+          <?php if ($packProformas === []): ?><tr><td colspan="3" class="muted">No PI found.</td></tr><?php endif; ?>
+          </tbody></table>
+
+          <h3>F) Invoice</h3>
+          <p><a class="btn" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">Create Invoice</a></p>
+          <table><thead><tr><th>ID</th><th>Date</th><th>Actions</th></tr></thead><tbody>
+          <?php foreach ($packInvoices as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['invoice_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="invoice" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
+          <?php if ($packInvoices === []): ?><tr><td colspan="3" class="muted">No invoice found.</td></tr><?php endif; ?>
+          </tbody></table>
+        <?php else: ?>
+          <h2 style="margin-top:0;">Accepted Customers</h2>
+          <form method="get" class="grid" style="margin-bottom:1rem;">
+            <input type="hidden" name="tab" value="accepted_customers" />
+            <div><label>Search (name/mobile)</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div>
+            <div><label>&nbsp;</label><label><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Include archived quotations</label></div>
+            <div><label>&nbsp;</label><button class="btn" type="submit">Apply</button></div>
+          </form>
+          <table>
+            <thead><tr><th>Sr No</th><th>Customer Name</th><th>View</th><th>Quotation Amount</th><th>Payment Received</th><th>Receivables</th></tr></thead>
+            <tbody>
+              <?php foreach ($acceptedRows as $index => $row): ?>
+                <?php $quote = $row['quote']; ?>
+                <tr>
+                  <td><?= $index + 1 ?></td>
+                  <td><?= htmlspecialchars((string) ($quote['customer_name'] ?? ''), ENT_QUOTES) ?><?php if (!empty($row['is_archived'])): ?> <span class="pill archived">ARCHIVED</span><?php endif; ?><br><span class="muted"><?= htmlspecialchars((string) ($quote['customer_mobile'] ?? ''), ENT_QUOTES) ?></span></td>
+                  <td><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => (string) ($quote['id'] ?? ''), 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">View</a></td>
+                  <td><?= htmlspecialchars($inr((float) $row['quotation_amount']), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars($inr((float) $row['payment_received']), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars($inr((float) $row['receivables']), ENT_QUOTES) ?><?php if (!empty($row['advance'])): ?><br><span class="muted">(Advance)</span><?php endif; ?><?php if (($row['receivables'] ?? 0) > 0): ?> <span class="pill warn">Due</span><?php endif; ?></td>
+                </tr>
+              <?php endforeach; ?>
+              <?php if ($acceptedRows === []): ?><tr><td colspan="6" class="muted">No accepted customers found.</td></tr><?php endif; ?>
+            </tbody>
+          </table>
+        <?php endif; ?>
+      </section>
+    <?php endif; ?>
+
+    <?php if ($activeTab === 'archived'): ?>
+      <section class="panel">
+        <h2 style="margin-top:0;">Archived Documents</h2>
+        <form method="get" class="grid" style="margin-bottom:1rem;">
+          <input type="hidden" name="tab" value="archived" />
+          <div>
+            <label>Type</label>
+            <select name="archive_type">
+              <option value="all" <?= $archiveTypeFilter === 'all' ? 'selected' : '' ?>>All</option>
+              <option value="quotation" <?= $archiveTypeFilter === 'quotation' ? 'selected' : '' ?>>Quotations</option>
+              <option value="agreement" <?= $archiveTypeFilter === 'agreement' ? 'selected' : '' ?>>Agreements</option>
+              <option value="receipt" <?= $archiveTypeFilter === 'receipt' ? 'selected' : '' ?>>Receipts</option>
+              <option value="delivery_challan" <?= $archiveTypeFilter === 'delivery_challan' ? 'selected' : '' ?>>DC</option>
+              <option value="proforma" <?= $archiveTypeFilter === 'proforma' ? 'selected' : '' ?>>PI</option>
+              <option value="invoice" <?= $archiveTypeFilter === 'invoice' ? 'selected' : '' ?>>Invoice</option>
+            </select>
+          </div>
+          <div><label>Search</label><input type="text" name="archive_q" value="<?= htmlspecialchars((string) ($_GET['archive_q'] ?? ''), ENT_QUOTES) ?>" placeholder="Customer / mobile / doc id / quote id" /></div>
+          <div><label>&nbsp;</label><button class="btn" type="submit">Apply</button></div>
+        </form>
+        <table>
+          <thead><tr><th>Type</th><th>Doc ID</th><th>Customer</th><th>Linked quotation id</th><th>Amount</th><th>Archived at</th><th>Actions</th></tr></thead>
+          <tbody>
+            <?php foreach ($archivedRows as $row): ?>
+              <tr>
+                <td><?= htmlspecialchars($documentTypeLabel[(string) ($row['type'] ?? '')] ?? (string) ($row['type'] ?? ''), ENT_QUOTES) ?></td>
+                <td><?= htmlspecialchars((string) ($row['doc_id'] ?? ''), ENT_QUOTES) ?></td>
+                <td><?= htmlspecialchars((string) ($row['customer'] ?? ''), ENT_QUOTES) ?><br><span class="muted"><?= htmlspecialchars((string) ($row['mobile'] ?? ''), ENT_QUOTES) ?></span></td>
+                <td><?= htmlspecialchars((string) ($row['quotation_id'] ?? ''), ENT_QUOTES) ?></td>
+                <td><?= htmlspecialchars($inr((float) ($row['amount'] ?? 0)), ENT_QUOTES) ?></td>
+                <td><?= htmlspecialchars((string) ($row['archived_at'] ?? ''), ENT_QUOTES) ?></td>
+                <td class="row-actions">
+                  <?php if ((string) ($row['quotation_id'] ?? '') !== ''): ?><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string) ($row['quotation_id'] ?? '')) ?>" target="_blank" rel="noopener">View</a><?php endif; ?>
+                  <?php if ($isAdmin): ?>
+                    <form class="inline-form" method="post">
+                      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                      <input type="hidden" name="action" value="set_archive_state" />
+                      <input type="hidden" name="doc_type" value="<?= htmlspecialchars((string) ($row['type'] ?? ''), ENT_QUOTES) ?>" />
+                      <input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['doc_id'] ?? ''), ENT_QUOTES) ?>" />
+                      <input type="hidden" name="archive_state" value="unarchive" />
+                      <input type="hidden" name="return_tab" value="archived" />
+                      <button class="btn secondary" type="submit">Unarchive</button>
+                    </form>
+                  <?php endif; ?>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            <?php if ($archivedRows === []): ?><tr><td colspan="7" class="muted">No archived documents found.</td></tr><?php endif; ?>
+          </tbody>
+        </table>
+      </section>
+    <?php endif; ?>
 
     <?php if ($activeTab === 'company'): ?>
       <section class="panel">
