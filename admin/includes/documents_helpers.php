@@ -43,6 +43,36 @@ function documents_challans_dir(): string
     return documents_base_dir() . '/challans';
 }
 
+function documents_sales_documents_dir(): string
+{
+    return documents_base_dir() . '/documents';
+}
+
+function documents_sales_agreements_store_path(): string
+{
+    return documents_sales_documents_dir() . '/agreements/agreements.json';
+}
+
+function documents_sales_receipts_store_path(): string
+{
+    return documents_sales_documents_dir() . '/receipts/receipts.json';
+}
+
+function documents_sales_delivery_challans_store_path(): string
+{
+    return documents_sales_documents_dir() . '/delivery_challans/delivery_challans.json';
+}
+
+function documents_sales_proforma_store_path(): string
+{
+    return documents_sales_documents_dir() . '/proforma_invoices/pi.json';
+}
+
+function documents_sales_invoice_store_path(): string
+{
+    return documents_sales_documents_dir() . '/invoices/invoices.json';
+}
+
 function documents_proformas_dir(): string
 {
     return documents_base_dir() . '/proformas';
@@ -126,6 +156,11 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_challan_pdf_dir());
     documents_ensure_dir(documents_proformas_dir());
     documents_ensure_dir(documents_invoices_dir());
+    documents_ensure_dir(documents_sales_documents_dir() . '/agreements');
+    documents_ensure_dir(documents_sales_documents_dir() . '/receipts');
+    documents_ensure_dir(documents_sales_documents_dir() . '/delivery_challans');
+    documents_ensure_dir(documents_sales_documents_dir() . '/proforma_invoices');
+    documents_ensure_dir(documents_sales_documents_dir() . '/invoices');
     documents_ensure_dir(documents_public_branding_dir());
     documents_ensure_dir(documents_public_backgrounds_dir());
     documents_ensure_dir(documents_public_watermarks_dir());
@@ -171,6 +206,18 @@ function documents_ensure_structure(): void
     $quoteDefaultsPath = documents_quote_defaults_path();
     if (!is_file($quoteDefaultsPath)) {
         json_save($quoteDefaultsPath, documents_quote_defaults_settings());
+    }
+
+    foreach ([
+        documents_sales_agreements_store_path(),
+        documents_sales_receipts_store_path(),
+        documents_sales_delivery_challans_store_path(),
+        documents_sales_proforma_store_path(),
+        documents_sales_invoice_store_path(),
+    ] as $storePath) {
+        if (!is_file($storePath)) {
+            json_save($storePath, []);
+        }
     }
 }
 
@@ -747,6 +794,9 @@ function documents_quote_defaults(): array
         'quote_no' => '',
         'revision' => 0,
         'status' => 'Draft',
+        'archived_flag' => false,
+        'archived_at' => '',
+        'archived_by' => ['type' => '', 'id' => '', 'name' => ''],
         'approval' => [
             'approved_by_id' => '',
             'approved_by_name' => '',
@@ -757,6 +807,15 @@ function documents_quote_defaults(): array
             'accepted_by_admin_name' => '',
             'accepted_at' => '',
             'accepted_note' => '',
+        ],
+        'accepted_at' => '',
+        'accepted_by' => ['type' => '', 'id' => '', 'name' => ''],
+        'workflow' => [
+            'agreement_id' => '',
+            'proforma_invoice_id' => '',
+            'invoice_id' => '',
+            'receipt_ids' => [],
+            'delivery_challan_ids' => [],
         ],
         'links' => [
             'customer_mobile' => '',
@@ -1580,7 +1639,7 @@ function documents_list_quotes(): array
         if (!is_array($row)) {
             continue;
         }
-        $quote = array_merge(documents_quote_defaults(), $row);
+        $quote = documents_quote_prepare(is_array($row) ? $row : []);
         $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
         $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
         $quotes[] = $quote;
@@ -1607,7 +1666,7 @@ function documents_get_quote(string $id): ?array
     if (!is_array($row)) {
         return null;
     }
-    $quote = array_merge(documents_quote_defaults(), $row);
+    $quote = documents_quote_prepare($row);
     $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
     $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
     return $quote;
@@ -1621,6 +1680,7 @@ function documents_save_quote(array $quote): array
     }
     $path = documents_quotations_dir() . '/' . $id . '.json';
     $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
+    $quote = documents_quote_prepare($quote);
     $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
     if (safe_text((string) ($quote['special_requests_text'] ?? '')) === '' && safe_text((string) ($quote['special_requests_inclusive'] ?? '')) !== '') {
         $quote['special_requests_text'] = (string) $quote['special_requests_inclusive'];
@@ -1703,21 +1763,9 @@ function documents_generate_invoice_public_number(string $segment): array
     return ['ok' => true, 'invoice_no' => (string) ($number['doc_no'] ?? ''), 'error' => ''];
 }
 
-function documents_status_label(array $quote, string $viewerType = 'admin'): string
-{
-    $status = (string) ($quote['status'] ?? 'Draft');
-    if ($status === 'Draft') {
-        if (($quote['created_by_type'] ?? '') === 'employee') {
-            return $viewerType === 'employee' ? 'Pending Admin Approval' : 'Needs Approval';
-        }
-        return 'Draft';
-    }
-    return $status;
-}
-
 function documents_quote_can_edit(array $quote, string $viewerType, string $viewerId = ''): bool
 {
-    if ((string) ($quote['status'] ?? 'Draft') !== 'Draft') {
+    if (documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')) !== 'draft') {
         return false;
     }
     if ($viewerType === 'admin') {
@@ -2156,4 +2204,190 @@ function documents_render_agreement_body_html(array $agreement, array $company):
     $htmlOverride = safe_text((string) ($agreement['overrides']['html_override'] ?? ''));
     $html = $htmlOverride !== '' ? $htmlOverride : (string) ($template['html_template'] ?? '');
     return strtr($html, documents_build_agreement_placeholders($agreement, $company));
+}
+
+function documents_quote_normalize_status(string $status): string
+{
+    $normalized = strtolower(trim($status));
+    if ($normalized === 'pending admin approval') {
+        return 'pending_admin_approval';
+    }
+    if (in_array($normalized, ['draft', 'pending_admin_approval', 'approved', 'accepted', 'archived'], true)) {
+        return $normalized;
+    }
+    if ($normalized === 'approved') {
+        return 'approved';
+    }
+    if ($normalized === 'accepted') {
+        return 'accepted';
+    }
+    return 'draft';
+}
+
+function documents_quote_workflow_defaults(): array
+{
+    return [
+        'agreement_id' => '',
+        'proforma_invoice_id' => '',
+        'invoice_id' => '',
+        'receipt_ids' => [],
+        'delivery_challan_ids' => [],
+    ];
+}
+
+function documents_quote_prepare(array $quote): array
+{
+    $quote = array_merge(documents_quote_defaults(), $quote);
+    $quote['status'] = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
+    $quote['workflow'] = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
+    $quote['accepted_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['accepted_by'] ?? null) ? $quote['accepted_by'] : []);
+    $quote['archived_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['archived_by'] ?? null) ? $quote['archived_by'] : []);
+    $quote['archived_flag'] = !empty($quote['archived_flag']) || $quote['status'] === 'archived';
+    return $quote;
+}
+
+function documents_read_sales_store(string $path): array
+{
+    $rows = json_load($path, []);
+    return is_array($rows) ? $rows : [];
+}
+
+function documents_write_sales_store(string $path, array $rows): array
+{
+    return json_save($path, array_values($rows));
+}
+
+function documents_generate_simple_document_id(string $prefix): string
+{
+    return strtoupper($prefix) . '-' . date('YmdHis') . '-' . strtoupper(bin2hex(random_bytes(2)));
+}
+
+function documents_sales_document_defaults(string $type): array
+{
+    return [
+        'id' => '',
+        'doc_type' => $type,
+        'quotation_id' => '',
+        'customer_mobile' => '',
+        'customer_name' => '',
+        'created_at' => '',
+        'updated_at' => '',
+        'created_by' => ['type' => '', 'id' => '', 'name' => ''],
+        'status' => 'draft',
+        'archived_flag' => false,
+        'archived_at' => '',
+        'archived_by' => ['type' => '', 'id' => '', 'name' => ''],
+        'notes' => '',
+    ];
+}
+
+function documents_list_sales_documents(string $type): array
+{
+    $pathMap = [
+        'agreement' => documents_sales_agreements_store_path(),
+        'receipt' => documents_sales_receipts_store_path(),
+        'delivery_challan' => documents_sales_delivery_challans_store_path(),
+        'proforma' => documents_sales_proforma_store_path(),
+        'invoice' => documents_sales_invoice_store_path(),
+    ];
+    $path = $pathMap[$type] ?? '';
+    if ($path === '') {
+        return [];
+    }
+    $rows = documents_read_sales_store($path);
+    $rows = array_values(array_filter($rows, static fn($row): bool => is_array($row)));
+    usort($rows, static fn(array $a, array $b): int => strcmp((string)($b['created_at'] ?? ''), (string)($a['created_at'] ?? '')));
+    return $rows;
+}
+
+function documents_get_sales_document(string $type, string $id): ?array
+{
+    foreach (documents_list_sales_documents($type) as $row) {
+        if ((string) ($row['id'] ?? '') === $id) {
+            return $row;
+        }
+    }
+    return null;
+}
+
+function documents_save_sales_document(string $type, array $document): array
+{
+    $pathMap = [
+        'agreement' => documents_sales_agreements_store_path(),
+        'receipt' => documents_sales_receipts_store_path(),
+        'delivery_challan' => documents_sales_delivery_challans_store_path(),
+        'proforma' => documents_sales_proforma_store_path(),
+        'invoice' => documents_sales_invoice_store_path(),
+    ];
+    $path = $pathMap[$type] ?? '';
+    if ($path === '') {
+        return ['ok' => false, 'error' => 'Invalid document type'];
+    }
+
+    $rows = documents_read_sales_store($path);
+    $base = documents_sales_document_defaults($type);
+    $document = array_merge($base, $document);
+    $document['updated_at'] = date('c');
+
+    $found = false;
+    foreach ($rows as $index => $row) {
+        if (is_array($row) && (string) ($row['id'] ?? '') === (string) ($document['id'] ?? '')) {
+            $rows[$index] = array_merge($base, $row, $document);
+            $found = true;
+            break;
+        }
+    }
+    if (!$found) {
+        if ((string) ($document['id'] ?? '') === '') {
+            return ['ok' => false, 'error' => 'Missing document ID'];
+        }
+        if ((string) ($document['created_at'] ?? '') === '') {
+            $document['created_at'] = date('c');
+        }
+        $rows[] = $document;
+    }
+
+    return documents_write_sales_store($path, $rows);
+}
+
+function documents_quote_link_workflow_doc(array &$quote, string $type, string $id): void
+{
+    $quote = documents_quote_prepare($quote);
+    if ($type === 'agreement') {
+        $quote['workflow']['agreement_id'] = $id;
+    } elseif ($type === 'proforma') {
+        $quote['workflow']['proforma_invoice_id'] = $id;
+    } elseif ($type === 'invoice') {
+        $quote['workflow']['invoice_id'] = $id;
+    } elseif ($type === 'receipt') {
+        $ids = is_array($quote['workflow']['receipt_ids'] ?? null) ? $quote['workflow']['receipt_ids'] : [];
+        if (!in_array($id, $ids, true)) {
+            $ids[] = $id;
+        }
+        $quote['workflow']['receipt_ids'] = array_values($ids);
+    } elseif ($type === 'delivery_challan') {
+        $ids = is_array($quote['workflow']['delivery_challan_ids'] ?? null) ? $quote['workflow']['delivery_challan_ids'] : [];
+        if (!in_array($id, $ids, true)) {
+            $ids[] = $id;
+        }
+        $quote['workflow']['delivery_challan_ids'] = array_values($ids);
+    }
+}
+
+function documents_status_label(array $quote, string $viewerType = 'admin'): string
+{
+    $status = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
+    if ($status === 'draft') {
+        if (($quote['created_by_type'] ?? '') === 'employee') {
+            return $viewerType === 'employee' ? 'Pending Admin Approval' : 'Needs Approval';
+        }
+        return 'Draft';
+    }
+    $labels = [
+        'pending_admin_approval' => 'Pending Admin Approval',
+        'approved' => 'Approved',
+        'accepted' => 'Accepted',
+        'archived' => 'Archived',
+    ];
+    return $labels[$status] ?? ucfirst($status);
 }

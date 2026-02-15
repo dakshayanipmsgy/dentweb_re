@@ -19,7 +19,7 @@ documents_seed_template_sets_if_empty();
 $segments = ['RES', 'COM', 'IND', 'INST', 'PROD'];
 $units = ['Nos', 'Set', 'm', 'kWp', 'Box', 'Lot'];
 $templates = array_values(array_filter(json_load(documents_templates_dir() . '/template_sets.json', []), static fn($row): bool => is_array($row) && !($row['archived_flag'] ?? false)));
-$allQuotes = array_values(array_filter(documents_list_quotes(), static fn(array $q): bool => (string) ($q['created_by_type'] ?? '') === 'employee' && (string) ($q['created_by_id'] ?? '') === (string) ($employee['id'] ?? '')));
+$allQuotes = array_values(array_filter(documents_list_quotes(), static fn(array $q): bool => (string) ($q['created_by_type'] ?? '') === 'employee' && (string) ($q['created_by_id'] ?? '') === (string) ($employee['id'] ?? '') && documents_quote_normalize_status((string)($q['status'] ?? 'draft')) === 'accepted'));
 
 $redirectWith = static function (string $type, string $msg): void {
     header('Location: employee-challans.php?' . http_build_query(['status' => $type, 'message' => $msg]));
@@ -62,6 +62,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $linkedQuote = $linkedQuoteId !== '' ? documents_get_quote($linkedQuoteId) : null;
     if ($linkedQuote !== null && ((string) ($linkedQuote['created_by_type'] ?? '') !== 'employee' || (string) ($linkedQuote['created_by_id'] ?? '') !== (string) ($employee['id'] ?? ''))) {
         $redirectWith('error', 'You can link only your own quotations.');
+    }
+    if ($linkedQuote !== null && documents_quote_normalize_status((string)($linkedQuote['status'] ?? 'draft')) !== 'accepted') {
+        $redirectWith('error', 'Delivery challan creation is allowed only for accepted quotations.');
     }
 
     $snapshot = documents_customer_snapshot_defaults();
