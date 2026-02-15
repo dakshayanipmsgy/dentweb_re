@@ -50,62 +50,27 @@ function documents_sales_documents_dir(): string
 
 function documents_sales_agreements_store_path(): string
 {
-    return documents_sales_documents_dir() . '/agreements/active.json';
-}
-
-function documents_sales_agreements_archived_store_path(): string
-{
-    return documents_sales_documents_dir() . '/agreements/archived.json';
+    return documents_sales_documents_dir() . '/agreements/agreements.json';
 }
 
 function documents_sales_receipts_store_path(): string
 {
-    return documents_sales_documents_dir() . '/receipts/active.json';
-}
-
-function documents_sales_receipts_archived_store_path(): string
-{
-    return documents_sales_documents_dir() . '/receipts/archived.json';
+    return documents_sales_documents_dir() . '/receipts/receipts.json';
 }
 
 function documents_sales_delivery_challans_store_path(): string
 {
-    return documents_sales_documents_dir() . '/delivery_challans/active.json';
-}
-
-function documents_sales_delivery_challans_archived_store_path(): string
-{
-    return documents_sales_documents_dir() . '/delivery_challans/archived.json';
+    return documents_sales_documents_dir() . '/delivery_challans/delivery_challans.json';
 }
 
 function documents_sales_proforma_store_path(): string
 {
-    return documents_sales_documents_dir() . '/proforma_invoices/active.json';
-}
-
-function documents_sales_proforma_archived_store_path(): string
-{
-    return documents_sales_documents_dir() . '/proforma_invoices/archived.json';
+    return documents_sales_documents_dir() . '/proforma_invoices/pi.json';
 }
 
 function documents_sales_invoice_store_path(): string
 {
-    return documents_sales_documents_dir() . '/invoices/active.json';
-}
-
-function documents_sales_invoice_archived_store_path(): string
-{
-    return documents_sales_documents_dir() . '/invoices/archived.json';
-}
-
-function documents_quotes_active_dir(): string
-{
-    return documents_quotations_dir() . '/active';
-}
-
-function documents_quotes_archived_dir(): string
-{
-    return documents_quotations_dir() . '/archived';
+    return documents_sales_documents_dir() . '/invoices/invoices.json';
 }
 
 function documents_proformas_dir(): string
@@ -185,8 +150,6 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_media_dir());
     documents_ensure_dir(documents_logs_dir());
     documents_ensure_dir(documents_quotations_dir());
-    documents_ensure_dir(documents_quotes_active_dir());
-    documents_ensure_dir(documents_quotes_archived_dir());
     documents_ensure_dir(documents_agreements_dir());
     documents_ensure_dir(documents_agreement_pdf_dir());
     documents_ensure_dir(documents_challans_dir());
@@ -247,40 +210,14 @@ function documents_ensure_structure(): void
 
     foreach ([
         documents_sales_agreements_store_path(),
-        documents_sales_agreements_archived_store_path(),
         documents_sales_receipts_store_path(),
-        documents_sales_receipts_archived_store_path(),
         documents_sales_delivery_challans_store_path(),
-        documents_sales_delivery_challans_archived_store_path(),
         documents_sales_proforma_store_path(),
-        documents_sales_proforma_archived_store_path(),
         documents_sales_invoice_store_path(),
-        documents_sales_invoice_archived_store_path(),
     ] as $storePath) {
         if (!is_file($storePath)) {
             json_save($storePath, []);
         }
-    }
-
-    documents_migrate_legacy_store_if_required(documents_sales_documents_dir() . '/agreements/agreements.json', documents_sales_agreements_store_path());
-    documents_migrate_legacy_store_if_required(documents_sales_documents_dir() . '/receipts/receipts.json', documents_sales_receipts_store_path());
-    documents_migrate_legacy_store_if_required(documents_sales_documents_dir() . '/delivery_challans/delivery_challans.json', documents_sales_delivery_challans_store_path());
-    documents_migrate_legacy_store_if_required(documents_sales_documents_dir() . '/proforma_invoices/pi.json', documents_sales_proforma_store_path());
-    documents_migrate_legacy_store_if_required(documents_sales_documents_dir() . '/invoices/invoices.json', documents_sales_invoice_store_path());
-}
-
-function documents_migrate_legacy_store_if_required(string $legacyPath, string $activePath): void
-{
-    if (!is_file($legacyPath)) {
-        return;
-    }
-    $activeRows = json_load($activePath, []);
-    if (is_array($activeRows) && $activeRows !== []) {
-        return;
-    }
-    $legacyRows = json_load($legacyPath, []);
-    if (is_array($legacyRows) && $legacyRows !== []) {
-        json_save($activePath, $legacyRows);
     }
 }
 
@@ -1689,43 +1626,23 @@ function documents_find_customer_by_mobile(string $mobile): ?array
     return documents_map_customer_record($record);
 }
 
-function documents_quote_store_paths(string $bucket = 'active'): array
-{
-    $bucket = strtolower(trim($bucket)) === 'archived' ? 'archived' : 'active';
-    if ($bucket === 'active') {
-        return [
-            documents_quotes_active_dir(),
-            documents_quotations_dir(),
-        ];
-    }
-    return [documents_quotes_archived_dir()];
-}
-
-function documents_list_quotes(string $bucket = 'active'): array
+function documents_list_quotes(): array
 {
     documents_ensure_structure();
+    $files = glob(documents_quotations_dir() . '/*.json') ?: [];
     $quotes = [];
-    foreach (documents_quote_store_paths($bucket) as $dir) {
-        $files = glob($dir . '/*.json') ?: [];
-        foreach ($files as $file) {
-            if (!is_string($file)) {
-                continue;
-            }
-            $row = json_load($file, []);
-            if (!is_array($row)) {
-                continue;
-            }
-            $quote = documents_quote_prepare($row);
-            if ($bucket === 'active' && ($quote['archived_flag'] ?? false || documents_quote_normalize_status((string)($quote['status'] ?? 'draft')) === 'archived')) {
-                continue;
-            }
-            if ($bucket === 'archived' && !($quote['archived_flag'] ?? false) && documents_quote_normalize_status((string)($quote['status'] ?? 'draft')) !== 'archived') {
-                continue;
-            }
-            $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
-            $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
-            $quotes[] = $quote;
+    foreach ($files as $file) {
+        if (!is_string($file)) {
+            continue;
         }
+        $row = json_load($file, []);
+        if (!is_array($row)) {
+            continue;
+        }
+        $quote = documents_quote_prepare(is_array($row) ? $row : []);
+        $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
+        $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
+        $quotes[] = $quote;
     }
 
     usort($quotes, static function (array $a, array $b): int {
@@ -1735,35 +1652,20 @@ function documents_list_quotes(string $bucket = 'active'): array
     return $quotes;
 }
 
-function documents_get_quote(string $id, bool $allowArchived = true): ?array
+function documents_get_quote(string $id): ?array
 {
     $id = safe_filename($id);
     if ($id === '') {
         return null;
     }
-
-    $paths = [
-        documents_quotes_active_dir() . '/' . $id . '.json',
-        documents_quotations_dir() . '/' . $id . '.json',
-    ];
-    if ($allowArchived) {
-        $paths[] = documents_quotes_archived_dir() . '/' . $id . '.json';
+    $path = documents_quotations_dir() . '/' . $id . '.json';
+    if (!is_file($path)) {
+        return null;
     }
-
-    $row = null;
-    foreach ($paths as $path) {
-        if (is_file($path)) {
-            $loaded = json_load($path, []);
-            if (is_array($loaded)) {
-                $row = $loaded;
-                break;
-            }
-        }
-    }
+    $row = json_load($path, []);
     if (!is_array($row)) {
         return null;
     }
-
     $quote = documents_quote_prepare($row);
     $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
     $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
@@ -1776,66 +1678,14 @@ function documents_save_quote(array $quote): array
     if ($id === '') {
         return ['ok' => false, 'error' => 'Missing quote ID'];
     }
-
+    $path = documents_quotations_dir() . '/' . $id . '.json';
     $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
     $quote = documents_quote_prepare($quote);
     $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
     if (safe_text((string) ($quote['special_requests_text'] ?? '')) === '' && safe_text((string) ($quote['special_requests_inclusive'] ?? '')) !== '') {
         $quote['special_requests_text'] = (string) $quote['special_requests_inclusive'];
     }
-
-    $isArchived = !empty($quote['archived_flag']) || documents_quote_normalize_status((string)($quote['status'] ?? 'draft')) === 'archived';
-    $primaryPath = ($isArchived ? documents_quotes_archived_dir() : documents_quotes_active_dir()) . '/' . $id . '.json';
-    $legacyPath = documents_quotations_dir() . '/' . $id . '.json';
-    $otherPath = ($isArchived ? documents_quotes_active_dir() : documents_quotes_archived_dir()) . '/' . $id . '.json';
-
-    $saved = json_save($primaryPath, $quote);
-    if (!($saved['ok'] ?? false)) {
-        return $saved;
-    }
-
-    if (is_file($legacyPath) && realpath(dirname($legacyPath)) !== realpath(dirname($primaryPath))) {
-        @unlink($legacyPath);
-    }
-    if (is_file($otherPath)) {
-        @unlink($otherPath);
-    }
-
-    return ['ok' => true, 'error' => ''];
-}
-
-function documents_move_quote_to_archive(string $quoteId, array $actor = []): array
-{
-    $quote = documents_get_quote($quoteId);
-    if ($quote === null) {
-        return ['ok' => false, 'error' => 'Already archived or not found'];
-    }
-    if (!empty($quote['archived_flag']) || documents_quote_normalize_status((string)($quote['status'] ?? 'draft')) === 'archived') {
-        return ['ok' => true, 'error' => ''];
-    }
-    $quote['status'] = 'archived';
-    $quote['archived_flag'] = true;
-    $quote['archived_at'] = date('c');
-    $quote['archived_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], $actor);
-    $quote['updated_at'] = date('c');
-    return documents_save_quote($quote);
-}
-
-function documents_move_quote_to_active(string $quoteId): array
-{
-    $quote = documents_get_quote($quoteId);
-    if ($quote === null) {
-        return ['ok' => false, 'error' => 'Archived quote not found'];
-    }
-    if (empty($quote['archived_flag']) && documents_quote_normalize_status((string)($quote['status'] ?? 'draft')) !== 'archived') {
-        return ['ok' => true, 'error' => ''];
-    }
-    $quote['archived_flag'] = false;
-    $quote['archived_at'] = '';
-    $quote['archived_by'] = ['type' => '', 'id' => '', 'name' => ''];
-    $quote['status'] = (string)($quote['accepted_at'] ?? '') !== '' ? 'accepted' : 'approved';
-    $quote['updated_at'] = date('c');
-    return documents_save_quote($quote);
+    return json_save($path, $quote);
 }
 
 
@@ -2412,18 +2262,6 @@ function documents_generate_simple_document_id(string $prefix): string
     return strtoupper($prefix) . '-' . date('YmdHis') . '-' . strtoupper(bin2hex(random_bytes(2)));
 }
 
-function documents_sales_store_paths(string $type): array
-{
-    $map = [
-        'agreement' => ['active' => documents_sales_agreements_store_path(), 'archived' => documents_sales_agreements_archived_store_path()],
-        'receipt' => ['active' => documents_sales_receipts_store_path(), 'archived' => documents_sales_receipts_archived_store_path()],
-        'delivery_challan' => ['active' => documents_sales_delivery_challans_store_path(), 'archived' => documents_sales_delivery_challans_archived_store_path()],
-        'proforma' => ['active' => documents_sales_proforma_store_path(), 'archived' => documents_sales_proforma_archived_store_path()],
-        'invoice' => ['active' => documents_sales_invoice_store_path(), 'archived' => documents_sales_invoice_archived_store_path()],
-    ];
-    return $map[$type] ?? ['active' => '', 'archived' => ''];
-}
-
 function documents_sales_document_defaults(string $type): array
 {
     return [
@@ -2443,55 +2281,30 @@ function documents_sales_document_defaults(string $type): array
     ];
 }
 
-function documents_list_sales_documents(string $type, bool $includeArchived = false): array
+function documents_list_sales_documents(string $type): array
 {
-    $paths = documents_sales_store_paths($type);
-    if (($paths['active'] ?? '') === '') {
+    $pathMap = [
+        'agreement' => documents_sales_agreements_store_path(),
+        'receipt' => documents_sales_receipts_store_path(),
+        'delivery_challan' => documents_sales_delivery_challans_store_path(),
+        'proforma' => documents_sales_proforma_store_path(),
+        'invoice' => documents_sales_invoice_store_path(),
+    ];
+    $path = $pathMap[$type] ?? '';
+    if ($path === '') {
         return [];
     }
-
-    $rows = documents_read_sales_store((string)$paths['active']);
-    $rows = array_values(array_filter($rows, static fn($row): bool => is_array($row) && !($row['archived_flag'] ?? false)));
-
-    if ($includeArchived && (string)($paths['archived'] ?? '') !== '') {
-        $archivedRows = documents_read_sales_store((string)$paths['archived']);
-        $archivedRows = array_values(array_filter($archivedRows, static fn($row): bool => is_array($row)));
-        $rows = array_merge($rows, $archivedRows);
-    }
-
-    usort($rows, static fn(array $a, array $b): int => strcmp((string)($b['created_at'] ?? ''), (string)($a['created_at'] ?? '')));
-    return $rows;
-}
-
-function documents_list_archived_sales_documents(string $type): array
-{
-    $paths = documents_sales_store_paths($type);
-    if ((string)($paths['archived'] ?? '') === '') {
-        return [];
-    }
-    $rows = documents_read_sales_store((string)$paths['archived']);
+    $rows = documents_read_sales_store($path);
     $rows = array_values(array_filter($rows, static fn($row): bool => is_array($row)));
     usort($rows, static fn(array $a, array $b): int => strcmp((string)($b['created_at'] ?? ''), (string)($a['created_at'] ?? '')));
     return $rows;
 }
 
-function documents_get_sales_document(string $type, string $id, bool $allowArchived = true): ?array
+function documents_get_sales_document(string $type, string $id): ?array
 {
-    $id = safe_text($id);
-    if ($id === '') {
-        return null;
-    }
-
-    foreach (documents_list_sales_documents($type, false) as $row) {
+    foreach (documents_list_sales_documents($type) as $row) {
         if ((string) ($row['id'] ?? '') === $id) {
             return $row;
-        }
-    }
-    if ($allowArchived) {
-        foreach (documents_list_archived_sales_documents($type) as $row) {
-            if ((string) ($row['id'] ?? '') === $id) {
-                return $row;
-            }
         }
     }
     return null;
@@ -2499,124 +2312,42 @@ function documents_get_sales_document(string $type, string $id, bool $allowArchi
 
 function documents_save_sales_document(string $type, array $document): array
 {
-    $paths = documents_sales_store_paths($type);
-    $activePath = (string)($paths['active'] ?? '');
-    $archivedPath = (string)($paths['archived'] ?? '');
-    if ($activePath === '' || $archivedPath === '') {
+    $pathMap = [
+        'agreement' => documents_sales_agreements_store_path(),
+        'receipt' => documents_sales_receipts_store_path(),
+        'delivery_challan' => documents_sales_delivery_challans_store_path(),
+        'proforma' => documents_sales_proforma_store_path(),
+        'invoice' => documents_sales_invoice_store_path(),
+    ];
+    $path = $pathMap[$type] ?? '';
+    if ($path === '') {
         return ['ok' => false, 'error' => 'Invalid document type'];
     }
 
+    $rows = documents_read_sales_store($path);
     $base = documents_sales_document_defaults($type);
     $document = array_merge($base, $document);
     $document['updated_at'] = date('c');
-    $isArchived = !empty($document['archived_flag']);
-    $targetPath = $isArchived ? $archivedPath : $activePath;
-    $otherPath = $isArchived ? $activePath : $archivedPath;
-
-    $targetRows = documents_read_sales_store($targetPath);
-    $otherRows = documents_read_sales_store($otherPath);
-    $docId = (string) ($document['id'] ?? '');
-
-    if ($docId === '') {
-        return ['ok' => false, 'error' => 'Missing document ID'];
-    }
-
-    if ((string) ($document['created_at'] ?? '') === '') {
-        $document['created_at'] = date('c');
-    }
 
     $found = false;
-    foreach ($targetRows as $index => $row) {
-        if (is_array($row) && (string) ($row['id'] ?? '') === $docId) {
-            $targetRows[$index] = array_merge($base, $row, $document);
+    foreach ($rows as $index => $row) {
+        if (is_array($row) && (string) ($row['id'] ?? '') === (string) ($document['id'] ?? '')) {
+            $rows[$index] = array_merge($base, $row, $document);
             $found = true;
             break;
         }
     }
     if (!$found) {
-        $targetRows[] = $document;
-    }
-
-    $otherRows = array_values(array_filter($otherRows, static fn($row): bool => !is_array($row) || (string)($row['id'] ?? '') !== $docId));
-
-    $savedTarget = documents_write_sales_store($targetPath, $targetRows);
-    if (!($savedTarget['ok'] ?? false)) {
-        return $savedTarget;
-    }
-    $savedOther = documents_write_sales_store($otherPath, $otherRows);
-    if (!($savedOther['ok'] ?? false)) {
-        return $savedOther;
-    }
-
-    return ['ok' => true, 'error' => ''];
-}
-
-function documents_archive_sales_document(string $type, string $id, array $actor = []): array
-{
-    $paths = documents_sales_store_paths($type);
-    $activePath = (string)($paths['active'] ?? '');
-    $archivedPath = (string)($paths['archived'] ?? '');
-    if ($activePath === '' || $archivedPath === '') {
-        return ['ok' => false, 'error' => 'Invalid document type'];
-    }
-
-    $activeRows = documents_read_sales_store($activePath);
-    $archivedRows = documents_read_sales_store($archivedPath);
-    foreach ($activeRows as $index => $row) {
-        if (!is_array($row) || (string)($row['id'] ?? '') !== $id) {
-            continue;
+        if ((string) ($document['id'] ?? '') === '') {
+            return ['ok' => false, 'error' => 'Missing document ID'];
         }
-        unset($activeRows[$index]);
-        $row['archived_flag'] = true;
-        $row['archived_at'] = date('c');
-        $row['archived_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], $actor);
-        $row['updated_at'] = date('c');
-        $archivedRows[] = $row;
-        $savedActive = documents_write_sales_store($activePath, array_values($activeRows));
-        if (!($savedActive['ok'] ?? false)) {
-            return $savedActive;
+        if ((string) ($document['created_at'] ?? '') === '') {
+            $document['created_at'] = date('c');
         }
-        return documents_write_sales_store($archivedPath, $archivedRows);
+        $rows[] = $document;
     }
 
-    foreach ($archivedRows as $row) {
-        if (is_array($row) && (string)($row['id'] ?? '') === $id) {
-            return ['ok' => true, 'error' => ''];
-        }
-    }
-
-    return ['ok' => false, 'error' => 'Already archived or not found'];
-}
-
-function documents_unarchive_sales_document(string $type, string $id): array
-{
-    $paths = documents_sales_store_paths($type);
-    $activePath = (string)($paths['active'] ?? '');
-    $archivedPath = (string)($paths['archived'] ?? '');
-    if ($activePath === '' || $archivedPath === '') {
-        return ['ok' => false, 'error' => 'Invalid document type'];
-    }
-
-    $activeRows = documents_read_sales_store($activePath);
-    $archivedRows = documents_read_sales_store($archivedPath);
-    foreach ($archivedRows as $index => $row) {
-        if (!is_array($row) || (string)($row['id'] ?? '') !== $id) {
-            continue;
-        }
-        unset($archivedRows[$index]);
-        $row['archived_flag'] = false;
-        $row['archived_at'] = '';
-        $row['archived_by'] = ['type' => '', 'id' => '', 'name' => ''];
-        $row['updated_at'] = date('c');
-        $activeRows[] = $row;
-        $savedArchived = documents_write_sales_store($archivedPath, array_values($archivedRows));
-        if (!($savedArchived['ok'] ?? false)) {
-            return $savedArchived;
-        }
-        return documents_write_sales_store($activePath, $activeRows);
-    }
-
-    return ['ok' => false, 'error' => 'Archived document not found'];
+    return documents_write_sales_store($path, $rows);
 }
 
 function documents_quote_link_workflow_doc(array &$quote, string $type, string $id): void
