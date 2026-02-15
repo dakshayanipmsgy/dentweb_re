@@ -182,6 +182,12 @@ function documents_quote_defaults_settings(): array
                 'primary_color' => '#0f766e',
                 'secondary_color' => '#22c55e',
                 'accent_color' => '#f59e0b',
+                'header_bg' => '#0f766e',
+                'header_text' => '#ecfeff',
+                'footer_bg' => '#0f172a',
+                'footer_text' => '#e2e8f0',
+                'chip_bg' => '#ccfbf1',
+                'chip_text' => '#134e4a',
                 'logo_path' => '',
                 'tagline' => '',
                 'contact_line' => '',
@@ -201,6 +207,10 @@ function documents_quote_defaults_settings(): array
                 'emission_factor_kg_per_kwh' => 0.82,
                 'tree_absorption_kg_per_tree_per_year' => 20,
             ],
+        ],
+        'defaults' => [
+            'hsn_solar' => '8541',
+            'cover_note_template' => '🌞 Thank you for considering Dakshayani Enterprises. We are pleased to share a clear and practical solar proposal tailored for your site.',
         ],
         'segments' => [
             'RES' => [
@@ -691,8 +701,16 @@ function documents_quote_defaults(): array
                 'igst_18' => 0,
             ],
             'grand_total' => 0,
+            'final_price_incl_gst' => 0,
+            'transportation_rs' => 0,
+            'gross_payable' => 0,
+            'subsidy_expected_rs' => 0,
+            'net_after_subsidy' => 0,
         ],
+        'cover_note_text' => '',
+        'special_requests_text' => '',
         'special_requests_inclusive' => '',
+        'items' => [],
         'special_requests_override_note' => true,
         'annexures_overrides' => [
             'cover_notes' => '',
@@ -1090,6 +1108,112 @@ function documents_save_challan(array $challan): array
     return json_save(documents_challans_dir() . '/' . $id . '.json', $challan);
 }
 
+
+function documents_quote_item_defaults(): array
+{
+    return [
+        'name' => '',
+        'description' => '',
+        'hsn' => '8541',
+        'qty' => 1,
+        'unit' => 'set',
+        'gst_slab' => '5',
+        'basic_amount' => 0,
+    ];
+}
+
+function documents_normalize_quote_items(array $items, string $systemType = 'Ongrid', float $capacityKwp = 0.0, string $defaultHsn = '8541'): array
+{
+    $rows = [];
+    foreach ($items as $row) {
+        if (!is_array($row)) { continue; }
+        $item = array_merge(documents_quote_item_defaults(), $row);
+        $item['name'] = safe_text((string) ($item['name'] ?? ''));
+        $item['description'] = safe_text((string) ($item['description'] ?? ''));
+        $item['hsn'] = safe_text((string) ($item['hsn'] ?? '')) ?: $defaultHsn;
+        $item['qty'] = (float) ($item['qty'] ?? 0);
+        $item['unit'] = safe_text((string) ($item['unit'] ?? ''));
+        $slab = strtoupper(safe_text((string) ($item['gst_slab'] ?? '5')));
+        $item['gst_slab'] = in_array($slab, ['5', '18', 'NA'], true) ? $slab : '5';
+        $item['basic_amount'] = round((float) ($item['basic_amount'] ?? 0), 2);
+        if ($item['name'] === '' && $item['basic_amount'] <= 0) { continue; }
+        $rows[] = $item;
+    }
+
+    if ($rows === []) {
+        $label = strtolower($systemType) === 'hybrid' ? 'Hybrid Solar System' : 'On-grid Solar System';
+        $rows[] = [
+            'name' => $label,
+            'description' => 'System package',
+            'hsn' => $defaultHsn,
+            'qty' => $capacityKwp > 0 ? $capacityKwp : 1,
+            'unit' => $capacityKwp > 0 ? 'kWp' : 'set',
+            'gst_slab' => '5',
+            'basic_amount' => 0,
+        ];
+    }
+
+    return $rows;
+}
+
+function documents_calc_pricing_from_items(array $items, string $pricingMode, string $taxType, float $transportationRs = 0.0, float $subsidyExpectedRs = 0.0): array
+{
+    $pricingMode = in_array($pricingMode, ['solar_split_70_30', 'flat_5'], true) ? $pricingMode : 'solar_split_70_30';
+    $taxType = $taxType === 'IGST' ? 'IGST' : 'CGST_SGST';
+    $baseTotal = 0.0;
+    foreach ($items as $item) {
+        if (!is_array($item)) { continue; }
+        $baseTotal += max(0, (float) ($item['basic_amount'] ?? 0));
+    }
+
+    if ($pricingMode === 'flat_5') {
+        $bucket5Basic = $baseTotal;
+        $bucket18Basic = 0.0;
+    } else {
+        $bucket5Basic = $baseTotal * 0.70;
+        $bucket18Basic = $baseTotal * 0.30;
+    }
+    $bucket5Gst = $bucket5Basic * 0.05;
+    $bucket18Gst = $bucket18Basic * 0.18;
+    $finalPrice = $baseTotal + $bucket5Gst + $bucket18Gst;
+    $transportationRs = max(0, $transportationRs);
+    $grossPayable = $finalPrice + $transportationRs;
+    $subsidyExpectedRs = max(0, $subsidyExpectedRs);
+
+    $calc = [
+        'basic_total' => round($baseTotal, 2),
+        'bucket_5_basic' => round($bucket5Basic, 2),
+        'bucket_5_gst' => round($bucket5Gst, 2),
+        'bucket_18_basic' => round($bucket18Basic, 2),
+        'bucket_18_gst' => round($bucket18Gst, 2),
+        'gst_split' => [
+            'cgst_5' => 0.0,
+            'sgst_5' => 0.0,
+            'cgst_18' => 0.0,
+            'sgst_18' => 0.0,
+            'igst_5' => 0.0,
+            'igst_18' => 0.0,
+        ],
+        'grand_total' => round($finalPrice, 2),
+        'final_price_incl_gst' => round($finalPrice, 2),
+        'transportation_rs' => round($transportationRs, 2),
+        'gross_payable' => round($grossPayable, 2),
+        'subsidy_expected_rs' => round($subsidyExpectedRs, 2),
+        'net_after_subsidy' => round($grossPayable - $subsidyExpectedRs, 2),
+    ];
+    if ($taxType === 'IGST') {
+        $calc['gst_split']['igst_5'] = round($bucket5Gst, 2);
+        $calc['gst_split']['igst_18'] = round($bucket18Gst, 2);
+    } else {
+        $calc['gst_split']['cgst_5'] = round($bucket5Gst / 2, 2);
+        $calc['gst_split']['sgst_5'] = round($bucket5Gst / 2, 2);
+        $calc['gst_split']['cgst_18'] = round($bucket18Gst / 2, 2);
+        $calc['gst_split']['sgst_18'] = round($bucket18Gst / 2, 2);
+    }
+
+    return $calc;
+}
+
 function documents_calc_pricing(float $grandTotal, string $pricingMode, string $taxType): array
 {
     $grandTotal = max(0, $grandTotal);
@@ -1326,7 +1450,10 @@ function documents_list_quotes(): array
         if (!is_array($row)) {
             continue;
         }
-        $quotes[] = array_merge(documents_quote_defaults(), $row);
+        $quote = array_merge(documents_quote_defaults(), $row);
+        $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
+        $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
+        $quotes[] = $quote;
     }
 
     usort($quotes, static function (array $a, array $b): int {
@@ -1350,7 +1477,10 @@ function documents_get_quote(string $id): ?array
     if (!is_array($row)) {
         return null;
     }
-    return array_merge(documents_quote_defaults(), $row);
+    $quote = array_merge(documents_quote_defaults(), $row);
+    $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
+    $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
+    return $quote;
 }
 
 function documents_save_quote(array $quote): array
@@ -1360,6 +1490,11 @@ function documents_save_quote(array $quote): array
         return ['ok' => false, 'error' => 'Missing quote ID'];
     }
     $path = documents_quotations_dir() . '/' . $id . '.json';
+    $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
+    $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
+    if (safe_text((string) ($quote['special_requests_text'] ?? '')) === '' && safe_text((string) ($quote['special_requests_inclusive'] ?? '')) !== '') {
+        $quote['special_requests_text'] = (string) $quote['special_requests_inclusive'];
+    }
     return json_save($path, $quote);
 }
 
