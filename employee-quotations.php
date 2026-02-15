@@ -20,6 +20,7 @@ $templates = array_values(array_filter(json_load(documents_templates_dir() . '/t
 }));
 $templateBlocks = documents_sync_template_block_entries($templates);
 $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
+$quotationSettings = documents_get_quotation_settings();
 
 $redirectWith = static function (string $type, string $msg): void {
     header('Location: employee-quotations.php?' . http_build_query(['status' => $type, 'message' => $msg]));
@@ -164,8 +165,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['special_requests_override_note'] = true;
         $quote['annexures_overrides'] = $annexure;
         $quote['template_attachments'] = (($templateBlocks[$templateSetId]['attachments'] ?? null) && is_array($templateBlocks[$templateSetId]['attachments'])) ? $templateBlocks[$templateSetId]['attachments'] : documents_template_attachment_defaults();
-        $quote['rendering']['background_image'] = (string) (($selectedTemplate['default_doc_theme']['page_background_image'] ?? '') ?: '');
-        $quote['rendering']['background_opacity'] = (float) (($selectedTemplate['default_doc_theme']['page_background_opacity'] ?? 1) ?: 1);
+        $segmentForFinance = safe_text($_POST['finance_segment'] ?? (string) ($quote['segment'] ?? 'RES'));
+        if (!in_array($segmentForFinance, ['RES', 'COM', 'IND', 'INST'], true)) {
+            $segmentForFinance = 'RES';
+        }
+        $quote['finance_inputs'] = [
+            'segment' => $segmentForFinance,
+            'unit_rate_rs_per_kwh' => ($_POST['unit_rate_rs_per_kwh'] ?? '') === '' ? null : (float) $_POST['unit_rate_rs_per_kwh'],
+            'annual_generation_kwh_per_kw' => ($_POST['annual_generation_kwh_per_kw'] ?? '') === '' ? null : (float) $_POST['annual_generation_kwh_per_kw'],
+            'financing_mode' => in_array((string) ($_POST['financing_mode'] ?? 'loan'), ['loan', 'self'], true) ? (string) $_POST['financing_mode'] : 'loan',
+            'loan_interest_rate_percent' => ($_POST['loan_interest_rate_percent'] ?? '') === '' ? null : (float) $_POST['loan_interest_rate_percent'],
+            'loan_tenure_years' => ($_POST['loan_tenure_years'] ?? '') === '' ? null : max(1, (int) $_POST['loan_tenure_years']),
+            'down_payment_percent' => ($_POST['down_payment_percent'] ?? '') === '' ? 10 : max(0.0, min(100.0, (float) $_POST['down_payment_percent'])),
+            'monthly_bill_estimate_rs' => ($_POST['monthly_bill_estimate_rs'] ?? '') === '' ? null : max(0.0, (float) $_POST['monthly_bill_estimate_rs']),
+            'monthly_units_estimate_kwh' => ($_POST['monthly_units_estimate_kwh'] ?? '') === '' ? null : max(0.0, (float) $_POST['monthly_units_estimate_kwh']),
+            'analysis_years' => max(1, min(25, (int) ($_POST['analysis_years'] ?? 10))),
+        ];
+        $quote['visual_overrides'] = [
+            'base_font_size_px' => ($_POST['visual_base_font_size_px'] ?? '') === '' ? null : (float) $_POST['visual_base_font_size_px'],
+            'colors' => [
+                'primary' => safe_text($_POST['visual_color_primary'] ?? '') ?: null,
+                'secondary' => safe_text($_POST['visual_color_secondary'] ?? '') ?: null,
+                'accent' => safe_text($_POST['visual_color_accent'] ?? '') ?: null,
+            ],
+            'watermark' => [
+                'enabled' => ($_POST['visual_watermark_enabled'] ?? '') === '' ? null : (($_POST['visual_watermark_enabled'] ?? '') === '1'),
+                'image_path' => safe_text($_POST['visual_watermark_image_path'] ?? '') ?: null,
+                'opacity' => ($_POST['visual_watermark_opacity'] ?? '') === '' ? null : (float) $_POST['visual_watermark_opacity'],
+                'scale_percent' => ($_POST['visual_watermark_scale_percent'] ?? '') === '' ? null : (float) $_POST['visual_watermark_scale_percent'],
+            ],
+        ];
         $quote['updated_at'] = date('c');
 
         $saved = documents_save_quote($quote);
@@ -199,6 +228,7 @@ $message = safe_text($_GET['message'] ?? '');
 $lookupMobile = safe_text($_GET['lookup_mobile'] ?? '');
 $lookup = $lookupMobile !== '' ? documents_find_customer_by_mobile($lookupMobile) : null;
 $quoteSnapshot = documents_quote_resolve_snapshot($editing);
+$effectiveFinance = documents_quote_effective_finance_inputs($editing);
 if ($lookup !== null) {
     $quoteSnapshot = array_merge($quoteSnapshot, $lookup);
 }
@@ -236,6 +266,27 @@ if ($lookup !== null) {
 <div><label>Circle</label><input name="circle_name" value="<?= htmlspecialchars((string)(($editing['circle_name'] !== '') ? $editing['circle_name'] : ($quoteSnapshot['circle_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Division</label><input name="division_name" value="<?= htmlspecialchars((string)(($editing['division_name'] !== '') ? $editing['division_name'] : ($quoteSnapshot['division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
+<div style="grid-column:1/-1"><h3>Finance Inputs & Overrides</h3><div class="muted">Leave blank to use global defaults.</div></div>
+<div><label>Segment</label><select name="finance_segment"><?php foreach (['RES','COM','IND','INST'] as $seg): ?><option value="<?= $seg ?>" <?= (string) ($effectiveFinance['segment'] ?? 'RES') === $seg ? 'selected' : '' ?>><?= $seg ?></option><?php endforeach; ?></select></div>
+<div><label>Unit Rate (₹/kWh)</label><input type="number" step="0.01" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string) ($editing['finance_inputs']['unit_rate_rs_per_kwh'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Annual Generation (kWh/kW/year)</label><input type="number" step="1" name="annual_generation_kwh_per_kw" value="<?= htmlspecialchars((string) ($editing['finance_inputs']['annual_generation_kwh_per_kw'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Loan Interest %</label><input type="number" step="0.01" name="loan_interest_rate_percent" value="<?= htmlspecialchars((string) ($editing['finance_inputs']['loan_interest_rate_percent'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Loan Tenure (years)</label><input type="number" min="1" name="loan_tenure_years" value="<?= htmlspecialchars((string) ($editing['finance_inputs']['loan_tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Analysis Years</label><input type="number" min="1" max="25" name="analysis_years" value="<?= htmlspecialchars((string) ($editing['finance_inputs']['analysis_years'] ?? 10), ENT_QUOTES) ?>"></div>
+<div><label>Monthly Bill Estimate (₹)</label><input type="number" step="0.01" min="0" name="monthly_bill_estimate_rs" value="<?= htmlspecialchars((string) ($editing['finance_inputs']['monthly_bill_estimate_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Monthly Units Estimate (kWh)</label><input type="number" step="0.01" min="0" name="monthly_units_estimate_kwh" value="<?= htmlspecialchars((string) ($editing['finance_inputs']['monthly_units_estimate_kwh'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Financing Mode</label><select name="financing_mode"><option value="loan" <?= (($editing['finance_inputs']['financing_mode'] ?? 'loan') === 'loan') ? 'selected' : '' ?>>Loan</option><option value="self" <?= (($editing['finance_inputs']['financing_mode'] ?? '') === 'self') ? 'selected' : '' ?>>Self</option></select></div>
+<div><label>Down Payment %</label><input type="number" step="0.01" min="0" max="100" name="down_payment_percent" value="<?= htmlspecialchars((string) ($editing['finance_inputs']['down_payment_percent'] ?? 10), ENT_QUOTES) ?>"></div>
+<div style="grid-column:1/-1"><h3>Visual Overrides (Optional)</h3></div>
+<div><label>Base Font Size Override (px)</label><input type="number" step="1" name="visual_base_font_size_px" value="<?= htmlspecialchars((string) ($editing['visual_overrides']['base_font_size_px'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Primary Color Override</label><input type="color" name="visual_color_primary" value="<?= htmlspecialchars((string) (($editing['visual_overrides']['colors']['primary'] ?? '') ?: ($quotationSettings['colors']['primary'] ?? '#0ea5e9')), ENT_QUOTES) ?>"></div>
+<div><label>Secondary Color Override</label><input type="color" name="visual_color_secondary" value="<?= htmlspecialchars((string) (($editing['visual_overrides']['colors']['secondary'] ?? '') ?: ($quotationSettings['colors']['secondary'] ?? '#22c55e')), ENT_QUOTES) ?>"></div>
+<div><label>Accent Color Override</label><input type="color" name="visual_color_accent" value="<?= htmlspecialchars((string) (($editing['visual_overrides']['colors']['accent'] ?? '') ?: ($quotationSettings['colors']['accent'] ?? '#f59e0b')), ENT_QUOTES) ?>"></div>
+<div><label>Watermark Override (blank = global)</label><select name="visual_watermark_enabled"><option value="">Use Global</option><option value="1" <?= (($editing['visual_overrides']['watermark']['enabled'] ?? null) === true) ? 'selected' : '' ?>>Enabled</option><option value="0" <?= (($editing['visual_overrides']['watermark']['enabled'] ?? null) === false) ? 'selected' : '' ?>>Disabled</option></select></div>
+<div><label>Watermark Image Path Override</label><input name="visual_watermark_image_path" value="<?= htmlspecialchars((string) ($editing['visual_overrides']['watermark']['image_path'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Watermark Opacity Override</label><input type="number" min="0.02" max="0.2" step="0.01" name="visual_watermark_opacity" value="<?= htmlspecialchars((string) ($editing['visual_overrides']['watermark']['opacity'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Watermark Scale % Override</label><input type="number" min="20" max="120" step="1" name="visual_watermark_scale_percent" value="<?= htmlspecialchars((string) ($editing['visual_overrides']['watermark']['scale_percent'] ?? ''), ENT_QUOTES) ?>"></div>
+
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Customer (Inclusive in the rate)</label><textarea name="special_requests_inclusive"><?= htmlspecialchars((string)$editing['special_requests_inclusive'], ENT_QUOTES) ?></textarea><div class="muted">In case of conflict, Special Requests will be given priority over Annexure inclusions.</div></div>
 <div style="grid-column:1/-1"><div class="muted">Annexures are based on template snapshot; edit below.</div></div><?php foreach (['cover_notes'=>'Cover Notes','system_inclusions'=>'System Inclusions','payment_terms'=>'Payment Terms','warranty'=>'Warranty','system_type_explainer'=>'System Type Explainer','transportation'=>'Transportation','terms_conditions'=>'Terms & Conditions','pm_subsidy_info'=>'PM Subsidy Info'] as $key=>$label): ?><div style="grid-column:1/-1"><label><?= $label ?></label><textarea name="ann_<?= $key ?>"><?= htmlspecialchars((string)($editing['annexures_overrides'][$key] ?? ''), ENT_QUOTES) ?></textarea></div><?php endforeach; ?>
