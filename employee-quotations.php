@@ -164,8 +164,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['special_requests_override_note'] = true;
         $quote['annexures_overrides'] = $annexure;
         $quote['template_attachments'] = (($templateBlocks[$templateSetId]['attachments'] ?? null) && is_array($templateBlocks[$templateSetId]['attachments'])) ? $templateBlocks[$templateSetId]['attachments'] : documents_template_attachment_defaults();
-        $quote['rendering']['background_image'] = (string) (($selectedTemplate['default_doc_theme']['page_background_image'] ?? '') ?: '');
-        $quote['rendering']['background_opacity'] = (float) (($selectedTemplate['default_doc_theme']['page_background_opacity'] ?? 1) ?: 1);
+        $proposalDefaults = documents_quote_proposal_input_defaults((string) ($quote['segment'] ?? 'RES'));
+        $quote['proposal_inputs'] = [
+            'monthly_bill_rs' => (float) ($_POST['proposal_monthly_bill_rs'] ?? $proposalDefaults['monthly_bill_rs']),
+            'unit_rate_rs' => (float) ($_POST['proposal_unit_rate_rs'] ?? $proposalDefaults['unit_rate_rs']),
+            'annual_generation_kwh_per_kw' => (float) ($_POST['proposal_annual_generation_kwh_per_kw'] ?? $proposalDefaults['annual_generation_kwh_per_kw']),
+            'emission_factor_kg_per_kwh' => (float) ($_POST['proposal_emission_factor_kg_per_kwh'] ?? $proposalDefaults['emission_factor_kg_per_kwh']),
+            'tree_absorption_kg_per_year' => (float) ($_POST['proposal_tree_absorption_kg_per_year'] ?? $proposalDefaults['tree_absorption_kg_per_year']),
+            'financing_enabled' => isset($_POST['proposal_financing_enabled']),
+            'interest_rate_percent' => (float) ($_POST['proposal_interest_rate_percent'] ?? $proposalDefaults['interest_rate_percent']),
+            'tenure_years' => (int) ($_POST['proposal_tenure_years'] ?? $proposalDefaults['tenure_years']),
+            'down_payment_percent' => (float) ($_POST['proposal_down_payment_percent'] ?? $proposalDefaults['down_payment_percent']),
+            'remaining_bill_percent_after_solar' => (float) ($_POST['proposal_remaining_bill_percent_after_solar'] ?? $proposalDefaults['remaining_bill_percent_after_solar']),
+            'analysis_years' => max(1, (int) ($_POST['proposal_analysis_years'] ?? $proposalDefaults['analysis_years'])),
+            'transportation_rs' => (float) ($_POST['proposal_transportation_rs'] ?? $proposalDefaults['transportation_rs']),
+        ];
+        $quote['proposal_overrides'] = $quote['proposal_inputs'];
         $quote['updated_at'] = date('c');
 
         $saved = documents_save_quote($quote);
@@ -199,6 +213,7 @@ $message = safe_text($_GET['message'] ?? '');
 $lookupMobile = safe_text($_GET['lookup_mobile'] ?? '');
 $lookup = $lookupMobile !== '' ? documents_find_customer_by_mobile($lookupMobile) : null;
 $quoteSnapshot = documents_quote_resolve_snapshot($editing);
+$proposalInputs = documents_quote_resolve_proposal_inputs($editing);
 if ($lookup !== null) {
     $quoteSnapshot = array_merge($quoteSnapshot, $lookup);
 }
@@ -237,9 +252,23 @@ if ($lookup !== null) {
 <div><label>Division</label><input name="division_name" value="<?= htmlspecialchars((string)(($editing['division_name'] !== '') ? $editing['division_name'] : ($quoteSnapshot['division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
+<div style="grid-column:1/-1"><h3>Proposal Calculator</h3><div class="muted">Used for visual proposal charts and savings analytics.</div></div>
+<div><label>Monthly Bill (₹)</label><input type="number" step="0.01" min="0" name="proposal_monthly_bill_rs" value="<?= htmlspecialchars((string)$proposalInputs['monthly_bill_rs'], ENT_QUOTES) ?>"></div>
+<div><label>Unit Rate (₹/kWh)</label><input type="number" step="0.01" min="0" name="proposal_unit_rate_rs" value="<?= htmlspecialchars((string)$proposalInputs['unit_rate_rs'], ENT_QUOTES) ?>"></div>
+<div><label>Annual Gen / kW (kWh)</label><input type="number" step="1" min="1" name="proposal_annual_generation_kwh_per_kw" value="<?= htmlspecialchars((string)$proposalInputs['annual_generation_kwh_per_kw'], ENT_QUOTES) ?>"></div>
+<div><label>Emission Factor</label><input type="number" step="0.01" min="0" name="proposal_emission_factor_kg_per_kwh" value="<?= htmlspecialchars((string)$proposalInputs['emission_factor_kg_per_kwh'], ENT_QUOTES) ?>"></div>
+<div><label>Tree Absorption (kg/yr)</label><input type="number" step="0.1" min="1" name="proposal_tree_absorption_kg_per_year" value="<?= htmlspecialchars((string)$proposalInputs['tree_absorption_kg_per_year'], ENT_QUOTES) ?>"></div>
+<div><label>Transportation (₹)</label><input type="number" step="0.01" min="0" name="proposal_transportation_rs" value="<?= htmlspecialchars((string)$proposalInputs['transportation_rs'], ENT_QUOTES) ?>"></div>
+<div><label>Interest Rate (%)</label><input type="number" step="0.01" min="0" name="proposal_interest_rate_percent" value="<?= htmlspecialchars((string)$proposalInputs['interest_rate_percent'], ENT_QUOTES) ?>"></div>
+<div><label>Tenure (Years)</label><input type="number" step="1" min="1" name="proposal_tenure_years" value="<?= htmlspecialchars((string)$proposalInputs['tenure_years'], ENT_QUOTES) ?>"></div>
+<div><label>Down Payment (%)</label><input type="number" step="0.01" min="0" name="proposal_down_payment_percent" value="<?= htmlspecialchars((string)$proposalInputs['down_payment_percent'], ENT_QUOTES) ?>"></div>
+<div><label>Remaining Bill After Solar (%)</label><input type="number" step="0.01" min="0" name="proposal_remaining_bill_percent_after_solar" value="<?= htmlspecialchars((string)$proposalInputs['remaining_bill_percent_after_solar'], ENT_QUOTES) ?>"></div>
+<div><label>Analysis Years</label><input type="number" step="1" min="1" name="proposal_analysis_years" value="<?= htmlspecialchars((string)$proposalInputs['analysis_years'], ENT_QUOTES) ?>"></div>
+<div><label><input type="checkbox" name="proposal_financing_enabled" <?= !empty($proposalInputs['financing_enabled'])?'checked':'' ?>> Financing Enabled</label></div>
+
 <div style="grid-column:1/-1"><label>Special Requests From Customer (Inclusive in the rate)</label><textarea name="special_requests_inclusive"><?= htmlspecialchars((string)$editing['special_requests_inclusive'], ENT_QUOTES) ?></textarea><div class="muted">In case of conflict, Special Requests will be given priority over Annexure inclusions.</div></div>
 <div style="grid-column:1/-1"><div class="muted">Annexures are based on template snapshot; edit below.</div></div><?php foreach (['cover_notes'=>'Cover Notes','system_inclusions'=>'System Inclusions','payment_terms'=>'Payment Terms','warranty'=>'Warranty','system_type_explainer'=>'System Type Explainer','transportation'=>'Transportation','terms_conditions'=>'Terms & Conditions','pm_subsidy_info'=>'PM Subsidy Info'] as $key=>$label): ?><div style="grid-column:1/-1"><label><?= $label ?></label><textarea name="ann_<?= $key ?>"><?= htmlspecialchars((string)($editing['annexures_overrides'][$key] ?? ''), ENT_QUOTES) ?></textarea></div><?php endforeach; ?>
 </div><br><button class="btn" type="submit">Save Quotation</button></form></div>
-<div class="card"><h2>My Quote List</h2><table><thead><tr><th>Quote No</th><th>Name</th><th>Status</th><th>Amount</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
-<?php foreach ($quotes as $q): ?><tr><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'employee'), ENT_QUOTES) ?></td><td>₹<?= number_format((float)$q['calc']['grand_total'],2) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td><td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <?php if (documents_quote_can_edit($q, 'employee', (string) ($employee['id'] ?? ''))): ?><a class="btn secondary" href="employee-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?></td></tr><?php endforeach; if ($quotes===[]): ?><tr><td colspan="6">No quotations yet.</td></tr><?php endif; ?></tbody></table></div>
+<div class="card"><h2>My Quote List</h2><table><thead><tr><th>Quote No</th><th>Name</th><th>Status</th><th>Amount</th><th>Updated</th><th>Share Link</th><th>Actions</th></tr></thead><tbody>
+<?php foreach ($quotes as $q): ?><tr><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'employee'), ENT_QUOTES) ?></td><td>₹<?= number_format((float)$q['calc']['grand_total'],2) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td><td><?= !empty(($q['share']['enabled'] ?? false)) ? 'Enabled' : 'Disabled' ?><?php if (!empty(($q['share']['enabled'] ?? false)) && !empty(($q['share']['token'] ?? ''))): ?> · <a href="quote.php?t=<?= urlencode((string)$q['share']['token']) ?>" target="_blank">Open</a><?php endif; ?></td><td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <?php if (documents_quote_can_edit($q, 'employee', (string) ($employee['id'] ?? ''))): ?><a class="btn secondary" href="employee-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?></td></tr><?php endforeach; if ($quotes===[]): ?><tr><td colspan="7">No quotations yet.</td></tr><?php endif; ?></tbody></table></div>
 </main></body></html>
