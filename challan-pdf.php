@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/employee_portal.php';
 require_once __DIR__ . '/includes/employee_admin.php';
+require_once __DIR__ . '/includes/handover.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 
 documents_ensure_structure();
@@ -40,5 +41,34 @@ if ($viewerType === 'employee' && ((string) ($challan['created_by_type'] ?? '') 
     exit;
 }
 
-header('Location: challan-print.php?id=' . urlencode((string) ($challan['id'] ?? '')) . '&status=pdf_disabled');
-exit;
+try {
+    $_GET['id'] = (string) ($challan['id'] ?? '');
+    $_GET['pdf'] = '1';
+    ob_start();
+    require __DIR__ . '/challan-print.php';
+    $html = (string) ob_get_clean();
+
+    documents_ensure_dir(documents_challan_pdf_dir());
+    $filename = safe_filename((string) $challan['id']) . '.pdf';
+    $pdfPath = documents_challan_pdf_dir() . '/' . $filename;
+
+    $ok = handover_generate_pdf($html, $pdfPath);
+    if (!$ok || !is_file($pdfPath)) {
+        throw new RuntimeException('PDF generator failed.');
+    }
+
+    $challan['pdf_path'] = '/data/documents/challans/pdfs/' . $filename;
+    $challan['pdf_generated_at'] = date('c');
+    $challan['updated_at'] = date('c');
+    documents_save_challan($challan);
+
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="' . safe_filename((string) ($challan['challan_no'] ?: $challan['id'])) . '.pdf"');
+    header('Content-Length: ' . (string) filesize($pdfPath));
+    readfile($pdfPath);
+    exit;
+} catch (Throwable $e) {
+    documents_log('Challan PDF generation failed for ' . (string) ($challan['id'] ?? '') . ': ' . $e->getMessage());
+    header('Location: challan-view.php?id=' . urlencode((string) ($challan['id'] ?? '')) . '&status=error&message=' . urlencode('PDF generation failed. Please retry.'));
+    exit;
+}
