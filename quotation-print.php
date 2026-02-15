@@ -213,16 +213,16 @@ $licenses = array_filter([(string) ($company['jreda_license'] ?? ''), (string) (
 $headerPhones = array_values(array_filter([(string) ($company['phone_primary'] ?? ''), (string) ($company['phone_secondary'] ?? '')]));
 $headerEmails = array_values(array_filter([(string) ($company['email_primary'] ?? ''), (string) ($company['email_secondary'] ?? '')]));
 $companyAddress = trim(implode(', ', array_filter([
-    (string) ($company['address_line'] ?? ''),
-    (string) ($company['city'] ?? ''),
-    (string) ($company['district'] ?? ''),
-    (string) ($company['state'] ?? ''),
-    (string) ($company['pin'] ?? ''),
+    (string) ($company['address_line'] ?? 'Maa Tara, Kilburn Colony, Hinoo'),
+    (string) ($company['city'] ?? 'Ranchi'),
+    (string) ($company['district'] ?? 'Ranchi'),
+    (string) ($company['state'] ?? 'JH'),
+    (string) ($company['pin'] ?? '834002'),
 ])));
 $identityParts = array_values(array_filter([
     (string) ($company['gstin'] ?? '') !== '' ? ('GSTIN: ' . (string) $company['gstin']) : '',
     (string) ($company['pan'] ?? '') !== '' ? ('PAN: ' . (string) $company['pan']) : '',
-    (string) ($company['udyam'] ?? '') !== '' ? ('Udyam: ' . (string) $company['udyam']) : '',
+    'Udyam: ' . (string) (($company['udyam'] ?? '') !== '' ? $company['udyam'] : 'UDYAM-JH-20-0005867'),
 ]));
 $fields = [
     'Name' => (string) ($snapshot['name'] ?: $quote['customer_name']),
@@ -230,9 +230,29 @@ $fields = [
     'Address' => (string) ($quote['site_address'] ?: $snapshot['address']),
     'City' => (string) ($snapshot['city'] ?: $quote['city']),
     'District' => (string) ($snapshot['district'] ?: $quote['district']),
+    'PIN' => (string) ($snapshot['pin'] ?? ''),
+    'State' => (string) ($snapshot['state'] ?? ''),
+    'Meter Number' => (string) ($snapshot['meter_number'] ?? $quote['meter_number'] ?? ''),
+    'Meter Serial' => (string) ($snapshot['meter_serial_number'] ?? $quote['meter_serial_number'] ?? ''),
+    'JBVNL Consumer No.' => (string) ($snapshot['consumer_account_no'] ?? $quote['consumer_account_no'] ?? ''),
+    'PMSG App ID' => (string) ($snapshot['application_id'] ?? $quote['application_id'] ?? ''),
+    'Submitted Date' => (string) ($snapshot['application_submitted_date'] ?? $quote['application_submitted_date'] ?? ''),
+    'Sanction Load (kWp)' => (string) ($snapshot['sanction_load_kwp'] ?? $quote['sanction_load_kwp'] ?? ''),
+    'Installed PV Capacity (kWp)' => (string) (($quote['capacity_kwp'] ?? '') !== '' ? $quote['capacity_kwp'] : ($snapshot['installed_pv_module_capacity_kwp'] ?? $quote['installed_pv_module_capacity_kwp'] ?? '')),
+    'Circle / Division / Subdivision' => trim(implode(' / ', array_filter([(string) ($snapshot['circle'] ?? ''), (string) ($snapshot['division'] ?? ''), (string) ($snapshot['subdivision'] ?? '')]))),
 ];
 $websiteText = (string) ($company['website'] ?? '');
 $websiteDisplay = preg_replace('#^https?://#', '', $websiteText ?? '') ?: '';
+
+$bankDetails = array_values(array_filter([
+    (string) ($company['bank_name'] ?? '') !== '' ? ('Bank: ' . (string) $company['bank_name']) : '',
+    (string) ($company['bank_account_name'] ?? '') !== '' ? ('A/C Name: ' . (string) $company['bank_account_name']) : '',
+    (string) ($company['bank_account_no'] ?? '') !== '' ? ('A/C No: ' . (string) $company['bank_account_no']) : '',
+    (string) ($company['bank_ifsc'] ?? '') !== '' ? ('IFSC: ' . (string) $company['bank_ifsc']) : '',
+    (string) ($company['bank_branch'] ?? '') !== '' ? ('Branch: ' . (string) $company['bank_branch']) : '',
+]));
+$upiId = (string) ($company['upi_id'] ?? '');
+$upiQrPath = (string) ($company['upi_qr_path'] ?? '');
 $whatsAppNumber = '7070278178';
 $whatsAppLink = 'https://wa.me/91' . $whatsAppNumber;
 
@@ -255,39 +275,83 @@ $whyIdealBullets = [
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Print <?= htmlspecialchars((string) $quote['quote_no'], ENT_QUOTES) ?></title>
 <style>
-:root{--brandPrimary:<?= htmlspecialchars((string)($theme['primary_color'] ?? '#0b5fff'), ENT_QUOTES) ?>;--brandAccent:<?= htmlspecialchars((string)($theme['accent_color'] ?? '#00b894'), ENT_QUOTES) ?>;--brandGreen:<?= htmlspecialchars((string)($theme['chart_green_color'] ?? '#16a34a'), ENT_QUOTES) ?>;--brandOrange:<?= htmlspecialchars((string)($theme['chart_yellow_color'] ?? '#f59e0b'), ENT_QUOTES) ?>;--brandRed:<?= htmlspecialchars((string)($theme['chart_red_color'] ?? '#dc2626'), ENT_QUOTES) ?>;--text:<?= htmlspecialchars((string)($theme['text_color'] ?? '#111827'), ENT_QUOTES) ?>;--muted:<?= htmlspecialchars((string)($theme['muted_text_color'] ?? '#6b7280'), ENT_QUOTES) ?>;--bg:<?= htmlspecialchars((string)($theme['bg_color'] ?? '#ffffff'), ENT_QUOTES) ?>;--card:<?= htmlspecialchars((string)($theme['card_bg'] ?? '#f8fafc'), ENT_QUOTES) ?>;--border:<?= htmlspecialchars((string)($theme['border_color'] ?? '#e5e7eb'), ENT_QUOTES) ?>;--heading:<?= htmlspecialchars((string)(($theme['heading_color'] ?? $theme['primary_color']) ?? '#0b5fff'), ENT_QUOTES) ?>;}
-body{font-family:Arial,sans-serif;color:var(--text);margin:0;background:var(--bg);font-size:<?= (int)($type['base_font_size_px'] ?? 14) ?>px;line-height:<?= (float)($type['line_height'] ?? 1.45) ?>}
-.wrap{max-width:1020px;margin:0 auto;padding:14px}
-.section-card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(2,6,23,.04)}
-.section-title{margin:0 0 10px;color:var(--heading);font-size:<?= (int)($type['h3_px'] ?? 16) ?>px;border-left:4px solid var(--brandAccent);padding-left:10px}
-.hero-header{border-top:5px solid var(--brandPrimary)}
+:root{
+  --brand-primary:<?= htmlspecialchars((string)($theme['primary_color'] ?? '#0b5fff'), ENT_QUOTES) ?>;
+  --brand-accent:<?= htmlspecialchars((string)($theme['accent_color'] ?? '#00b894'), ENT_QUOTES) ?>;
+  --brand-muted:<?= htmlspecialchars((string)(($theme['brand_muted_color'] ?? $theme['muted_text_color']) ?? '#6b7280'), ENT_QUOTES) ?>;
+  --brand-bg:<?= htmlspecialchars((string)($theme['bg_color'] ?? '#ffffff'), ENT_QUOTES) ?>;
+  --brand-card:<?= htmlspecialchars((string)($theme['card_bg'] ?? '#f8fafc'), ENT_QUOTES) ?>;
+  --brand-border:<?= htmlspecialchars((string)($theme['border_color'] ?? '#e5e7eb'), ENT_QUOTES) ?>;
+  --brand-text:<?= htmlspecialchars((string)($theme['text_color'] ?? '#111827'), ENT_QUOTES) ?>;
+  --brand-success:<?= htmlspecialchars((string)(($theme['success_color'] ?? $theme['chart_green_color']) ?? '#16a34a'), ENT_QUOTES) ?>;
+  --brand-warning:<?= htmlspecialchars((string)(($theme['warning_color'] ?? $theme['chart_yellow_color']) ?? '#f59e0b'), ENT_QUOTES) ?>;
+  --brand-danger:<?= htmlspecialchars((string)(($theme['danger_color'] ?? $theme['chart_red_color']) ?? '#dc2626'), ENT_QUOTES) ?>;
+  --font-base-screen: <?= (int)($type['base_font_size_px'] ?? 11) ?>px;
+  --font-base-print: <?= (int)($type['print_base_font_size_px'] ?? 10) ?>px;
+  --print-scale: <?= htmlspecialchars((string)($style['layout']['print_scale'] ?? 0.92), ENT_QUOTES) ?>;
+  --a4-content-width: 190mm;
+  --compact-multiplier: <?= !empty($style['layout']['compact_print_mode']) ? '0.84' : '1' ?>;
+  --print-bg: <?= !empty($style['layout']['print_backgrounds_enabled']) ? 'exact' : 'economy' ?>;
+
+  --brandPrimary:var(--brand-primary);--brandAccent:var(--brand-accent);--brandGreen:var(--brand-success);--brandOrange:var(--brand-warning);--brandRed:var(--brand-danger);
+  --text:var(--brand-text);--muted:var(--brand-muted);--bg:var(--brand-bg);--card:var(--brand-card);--border:var(--brand-border);--heading:var(--brand-primary);
+}
+html,body{margin:0;padding:0;background:var(--brand-bg);color:var(--brand-text);font-family:"Inter","Roboto","Arial",sans-serif;font-size:var(--font-base-screen);line-height:<?= (float)($type['line_height'] ?? 1.45) ?>; -webkit-print-color-adjust:var(--print-bg) !important; print-color-adjust:var(--print-bg) !important;}
+.wrap{max-width:800px;width:100%;margin:0 auto;padding:16px}
+.quote-wrap{width:100%}
+.section-card,.badge-pill,.orange-strip,.kv,.icon-card,.table th,.table td,.graph-card canvas,.soft-note,.footer,.hero-header,.warranty-badge,.graph-card,.contact-right{-webkit-print-color-adjust:var(--print-bg) !important;print-color-adjust:var(--print-bg) !important;}
+.section-card{background:var(--brand-card);border:1px solid var(--brand-border);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(2,6,23,.05);break-inside:avoid;page-break-inside:avoid}
+.section-title{margin:0 0 10px;color:var(--brand-primary);font-size:<?= (int)($type['h3_px'] ?? 16) ?>px;border-left:4px solid var(--brand-accent);padding-left:10px;break-after:avoid;page-break-after:avoid}
+.hero-header{border-top:5px solid var(--brand-primary);background:linear-gradient(180deg,color-mix(in srgb, var(--brand-primary) 4%, white), var(--brand-card))}
 .head-grid{display:grid;grid-template-columns:140px 1fr auto;gap:12px;align-items:center}
-.contact-right{text-align:right;font-size:12px;color:var(--muted)}
-.authority{font-size:<?= (int)($type['h2_px'] ?? 20) ?>px;font-weight:700;color:var(--brandPrimary);margin:10px 0 2px}
-.sub-authority{font-size:14px;color:var(--brandAccent);font-weight:700}
+.contact-right{text-align:right;font-size:12px;color:var(--brand-muted)}
+.authority{font-size:<?= (int)($type['h2_px'] ?? 20) ?>px;font-weight:800;color:var(--brand-primary);margin:10px 0 2px}
+.sub-authority{font-size:14px;color:var(--brand-accent);font-weight:700}
 .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.badge-pill{border:1px solid color-mix(in srgb, var(--brandPrimary) 30%, white);background:color-mix(in srgb, var(--brandAccent) 8%, white);border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700;color:var(--brandPrimary)}
+.badge-pill{border:1px solid color-mix(in srgb, var(--brand-primary) 30%, white);background:color-mix(in srgb, var(--brand-accent) 8%, white);border-radius:999px;padding:5px 10px;font-size:11px;font-weight:700;color:var(--brand-primary)}
 .hero-grid{display:grid;grid-template-columns:2fr 1fr;gap:10px}
 .key-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.kv{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:9px}
-.kv .k{font-size:12px;color:var(--muted)} .kv .v{font-size:17px;font-weight:700;margin-top:3px}
-.orange-strip{background:color-mix(in srgb, var(--brandOrange) 12%, white);border:1px solid color-mix(in srgb, var(--brandOrange) 45%, white);border-radius:12px;padding:10px}
-.small-muted{font-size:12px;color:var(--muted)}
+.kv{border-radius:12px;padding:9px}
+.kv .k{font-size:11px;color:var(--brand-muted)} .kv .v{font-size:16px;font-weight:800;margin-top:3px}
+.orange-strip{background:color-mix(in srgb, var(--brand-warning) 12%, white);border:1px solid color-mix(in srgb, var(--brand-warning) 45%, white);border-radius:12px;padding:10px}
+.small-muted{font-size:11px;color:var(--brand-muted)}
 .cards-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.icon-card{border:1px solid var(--border);background:var(--card);border-radius:12px;padding:10px}
-.icon-card .v{font-size:18px;font-weight:700;margin-top:4px}
-.warranty-badge{display:inline-block;margin-top:8px;border-radius:999px;padding:4px 12px;background:#ecfdf5;border:1px solid #86efac;color:#166534;font-size:12px;font-weight:700}
-.table{width:100%;border-collapse:collapse}
-.table th,.table td{border:1px solid var(--border);padding:8px;text-align:left;vertical-align:top}
-.table th{background:var(--card)} .table td:last-child,.table th:last-child{text-align:right}
-.big-benefit{font-size:24px;font-weight:800;color:var(--brandGreen)}
+.icon-card{border:1px solid var(--brand-border);background:var(--brand-card);border-radius:12px;padding:10px;break-inside:avoid;page-break-inside:avoid}
+.icon-card .v{font-size:17px;font-weight:800;margin-top:4px}
+.warranty-card{grid-column:span 2;min-height:96px}
+.warranty-badge{display:inline-block;margin-top:8px;border-radius:999px;padding:4px 12px;background:color-mix(in srgb, var(--brand-success) 16%, white);border:1px solid color-mix(in srgb, var(--brand-success) 45%, white);color:#166534;font-size:12px;font-weight:700}
+.table{width:100%;border-collapse:collapse;break-inside:auto;page-break-inside:auto}
+.table th,.table td{border:1px solid var(--brand-border);padding:8px;text-align:left;vertical-align:top}
+.table th{background:var(--brand-card)} .table td:last-child,.table th:last-child{text-align:right}
+.money-pop{font-size:1.08em;font-weight:800;color:var(--brand-primary)}
+.big-benefit{font-size:22px;font-weight:900;color:var(--brand-success)}
 .graph-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.graph-card canvas{width:100%;height:300px;border:1px solid var(--border);border-radius:14px;background:white}
-.soft-note{background:var(--card);border:1px dashed var(--border);border-radius:12px;padding:10px;color:var(--muted)}
-.footer{margin-top:8px;font-size:12px;color:var(--muted);text-align:center;padding:12px;border-top:1px solid var(--border)}
-@media (max-width:900px){.head-grid,.hero-grid,.cards-3,.graph-grid,.key-values{grid-template-columns:1fr}.contact-right{text-align:left}}
+.graph-card{break-inside:avoid;page-break-inside:avoid}
+.graph-card canvas,.graph-card img.chart-print-image{width:100%;height:300px;border:1px solid var(--brand-border);border-radius:14px;background:white;display:block}
+.soft-note{background:var(--brand-card);border:1px dashed var(--brand-border);border-radius:12px;padding:10px;color:var(--brand-muted)}
+.footer{margin-top:8px;font-size:11px;color:var(--brand-muted);text-align:center;padding:12px;border-top:1px solid var(--brand-border)}
+h2,h3{break-after:avoid;page-break-after:avoid}
+.avoid-break{break-inside:avoid;page-break-inside:avoid}
+@media (max-width:900px){.head-grid,.hero-grid,.cards-3,.graph-grid,.key-values{grid-template-columns:1fr}.contact-right{text-align:left}.warranty-card{grid-column:auto}}
+@page { size: A4; margin: 10mm; }
+@media print{
+  html,body{font-size:var(--font-base-print);background:#fff}
+  .wrap{max-width:190mm;width:190mm;padding:0;margin:0 auto}
+  .quote-wrap{zoom:var(--print-scale);width:calc(100% / var(--print-scale));margin:0 auto;transform-origin:top left}
+  @supports not (zoom: 1){
+    .quote-wrap{transform:scale(var(--print-scale));transform-origin:top left;width:calc(100% / var(--print-scale));}
+  }
+  .section-card{padding:calc(14px * var(--compact-multiplier));margin-bottom:calc(10px * var(--compact-multiplier));box-shadow:none;border-color:color-mix(in srgb, var(--brand-border) 70%, #fff)}
+  .badge-pill,.icon-card,.kv,.orange-strip,.soft-note{padding:calc(8px * var(--compact-multiplier))}
+  .badges,.cards-3,.graph-grid,.hero-grid,.key-values{gap:calc(8px * var(--compact-multiplier))}
+  .authority{font-size:18px}
+  .sub-authority{font-size:12px}
+  .section-title{font-size:14px;font-weight:800}
+  .icon-card .v,.kv .v{font-size:15px;font-weight:800}
+  a{text-decoration:none;color:inherit}
+}
 </style></head>
-<body><div class="wrap">
+<body><div class="quote-wrap wrap">
 <div class="section-card hero-header">
   <div class="head-grid">
     <div><?php if ((string)($company['logo_path'] ?? '') !== ''): ?><img src="<?= htmlspecialchars((string)$company['logo_path'], ENT_QUOTES) ?>" alt="Logo" style="max-width:130px;max-height:70px"><?php endif; ?></div>
@@ -344,11 +408,11 @@ body{font-family:Arial,sans-serif;color:var(--text);margin:0;background:var(--bg
   <h2 class="section-title">Your System at a Glance</h2>
   <div class="cards-3">
     <div class="icon-card"><div>⚡ System Type</div><div class="v"><?= htmlspecialchars((string)$quote['system_type'], ENT_QUOTES) ?></div></div>
-    <div class="icon-card"><div>🔋 System Size (Installed PV)</div><div class="v"><?= number_format($capacity,2) ?> kWp</div></div>
+    <div class="icon-card"><div>🔋 System Size (Installed PV)</div><div class="v money-pop"><?= number_format($capacity,2) ?> kWp</div></div>
     <div class="icon-card"><div>☀️ Expected Generation</div><div class="v"><?= number_format($annualGeneration,0) ?> kWh/year</div></div>
+    <div class="icon-card warranty-card"><div>🛡️ Warranty Summary</div><div class="small-muted"><?= htmlspecialchars($warrantyLabel, ENT_QUOTES) ?></div><div class="small-muted">Detailed component-wise terms are available in the warranty section.</div></div>
   </div>
   <div class="small-muted" style="margin-top:8px">Estimated Monthly Generation: <?= number_format($monthlySolarUnits,0) ?> kWh/month</div>
-  <span class="warranty-badge"><?= htmlspecialchars($warrantyLabel, ENT_QUOTES) ?></span>
   <div class="section-card" style="margin-top:12px">
     <h3 class="section-title" style="margin-bottom:8px">Why this system is ideal for you</h3>
     <ul>
@@ -363,9 +427,9 @@ body{font-family:Arial,sans-serif;color:var(--text);margin:0;background:var(--bg
 <div class="section-card">
   <h2 class="section-title">Pricing Summary + Subsidy + Transportation</h2>
   <table class="table">
-    <tr><th>Final Price (GST)</th><td>₹<?= number_format($quoteTotalCost,2) ?></td></tr>
-    <tr><th>Transportation</th><td><?php if ($transportMode === 'included'): ?>Included<?php elseif ($transportMode === 'extra'): ?>Extra (₹<?= number_format($transportExtra,2) ?>)<?php else: ?>N/A<?php endif; ?></td></tr>
-    <tr><th>Grand Total (GST)</th><td>₹<?= number_format($grandTotalWithTransport,2) ?></td></tr>
+    <tr><th>Final Price (GST)</th><td class="money-pop">₹<?= number_format($quoteTotalCost,2) ?></td></tr>
+    <?php if ($transportExtra > 0): ?><tr><th>Transportation</th><td>₹<?= number_format($transportExtra,2) ?></td></tr><?php endif; ?>
+    <tr><th>Grand Total (GST)</th><td class="money-pop">₹<?= number_format($grandTotalWithTransport,2) ?></td></tr>
     <tr><th>Subsidy Expected</th><td>₹<?= number_format($subsidy,2) ?></td></tr>
     <tr><th>Net Cost After Subsidy</th><td><strong>₹<?= number_format($netCostAfterSubsidy,2) ?></strong></td></tr>
   </table>
@@ -441,14 +505,16 @@ body{font-family:Arial,sans-serif;color:var(--text);margin:0;background:var(--bg
 <div class="section-card">
   <h2 class="section-title">For Dakshayani Enterprises</h2>
   <div>Authorized Signatory</div>
-  <div>Mob: <?= htmlspecialchars($whatsAppNumber, ENT_QUOTES) ?></div>
+  <div>Mob: <?= htmlspecialchars($whatsAppNumber, ENT_QUOTES) ?></div><?php if (!empty($headerEmails)): ?><div>Email: <?= htmlspecialchars(implode(', ', $headerEmails), ENT_QUOTES) ?></div><?php endif; ?><div><?= htmlspecialchars($companyAddress, ENT_QUOTES) ?></div>
   <p>Thank you for considering Dakshayani Enterprises. We look forward to powering your home/business.</p>
 </div>
 
 <div class="footer">
-  <?= htmlspecialchars($companyName, ENT_QUOTES) ?><?php if (!empty($licenses)): ?> | <?= htmlspecialchars(implode(' • ', $licenses), ENT_QUOTES) ?><?php endif; ?><?php if (!empty($identityParts)): ?> | <?= htmlspecialchars(implode(' | ', $identityParts), ENT_QUOTES) ?><?php endif; ?>
+  <strong><?= htmlspecialchars($companyName, ENT_QUOTES) ?></strong> | <?= htmlspecialchars($companyAddress, ENT_QUOTES) ?><?php if (!empty($licenses)): ?> | <?= htmlspecialchars(implode(' • ', $licenses), ENT_QUOTES) ?><?php endif; ?><?php if (!empty($identityParts)): ?> | <?= htmlspecialchars(implode(' | ', $identityParts), ENT_QUOTES) ?><?php endif; ?>
   <br>
-  <?php if (!empty($headerPhones)): ?>📞 <?= htmlspecialchars(implode(', ', $headerPhones), ENT_QUOTES) ?> | <?php endif; ?>💬 <a href="<?= htmlspecialchars($whatsAppLink, ENT_QUOTES) ?>" target="_blank" rel="noopener">WhatsApp: <?= htmlspecialchars($whatsAppNumber, ENT_QUOTES) ?></a><?php if ($websiteDisplay !== ''): ?> | 🌐 <?= htmlspecialchars($websiteDisplay, ENT_QUOTES) ?><?php endif; ?>
+  <?php if (!empty($headerPhones)): ?>📞 <?= htmlspecialchars(implode(', ', $headerPhones), ENT_QUOTES) ?> | <?php endif; ?><?php if (!empty($headerEmails)): ?>✉️ <?= htmlspecialchars(implode(', ', $headerEmails), ENT_QUOTES) ?> | <?php endif; ?>💬 <a href="<?= htmlspecialchars($whatsAppLink, ENT_QUOTES) ?>" target="_blank" rel="noopener">WhatsApp: <?= htmlspecialchars($whatsAppNumber, ENT_QUOTES) ?></a><?php if ($websiteDisplay !== ''): ?> | 🌐 <?= htmlspecialchars($websiteDisplay, ENT_QUOTES) ?><?php endif; ?>
+  <?php if (!empty($bankDetails)): ?><br><?= htmlspecialchars(implode(' | ', $bankDetails), ENT_QUOTES) ?><?php endif; ?><?php if ($upiId !== ''): ?> | UPI: <?= htmlspecialchars($upiId, ENT_QUOTES) ?><?php endif; ?>
+  <?php if ($upiQrPath !== ''): ?><div style="margin-top:6px"><img src="<?= htmlspecialchars($upiQrPath, ENT_QUOTES) ?>" alt="UPI QR" style="max-height:72px;max-width:72px"></div><?php endif; ?>
 </div>
 
 </div>
@@ -468,17 +534,18 @@ const data={
   netCostAfterSubsidy: <?= json_encode(round($netCostAfterSubsidy,2)) ?>,
   annualSavings: <?= json_encode(round($annualSavings,2)) ?>,
   paybackYears: <?= json_encode($paybackYears) ?>,
-  chartRed: getComputedStyle(document.documentElement).getPropertyValue('--brandRed').trim() || '#dc2626',
-  chartOrange: getComputedStyle(document.documentElement).getPropertyValue('--brandOrange').trim() || '#f59e0b',
-  chartGreen: getComputedStyle(document.documentElement).getPropertyValue('--brandGreen').trim() || '#16a34a',
+  chartRed: getComputedStyle(document.documentElement).getPropertyValue('--brand-danger').trim() || '#dc2626',
+  chartOrange: getComputedStyle(document.documentElement).getPropertyValue('--brand-warning').trim() || '#f59e0b',
+  chartGreen: getComputedStyle(document.documentElement).getPropertyValue('--brand-success').trim() || '#16a34a',
 };
+const printCanvasState=[];
 const rupees=v=>'₹'+Math.round(v).toLocaleString('en-IN');
-function setupCanvas(id,h){const c=document.getElementById(id);if(!c){return null;}const dpr=window.devicePixelRatio||1;const w=Math.max(620,Math.floor(c.clientWidth||620));c.width=w*dpr;c.height=h*dpr;const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.lineJoin='round';ctx.lineCap='round';return {ctx,w,h};}
-function axes(ctx,left,top,right,bottom,xLabel,yLabel){ctx.strokeStyle='#94a3b8';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(left,top);ctx.lineTo(left,bottom);ctx.lineTo(right,bottom);ctx.stroke();ctx.fillStyle='#334155';ctx.font='12px Arial';ctx.fillText(xLabel,(left+right)/2-28,bottom+26);ctx.save();ctx.translate(left-44,(top+bottom)/2+20);ctx.rotate(-Math.PI/2);ctx.fillText(yLabel,0,0);ctx.restore();}
+function setupCanvas(id,h){const c=document.getElementById(id);if(!c){return null;}const dpr=Math.max(window.devicePixelRatio||1,2);const w=Math.max(620,Math.floor(c.clientWidth||620));c.width=w*dpr;c.height=h*dpr;const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.lineJoin='round';ctx.lineCap='round';return {ctx,w,h,c};}
+function axes(ctx,left,top,right,bottom,xLabel,yLabel){ctx.strokeStyle='#94a3b8';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(left,top);ctx.lineTo(left,bottom);ctx.lineTo(right,bottom);ctx.stroke();ctx.fillStyle='#334155';ctx.font='600 12px Arial';ctx.fillText(xLabel,(left+right)/2-38,bottom+26);ctx.save();ctx.translate(left-50,(top+bottom)/2+20);ctx.rotate(-Math.PI/2);ctx.fillText(yLabel,0,0);ctx.restore();}
 function drawGraph1(){const p=setupCanvas('graph1Monthly',300);if(!p)return;const {ctx,w,h}=p;ctx.clearRect(0,0,w,h);const left=78,right=w-24,top=30,bottom=h-52;axes(ctx,left,top,right,bottom,'Comparison Cases','₹ / month');
 const bars=[{name:'Without Solar',color:data.chartRed,value:data.monthlyBill},{name:'Solar + EMI',color:data.chartOrange,value:data.emi+data.residualBill},{name:'Solar after Loan',color:data.chartGreen,value:data.residualBill}];
 const max=Math.max(1,...bars.map(b=>b.value))*1.25;const bw=Math.min(72,((right-left)/bars.length)-34);const gap=((right-left)-(bars.length*bw))/(bars.length+1);
-for(let i=0;i<bars.length;i++){const b=bars[i];const x=left+gap*(i+1)+bw*i;const bh=((bottom-top)*b.value/max);ctx.fillStyle=b.color;ctx.beginPath();ctx.roundRect(x,bottom-bh,bw,bh,8);ctx.fill();ctx.fillStyle='#0f172a';ctx.font='bold 11px Arial';ctx.fillText(rupees(b.value),x-2,bottom-bh-8);ctx.font='11px Arial';ctx.fillText(b.name,x-4,bottom+18);} }
+for(let i=0;i<bars.length;i++){const b=bars[i];const x=left+gap*(i+1)+bw*i;const bh=((bottom-top)*b.value/max);ctx.fillStyle=b.color;ctx.beginPath();ctx.roundRect(x,bottom-bh,bw,bh,8);ctx.fill();ctx.fillStyle='#0f172a';ctx.font='700 11px Arial';ctx.fillText(rupees(b.value),x-2,bottom-bh-8);ctx.font='11px Arial';ctx.fillText(b.name,x-4,bottom+18);} }
 function drawLine(ctx,points,color,dashed){ctx.strokeStyle=color;ctx.lineWidth=3;if(dashed){ctx.setLineDash([6,5]);}else{ctx.setLineDash([]);}ctx.beginPath();points.forEach((p,i)=>{if(i===0){ctx.moveTo(p.x,p.y);}else{ctx.lineTo(p.x,p.y);}});ctx.stroke();ctx.setLineDash([]);}
 function drawGraph2(){const p=setupCanvas('graph2Cumulative',300);if(!p)return;const {ctx,w,h}=p;ctx.clearRect(0,0,w,h);const left=78,right=w-22,top=30,bottom=h-52;axes(ctx,left,top,right,bottom,'Years','Total money spent (₹)');
 const years=Math.max(1,data.yearsForCumulative);const red=[],orange=[],green=[];let loanCum=data.marginMoney;
@@ -491,9 +558,35 @@ if(breakEvenYear!==null){const x=left+(right-left)*(breakEvenYear/years);ctx.str
 ctx.fillStyle=data.chartRed;ctx.fillText('■ Without Solar',left,bottom+18);ctx.fillStyle=data.chartOrange;ctx.fillText('■ Solar + Loan',left+120,bottom+18);ctx.fillStyle=data.chartGreen;ctx.fillText('■ Self finance',left+225,bottom+18);
 }
 function drawGraph3(){const p=setupCanvas('graph3Payback',260);if(!p)return;const {ctx,w,h}=p;ctx.clearRect(0,0,w,h);const cx=w/2,cy=185,r=120;ctx.lineWidth=16;ctx.strokeStyle='#e2e8f0';ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,0);ctx.stroke();
-const years=Math.min(25,Math.max(0,data.paybackYears===null?25:data.paybackYears));const end=Math.PI+(Math.PI*(years/25));ctx.strokeStyle=data.chartGreen;ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,end);ctx.stroke();ctx.fillStyle='#0f172a';ctx.font='bold 22px Arial';ctx.fillText(data.paybackYears===null?'N/A':Number(data.paybackYears).toFixed(1)+' yrs',cx-40,145);ctx.font='13px Arial';ctx.fillText('Estimated Payback',cx-58,166);ctx.fillText('Annual Savings: '+rupees(data.annualSavings),cx-85,212);ctx.fillStyle='#475569';ctx.fillText('0y',cx-r-6,cy+22);ctx.fillText('25y',cx+r-20,cy+22);}
+const years=Math.min(25,Math.max(0,data.paybackYears===null?25:data.paybackYears));const end=Math.PI+(Math.PI*(years/25));ctx.strokeStyle=data.chartGreen;ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,end);ctx.stroke();ctx.fillStyle='#0f172a';ctx.font='700 22px Arial';ctx.fillText(data.paybackYears===null?'N/A':Number(data.paybackYears).toFixed(1)+' yrs',cx-40,145);ctx.font='13px Arial';ctx.fillText('Estimated Payback',cx-58,166);ctx.fillText('Annual Savings: '+rupees(data.annualSavings),cx-85,212);ctx.fillStyle='#475569';ctx.fillText('0y',cx-r-6,cy+22);ctx.fillText('25y',cx+r-20,cy+22);}
 function renderAll(){if(!data.hasSavingsInputs){return;}drawGraph1();drawGraph2();drawGraph3();}
-window.addEventListener('load',function(){renderAll();if(location.search.indexOf('autoprint=1')!==-1){window.print();}});
+
+function swapChartsForPrint(){
+  const canvases=document.querySelectorAll('.graph-card canvas');
+  canvases.forEach((canvas,index)=>{
+    const img=document.createElement('img');
+    img.className='chart-print-image';
+    img.alt='Chart '+(index+1)+' print snapshot';
+    img.width=canvas.clientWidth||canvas.width;
+    img.height=canvas.clientHeight||canvas.height;
+    img.src=canvas.toDataURL('image/png');
+    canvas.style.display='none';
+    canvas.parentNode.insertBefore(img, canvas.nextSibling);
+    printCanvasState.push({canvas,img});
+  });
+}
+function restoreChartsAfterPrint(){
+  while(printCanvasState.length){
+    const state=printCanvasState.pop();
+    if(state.img && state.img.parentNode){state.img.parentNode.removeChild(state.img);} 
+    if(state.canvas){state.canvas.style.display='block';}
+  }
+  renderAll();
+}
+window.addEventListener('beforeprint',swapChartsForPrint);
+window.addEventListener('afterprint',restoreChartsAfterPrint);
+window.matchMedia('print').addEventListener('change',e=>{if(e.matches){swapChartsForPrint();}else{restoreChartsAfterPrint();}});
+window.addEventListener('load',function(){renderAll();if(location.search.indexOf('autoprint=1')!==-1){setTimeout(()=>window.print(),150);}});
 window.addEventListener('resize',renderAll);
 })();
 </script>

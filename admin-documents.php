@@ -74,7 +74,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $settings['theme']['card_bg'] = safe_text($_POST['card_bg'] ?? $settings['theme']['card_bg']);
         $settings['theme']['border_color'] = safe_text($_POST['border_color'] ?? $settings['theme']['border_color']);
 
+        $settings['theme']['brand_muted_color'] = safe_text($_POST['brand_muted_color'] ?? $settings['theme']['brand_muted_color']);
+        $settings['theme']['success_color'] = safe_text($_POST['success_color'] ?? $settings['theme']['success_color']);
+        $settings['theme']['warning_color'] = safe_text($_POST['warning_color'] ?? $settings['theme']['warning_color']);
+        $settings['theme']['danger_color'] = safe_text($_POST['danger_color'] ?? $settings['theme']['danger_color']);
+
         $settings['typography']['base_font_size_px'] = max(10, min(20, (int) ($_POST['base_font_size_px'] ?? $settings['typography']['base_font_size_px'])));
+        $settings['typography']['print_base_font_size_px'] = max(8, min(16, (int) ($_POST['print_base_font_size_px'] ?? $settings['typography']['print_base_font_size_px'])));
         $settings['typography']['h1_px'] = max(16, min(40, (int) ($_POST['h1_px'] ?? $settings['typography']['h1_px'])));
         $settings['typography']['h2_px'] = max(14, min(34, (int) ($_POST['h2_px'] ?? $settings['typography']['h2_px'])));
         $settings['typography']['h3_px'] = max(12, min(28, (int) ($_POST['h3_px'] ?? $settings['typography']['h3_px'])));
@@ -83,6 +89,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $settings['layout']['page_background_enabled'] = isset($_POST['page_background_enabled']);
         $settings['layout']['show_cover_page'] = isset($_POST['show_cover_page']);
         $settings['layout']['continuous_flow'] = isset($_POST['continuous_flow']);
+        $settings['layout']['print_backgrounds_enabled'] = isset($_POST['print_backgrounds_enabled']);
+        $settings['layout']['compact_print_mode'] = isset($_POST['compact_print_mode']);
+        $settings['layout']['print_scale'] = max(0.7, min(1, (float) ($_POST['print_scale'] ?? $settings['layout']['print_scale'])));
         $settings['layout']['page_background_image'] = safe_text($_POST['page_background_image'] ?? $settings['layout']['page_background_image']);
         $settings['layout']['page_background_opacity'] = max(0, min(1, (float) ($_POST['page_background_opacity'] ?? $settings['layout']['page_background_opacity'])));
 
@@ -481,7 +490,15 @@ $user = current_user();
           <div><label>Background color</label><input type="color" name="bg_color" value="<?= htmlspecialchars((string) $documentStyle['theme']['bg_color'], ENT_QUOTES) ?>" /></div>
           <div><label>Card background</label><input type="color" name="card_bg" value="<?= htmlspecialchars((string) $documentStyle['theme']['card_bg'], ENT_QUOTES) ?>" /></div>
           <div><label>Border color</label><input type="color" name="border_color" value="<?= htmlspecialchars((string) $documentStyle['theme']['border_color'], ENT_QUOTES) ?>" /></div>
+          <div><label>Brand muted color</label><input type="color" name="brand_muted_color" value="<?= htmlspecialchars((string) ($documentStyle['theme']['brand_muted_color'] ?? $documentStyle['theme']['muted_text_color']), ENT_QUOTES) ?>" /></div>
+          <div><label>Success color</label><input type="color" name="success_color" value="<?= htmlspecialchars((string) ($documentStyle['theme']['success_color'] ?? '#16a34a'), ENT_QUOTES) ?>" /></div>
+          <div><label>Warning color</label><input type="color" name="warning_color" value="<?= htmlspecialchars((string) ($documentStyle['theme']['warning_color'] ?? '#f59e0b'), ENT_QUOTES) ?>" /></div>
+          <div><label>Danger color</label><input type="color" name="danger_color" value="<?= htmlspecialchars((string) ($documentStyle['theme']['danger_color'] ?? '#dc2626'), ENT_QUOTES) ?>" /></div>
           <div><label>Base font size</label><input type="range" min="10" max="20" name="base_font_size_px" value="<?= (int) $documentStyle['typography']['base_font_size_px'] ?>" /></div>
+          <div><label>Print base font size (px)</label><input type="number" min="8" max="16" name="print_base_font_size_px" value="<?= (int) ($documentStyle['typography']['print_base_font_size_px'] ?? 10) ?>" /></div>
+          <div><label>Print scale (decimal)</label><input type="number" step="0.01" min="0.70" max="1" name="print_scale" value="<?= htmlspecialchars((string) ($documentStyle['layout']['print_scale'] ?? 0.92), ENT_QUOTES) ?>" /></div>
+          <div><label><input type="checkbox" name="print_backgrounds_enabled" <?= !empty($documentStyle['layout']['print_backgrounds_enabled']) ? 'checked' : '' ?> /> Print backgrounds ON</label></div>
+          <div><label><input type="checkbox" name="compact_print_mode" <?= !empty($documentStyle['layout']['compact_print_mode']) ? 'checked' : '' ?> /> Compact print mode ON</label></div>
           <div><label>H1 px</label><input type="number" name="h1_px" value="<?= (int) $documentStyle['typography']['h1_px'] ?>" /></div>
           <div><label>H2 px</label><input type="number" name="h2_px" value="<?= (int) $documentStyle['typography']['h2_px'] ?>" /></div>
           <div><label>H3 px</label><input type="number" name="h3_px" value="<?= (int) $documentStyle['typography']['h3_px'] ?>" /></div>
