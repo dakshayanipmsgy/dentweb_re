@@ -29,15 +29,14 @@ if ($quote === null) { http_response_code(404); echo 'Quotation not found.'; exi
 if ($viewerType === 'employee' && ((string) ($quote['created_by_type'] ?? '') !== 'employee' || (string) ($quote['created_by_id'] ?? '') !== $viewerId)) {
     http_response_code(403); echo 'Access denied.'; exit;
 }
+
 $redirect = static function (string $type, string $message) use ($id): void {
     header('Location: quotation-view.php?' . http_build_query(['id' => $id, 'status' => $type, 'message' => $message]));
     exit;
 };
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) { $redirect('error', 'Security validation failed.'); }
     $action = safe_text($_POST['action'] ?? '');
-
     if ($action === 'approve_quote' && $viewerType === 'admin') {
         $quote['status'] = 'Approved';
         $quote['approval']['approved_by_id'] = (string) ($user['id'] ?? '');
@@ -47,11 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         documents_save_quote($quote);
         $redirect('success', 'Quotation approved.');
     }
-
     if ($action === 'accept_quote' && $viewerType === 'admin') {
-        if ((string) ($quote['status'] ?? '') !== 'Approved' && (string) ($quote['status'] ?? '') !== 'Accepted') {
-            $redirect('error', 'Quotation must be Approved first.');
-        }
+        if (!in_array((string)($quote['status'] ?? ''), ['Approved', 'Accepted'], true)) { $redirect('error', 'Quotation must be Approved first.'); }
         $customer = documents_upsert_customer_from_quote($quote);
         if (!($customer['ok'] ?? false)) { $redirect('error', (string) ($customer['error'] ?? 'Customer creation failed.')); }
         $agreement = documents_create_agreement_from_quote($quote, is_array($user) ? $user : []);
@@ -68,25 +64,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         documents_save_quote($quote);
         $redirect('success', 'Quotation accepted and linked documents generated.');
     }
-
-    if ($action === 'archive_quote' && $viewerType === 'admin') {
-        $quote['status'] = 'Archived';
-        $quote['updated_at'] = date('c');
-        documents_save_quote($quote);
-        $redirect('success', 'Quotation archived.');
-    }
-
     if ($action === 'share_update') {
-        $status = (string) ($quote['status'] ?? '');
-        if (!in_array($status, ['Approved', 'Accepted'], true)) {
-            $redirect('error', 'Public sharing is allowed only for Approved/Accepted quotations.');
-        }
-        $enable = isset($_POST['public_enabled']);
-        if (isset($_POST['generate_token']) || ((string) ($quote['share']['public_token'] ?? '')) === '') {
+        if (!in_array((string)($quote['status'] ?? ''), ['Approved', 'Accepted'], true)) { $redirect('error', 'Public sharing is allowed only for Approved/Accepted quotations.'); }
+        $quote['share']['public_enabled'] = isset($_POST['public_enabled']);
+        if (isset($_POST['generate_token']) || ((string)($quote['share']['public_token'] ?? '')) === '') {
             $quote['share']['public_token'] = bin2hex(random_bytes(16));
             $quote['share']['public_created_at'] = date('c');
         }
-        $quote['share']['public_enabled'] = $enable;
         $quote['updated_at'] = date('c');
         documents_save_quote($quote);
         $redirect('success', 'Share settings updated.');
@@ -94,57 +78,142 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $quoteDefaults = documents_get_quote_defaults_settings();
-$segment = (string) ($quote['segment'] ?? 'RES');
+$segment = (string)($quote['segment'] ?? 'RES');
 $segmentDefaults = is_array($quoteDefaults['segments'][$segment] ?? null) ? $quoteDefaults['segments'][$segment] : [];
-$snapshot = documents_quote_resolve_snapshot($quote);
-$links = is_array($quote['links'] ?? null) ? $quote['links'] : [];
-$typo = $quoteDefaults['global']['typography'] ?? [];
-$styleTypo = is_array($quote['style_overrides']['typography'] ?? null) ? $quote['style_overrides']['typography'] : [];
-$baseFont = (int) (($styleTypo['base_font_px'] !== '' ? $styleTypo['base_font_px'] : ($typo['base_font_px'] ?? 14)));
-$headingScale = (float) (($styleTypo['heading_scale'] !== '' ? $styleTypo['heading_scale'] : ($typo['heading_scale'] ?? 1)));
-$density = (string) (($styleTypo['density'] !== '' ? $styleTypo['density'] : ($typo['density'] ?? 'comfortable')));
+$company = documents_get_company_profile_for_quotes();
+$templateSets = json_load(documents_templates_dir() . '/template_sets.json', []);
+$template = [];
+foreach ($templateSets as $row) {
+    if ((string)($row['id'] ?? '') === (string)($quote['template_set_id'] ?? '')) { $template = is_array($row) ? $row : []; break; }
+}
+$templateTags = is_array($template['tags'] ?? null) ? $template['tags'] : [];
+
+$shareUrl = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/quotation-public.php?token=' . urlencode((string)($quote['share']['public_token'] ?? ''));
+$primaryPhone = trim((string)($company['phone_primary'] ?? ''));
+$secondaryPhone = trim((string)($company['phone_secondary'] ?? ''));
+$email = trim((string)($company['email_primary'] ?? ''));
+$website = trim((string)($company['website'] ?? ''));
+$brandName = trim((string)($company['brand_name'] ?? '')) ?: 'Dakshayani Enterprises';
+$companyName = trim((string)($company['company_name'] ?? '')) ?: $brandName;
+$addressParts = array_filter([trim((string)($company['address_line'] ?? '')), trim((string)($company['city'] ?? '')), trim((string)($company['district'] ?? '')), trim((string)($company['state'] ?? '')), trim((string)($company['pin'] ?? ''))]);
+$fullAddress = implode(', ', $addressParts);
+$preparedBy = (string)($quote['created_by_name'] ?? 'Team');
+
 $wmGlobal = $quoteDefaults['global']['branding']['watermark'] ?? ['enabled'=>true,'image_path'=>'','opacity'=>0.08];
-$wmOverride = is_array($quote['style_overrides']['watermark'] ?? null) ? $quote['style_overrides']['watermark'] : [];
-$wmEnabled = (($wmOverride['enabled'] ?? '') === '') ? !empty($wmGlobal['enabled']) : (($wmOverride['enabled'] ?? '') === '1');
-$wmImage = (string) (($wmOverride['image_path'] ?? '') !== '' ? $wmOverride['image_path'] : ($wmGlobal['image_path'] ?? ''));
-$wmOpacity = (float) (($wmOverride['opacity'] ?? '') !== '' ? $wmOverride['opacity'] : ($wmGlobal['opacity'] ?? 0.08));
-$shareUrl = ((isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '') . rtrim(dirname($_SERVER['PHP_SELF'] ?? '/'), '/') . '/quotation-public.php?token=' . urlencode((string)($quote['share']['public_token'] ?? '')));
+$wmEnabled = !empty($wmGlobal['enabled']);
+$wmImage = (string)($wmGlobal['image_path'] ?? '');
+$wmOpacity = (float)($wmGlobal['opacity'] ?? 0.08);
 ?>
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quotation <?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></title>
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quotation <?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></title>
 <style>
-:root{--base:<?= max(12, min(18, $baseFont)) ?>px;--heading:<?= max(0.8,min(1.5,$headingScale)) ?>;--p:<?= $density==='compact'?'10px':($density==='spacious'?'20px':'14px') ?>;--pri:#0f766e;--sec:#22c55e;--acc:#f59e0b}
-body{margin:0;font-family:Arial,sans-serif;font-size:var(--base);background:#f4f8ff;color:#0f172a}.wrap{max-width:1100px;margin:auto;padding:16px}.card{background:#fff;border:1px solid #dbeafe;border-radius:16px;padding:var(--p);margin-bottom:14px;box-shadow:0 4px 18px rgba(15,23,42,.05)}
-.h{font-size:calc(1.1rem * var(--heading));font-weight:800}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.pill{display:inline-block;padding:4px 10px;border-radius:999px;background:#ecfeff;color:#155e75;font-weight:700;font-size:.82em}.btn{display:inline-block;background:#0f766e;color:#fff;text-decoration:none;border:none;border-radius:10px;padding:8px 12px;cursor:pointer}.btn.s{background:#fff;color:#0f172a;border:1px solid #cbd5e1}
-.metric{background:linear-gradient(135deg,#ecfeff,#f0fdf4);border:1px solid #bbf7d0;border-radius:12px;padding:10px}.metric b{font-size:1.1em}.timeline{display:flex;gap:8px;overflow:auto}.timeline div{min-width:120px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;text-align:center}
-.chart{height:220px;border:1px dashed #cbd5e1;border-radius:12px;padding:10px}
-.watermark{display:none}
-@media print {.btn,.noprint{display:none!important}.wrap{max-width:none}.card{break-inside:avoid}.watermark{display:block;position:fixed;inset:0;pointer-events:none;z-index:0;background-repeat:no-repeat;background-position:center;background-size:65%;opacity:<?= htmlspecialchars((string)$wmOpacity, ENT_QUOTES) ?>}.content{position:relative;z-index:2}}
+body{margin:0;background:#eef3f9;font-family:Inter,Arial,sans-serif;color:#0f172a} .wrap{max-width:1080px;margin:0 auto;padding:14px}
+.card{background:#fff;border:1px solid #d7e2ef;border-radius:14px;padding:14px;margin-bottom:12px} .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.h{font-weight:700;font-size:18px}.muted{color:#64748b;font-size:13px}.metric{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px}
+.header{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start}.chips{display:flex;flex-wrap:wrap;gap:6px}.chip{font-size:11px;background:#e0f2fe;color:#0c4a6e;border-radius:999px;padding:4px 8px}
+.footer{font-size:13px;background:#0f172a;color:#e2e8f0} .footer a{color:#93c5fd}
+.chart{border:1px solid #e2e8f0;border-radius:12px;padding:10px;background:#fff}.chart h4{margin:0 0 8px 0}
+canvas{width:100%;height:220px}.noprint{display:block}
+@media print{body{background:#fff}.wrap{max-width:none;padding:0}.card{break-inside:avoid;border-color:#cbd5e1}.noprint{display:none!important}<?php if ($wmEnabled && $wmImage !== ''): ?>body::before{content:"";position:fixed;inset:0;background:url('<?= htmlspecialchars($wmImage, ENT_QUOTES) ?>') center/40% no-repeat;opacity:<?= htmlspecialchars((string)$wmOpacity, ENT_QUOTES) ?>;z-index:-1}<?php endif; ?>}
 </style></head><body>
-<?php if ($wmEnabled && $wmImage !== ''): ?><div class="watermark" style="background-image:url('<?= htmlspecialchars($wmImage, ENT_QUOTES) ?>')"></div><?php endif; ?>
-<main class="wrap content">
-<?php if (safe_text($_GET['message'] ?? '') !== ''): ?><div class="card"><?= htmlspecialchars((string)($_GET['message'] ?? ''), ENT_QUOTES) ?></div><?php endif; ?>
-<div class="card"><div class="h">🌞 Solar Sales Proposal · <?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></div><p><?= htmlspecialchars((string)($snapshot['name'] ?: $quote['customer_name']), ENT_QUOTES) ?> · <?= htmlspecialchars((string)($snapshot['mobile'] ?: $quote['customer_mobile']), ENT_QUOTES) ?> · <?= htmlspecialchars((string)$quote['city'], ENT_QUOTES) ?></p><span class="pill">Status: <?= htmlspecialchars(documents_status_label($quote, $viewerType), ENT_QUOTES) ?></span> <span class="pill">Next steps: Accept → Agreement → PI → Installation</span></div>
-<div class="card grid" id="metrics"></div>
-<div class="card"><div class="h">⚡ Pricing Summary</div><div class="grid"><div class="metric"><div>Grand Total</div><b>₹<?= number_format((float)$quote['calc']['grand_total'],2) ?></b></div><div class="metric"><div>Transportation</div><b>₹<?= number_format((float)($quote['finance_inputs']['transportation_rs'] ?? 0),2) ?></b></div><div class="metric"><div>Expected Subsidy</div><b id="subsidyCard">₹0</b></div><div class="metric"><div>Net Cost</div><b id="netCostCard">₹0</b></div></div><details><summary>GST breakup</summary><p>5% bucket total: ₹<?= number_format((float)$quote['calc']['bucket_5_basic'] + (float)$quote['calc']['bucket_5_gst'],2) ?> · 18% bucket total: ₹<?= number_format((float)$quote['calc']['bucket_18_basic'] + (float)$quote['calc']['bucket_18_gst'],2) ?></p></details></div>
-<div class="card"><div class="h">📊 Savings & EMI</div><div class="grid"><div class="metric"><div>Monthly bill</div><b id="billCard"></b></div><div class="metric"><div>Estimated EMI</div><b id="emiCard"></b></div><div class="metric"><div>Monthly saving</div><b id="saveCard"></b></div><div class="metric"><div>Payback</div><b id="paybackCard"></b></div></div><div class="grid"><div class="chart" id="chart1"></div><div class="chart" id="chart2"></div><div class="chart" id="chart3"></div></div></div>
-<div class="card"><div class="h">🌳 CO₂ & Trees Impact</div><div class="grid"><div class="metric"><div>CO₂ saved / year</div><b id="co2Y"></b></div><div class="metric"><div>CO₂ saved / 25 years</div><b id="co225"></b></div><div class="metric"><div>Trees equivalent / year</div><b id="treesY"></b></div><div class="metric"><div>Trees equivalent / 25 years</div><b id="trees25"></b></div></div></div>
-<div class="card"><div class="h">🧰 Inclusions & Terms</div><ul><li><?= nl2br(htmlspecialchars((string)($quote['annexures_overrides']['system_inclusions'] ?? ''), ENT_QUOTES)) ?></li><li><?= nl2br(htmlspecialchars((string)($quote['annexures_overrides']['warranty'] ?? ''), ENT_QUOTES)) ?></li><li><?= nl2br(htmlspecialchars((string)($quote['annexures_overrides']['pm_subsidy_info'] ?? ''), ENT_QUOTES)) ?></li></ul></div>
-<div class="card"><div class="h">🗓️ Timeline</div><div class="timeline"><div>Application</div><div>Survey</div><div>Material</div><div>Installation</div><div>Net meter</div><div>Commissioning</div><div>Subsidy</div></div></div>
-<div class="card noprint"><a class="btn s" href="<?= htmlspecialchars($viewerType === 'admin' ? 'admin-quotations.php' : 'employee-quotations.php', ENT_QUOTES) ?>">Back</a> <?php if (documents_quote_can_edit($quote,$viewerType,$viewerId)): ?><a class="btn s" href="<?= htmlspecialchars(($viewerType==='admin'?'admin-quotations.php':'employee-quotations.php') . '?edit=' . urlencode((string)$quote['id']), ENT_QUOTES) ?>">Edit</a><?php endif; ?> <?php if ($viewerType==='admin' && (string)($quote['status']??'')==='Draft'): ?><form method="post" style="display:inline"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="approve_quote"><button class="btn" type="submit">Approve</button></form><?php endif; ?> <?php if ($viewerType==='admin' && in_array((string)($quote['status']??''),['Approved','Accepted'],true)): ?><form method="post" style="display:inline"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="accept_quote"><button class="btn" type="submit">Accepted by Customer</button></form><?php endif; ?></div>
-<div class="card noprint"><div class="h">🔗 Share Proposal</div><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="share_update"><label><input type="checkbox" name="public_enabled" <?= !empty($quote['share']['public_enabled'])?'checked':'' ?>> Enable public sharing</label> <button class="btn s" name="generate_token" value="1" type="submit">Generate New Token</button> <button class="btn" type="submit">Save Share Settings</button></form><?php if (!empty($quote['share']['public_token'])): ?><p>Public URL: <a href="<?= htmlspecialchars($shareUrl, ENT_QUOTES) ?>" target="_blank"><?= htmlspecialchars($shareUrl, ENT_QUOTES) ?></a></p><?php endif; ?></div>
+<main class="wrap">
+<div class="card header"><div><div class="h"><?= htmlspecialchars($companyName, ENT_QUOTES) ?></div><div class="muted"><?= htmlspecialchars($fullAddress, ENT_QUOTES) ?></div><div class="muted"><?= htmlspecialchars(trim($primaryPhone . ($secondaryPhone !== '' ? ' / ' . $secondaryPhone : '')), ENT_QUOTES) ?><?= $email!==''?' · '.htmlspecialchars($email, ENT_QUOTES):'' ?><?= $website!==''?' · '.htmlspecialchars($website, ENT_QUOTES):'' ?></div><div class="muted"><?php if(!empty($company['gstin'])): ?>GSTIN: <?= htmlspecialchars((string)$company['gstin'], ENT_QUOTES) ?> · <?php endif; ?><?php if(!empty($company['udyam'])): ?>UDYAM: <?= htmlspecialchars((string)$company['udyam'], ENT_QUOTES) ?><?php endif; ?><?php if(!empty($company['jreda_license'])): ?> · JREDA: <?= htmlspecialchars((string)$company['jreda_license'], ENT_QUOTES) ?><?php endif; ?></div><?php if ($templateTags !== []): ?><div class="chips"><?php foreach ($templateTags as $tag): ?><span class="chip"><?= htmlspecialchars((string)$tag, ENT_QUOTES) ?></span><?php endforeach; ?></div><?php endif; ?></div><div class="metric"><div>Quote No: <b><?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></b></div><div>Prepared by: <b><?= htmlspecialchars($preparedBy, ENT_QUOTES) ?></b></div><div>Valid till: <b><?= htmlspecialchars((string)($quote['valid_until'] ?: '-'), ENT_QUOTES) ?></b></div></div></div>
+<div class="card"><div class="h">Customer</div><div class="muted"><?= htmlspecialchars((string)$quote['customer_name'], ENT_QUOTES) ?> · <?= htmlspecialchars((string)$quote['city'], ENT_QUOTES) ?></div></div>
+<div class="card"><div class="h">Pricing Summary</div><div class="grid"><div class="metric">Final price<br><b id="finalPrice"></b></div><div class="metric">Transportation<br><b id="transportationRs"></b></div><div class="metric">Subsidy expected<br><b id="subsidyRs"></b></div><div class="metric">Net cost after subsidy<br><b id="netCostRs"></b></div></div><p class="muted">Customer pays full amount to vendor. Subsidy is credited later after commissioning (as per scheme process).</p></div>
+<div class="card"><div class="h">Finance Clarity</div><p class="muted" id="clarityText"></p><p class="muted">Graph assumes best-case bank loan up to ₹2,00,000 at 6% for 10 years. Higher loan slabs may have higher interest (e.g., 8.15%+) and higher margin (20%).</p><div class="grid"><div class="metric"><b>Bank Loan Snapshot</b><div>Margin money: <span id="marginRs"></span></div><div>Loan amount: <span id="loanRs"></span></div><div>EMI: <span id="emiRs"></span>/month</div><div>Residual bill: <span id="residualRs"></span>/month</div><div>Total monthly outflow: <span id="loanOutflowRs"></span>/month</div></div><div class="metric"><b>Self-finance Snapshot</b><div>Upfront: <span id="selfUpfrontRs"></span></div><div>Residual bill: <span id="selfResidualRs"></span>/month</div></div><div class="metric"><b>No Solar Snapshot</b><div>Current bill: <span id="noSolarRs"></span>/month</div></div></div><div class="metric" style="margin-top:10px"><b>Loan Notes</b><div id="higherSlabInfo" class="muted"></div></div></div>
+<div class="card"><div class="grid"><div class="chart"><h4>Monthly Spend Comparison</h4><canvas id="chart1" width="480" height="220"></canvas></div><div class="chart"><h4>Cumulative Spend Over 10 Years</h4><canvas id="chart2" width="480" height="220"></canvas></div><div class="chart"><h4>Payback Meter</h4><div id="paybackText" class="muted"></div></div></div></div>
+<div class="card noprint"><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>"><?php if ($viewerType==='admin' && (string)($quote['status']??'')==='Draft'): ?><button name="action" value="approve_quote">Approve</button><?php endif; ?><?php if ($viewerType==='admin' && in_array((string)($quote['status']??''), ['Approved','Accepted'], true)): ?><button name="action" value="accept_quote">Accepted by Customer</button><?php endif; ?></form></div>
+<div class="card noprint"><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="action" value="share_update"><label><input type="checkbox" name="public_enabled" <?= !empty($quote['share']['public_enabled'])?'checked':'' ?>> Enable public sharing</label> <button name="generate_token" value="1">Generate New Token</button> <button type="submit">Save Share Settings</button><?php if (!empty($quote['share']['public_token'])): ?><p>Public URL: <a href="<?= htmlspecialchars($shareUrl, ENT_QUOTES) ?>" target="_blank"><?= htmlspecialchars($shareUrl, ENT_QUOTES) ?></a></p><?php endif; ?></form></div>
+<div class="card footer"><div>For <?= htmlspecialchars($brandName, ENT_QUOTES) ?></div><div><?= htmlspecialchars(trim($primaryPhone . ($secondaryPhone !== '' ? ' / ' . $secondaryPhone : '')), ENT_QUOTES) ?><?= $email!==''?' · '.htmlspecialchars($email, ENT_QUOTES):'' ?><?= $website!==''?' · '.htmlspecialchars($website, ENT_QUOTES):'' ?></div><div><?= htmlspecialchars($fullAddress, ENT_QUOTES) ?></div><?php if(!empty($company['bank_account_name']) || !empty($company['bank_name']) || !empty($company['bank_ifsc'])): ?><div>Bank: <?= htmlspecialchars((string)$company['bank_account_name'], ENT_QUOTES) ?><?= !empty($company['bank_name'])?' · '.htmlspecialchars((string)$company['bank_name'], ENT_QUOTES):'' ?><?= !empty($company['bank_ifsc'])?' · IFSC: '.htmlspecialchars((string)$company['bank_ifsc'], ENT_QUOTES):'' ?></div><?php endif; ?><div class="muted">This proposal is indicative and subject to site verification and final execution conditions.</div></div>
 </main>
 <script>
-const quote={grand:<?= json_encode((float)$quote['calc']['grand_total']) ?>,cap:<?= json_encode((float)$quote['capacity_kwp']) ?>,monthlyBill:<?= json_encode((float)($quote['finance_inputs']['monthly_bill_rs'] ?: 0)) ?>,unitRate:<?= json_encode((float)(($quote['finance_inputs']['unit_rate_rs_per_kwh'] ?: ($segmentDefaults['unit_rate_rs_per_kwh'] ?? 8))) ) ?>,annGen:<?= json_encode((float)(($quote['finance_inputs']['annual_generation_per_kw'] ?: ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450))) ) ?>,emiRate:<?= json_encode((float)(($quote['finance_inputs']['loan']['interest_pct'] ?: 8.15))) ?>,tenure:<?= json_encode((float)(($quote['finance_inputs']['loan']['tenure_years'] ?: (($segmentDefaults['loan_defaults']['tenure_years'] ?? 10)))) ) ?>,loanEnabled:<?= json_encode(!empty($quote['finance_inputs']['loan']['enabled'])) ?>,loanAmount:<?= json_encode((float)($quote['finance_inputs']['loan']['loan_amount'] ?: $quote['calc']['grand_total'])) ?>,subsidyOverride:<?= json_encode((float)($quote['finance_inputs']['subsidy_expected_rs'] ?: 0)) ?>,emission:<?= json_encode((float)($quoteDefaults['global']['energy_defaults']['emission_factor_kg_per_kwh'] ?? 0.82)) ?>,tree:<?= json_encode((float)($quoteDefaults['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'] ?? 20)) ?>,segment:<?= json_encode($segment) ?>};
-function n(v){return '₹'+Number(v).toLocaleString('en-IN',{maximumFractionDigits:0})}
-function subsidy(){ if(quote.subsidyOverride>0) return quote.subsidyOverride; if(quote.segment!=='RES') return 0; if(quote.cap>=3) return 78000; if(quote.cap>=2) return 60000; return 0; }
-function emi(p,r,y){const m=r/1200,N=y*12; if(m<=0||N<=0) return p/N; return p*m*Math.pow(1+m,N)/(Math.pow(1+m,N)-1);}
-const yearly=quote.cap*quote.annGen, monthlySolar=yearly/12, monthlySaving=monthlySolar*quote.unitRate, s=subsidy(), net=quote.grand-s, emiV=quote.loanEnabled?emi(quote.loanAmount,quote.emiRate,quote.tenure):0, benefit=quote.loanEnabled?(monthlySaving-emiV):monthlySaving, payback=monthlySaving>0?(net/(monthlySaving*12)):0;
-document.getElementById('subsidyCard').textContent=n(s); document.getElementById('netCostCard').textContent=n(net); document.getElementById('billCard').textContent=n(quote.monthlyBill||monthlySaving); document.getElementById('emiCard').textContent=n(emiV); document.getElementById('saveCard').textContent=n(benefit); document.getElementById('paybackCard').textContent=(payback?payback.toFixed(1):'-')+' yrs';
-const co2y=yearly*quote.emission, co225=co2y*25; document.getElementById('co2Y').textContent=co2y.toFixed(0)+' kg'; document.getElementById('co225').textContent=co225.toFixed(0)+' kg'; document.getElementById('treesY').textContent=(co2y/quote.tree).toFixed(0); document.getElementById('trees25').textContent=(co225/quote.tree).toFixed(0);
-const metrics=[["System",quote.cap.toFixed(2)+" kWp"],["Generation",yearly.toFixed(0)+" kWh/yr"],["Monthly saving",n(monthlySaving)],["Subsidy",n(s)],["Payback",(payback?payback.toFixed(1):'-')+" yrs"]];document.getElementById('metrics').innerHTML=metrics.map(m=>`<div class='metric'><div>${m[0]}</div><b>${m[1]}</b></div>`).join('');
-function barChart(id,a,b,c){const max=Math.max(a,b,c,1),w=[a,b,c].map(v=>Math.round((v/max)*150));document.getElementById(id).innerHTML=`<b>Monthly Spend Comparison</b><div style='display:flex;gap:8px;align-items:flex-end;height:170px'><div style='width:60px;height:${w[0]}px;background:#fb7185'></div><div style='width:60px;height:${w[1]}px;background:#34d399'></div><div style='width:60px;height:${w[2]}px;background:#60a5fa'></div></div><small>No solar / Solar+EMI / Solar+self</small>`}
-function lineChart(id,a,b){let x='';for(let i=1;i<=10;i++){const na=a*i*12,sa=b*i*12;x+=`<tr><td>${i}</td><td>${Math.round(na)}</td><td>${Math.round(sa)}</td></tr>`;}document.getElementById(id).innerHTML=`<b>10-year Cumulative Spend</b><table style='width:100%;font-size:12px'><tr><th>Year</th><th>No Solar</th><th>With Solar</th></tr>${x}</table>`}
-function donut(id,p){const cl=Math.max(0,Math.min(100,p));document.getElementById(id).innerHTML=`<b>Payback Meter</b><svg viewBox='0 0 36 36' width='170'><path stroke='#e2e8f0' stroke-width='3.8' fill='none' d='M18 2.1a15.9 15.9 0 1 1 0 31.8a15.9 15.9 0 1 1 0-31.8'/><path stroke='#22c55e' stroke-width='3.8' fill='none' stroke-dasharray='${cl},100' d='M18 2.1a15.9 15.9 0 1 1 0 31.8a15.9 15.9 0 1 1 0-31.8'/><text x='18' y='20.35' text-anchor='middle' font-size='6'>${cl.toFixed(0)}%</text></svg>`}
-barChart('chart1',quote.monthlyBill||monthlySaving,emiV,Math.max(0,(quote.monthlyBill||monthlySaving)-monthlySaving)); lineChart('chart2',quote.monthlyBill||monthlySaving,Math.max(0,(quote.monthlyBill||monthlySaving)-benefit)); donut('chart3',payback>0?(100-Math.min(100,(payback/10)*100)):0);
+const quoteData = {
+  quotation_total_rs: <?= json_encode((float)($quote['calc']['grand_total'] ?? 0)) ?>,
+  subsidy_rs: <?= json_encode((float)($quote['finance_inputs']['subsidy_expected_rs'] ?: 0)) ?>,
+  monthly_bill_rs: <?= json_encode((float)($quote['finance_inputs']['monthly_bill_rs'] ?: 0)) ?>,
+  unit_rate: <?= json_encode((float)(($quote['finance_inputs']['unit_rate_rs_per_kwh'] ?: ($segmentDefaults['unit_rate_rs_per_kwh'] ?? 8))) ) ?>,
+  capacity_kwp: <?= json_encode((float)($quote['capacity_kwp'] ?: 0)) ?>,
+  annual_generation_per_kw: <?= json_encode((float)(($quote['finance_inputs']['annual_generation_per_kw'] ?: ($segmentDefaults['annual_generation_per_kw'] ?? $quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450))) ) ?>,
+  transportation_rs: <?= json_encode((float)($quote['finance_inputs']['transportation_rs'] ?: 0)) ?>,
+  segment: <?= json_encode($segment) ?>,
+  subsidy_cap_2kw: <?= json_encode((float)($segmentDefaults['subsidy']['cap_2kw'] ?? 60000)) ?>,
+  subsidy_cap_3kw_plus: <?= json_encode((float)($segmentDefaults['subsidy']['cap_3kw_plus'] ?? 78000)) ?>,
+  bestcase_max_loan: <?= json_encode((float)($segmentDefaults['loan_bestcase']['max_loan_rs'] ?? 200000)) ?>,
+  bestcase_interest_pct: <?= json_encode((float)($segmentDefaults['loan_bestcase']['interest_pct'] ?? 6.0)) ?>,
+  bestcase_tenure_years: <?= json_encode((float)($segmentDefaults['loan_bestcase']['tenure_years'] ?? 10)) ?>,
+  min_margin_pct: <?= json_encode((float)($segmentDefaults['loan_bestcase']['min_margin_pct'] ?? 10)) ?>,
+  slab2_interest_pct: <?= json_encode((float)($segmentDefaults['loan_info']['slab2_interest_pct'] ?? 8.15)) ?>,
+  slab2_min_margin_pct: <?= json_encode((float)($segmentDefaults['loan_info']['slab2_min_margin_pct'] ?? 20)) ?>,
+  slab2_range: <?= json_encode((string)($segmentDefaults['loan_info']['slab2_range'] ?? '₹2L–₹6L')) ?>
+};
+function formatRs(v){return '₹'+Number(v).toLocaleString('en-IN',{maximumFractionDigits:0});}
+function computeFinanceModel(i){
+  const quotation_total_rs = Math.max(0, Number(i.quotation_total_rs||0));
+  const subsidy_rs = Math.max(0, Number(i.subsidy_rs||0));
+  const monthly_bill_rs = Math.max(0, Number(i.monthly_bill_rs||0));
+  const unit_rate = Math.max(0.0001, Number(i.unit_rate||0));
+  const capacity_kwp = Math.max(0, Number(i.capacity_kwp||0));
+  const annual_generation_per_kw = Math.max(0, Number(i.annual_generation_per_kw||0));
+  const bestcase_max_loan = Math.max(0, Number(i.bestcase_max_loan||0));
+  const interest_pct = Math.max(0, Number(i.bestcase_interest_pct||0));
+  const tenure_years = Math.max(0, Number(i.bestcase_tenure_years||0));
+  const min_margin_pct = Math.max(0, Number(i.min_margin_pct||0));
+  const min_margin_rs = quotation_total_rs * (min_margin_pct/100);
+  const desired_loan_rs = quotation_total_rs - min_margin_rs;
+  const loan_rs = Math.min(desired_loan_rs, bestcase_max_loan);
+  const margin_rs = quotation_total_rs - loan_rs;
+  const loan_effective_principal = Math.max(0, loan_rs - subsidy_rs);
+  const r = (interest_pct/100)/12;
+  const n = tenure_years*12;
+  let EMI = 0;
+  if (loan_effective_principal > 0 && n > 0) {
+    EMI = r === 0 ? loan_effective_principal / n : (loan_effective_principal*r*Math.pow(1+r,n))/((Math.pow(1+r,n))-1);
+  }
+  const monthly_units = monthly_bill_rs / unit_rate;
+  const monthly_solar_units = (capacity_kwp * annual_generation_per_kw)/12;
+  const residual_units = Math.max(0, monthly_units - monthly_solar_units);
+  const residual_bill_rs = residual_units * unit_rate;
+  return {
+    margin_rs, loan_rs, EMI, residual_bill_rs,
+    loan_monthly_outflow: EMI + residual_bill_rs,
+    self_monthly_outflow: residual_bill_rs,
+    no_solar_monthly_outflow: monthly_bill_rs
+  };
+}
+function drawBars(canvas, values, labels, colors){const c=canvas.getContext('2d');const w=canvas.width,h=canvas.height;c.clearRect(0,0,w,h);const pad=30;const max=Math.max(...values,1);const bw=(w-pad*2)/values.length*0.6;values.forEach((v,idx)=>{const x=pad+idx*((w-pad*2)/values.length)+15;const bh=(v/max)*(h-70);const y=h-40-bh;c.fillStyle=colors[idx];c.fillRect(x,y,bw,bh);c.fillStyle='#334155';c.font='11px Arial';c.fillText(labels[idx],x,h-22);c.fillText(Math.round(v).toLocaleString('en-IN'),x,y-5);});}
+function drawLines(canvas,noSolar,bank,self){const c=canvas.getContext('2d');const w=canvas.width,h=canvas.height;c.clearRect(0,0,w,h);const pad=30;const months=120;const points=[];for(let m=0;m<=months;m+=12){points.push([m,m*noSolar,m*bank,quoteData.quotation_total_rs+m*self]);}
+const max=Math.max(...points.map(p=>Math.max(p[1],p[2],p[3])),1);const toXY=(m,v)=>[pad + (m/months)*(w-pad*2), h-pad - (v/max)*(h-pad*2)];
+for(let y=0;y<5;y++){const yy=pad+y*(h-pad*2)/4;c.strokeStyle='#e2e8f0';c.beginPath();c.moveTo(pad,yy);c.lineTo(w-pad,yy);c.stroke();}
+[['#ef4444',1],['#2563eb',2],['#16a34a',3]].forEach(([color,i])=>{c.strokeStyle=color;c.lineWidth=2;c.beginPath();points.forEach((p,idx)=>{const [x,y]=toXY(p[0],p[i]);if(idx===0)c.moveTo(x,y);else c.lineTo(x,y);});c.stroke();});
+c.fillStyle='#334155';c.font='11px Arial';c.fillText('No Solar',pad,12);c.fillStyle='#2563eb';c.fillText('Bank-financed',pad+70,12);c.fillStyle='#16a34a';c.fillText('Self-financed',pad+170,12);
+}
+let subsidy = quoteData.subsidy_rs;
+if (subsidy <= 0 && quoteData.segment === 'RES') subsidy = quoteData.capacity_kwp >= 3 ? quoteData.subsidy_cap_3kw_plus : (quoteData.capacity_kwp >= 2 ? quoteData.subsidy_cap_2kw : 0);
+quoteData.subsidy_rs = subsidy;
+const out = computeFinanceModel(quoteData);
+if (quoteData.monthly_bill_rs <= 0) {
+  document.querySelector('#chart1').insertAdjacentHTML('afterend','<div class="muted">Enter bill to see charts.</div>');
+}
+document.getElementById('finalPrice').textContent = formatRs(quoteData.quotation_total_rs);
+document.getElementById('transportationRs').textContent = formatRs(quoteData.transportation_rs);
+document.getElementById('subsidyRs').textContent = formatRs(quoteData.subsidy_rs);
+document.getElementById('netCostRs').textContent = formatRs(quoteData.quotation_total_rs - quoteData.subsidy_rs);
+document.getElementById('clarityText').textContent = `Total project cost remains ${formatRs(quoteData.quotation_total_rs)}. Bank finance means you pay margin + loan; self finance means you pay the full amount upfront.`;
+document.getElementById('marginRs').textContent = formatRs(out.margin_rs);
+document.getElementById('loanRs').textContent = formatRs(out.loan_rs);
+document.getElementById('emiRs').textContent = formatRs(out.EMI);
+document.getElementById('residualRs').textContent = formatRs(out.residual_bill_rs);
+document.getElementById('loanOutflowRs').textContent = formatRs(out.loan_monthly_outflow);
+document.getElementById('selfUpfrontRs').textContent = formatRs(quoteData.quotation_total_rs);
+document.getElementById('selfResidualRs').textContent = formatRs(out.self_monthly_outflow);
+document.getElementById('noSolarRs').textContent = formatRs(out.no_solar_monthly_outflow);
+document.getElementById('higherSlabInfo').textContent = `For loans above ₹2,00,000 up to ₹6,00,000, typical interest may be ${quoteData.slab2_interest_pct}%+ with ${quoteData.slab2_min_margin_pct}% margin (varies by bank).`;
+
+drawBars(document.getElementById('chart1'), [out.no_solar_monthly_outflow, out.loan_monthly_outflow, out.self_monthly_outflow], ['No Solar','Bank-financed','Self-financed'], ['#ef4444','#2563eb','#16a34a']);
+drawLines(document.getElementById('chart2'), out.no_solar_monthly_outflow, out.loan_monthly_outflow, out.self_monthly_outflow);
+const annual_savings_rs = (out.no_solar_monthly_outflow - out.residual_bill_rs)*12;
+const payback_years = quoteData.quotation_total_rs / Math.max(annual_savings_rs, 0.01);
+const payback_after_subsidy_years = (quoteData.quotation_total_rs - quoteData.subsidy_rs) / Math.max(annual_savings_rs, 0.01);
+document.getElementById('paybackText').textContent = `Estimated Payback: ${payback_years.toFixed(1)} years. Net-after-subsidy payback: ${payback_after_subsidy_years.toFixed(1)} years.`;
 </script>
 </body></html>
