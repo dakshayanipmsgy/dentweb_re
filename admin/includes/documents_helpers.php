@@ -78,6 +78,11 @@ function documents_public_backgrounds_dir(): string
     return dirname(__DIR__, 2) . '/images/documents/backgrounds';
 }
 
+function documents_public_watermarks_dir(): string
+{
+    return dirname(__DIR__, 2) . '/images/documents/watermarks';
+}
+
 function documents_public_media_dir(): string
 {
     return dirname(__DIR__, 2) . '/images/documents';
@@ -123,6 +128,7 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_invoices_dir());
     documents_ensure_dir(documents_public_branding_dir());
     documents_ensure_dir(documents_public_backgrounds_dir());
+    documents_ensure_dir(documents_public_watermarks_dir());
     documents_ensure_dir(documents_public_diagrams_dir());
     documents_ensure_dir(documents_public_uploads_dir());
 
@@ -161,6 +167,66 @@ function documents_ensure_structure(): void
     if (!is_file($logPath)) {
         @file_put_contents($logPath, '', LOCK_EX);
     }
+
+    $quoteDefaultsPath = documents_settings_dir() . '/quote_defaults.json';
+    if (!is_file($quoteDefaultsPath)) {
+        json_save($quoteDefaultsPath, documents_quote_defaults_settings());
+    }
+}
+
+function documents_quote_defaults_settings(): array
+{
+    return [
+        'global' => [
+            'branding' => [
+                'primary_color' => '#0f766e',
+                'secondary_color' => '#22c55e',
+                'accent_color' => '#f59e0b',
+                'logo_path' => '',
+                'tagline' => '',
+                'contact_line' => '',
+                'watermark' => [
+                    'enabled' => true,
+                    'image_path' => '',
+                    'opacity' => 0.08,
+                ],
+            ],
+            'typography' => [
+                'base_font_px' => 14,
+                'heading_scale' => 1.0,
+                'density' => 'comfortable',
+            ],
+            'energy_defaults' => [
+                'annual_generation_per_kw' => 1450,
+                'emission_factor_kg_per_kwh' => 0.82,
+                'tree_absorption_kg_per_tree_per_year' => 20,
+            ],
+        ],
+        'segments' => [
+            'RES' => [
+                'unit_rate_rs_per_kwh' => 8,
+                'subsidy' => ['enabled' => true, 'cap_2kw' => 60000, 'cap_3kw_plus' => 78000],
+                'loan_defaults' => [
+                    'enabled' => true,
+                    'tenure_years' => 10,
+                    'slabs' => [
+                        ['max_loan' => 200000, 'margin_pct' => 10, 'interest_pct' => 6.0],
+                        ['min_loan' => 200001, 'max_loan' => 600000, 'margin_pct' => 20, 'interest_pct' => 8.15],
+                    ],
+                ],
+            ],
+            'COM' => ['unit_rate_rs_per_kwh' => 10, 'subsidy' => ['enabled' => false], 'loan_defaults' => ['enabled' => true, 'tenure_years' => 7]],
+            'IND' => ['unit_rate_rs_per_kwh' => 11, 'subsidy' => ['enabled' => false], 'loan_defaults' => ['enabled' => true, 'tenure_years' => 7]],
+            'INST' => ['unit_rate_rs_per_kwh' => 9, 'subsidy' => ['enabled' => false,], 'loan_defaults' => ['enabled' => true, 'tenure_years' => 7]],
+        ],
+    ];
+}
+
+function documents_get_quote_defaults_settings(): array
+{
+    $path = documents_settings_dir() . '/quote_defaults.json';
+    $stored = json_load($path, []);
+    return array_replace_recursive(documents_quote_defaults_settings(), is_array($stored) ? $stored : []);
 }
 
 function documents_agreement_template_defaults(): array
@@ -606,6 +672,30 @@ function documents_quote_defaults(): array
             'pm_subsidy_info' => '',
         ],
         'template_attachments' => documents_template_attachment_defaults(),
+        'finance_inputs' => [
+            'monthly_bill_rs' => '',
+            'unit_rate_rs_per_kwh' => '',
+            'annual_generation_per_kw' => '',
+            'loan' => [
+                'enabled' => true,
+                'interest_pct' => '',
+                'tenure_years' => '',
+                'margin_pct' => '',
+                'loan_amount' => '',
+            ],
+            'subsidy_expected_rs' => '',
+            'transportation_rs' => '',
+            'notes_for_customer' => '',
+        ],
+        'style_overrides' => [
+            'typography' => ['base_font_px' => '', 'heading_scale' => '', 'density' => ''],
+            'watermark' => ['enabled' => '', 'image_path' => '', 'opacity' => ''],
+        ],
+        'share' => [
+            'public_enabled' => false,
+            'public_token' => '',
+            'public_created_at' => '',
+        ],
         'rendering' => [
             'background_image' => '',
             'background_opacity' => 1.0,

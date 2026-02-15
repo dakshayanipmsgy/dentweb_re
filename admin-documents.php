@@ -433,7 +433,7 @@ $user = current_user();
     <?php if ($activeTab === 'templates'): ?>
       <section class="panel">
         <table>
-          <thead><tr><th>Name</th><th>Segment</th><th>Archived</th><th>Background</th><th>Opacity</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Segment</th><th>Archived</th><th>Actions</th></tr></thead>
           <tbody>
             <?php foreach ($templates as $template): ?>
               <?php if (!is_array($template)) { continue; } ?>
@@ -442,8 +442,6 @@ $user = current_user();
                 <td><?= htmlspecialchars((string) ($template['name'] ?? ''), ENT_QUOTES) ?></td>
                 <td><?= htmlspecialchars((string) ($template['segment'] ?? ''), ENT_QUOTES) ?></td>
                 <td><?= !empty($template['archived_flag']) ? 'Yes' : 'No' ?></td>
-                <td><?= htmlspecialchars((string) ($theme['page_background_image'] ?? ''), ENT_QUOTES) ?></td>
-                <td><?= htmlspecialchars((string) ($theme['page_background_opacity'] ?? 1), ENT_QUOTES) ?></td>
                 <td>
                   <details>
                     <summary>Edit</summary>
@@ -454,8 +452,6 @@ $user = current_user();
                       <div><label>Name</label><input type="text" name="name" value="<?= htmlspecialchars((string) ($template['name'] ?? ''), ENT_QUOTES) ?>" /></div>
                       <div><label>Segment</label><select name="segment"><?php foreach ($segments as $segment): ?><option value="<?= htmlspecialchars($segment, ENT_QUOTES) ?>" <?= ((string) ($template['segment'] ?? '') === $segment) ? 'selected' : '' ?>><?= htmlspecialchars($segment, ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
                       <div><label>Notes</label><textarea name="notes"><?= htmlspecialchars((string) ($template['notes'] ?? ''), ENT_QUOTES) ?></textarea></div>
-                      <div><label>Background image upload</label><input type="file" name="template_background_upload" accept="image/*" /></div>
-                      <div><label>Background opacity (0.1-1)</label><input type="number" name="page_background_opacity" step="0.1" min="0.1" max="1" value="<?= htmlspecialchars((string) ($theme['page_background_opacity'] ?? 1), ENT_QUOTES) ?>" /></div>
                       <div><button class="btn" type="submit">Save</button></div>
                     </form>
                     <form method="post" style="margin-top:0.5rem;">
@@ -477,8 +473,6 @@ $user = current_user();
           <div><label>Name</label><input type="text" name="name" required /></div>
           <div><label>Segment</label><select name="segment"><?php foreach ($segments as $segment): ?><option value="<?= htmlspecialchars($segment, ENT_QUOTES) ?>"><?= htmlspecialchars($segment, ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
           <div><label>Notes</label><textarea name="notes"></textarea></div>
-          <div><label>Background image upload</label><input type="file" name="template_background_upload" accept="image/*" /></div>
-          <div><label>Background opacity</label><input type="number" name="page_background_opacity" step="0.1" min="0.1" max="1" value="1" /></div>
           <div><button class="btn" type="submit">Save Template Set</button></div>
         </form>
       </section>
