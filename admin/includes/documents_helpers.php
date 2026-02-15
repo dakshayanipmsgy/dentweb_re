@@ -320,7 +320,9 @@ function save_quote_defaults(array $settings): array
 function load_company_profile(): array
 {
     $profile = json_load(documents_company_profile_path(), []);
-    return array_merge(documents_company_profile_defaults(), is_array($profile) ? $profile : []);
+    $merged = array_merge(documents_company_profile_defaults(), is_array($profile) ? $profile : []);
+    $merged['logo_path'] = documents_normalize_public_asset_path($merged['logo_path'] ?? '');
+    return $merged;
 }
 
 function save_company_profile(array $profile): array
@@ -328,6 +330,34 @@ function save_company_profile(array $profile): array
     $merged = array_merge(documents_company_profile_defaults(), $profile);
     $merged['updated_at'] = date('c');
     return json_save(documents_company_profile_path(), $merged);
+}
+
+function documents_normalize_public_asset_path($rawPath): string
+{
+    $path = trim((string) $rawPath);
+    if ($path === '') {
+        return '';
+    }
+
+    if (preg_match('#^https?://#i', $path)) {
+        return $path;
+    }
+
+    $isWindowsPath = strlen($path) > 2 && ctype_alpha($path[0]) && $path[1] === ':' && ($path[2] === '\\' || $path[2] === '/');
+    $isFilesystemPath = str_starts_with($path, '/') || $isWindowsPath;
+    if ($isFilesystemPath && !str_starts_with($path, '/images/') && !str_starts_with($path, '/uploads/')) {
+        return '';
+    }
+
+    if (str_starts_with($path, '/')) {
+        return $path;
+    }
+
+    if (strpos($path, 'images/') === 0 || strpos($path, 'uploads/') === 0) {
+        return '/' . ltrim($path, '/');
+    }
+
+    return '/images/documents/branding/' . ltrim($path, '/');
 }
 
 function documents_get_company_profile_for_quotes(): array
@@ -347,6 +377,8 @@ function documents_get_company_profile_for_quotes(): array
         $profile['website'] = (string) ($profile['website'] ?: ($brand['website_url'] ?? ''));
         $profile['address_line'] = (string) ($profile['address_line'] ?: ($brand['physical_address'] ?? ''));
     }
+
+    $profile['logo_path'] = documents_normalize_public_asset_path($profile['logo_path'] ?? '');
 
     return $profile;
 }
