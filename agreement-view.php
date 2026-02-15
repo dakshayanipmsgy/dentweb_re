@@ -105,8 +105,7 @@ $message = safe_text($_GET['message'] ?? '');
     <h1 style="margin:0 0 10px 0">Agreement View</h1>
     <p><strong><?= htmlspecialchars((string) $agreement['agreement_no'], ENT_QUOTES) ?></strong> · Status: <?= htmlspecialchars((string) $agreement['status'], ENT_QUOTES) ?></p>
     <a class="btn secondary" href="admin-agreements.php">Back to Agreements</a>
-    <a class="btn" target="_blank" href="agreement-print.php?id=<?= urlencode((string) $agreement['id']) ?>">Print</a>
-    <a class="btn" href="agreement-pdf.php?id=<?= urlencode((string) $agreement['id']) ?>">Download PDF</a>
+    
   </div>
 
   <form method="post">
@@ -128,7 +127,7 @@ $message = safe_text($_GET['message'] ?? '');
 
     <div class="card">
       <h2 style="margin-top:0">Field Overrides (optional)</h2>
-      <p class="muted">If override is non-empty, it is used in print/PDF placeholders.</p>
+      <p class="muted">If override is non-empty, it is used in HTML placeholders.</p>
       <div class="grid">
         <div><label>Override Execution Date</label><input name="override_execution_date" value="<?= htmlspecialchars((string) ($agreement['overrides']['fields_override']['execution_date'] ?? ''), ENT_QUOTES) ?>"></div>
         <div><label>Override kWp</label><input name="override_system_capacity_kwp" value="<?= htmlspecialchars((string) ($agreement['overrides']['fields_override']['system_capacity_kwp'] ?? ''), ENT_QUOTES) ?>"></div>
