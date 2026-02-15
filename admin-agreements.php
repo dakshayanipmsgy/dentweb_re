@@ -9,7 +9,7 @@ documents_ensure_structure();
 
 $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
 $templates = documents_get_agreement_templates();
-$activeTemplates = array_filter($templates, static fn($row): bool => is_array($row) && !($row['archived_flag'] ?? false));
+$activeTemplates = array_filter($templates, static fn($row): bool => is_array($row) && !documents_is_archived($row));
 if ($activeTemplates === []) {
     $defaults = documents_agreement_template_defaults();
     $activeTemplates = $defaults;
@@ -160,6 +160,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($agreement === null) {
             $redirectWith('error', 'Agreement not found.');
         }
+        $user = current_user();
+        $agreement = documents_set_archived($agreement, [
+            'type' => 'admin',
+            'id' => (string) ($user['id'] ?? ''),
+            'name' => (string) ($user['full_name'] ?? 'Admin'),
+        ]);
         $agreement['status'] = 'Archived';
         $agreement['updated_at'] = date('c');
         $saved = documents_save_agreement($agreement);
@@ -207,7 +213,12 @@ if (is_array($templateSets)) {
 $all = documents_list_agreements();
 $search = strtolower(safe_text($_GET['q'] ?? ''));
 $statusFilter = safe_text($_GET['status_filter'] ?? '');
-$rows = array_values(array_filter($all, static function (array $row) use ($search, $statusFilter): bool {
+$showArchived = $statusFilter === 'Archived';
+$rows = array_values(array_filter($all, static function (array $row) use ($search, $statusFilter, $showArchived): bool {
+    $isArchived = documents_is_archived($row);
+    if (!$showArchived && $isArchived) {
+        return false;
+    }
     if ($statusFilter !== '' && (string) ($row['status'] ?? '') !== $statusFilter) {
         return false;
     }
@@ -344,7 +355,7 @@ $message = safe_text($_GET['message'] ?? '');
           <td>
             <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) $row['id']) ?>">View/Edit</a>
             
-            <?php if ((string) $row['status'] !== 'Archived'): ?>
+            <?php if (!documents_is_archived($row)): ?>
             <form method="post" style="display:inline-block">
               <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>">
               <input type="hidden" name="action" value="archive_agreement">
