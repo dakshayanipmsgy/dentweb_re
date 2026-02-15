@@ -11,7 +11,13 @@
         "enabled": true,
         "image_path": "",
         "opacity": 0.08
-      }
+      },
+      "header_bg": "#0f766e",
+      "header_text": "#ecfeff",
+      "footer_bg": "#0f172a",
+      "footer_text": "#e2e8f0",
+      "chip_bg": "#ccfbf1",
+      "chip_text": "#134e4a"
     },
     "typography": {
       "base_font_px": 14,
@@ -37,8 +43,17 @@
         "enabled": true,
         "tenure_years": 10,
         "slabs": [
-          { "max_loan": 200000, "margin_pct": 10, "interest_pct": 6 },
-          { "min_loan": 200001, "max_loan": 600000, "margin_pct": 20, "interest_pct": 8.15 }
+          {
+            "max_loan": 200000,
+            "margin_pct": 10,
+            "interest_pct": 6
+          },
+          {
+            "min_loan": 200001,
+            "max_loan": 600000,
+            "margin_pct": 20,
+            "interest_pct": 8.15
+          }
         ]
       },
       "loan_bestcase": {
@@ -53,8 +68,39 @@
         "slab2_range": "₹2L–₹6L"
       }
     },
-    "COM": { "unit_rate_rs_per_kwh": 10, "subsidy": { "enabled": false }, "loan_defaults": { "enabled": true, "tenure_years": 7 } },
-    "IND": { "unit_rate_rs_per_kwh": 11, "subsidy": { "enabled": false }, "loan_defaults": { "enabled": true, "tenure_years": 7 } },
-    "INST": { "unit_rate_rs_per_kwh": 9, "subsidy": { "enabled": false }, "loan_defaults": { "enabled": true, "tenure_years": 7 } }
+    "COM": {
+      "unit_rate_rs_per_kwh": 10,
+      "subsidy": {
+        "enabled": false
+      },
+      "loan_defaults": {
+        "enabled": true,
+        "tenure_years": 7
+      }
+    },
+    "IND": {
+      "unit_rate_rs_per_kwh": 11,
+      "subsidy": {
+        "enabled": false
+      },
+      "loan_defaults": {
+        "enabled": true,
+        "tenure_years": 7
+      }
+    },
+    "INST": {
+      "unit_rate_rs_per_kwh": 9,
+      "subsidy": {
+        "enabled": false
+      },
+      "loan_defaults": {
+        "enabled": true,
+        "tenure_years": 7
+      }
+    }
+  },
+  "defaults": {
+    "hsn_solar": "8541",
+    "cover_note_template": "🌞 Thank you for considering Dakshayani Enterprises. We are pleased to share a clear and practical solar proposal tailored for your site."
   }
 }

@@ -41,6 +41,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $d['segments']['RES']['loan_info']['slab2_min_margin_pct'] = (float)($_POST['res_slab2_min_margin_pct'] ?? 20);
     $d['segments']['RES']['loan_info']['slab2_range'] = safe_text($_POST['res_slab2_range'] ?? '₹2L–₹6L');
 
+    foreach (['primary_color','secondary_color','accent_color','header_bg','header_text','footer_bg','footer_text','chip_bg','chip_text'] as $colorKey) {
+        $d['global']['branding'][$colorKey] = safe_text($_POST[$colorKey] ?? (string) ($d['global']['branding'][$colorKey] ?? ''));
+    }
+    $d['defaults']['hsn_solar'] = safe_text($_POST['default_hsn_solar'] ?? (string) ($d['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
+    $d['defaults']['cover_note_template'] = trim((string) ($_POST['cover_note_template'] ?? (string) ($d['defaults']['cover_note_template'] ?? '')));
+
     $d['global']['branding']['watermark']['enabled'] = isset($_POST['wm_enabled']);
     $d['global']['branding']['watermark']['opacity'] = (float)($_POST['wm_opacity'] ?? 0.08);
     if (isset($_FILES['wm_upload']) && (int)($_FILES['wm_upload']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
@@ -83,6 +89,18 @@ $d = documents_get_quote_defaults_settings();
 <div><label>Higher slab interest % (info only)</label><input type="number" step="0.01" name="res_slab2_interest_pct" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_info']['slab2_interest_pct'] ?? 8.15), ENT_QUOTES) ?>"></div>
 <div><label>Higher slab min margin % (info only)</label><input type="number" step="0.01" name="res_slab2_min_margin_pct" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_info']['slab2_min_margin_pct'] ?? 20), ENT_QUOTES) ?>"></div>
 <div><label>Higher slab range text (info only)</label><input name="res_slab2_range" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_info']['slab2_range'] ?? '₹2L–₹6L'), ENT_QUOTES) ?>"></div>
+
+<div><label>Default HSN (solar)</label><input name="default_hsn_solar" value="<?= htmlspecialchars((string)($d['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>"></div>
+<div style="grid-column:1/-1"><label>Default Cover Note Template</label><input name="cover_note_template" value="<?= htmlspecialchars((string)($d['defaults']['cover_note_template'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Primary color</label><input type="color" name="primary_color" value="<?= htmlspecialchars((string)($d['global']['branding']['primary_color'] ?? '#0f766e'), ENT_QUOTES) ?>"></div>
+<div><label>Secondary color</label><input type="color" name="secondary_color" value="<?= htmlspecialchars((string)($d['global']['branding']['secondary_color'] ?? '#22c55e'), ENT_QUOTES) ?>"></div>
+<div><label>Accent color</label><input type="color" name="accent_color" value="<?= htmlspecialchars((string)($d['global']['branding']['accent_color'] ?? '#f59e0b'), ENT_QUOTES) ?>"></div>
+<div><label>Header background</label><input type="color" name="header_bg" value="<?= htmlspecialchars((string)($d['global']['branding']['header_bg'] ?? '#0f766e'), ENT_QUOTES) ?>"></div>
+<div><label>Header text</label><input type="color" name="header_text" value="<?= htmlspecialchars((string)($d['global']['branding']['header_text'] ?? '#ecfeff'), ENT_QUOTES) ?>"></div>
+<div><label>Footer background</label><input type="color" name="footer_bg" value="<?= htmlspecialchars((string)($d['global']['branding']['footer_bg'] ?? '#0f172a'), ENT_QUOTES) ?>"></div>
+<div><label>Footer text</label><input type="color" name="footer_text" value="<?= htmlspecialchars((string)($d['global']['branding']['footer_text'] ?? '#e2e8f0'), ENT_QUOTES) ?>"></div>
+<div><label>Chip background</label><input type="color" name="chip_bg" value="<?= htmlspecialchars((string)($d['global']['branding']['chip_bg'] ?? '#ccfbf1'), ENT_QUOTES) ?>"></div>
+<div><label>Chip text</label><input type="color" name="chip_text" value="<?= htmlspecialchars((string)($d['global']['branding']['chip_text'] ?? '#134e4a'), ENT_QUOTES) ?>"></div>
 <div><label><input type="checkbox" name="wm_enabled" <?= !empty($d['global']['branding']['watermark']['enabled'])?'checked':'' ?>> Enable print watermark</label></div>
 <div><label>Watermark image upload</label><input type="file" name="wm_upload" accept="image/*"></div>
 <div><label>Watermark opacity</label><input type="number" step="0.01" min="0" max="1" name="wm_opacity" value="<?= htmlspecialchars((string)$d['global']['branding']['watermark']['opacity'], ENT_QUOTES) ?>"></div>

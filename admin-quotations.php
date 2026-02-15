@@ -58,10 +58,6 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
             $redirectWith('error', 'Capacity kWp is required.');
         }
 
-        $inputTotal = (float) ($_POST['input_total_gst_inclusive'] ?? 0);
-        if ($inputTotal <= 0) {
-            $redirectWith('error', 'Total amount must be greater than zero.');
-        }
 
         $pricingMode = safe_text($_POST['pricing_mode'] ?? 'solar_split_70_30');
         if (!in_array($pricingMode, ['solar_split_70_30', 'flat_5', 'itemized'], true)) {
@@ -74,7 +70,6 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         $placeOfSupply = safe_text($_POST['place_of_supply_state'] ?? 'Jharkhand');
         $companyState = strtolower(trim((string) ($company['state'] ?? 'Jharkhand')));
         $taxType = strtolower($placeOfSupply) === $companyState ? 'CGST_SGST' : 'IGST';
-        $calc = documents_calc_pricing($inputTotal, $pricingMode, $taxType);
 
         $annexure = [
             'cover_notes' => safe_text($_POST['ann_cover_notes'] ?? ''),
@@ -166,9 +161,35 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         $quote['pricing_mode'] = $pricingMode;
         $quote['place_of_supply_state'] = $placeOfSupply;
         $quote['tax_type'] = $taxType;
-        $quote['input_total_gst_inclusive'] = round($inputTotal, 2);
-        $quote['calc'] = $calc;
-        $quote['special_requests_inclusive'] = trim((string) ($_POST['special_requests_inclusive'] ?? ''));
+        $itemNames = is_array($_POST['item_name'] ?? null) ? $_POST['item_name'] : [];
+        $itemDescs = is_array($_POST['item_description'] ?? null) ? $_POST['item_description'] : [];
+        $itemHsns = is_array($_POST['item_hsn'] ?? null) ? $_POST['item_hsn'] : [];
+        $itemQtys = is_array($_POST['item_qty'] ?? null) ? $_POST['item_qty'] : [];
+        $itemUnits = is_array($_POST['item_unit'] ?? null) ? $_POST['item_unit'] : [];
+        $itemSlabs = is_array($_POST['item_gst_slab'] ?? null) ? $_POST['item_gst_slab'] : [];
+        $itemBasics = is_array($_POST['item_basic_amount'] ?? null) ? $_POST['item_basic_amount'] : [];
+        $rawItems = [];
+        $count = max(count($itemNames), count($itemBasics));
+        for ($i=0; $i<$count; $i++) {
+            $rawItems[] = [
+                'name' => safe_text((string) ($itemNames[$i] ?? '')),
+                'description' => safe_text((string) ($itemDescs[$i] ?? '')),
+                'hsn' => safe_text((string) ($itemHsns[$i] ?? '')),
+                'qty' => (float) ($itemQtys[$i] ?? 0),
+                'unit' => safe_text((string) ($itemUnits[$i] ?? '')),
+                'gst_slab' => safe_text((string) ($itemSlabs[$i] ?? '5')),
+                'basic_amount' => (float) ($itemBasics[$i] ?? 0),
+            ];
+        }
+        $defaultHsn = safe_text((string) ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
+        $quote['items'] = documents_normalize_quote_items($rawItems, $quote['system_type'], (float) $quote['capacity_kwp'], $defaultHsn);
+        $transportationRs = (float) ($_POST['transportation_rs'] ?? 0);
+        $subsidyExpectedRs = (float) ($_POST['subsidy_expected_rs'] ?? 0);
+        $quote['calc'] = documents_calc_pricing_from_items($quote['items'], $pricingMode, $taxType, $transportationRs, $subsidyExpectedRs);
+        $quote['input_total_gst_inclusive'] = (float) ($quote['calc']['final_price_incl_gst'] ?? 0);
+        $quote['cover_note_text'] = trim((string) ($_POST['cover_note_text'] ?? ''));
+        $quote['special_requests_text'] = trim((string) ($_POST['special_requests_text'] ?? ''));
+        $quote['special_requests_inclusive'] = $quote['special_requests_text'];
         $quote['special_requests_override_note'] = true;
         $quote['annexures_overrides'] = $annexure;
         $quote['template_attachments'] = (($templateBlocks[$templateSetId]['attachments'] ?? null) && is_array($templateBlocks[$templateSetId]['attachments'])) ? $templateBlocks[$templateSetId]['attachments'] : documents_template_attachment_defaults();
@@ -180,8 +201,8 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         $quote['finance_inputs']['loan']['tenure_years'] = safe_text($_POST['loan_tenure_years'] ?? '');
         $quote['finance_inputs']['loan']['margin_pct'] = safe_text($_POST['loan_margin_pct'] ?? '');
         $quote['finance_inputs']['loan']['loan_amount'] = safe_text($_POST['loan_amount'] ?? '');
-        $quote['finance_inputs']['subsidy_expected_rs'] = safe_text($_POST['subsidy_expected_rs'] ?? '');
-        $quote['finance_inputs']['transportation_rs'] = safe_text($_POST['transportation_rs'] ?? '');
+        $quote['finance_inputs']['subsidy_expected_rs'] = (string) $subsidyExpectedRs;
+        $quote['finance_inputs']['transportation_rs'] = (string) $transportationRs;
         $quote['finance_inputs']['notes_for_customer'] = trim((string) ($_POST['notes_for_customer'] ?? ''));
         $quote['style_overrides']['typography']['base_font_px'] = safe_text($_POST['style_base_font_px'] ?? '');
         $quote['style_overrides']['typography']['heading_scale'] = safe_text($_POST['style_heading_scale'] ?? '');
@@ -259,7 +280,7 @@ if ($lookup !== null) {
 <div><label>System Type</label><select name="system_type"><?php foreach (['Ongrid','Hybrid','Offgrid','Product'] as $t): ?><option value="<?= $t ?>" <?= $editing['system_type']===$t?'selected':'' ?>><?= $t ?></option><?php endforeach; ?></select></div>
 <div><label>Capacity kWp</label><input name="capacity_kwp" required value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>"></div>
 <div><label>Valid Until</label><input type="date" name="valid_until" value="<?= htmlspecialchars((string)$editing['valid_until'], ENT_QUOTES) ?>"></div>
-<div><label>Total (GST Inclusive)</label><input type="number" step="0.01" min="0" required name="input_total_gst_inclusive" value="<?= htmlspecialchars((string)$editing['input_total_gst_inclusive'], ENT_QUOTES) ?>"></div>
+<div><label>Cover note paragraph</label><textarea name="cover_note_text"><?= htmlspecialchars((string)($editing['cover_note_text'] ?: ($quoteDefaults['defaults']['cover_note_template'] ?? '')), ENT_QUOTES) ?></textarea></div>
 <div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div>
 <div><label>Place of Supply State</label><input name="place_of_supply_state" value="<?= htmlspecialchars((string)$editing['place_of_supply_state'], ENT_QUOTES) ?>"></div>
 <div><label>District</label><input name="district" value="<?= htmlspecialchars((string)($quoteSnapshot['district'] ?? $editing['district']), ENT_QUOTES) ?>"></div>
@@ -276,8 +297,8 @@ if ($lookup !== null) {
 <div><label>Division</label><input name="division_name" value="<?= htmlspecialchars((string)(($editing['division_name'] !== '') ? $editing['division_name'] : ($quoteSnapshot['division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
-<div style="grid-column:1/-1"><label>Special Requests From Customer (Inclusive in the rate)</label><textarea name="special_requests_inclusive"><?= htmlspecialchars((string)$editing['special_requests_inclusive'], ENT_QUOTES) ?></textarea><div class="muted">In case of conflict, Special Requests will be given priority over Annexure inclusions.</div></div>
-<div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
+<div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
+<div style="grid-column:1/-1"><h3>Items Table</h3><table id="itemsTable"><thead><tr><th>Sr</th><th>Item name</th><th>Description/specs</th><th>HSN</th><th>Qty</th><th>Unit</th><th>GST slab</th><th>Amount (basic)</th><th></th></tr></thead><tbody><?php $qItems = is_array($editing['items'] ?? null) && $editing['items'] !== [] ? $editing['items'] : documents_normalize_quote_items([], (string)$editing['system_type'], (float)$editing['capacity_kwp'], (string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541')); foreach ($qItems as $ix => $item): ?><tr><td><?= $ix+1 ?></td><td><input name="item_name[]" value="<?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_description[]" value="<?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_hsn[]" value="<?= htmlspecialchars((string)($item['hsn'] ?? ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')), ENT_QUOTES) ?>"></td><td><input type="number" step="0.01" name="item_qty[]" value="<?= htmlspecialchars((string)($item['qty'] ?? 1), ENT_QUOTES) ?>"></td><td><input name="item_unit[]" value="<?= htmlspecialchars((string)($item['unit'] ?? 'set'), ENT_QUOTES) ?>"></td><td><select name="item_gst_slab[]"><?php foreach(['5','18','NA'] as $sl): ?><option value="<?= $sl ?>" <?= ((string)($item['gst_slab'] ?? '5')===$sl)?'selected':'' ?>><?= $sl ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" name="item_basic_amount[]" value="<?= htmlspecialchars((string)($item['basic_amount'] ?? 0), ENT_QUOTES) ?>"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addItemBtn">Add item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
 <div><label>Monthly electricity bill (₹)</label><input type="number" step="0.01" name="monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Unit rate (₹/kWh)</label><input type="number" step="0.01" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['finance_inputs']['unit_rate_rs_per_kwh'] ?: ($segmentDefaults['unit_rate_rs_per_kwh'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($editing['finance_inputs']['annual_generation_per_kw'] ?: ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? '')), ENT_QUOTES) ?>"></div>
@@ -309,4 +330,4 @@ if ($lookup !== null) {
 <td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <?php if (documents_quote_can_edit($q, 'admin')): ?><a class="btn secondary" href="admin-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?></td>
 </tr><?php endforeach; if ($allQuotes===[]): ?><tr><td colspan="7">No quotations yet.</td></tr><?php endif; ?></tbody></table>
 </div>
-</main></body></html>
+<script>document.addEventListener('click',function(e){if(e.target&&e.target.id==='addItemBtn'){const tb=document.querySelector('#itemsTable tbody');if(!tb)return;const tr=document.createElement('tr');const dH='<?= htmlspecialchars((string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>';tr.innerHTML='<td></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="'+dH+'"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><select name="item_gst_slab[]"><option>5</option><option>18</option><option>NA</option></select></td><td><input type="number" step="0.01" name="item_basic_amount[]" value="0"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';tb.appendChild(tr);ren();}if(e.target&&e.target.classList.contains('rm-item')){e.target.closest('tr')?.remove();ren();}});function ren(){document.querySelectorAll('#itemsTable tbody tr').forEach((tr,i)=>{const td=tr.querySelector('td');if(td)td.textContent=String(i+1);});}ren();</script></main></body></html>
