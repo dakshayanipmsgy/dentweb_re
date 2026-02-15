@@ -671,13 +671,7 @@ function documents_quote_defaults(): array
         'financial_inputs' => [
             'estimated_monthly_bill_rs' => '',
             'subsidy_expected_rs' => '',
-            'unit_rate_rs_per_kwh' => '',
             'annual_generation_per_kw' => '',
-            'interest_rate_percent' => '',
-            'loan_tenure_years' => '',
-            'min_monthly_bill_after_solar_rs' => 300,
-            'analysis_mode' => 'simple_monthly',
-            'years_for_cumulative_chart' => 25,
             'emission_factor_kg_per_kwh' => '',
             'kg_co2_absorbed_per_tree_per_year' => '',
         ],

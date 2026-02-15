@@ -201,22 +201,8 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
             if ($styleOverride[$sectionKey] === []) { unset($styleOverride[$sectionKey]); }
         }
         $quote['style_override'] = $styleOverride;
-        $estimatedMonthlyBill = (string) safe_text($_POST['estimated_monthly_bill_rs'] ?? '');
-        $subsidyExpectedInput = (string) safe_text($_POST['subsidy_expected_rs'] ?? ($_POST['subsidy_amount_rs'] ?? ''));
-        $subsidyExpected = (float) ($subsidyExpectedInput !== '' ? $subsidyExpectedInput : ($quote['subsidy_amount_rs'] ?? ($quote['financial_inputs']['subsidy_expected_rs'] ?? 0)));
-
-        $quote['financial_inputs']['estimated_monthly_bill_rs'] = $estimatedMonthlyBill;
-        $quote['financial_inputs']['subsidy_expected_rs'] = $subsidyExpected > 0 ? (string) round($subsidyExpected, 2) : '';
-        $quote['financial_inputs']['unit_rate_rs_per_kwh'] = (string) safe_text($_POST['unit_rate_rs_per_kwh'] ?? '');
-        $quote['financial_inputs']['interest_rate_percent'] = (string) safe_text($_POST['interest_rate_percent'] ?? '');
-        $quote['financial_inputs']['loan_tenure_years'] = (string) safe_text($_POST['loan_tenure_years'] ?? '');
-        $quote['financial_inputs']['annual_generation_per_kw'] = (string) safe_text($_POST['annual_generation_per_kw'] ?? '');
-        $quote['financial_inputs']['min_monthly_bill_after_solar_rs'] = (string) safe_text($_POST['min_monthly_bill_after_solar_rs'] ?? '300');
-        $analysisMode = safe_text($_POST['analysis_mode'] ?? 'simple_monthly');
-        $quote['financial_inputs']['analysis_mode'] = in_array($analysisMode, ['simple_monthly', 'advanced_10y_monthly'], true) ? $analysisMode : 'simple_monthly';
-        $yearsForCumulative = (int) ($_POST['years_for_cumulative_chart'] ?? 25);
-        $quote['financial_inputs']['years_for_cumulative_chart'] = $yearsForCumulative > 0 ? $yearsForCumulative : 25;
-        $quote['subsidy_expected_rs'] = $subsidyExpected > 0 ? round($subsidyExpected, 2) : 0;
+        $quote['financial_inputs']['estimated_monthly_bill_rs'] = (string) safe_text($_POST['estimated_monthly_bill_rs'] ?? '');
+        $quote['financial_inputs']['subsidy_expected_rs'] = (string) safe_text($_POST['subsidy_expected_rs'] ?? '');
 
         $quote['updated_at'] = date('c');
 
@@ -313,16 +299,8 @@ if ($lookup !== null) {
 <div><label>Unit rate override (₹/kWh)</label><input type="number" step="0.01" name="override_unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['style_override']['defaults']['unit_rate_rs_per_kwh'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Interest rate override (%)</label><input type="number" step="0.01" name="override_interest_rate_percent" value="<?= htmlspecialchars((string)($editing['style_override']['defaults']['default_bank_interest_rate_percent'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Tenure override (years)</label><input type="number" min="1" name="override_loan_tenure_years" value="<?= htmlspecialchars((string)($editing['style_override']['defaults']['default_loan_tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
-<div style="grid-column:1/-1"><h3>Savings & EMI Calculator Inputs (required for graphs)</h3><div class="muted">Enter monthly bill to unlock homeowner-friendly savings graphs in print view.</div></div>
-<div><label>Estimated Monthly Electricity Bill (₹) *</label><input type="number" step="0.01" min="0" name="estimated_monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['financial_inputs']['estimated_monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Unit Rate (₹/kWh)</label><input type="number" step="0.01" min="0" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['financial_inputs']['unit_rate_rs_per_kwh'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Interest Rate (%)</label><input type="number" step="0.01" min="0" name="interest_rate_percent" value="<?= htmlspecialchars((string)($editing['financial_inputs']['interest_rate_percent'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Loan Tenure (years)</label><input type="number" step="1" min="1" name="loan_tenure_years" value="<?= htmlspecialchars((string)($editing['financial_inputs']['loan_tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Annual Generation per kW (kWh/year)</label><input type="number" step="0.01" min="0" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($editing['financial_inputs']['annual_generation_per_kw'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Minimum Monthly Bill after Solar (₹)</label><input type="number" step="0.01" min="0" name="min_monthly_bill_after_solar_rs" value="<?= htmlspecialchars((string)($editing['financial_inputs']['min_monthly_bill_after_solar_rs'] ?? 300), ENT_QUOTES) ?>"></div>
-<div><label>Mode</label><select name="analysis_mode"><option value="simple_monthly" <?= (($editing['financial_inputs']['analysis_mode'] ?? 'simple_monthly') === 'simple_monthly') ? 'selected' : '' ?>>Simple (Typical month comparison)</option><option value="advanced_10y_monthly" <?= (($editing['financial_inputs']['analysis_mode'] ?? '') === 'advanced_10y_monthly') ? 'selected' : '' ?>>Advanced (120 months view)</option></select></div>
-<div><label>Years for cumulative chart</label><input type="number" step="1" min="1" max="40" name="years_for_cumulative_chart" value="<?= htmlspecialchars((string)($editing['financial_inputs']['years_for_cumulative_chart'] ?? 25), ENT_QUOTES) ?>"></div>
-<div><label>Expected subsidy (₹)</label><input type="number" step="0.01" min="0" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($editing['financial_inputs']['subsidy_expected_rs'] ?? ($editing['subsidy_expected_rs'] ?? '')), ENT_QUOTES) ?>"></div>
+<div><label>Estimated monthly bill (₹)</label><input type="number" step="0.01" min="0" name="estimated_monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['financial_inputs']['estimated_monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Expected subsidy (₹)</label><input type="number" step="0.01" min="0" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($editing['financial_inputs']['subsidy_expected_rs'] ?? ''), ENT_QUOTES) ?>"></div>
 </div></details></div>
 
 <div style="grid-column:1/-1"><label>Special Requests From Customer (Inclusive in the rate)</label><textarea name="special_requests_inclusive"><?= htmlspecialchars((string)$editing['special_requests_inclusive'], ENT_QUOTES) ?></textarea><div class="muted">In case of conflict, Special Requests will be given priority over Annexure inclusions.</div></div>
