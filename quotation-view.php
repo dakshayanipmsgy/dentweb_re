@@ -135,6 +135,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['financial_inputs']['loan_tenure_years'] = $tenureInput;
         $quote['financial_inputs']['annual_generation_per_kw'] = $generationInput;
         $quote['financial_inputs']['margin_money_percent'] = round($marginMoneyPercent, 2);
+        $quote['financial_inputs']['loan_method'] = 'pm_subsidy_reduces_principal';
+        $quote['financial_inputs']['show_subsidy_in_emi_logic'] = true;
         $quote['financial_inputs']['min_monthly_bill_rs_override'] = $minOverride;
         $quote['financial_inputs']['analysis_mode'] = $analysisMode;
         $quote['financial_inputs']['years_for_cumulative_chart'] = $yearsForCumulative;
@@ -147,6 +149,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $redirect($id, 'success', 'Financial inputs saved.');
+    }
+
+    if ($action === 'save_section_toggles') {
+        if ($viewerType !== 'admin') {
+            $redirect($id, 'error', 'Only admin can update section toggles.');
+        }
+
+        $toggleKeys = ['cover_notes','system_glance','pricing_summary','savings_emi','pm_subsidy_info','system_type_explainer','system_inclusions','payment_terms','warranty','transportation','terms_conditions'];
+        $existing = is_array($quote['sections_enabled'] ?? null) ? $quote['sections_enabled'] : [];
+        foreach ($toggleKeys as $key) {
+            $existing[$key] = isset($_POST['sections_enabled'][$key]);
+        }
+        $quote['sections_enabled'] = $existing;
+        $quote['updated_at'] = date('c');
+
+        $saved = documents_save_quote($quote);
+        if (!($saved['ok'] ?? false)) {
+            $redirect($id, 'error', 'Failed to save section toggles.');
+        }
+
+        $redirect($id, 'success', 'Section toggles saved.');
     }
 
     if ($action === 'accept_quote') {
@@ -217,6 +240,22 @@ $financialInputs['analysis_mode'] = (string) (($financialInputs['analysis_mode']
 $financialInputs['years_for_cumulative_chart'] = (string) (($financialInputs['years_for_cumulative_chart'] ?? '') !== '' ? $financialInputs['years_for_cumulative_chart'] : 25);
 $financialInputs['min_monthly_bill_rs_override'] = (string) ($financialInputs['min_monthly_bill_rs_override'] ?? '');
 $financialInputs['estimated_monthly_units_kwh'] = (string) ($financialInputs['estimated_monthly_units_kwh'] ?? '');
+$financialInputs['loan_method'] = (string) (($financialInputs['loan_method'] ?? '') !== '' ? $financialInputs['loan_method'] : 'pm_subsidy_reduces_principal');
+$financialInputs['show_subsidy_in_emi_logic'] = (bool) ($financialInputs['show_subsidy_in_emi_logic'] ?? true);
+$sectionToggleDefaults = [
+    'cover_notes' => true,
+    'system_glance' => true,
+    'pricing_summary' => true,
+    'savings_emi' => true,
+    'pm_subsidy_info' => true,
+    'system_type_explainer' => true,
+    'system_inclusions' => true,
+    'payment_terms' => true,
+    'warranty' => true,
+    'transportation' => true,
+    'terms_conditions' => true,
+];
+$sectionsEnabled = array_merge($sectionToggleDefaults, is_array($quote['sections_enabled'] ?? null) ? $quote['sections_enabled'] : []);
 $isPmQuote = documents_quote_is_pm_surya_ghar($quote);
 if ($isPmQuote && (string) ($financialInputs['subsidy_expected_rs'] ?? '') === '') {
     $financialInputs['subsidy_expected_rs'] = (string) documents_calculate_pm_surya_subsidy((float) ($quote['capacity_kwp'] ?? 0));
@@ -257,6 +296,8 @@ if ($isPmQuote && (string) ($financialInputs['subsidy_expected_rs'] ?? '') === '
 <tr><th>Interest Rate (%)</th><td><input type="number" step="0.01" min="0" name="interest_rate_percent" value="<?= htmlspecialchars((string)($financialInputs['interest_rate_percent'] ?? ''), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td></tr>
 <tr><th>Loan Tenure (years)</th><td><input type="number" min="1" name="loan_tenure_years" value="<?= htmlspecialchars((string)($financialInputs['loan_tenure_years'] ?? ''), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td></tr>
 <tr><th>Margin Money (%)</th><td><input type="number" step="0.01" min="0" max="100" name="margin_money_percent" value="<?= htmlspecialchars((string)($financialInputs['margin_money_percent'] ?? 10), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td></tr>
+<tr><th>Loan Method</th><td><input type="text" value="<?= htmlspecialchars((string)($financialInputs['loan_method'] ?? 'pm_subsidy_reduces_principal'), ENT_QUOTES) ?>" disabled><div style="font-size:12px;color:#475569;margin-top:4px">Loan = (Quotation - Margin), EMI principal = (Loan - Subsidy).</div></td></tr>
+<tr><th>Show Subsidy in EMI Logic</th><td><input type="checkbox" checked disabled> <span style="font-size:12px;color:#475569">Always enabled for PM clarity graphs.</span></td></tr>
 <tr><th>Minimum Monthly Bill</th><td>
 <label><input type="radio" name="min_bill_mode" value="auto" <?= (($financialInputs['min_monthly_bill_rs_override'] ?? '') === '') ? 'checked' : '' ?> <?= $editable ? '' : 'disabled' ?>> Auto (recommended)</label>
 <label style="margin-left:10px"><input type="radio" name="min_bill_mode" value="manual" <?= (($financialInputs['min_monthly_bill_rs_override'] ?? '') !== '') ? 'checked' : '' ?> <?= $editable ? '' : 'disabled' ?>> Manual override</label>
@@ -274,6 +315,18 @@ if ($isPmQuote && (string) ($financialInputs['subsidy_expected_rs'] ?? '') === '
 </table>
 <?php if ($editable): ?><p><button class="btn" type="submit">Save Financial Inputs</button></p><?php else: ?><p>Financial inputs are locked after quotation leaves Draft status.</p><?php endif; ?>
 </form></div>
+
+<?php if ($viewerType === 'admin'): ?><div class="card"><h3>Section Toggles (Print Layout)</h3>
+<form method="post">
+<input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
+<input type="hidden" name="action" value="save_section_toggles">
+<table>
+<?php foreach (['cover_notes'=>'Cover Notes','system_glance'=>'Your System at a Glance + Environmental Impact','pricing_summary'=>'Pricing Summary','savings_emi'=>'Savings & EMI (3 graphs)','pm_subsidy_info'=>'PM Subsidy Info','system_type_explainer'=>'System Type Explainer','system_inclusions'=>'System Inclusions','payment_terms'=>'Payment Terms','warranty'=>'Warranty','transportation'=>'Transportation','terms_conditions'=>'Terms & Conditions'] as $sectionKey => $sectionLabel): ?>
+<tr><th><?= htmlspecialchars($sectionLabel, ENT_QUOTES) ?></th><td><label><input type="checkbox" name="sections_enabled[<?= htmlspecialchars($sectionKey, ENT_QUOTES) ?>]" value="1" <?= !empty($sectionsEnabled[$sectionKey]) ? 'checked' : '' ?>> Show in quotation print</label></td></tr>
+<?php endforeach; ?>
+</table>
+<p><button class="btn" type="submit">Save Section Toggles</button></p>
+</form></div><?php endif; ?>
 
 <div class="card"><h3>Pricing Summary</h3><table><thead><tr><th>Description</th><th>Basic</th><th>GST</th><th>Total</th></tr></thead><tbody>
 <tr><td>Solar Power Generation System (5%)</td><td><?= number_format((float)$quote['calc']['bucket_5_basic'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_5_gst'],2) ?></td><td><?= number_format((float)$quote['calc']['bucket_5_basic'] + (float)$quote['calc']['bucket_5_gst'],2) ?></td></tr>
