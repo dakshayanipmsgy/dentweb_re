@@ -14,8 +14,8 @@ $templates = array_values(array_filter(json_load(documents_templates_dir() . '/t
 $templateBlocks = documents_sync_template_block_entries($templates);
 $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
 
-$redirectWith = static function (string $type, string $msg, string $tab = 'quotes'): void {
-    header('Location: admin-quotations.php?' . http_build_query(['tab' => $tab, 'status' => $type, 'message' => $msg]));
+$redirectWith = static function (string $type, string $msg): void {
+    header('Location: admin-quotations.php?' . http_build_query(['status' => $type, 'message' => $msg]));
     exit;
 };
 
@@ -25,43 +25,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $action = safe_text($_POST['action'] ?? '');
-
-    if ($action === 'save_quote_settings') {
-        $settings = documents_get_quote_defaults_settings();
-        $settings['global']['branding']['primary_color'] = safe_text($_POST['primary_color'] ?? '#0f766e');
-        $settings['global']['branding']['accent_color'] = safe_text($_POST['accent_color'] ?? '#f59e0b');
-        $settings['global']['branding']['text_color'] = safe_text($_POST['text_color'] ?? '#0f172a');
-        $settings['global']['branding']['muted_text_color'] = safe_text($_POST['muted_text_color'] ?? '#64748b');
-        $settings['global']['branding']['page_bg_color'] = safe_text($_POST['page_bg_color'] ?? '#eef3f9');
-        $settings['global']['branding']['card_bg_color'] = safe_text($_POST['card_bg_color'] ?? '#ffffff');
-        $settings['global']['branding']['border_color'] = safe_text($_POST['border_color'] ?? '#dbe1ea');
-        $settings['global']['branding']['shadow_strength'] = safe_text($_POST['shadow_strength'] ?? 'soft');
-        $settings['global']['branding']['shadow_color'] = safe_text($_POST['shadow_color'] ?? 'rgba(15, 23, 42, 0.12)');
-        $settings['global']['branding']['header_gradient_start'] = safe_text($_POST['header_gradient_start'] ?? '#0f766e');
-        $settings['global']['branding']['header_gradient_end'] = safe_text($_POST['header_gradient_end'] ?? '#22c55e');
-        $settings['global']['branding']['footer_gradient_start'] = safe_text($_POST['footer_gradient_start'] ?? '#0f172a');
-        $settings['global']['branding']['footer_gradient_end'] = safe_text($_POST['footer_gradient_end'] ?? '#1e293b');
-        $settings['global']['branding']['gradient_direction'] = safe_text($_POST['gradient_direction'] ?? 'to right');
-        $settings['global']['typography']['base_font_px'] = (float) ($_POST['base_font_px'] ?? 14);
-        $settings['global']['typography']['h1_size_px'] = (float) ($_POST['h1_size_px'] ?? 28);
-        $settings['global']['typography']['h2_size_px'] = (float) ($_POST['h2_size_px'] ?? 22);
-        $settings['global']['typography']['h3_size_px'] = (float) ($_POST['h3_size_px'] ?? 18);
-        $settings['global']['typography']['line_height'] = (float) ($_POST['line_height'] ?? 1.6);
-        $settings['segments']['RES']['unit_rate_rs_per_kwh'] = (float) ($_POST['unit_rate_res'] ?? 8);
-        $settings['segments']['COM']['unit_rate_rs_per_kwh'] = (float) ($_POST['unit_rate_com'] ?? 10);
-        $settings['segments']['IND']['unit_rate_rs_per_kwh'] = (float) ($_POST['unit_rate_ind'] ?? 11);
-        $settings['segments']['INST']['unit_rate_rs_per_kwh'] = (float) ($_POST['unit_rate_inst'] ?? 9);
-        $settings['global']['energy_defaults']['bestcase_interest_pct'] = (float) ($_POST['bestcase_interest_pct'] ?? 6);
-        $settings['global']['energy_defaults']['bestcase_tenure_years'] = (float) ($_POST['bestcase_tenure_years'] ?? 10);
-        $settings['global']['energy_defaults']['annual_generation_per_kw'] = (float) ($_POST['annual_generation_per_kw'] ?? 1450);
-        $settings['global']['energy_defaults']['emission_factor_kg_per_kwh'] = (float) ($_POST['emission_factor_kg_per_kwh'] ?? 0.82);
-        $settings['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'] = (float) ($_POST['tree_absorption_kg_per_tree_per_year'] ?? 20);
-        $saved = json_save(documents_settings_dir() . '/quote_defaults.json', $settings);
-        if (!$saved['ok']) {
-            $redirectWith('error', 'Unable to save quotation settings.', 'settings');
-        }
-        $redirectWith('success', 'Quotation settings saved.', 'settings');
-    }
     if ($action === 'save_quote') {
         $quoteId = safe_text($_POST['quote_id'] ?? '');
 $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
@@ -203,8 +166,10 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         $itemHsns = is_array($_POST['item_hsn'] ?? null) ? $_POST['item_hsn'] : [];
         $itemQtys = is_array($_POST['item_qty'] ?? null) ? $_POST['item_qty'] : [];
         $itemUnits = is_array($_POST['item_unit'] ?? null) ? $_POST['item_unit'] : [];
+        $itemSlabs = is_array($_POST['item_gst_slab'] ?? null) ? $_POST['item_gst_slab'] : [];
+        $itemBasics = is_array($_POST['item_basic_amount'] ?? null) ? $_POST['item_basic_amount'] : [];
         $rawItems = [];
-        $count = count($itemNames);
+        $count = max(count($itemNames), count($itemBasics));
         for ($i=0; $i<$count; $i++) {
             $rawItems[] = [
                 'name' => safe_text((string) ($itemNames[$i] ?? '')),
@@ -212,15 +177,16 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
                 'hsn' => safe_text((string) ($itemHsns[$i] ?? '')),
                 'qty' => (float) ($itemQtys[$i] ?? 0),
                 'unit' => safe_text((string) ($itemUnits[$i] ?? '')),
+                'gst_slab' => safe_text((string) ($itemSlabs[$i] ?? '5')),
+                'basic_amount' => (float) ($itemBasics[$i] ?? 0),
             ];
         }
         $defaultHsn = safe_text((string) ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
         $quote['items'] = documents_normalize_quote_items($rawItems, $quote['system_type'], (float) $quote['capacity_kwp'], $defaultHsn);
         $transportationRs = (float) ($_POST['transportation_rs'] ?? 0);
         $subsidyExpectedRs = (float) ($_POST['subsidy_expected_rs'] ?? 0);
-        $systemTotalInclGst = (float) ($_POST['system_total_incl_gst'] ?? 0);
-        $quote['calc'] = documents_calc_pricing_from_total($systemTotalInclGst, $pricingMode, $taxType, $transportationRs, $subsidyExpectedRs);
-        $quote['input_total_gst_inclusive'] = $systemTotalInclGst;
+        $quote['calc'] = documents_calc_pricing_from_items($quote['items'], $pricingMode, $taxType, $transportationRs, $subsidyExpectedRs);
+        $quote['input_total_gst_inclusive'] = (float) ($quote['calc']['final_price_incl_gst'] ?? 0);
         $quote['cover_note_text'] = trim((string) ($_POST['cover_note_text'] ?? ''));
         $quote['special_requests_text'] = trim((string) ($_POST['special_requests_text'] ?? ''));
         $quote['special_requests_inclusive'] = $quote['special_requests_text'];
@@ -239,6 +205,8 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         $quote['finance_inputs']['transportation_rs'] = (string) $transportationRs;
         $quote['finance_inputs']['notes_for_customer'] = trim((string) ($_POST['notes_for_customer'] ?? ''));
         $quote['style_overrides']['typography']['base_font_px'] = safe_text($_POST['style_base_font_px'] ?? '');
+        $quote['style_overrides']['typography']['heading_scale'] = safe_text($_POST['style_heading_scale'] ?? '');
+        $quote['style_overrides']['typography']['density'] = safe_text($_POST['style_density'] ?? '');
         $quote['style_overrides']['watermark']['enabled'] = isset($_POST['watermark_enabled']) ? '1' : '';
         $quote['style_overrides']['watermark']['opacity'] = safe_text($_POST['watermark_opacity'] ?? '');
         $quote['style_overrides']['watermark']['image_path'] = safe_text($_POST['watermark_image_path'] ?? '');
@@ -278,7 +246,6 @@ if ($editing === null) {
     $editing['valid_until'] = date('Y-m-d', strtotime('+7 days'));
 }
 
-$activeTab = safe_text($_GET['tab'] ?? 'quotes');
 $status = safe_text($_GET['status'] ?? '');
 $message = safe_text($_GET['message'] ?? '');
 $lookupMobile = safe_text($_GET['lookup_mobile'] ?? '');
@@ -292,32 +259,8 @@ if ($lookup !== null) {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Quotations</title>
 <style>body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px}.card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}label{font-size:12px;font-weight:700;display:block;margin-bottom:4px}input,select,textarea{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box}textarea{min-height:70px}.btn{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}.btn.secondary{background:#fff;color:#1f2937;border:1px solid #cbd5e1}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe1ea;padding:8px;text-align:left;font-size:13px}.muted{color:#64748b}.alert{padding:8px;border-radius:8px;margin-bottom:12px}.ok{background:#ecfdf5}.err{background:#fef2f2}</style></head>
 <body><main class="wrap">
-<div class="card"><h1>Quotations</h1><a class="btn secondary" href="admin-documents.php">Back to Documents</a> <a class="btn" href="admin-quotations.php?tab=quotes">Create New</a> <a class="btn secondary" href="admin-quotations.php?tab=settings">⚙️ Quotation Settings</a></div>
+<div class="card"><h1>Quotations</h1><a class="btn secondary" href="admin-documents.php">Back to Documents</a> <a class="btn" href="admin-quotations.php">Create New</a></div>
 <?php if ($message !== ''): ?><div class="alert <?= $status === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
-<?php if ($activeTab === 'settings'): ?>
-<div class="card"><h2>⚙️ Quotation Settings</h2><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_quote_settings"><div class="grid">
-<div><label>Primary color</label><input name="primary_color" value="<?= htmlspecialchars((string)($quoteDefaults['global']['branding']['primary_color'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Accent color</label><input name="accent_color" value="<?= htmlspecialchars((string)($quoteDefaults['global']['branding']['accent_color'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Text color</label><input name="text_color" value="<?= htmlspecialchars((string)($quoteDefaults['global']['branding']['text_color'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Muted text color</label><input name="muted_text_color" value="<?= htmlspecialchars((string)($quoteDefaults['global']['branding']['muted_text_color'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Header gradient start</label><input name="header_gradient_start" value="<?= htmlspecialchars((string)($quoteDefaults['global']['branding']['header_gradient_start'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Header gradient end</label><input name="header_gradient_end" value="<?= htmlspecialchars((string)($quoteDefaults['global']['branding']['header_gradient_end'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Footer gradient start</label><input name="footer_gradient_start" value="<?= htmlspecialchars((string)($quoteDefaults['global']['branding']['footer_gradient_start'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Footer gradient end</label><input name="footer_gradient_end" value="<?= htmlspecialchars((string)($quoteDefaults['global']['branding']['footer_gradient_end'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Gradient direction</label><input name="gradient_direction" value="<?= htmlspecialchars((string)($quoteDefaults['global']['branding']['gradient_direction'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Residential unit rate</label><input type="number" step="0.01" name="unit_rate_res" value="<?= htmlspecialchars((string)($quoteDefaults['segments']['RES']['unit_rate_rs_per_kwh'] ?? 8), ENT_QUOTES) ?>"></div>
-<div><label>Commercial unit rate</label><input type="number" step="0.01" name="unit_rate_com" value="<?= htmlspecialchars((string)($quoteDefaults['segments']['COM']['unit_rate_rs_per_kwh'] ?? 10), ENT_QUOTES) ?>"></div>
-<div><label>Industrial unit rate</label><input type="number" step="0.01" name="unit_rate_ind" value="<?= htmlspecialchars((string)($quoteDefaults['segments']['IND']['unit_rate_rs_per_kwh'] ?? 11), ENT_QUOTES) ?>"></div>
-<div><label>Institutional unit rate</label><input type="number" step="0.01" name="unit_rate_inst" value="<?= htmlspecialchars((string)($quoteDefaults['segments']['INST']['unit_rate_rs_per_kwh'] ?? 9), ENT_QUOTES) ?>"></div>
-<div><label>Default interest rate (%)</label><input type="number" step="0.01" name="bestcase_interest_pct" value="<?= htmlspecialchars((string)($quoteDefaults['global']['energy_defaults']['bestcase_interest_pct'] ?? 6), ENT_QUOTES) ?>"></div>
-<div><label>Default loan tenure (years)</label><input type="number" step="1" name="bestcase_tenure_years" value="<?= htmlspecialchars((string)($quoteDefaults['global']['energy_defaults']['bestcase_tenure_years'] ?? 10), ENT_QUOTES) ?>"></div>
-<div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450), ENT_QUOTES) ?>"></div>
-<div><label>Emission factor</label><input type="number" step="0.01" name="emission_factor_kg_per_kwh" value="<?= htmlspecialchars((string)($quoteDefaults['global']['energy_defaults']['emission_factor_kg_per_kwh'] ?? 0.82), ENT_QUOTES) ?>"></div>
-<div><label>CO2 absorbed per tree per year</label><input type="number" step="0.01" name="tree_absorption_kg_per_tree_per_year" value="<?= htmlspecialchars((string)($quoteDefaults['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'] ?? 20), ENT_QUOTES) ?>"></div>
-<div style="grid-column:1/-1"><button class="btn" type="submit">Save Settings</button></div>
-</div></form></div>
-<?php endif; ?>
-<?php if ($activeTab === 'quotes'): ?>
 <div class="card">
 <h2><?= $editing['id'] === '' ? 'Create Quotation' : 'Edit Quotation' ?></h2>
 <form method="get" style="margin-bottom:10px">
@@ -338,8 +281,8 @@ if ($lookup !== null) {
 <div><label>Capacity kWp</label><input name="capacity_kwp" required value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>"></div>
 <div><label>Valid Until</label><input type="date" name="valid_until" value="<?= htmlspecialchars((string)$editing['valid_until'], ENT_QUOTES) ?>"></div>
 <div><label>Cover note paragraph</label><textarea name="cover_note_text"><?= htmlspecialchars((string)($editing['cover_note_text'] ?: ($quoteDefaults['defaults']['cover_note_template'] ?? '')), ENT_QUOTES) ?></textarea></div>
-<div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>Composite 70/30 (5% + 18%)</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>5% only</option></select></div>
-<div><label>GST-inclusive system price (₹)</label><input type="number" step="0.01" name="system_total_incl_gst" value="<?= htmlspecialchars((string)($editing['input_total_gst_inclusive'] ?? ""), ENT_QUOTES) ?>"></div><div><label>Place of Supply State</label><input name="place_of_supply_state" value="<?= htmlspecialchars((string)$editing['place_of_supply_state'], ENT_QUOTES) ?>"></div>
+<div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div>
+<div><label>Place of Supply State</label><input name="place_of_supply_state" value="<?= htmlspecialchars((string)$editing['place_of_supply_state'], ENT_QUOTES) ?>"></div>
 <div><label>District</label><input name="district" value="<?= htmlspecialchars((string)($quoteSnapshot['district'] ?? $editing['district']), ENT_QUOTES) ?>"></div>
 <div><label>City</label><input name="city" value="<?= htmlspecialchars((string)($quoteSnapshot['city'] ?? $editing['city']), ENT_QUOTES) ?>"></div>
 <div><label>State</label><input name="state" value="<?= htmlspecialchars((string)($quoteSnapshot['state'] ?? $editing['state']), ENT_QUOTES) ?>"></div>
@@ -355,7 +298,7 @@ if ($lookup !== null) {
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
-<div style="grid-column:1/-1"><h3>Items Table</h3><table id="itemsTable"><thead><tr><th>Sr No</th><th>Item Name</th><th>Description/Specs</th><th>HSN</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody><?php $qItems = is_array($editing['items'] ?? null) && $editing['items'] !== [] ? $editing['items'] : documents_normalize_quote_items([], (string)$editing['system_type'], (float)$editing['capacity_kwp'], (string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541')); foreach ($qItems as $ix => $item): ?><tr><td><?= $ix+1 ?></td><td><input name="item_name[]" value="<?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_description[]" value="<?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_hsn[]" value="<?= htmlspecialchars((string)($item['hsn'] ?? ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')), ENT_QUOTES) ?>"></td><td><input type="number" step="0.01" name="item_qty[]" value="<?= htmlspecialchars((string)($item['qty'] ?? 1), ENT_QUOTES) ?>"></td><td><input name="item_unit[]" value="<?= htmlspecialchars((string)($item['unit'] ?? 'set'), ENT_QUOTES) ?>"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addItemBtn">Add item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
+<div style="grid-column:1/-1"><h3>Items Table</h3><table id="itemsTable"><thead><tr><th>Sr</th><th>Item name</th><th>Description/specs</th><th>HSN</th><th>Qty</th><th>Unit</th><th>GST slab</th><th>Amount (basic)</th><th></th></tr></thead><tbody><?php $qItems = is_array($editing['items'] ?? null) && $editing['items'] !== [] ? $editing['items'] : documents_normalize_quote_items([], (string)$editing['system_type'], (float)$editing['capacity_kwp'], (string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541')); foreach ($qItems as $ix => $item): ?><tr><td><?= $ix+1 ?></td><td><input name="item_name[]" value="<?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_description[]" value="<?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_hsn[]" value="<?= htmlspecialchars((string)($item['hsn'] ?? ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')), ENT_QUOTES) ?>"></td><td><input type="number" step="0.01" name="item_qty[]" value="<?= htmlspecialchars((string)($item['qty'] ?? 1), ENT_QUOTES) ?>"></td><td><input name="item_unit[]" value="<?= htmlspecialchars((string)($item['unit'] ?? 'set'), ENT_QUOTES) ?>"></td><td><select name="item_gst_slab[]"><?php foreach(['5','18','NA'] as $sl): ?><option value="<?= $sl ?>" <?= ((string)($item['gst_slab'] ?? '5')===$sl)?'selected':'' ?>><?= $sl ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" name="item_basic_amount[]" value="<?= htmlspecialchars((string)($item['basic_amount'] ?? 0), ENT_QUOTES) ?>"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addItemBtn">Add item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
 <div><label>Monthly electricity bill (₹)</label><input type="number" step="0.01" name="monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Unit rate (₹/kWh)</label><input type="number" step="0.01" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['finance_inputs']['unit_rate_rs_per_kwh'] ?: ($segmentDefaults['unit_rate_rs_per_kwh'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($editing['finance_inputs']['annual_generation_per_kw'] ?: ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? '')), ENT_QUOTES) ?>"></div>
@@ -387,5 +330,4 @@ if ($lookup !== null) {
 <td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <?php if (documents_quote_can_edit($q, 'admin')): ?><a class="btn secondary" href="admin-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?></td>
 </tr><?php endforeach; if ($allQuotes===[]): ?><tr><td colspan="7">No quotations yet.</td></tr><?php endif; ?></tbody></table>
 </div>
-<?php endif; ?>
-<script>document.addEventListener('click',function(e){if(e.target&&e.target.id==='addItemBtn'){const tb=document.querySelector('#itemsTable tbody');if(!tb)return;const tr=document.createElement('tr');const dH='<?= htmlspecialchars((string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>';tr.innerHTML='<td></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="'+dH+'"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';tb.appendChild(tr);ren();}if(e.target&&e.target.classList.contains('rm-item')){e.target.closest('tr')?.remove();ren();}});function ren(){document.querySelectorAll('#itemsTable tbody tr').forEach((tr,i)=>{const td=tr.querySelector('td');if(td)td.textContent=String(i+1);});}ren();</script></main></body></html>
+<script>document.addEventListener('click',function(e){if(e.target&&e.target.id==='addItemBtn'){const tb=document.querySelector('#itemsTable tbody');if(!tb)return;const tr=document.createElement('tr');const dH='<?= htmlspecialchars((string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>';tr.innerHTML='<td></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="'+dH+'"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><select name="item_gst_slab[]"><option>5</option><option>18</option><option>NA</option></select></td><td><input type="number" step="0.01" name="item_basic_amount[]" value="0"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';tb.appendChild(tr);ren();}if(e.target&&e.target.classList.contains('rm-item')){e.target.closest('tr')?.remove();ren();}});function ren(){document.querySelectorAll('#itemsTable tbody tr').forEach((tr,i)=>{const td=tr.querySelector('td');if(td)td.textContent=String(i+1);});}ren();</script></main></body></html>

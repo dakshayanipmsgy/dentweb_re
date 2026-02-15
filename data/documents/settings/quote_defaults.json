@@ -17,35 +17,17 @@
       "footer_bg": "#0f172a",
       "footer_text": "#e2e8f0",
       "chip_bg": "#ccfbf1",
-      "chip_text": "#134e4a",
-      "text_color": "#0f172a",
-      "muted_text_color": "#64748b",
-      "page_bg_color": "#eef3f9",
-      "card_bg_color": "#ffffff",
-      "border_color": "#dbe1ea",
-      "shadow_strength": "soft",
-      "shadow_color": "rgba(15, 23, 42, 0.12)",
-      "header_gradient_start": "#0f766e",
-      "header_gradient_end": "#22c55e",
-      "footer_gradient_start": "#0f172a",
-      "footer_gradient_end": "#1e293b",
-      "gradient_direction": "to right"
+      "chip_text": "#134e4a"
     },
     "typography": {
       "base_font_px": 14,
       "heading_scale": 1,
-      "density": "comfortable",
-      "h1_size_px": 28,
-      "h2_size_px": 22,
-      "h3_size_px": 18,
-      "line_height": 1.6
+      "density": "comfortable"
     },
     "energy_defaults": {
       "annual_generation_per_kw": 1450,
       "emission_factor_kg_per_kwh": 0.82,
-      "tree_absorption_kg_per_tree_per_year": 20,
-      "bestcase_interest_pct": 6,
-      "bestcase_tenure_years": 10
+      "tree_absorption_kg_per_tree_per_year": 20
     }
   },
   "segments": {
@@ -83,7 +65,7 @@
       "loan_info": {
         "slab2_interest_pct": 8.15,
         "slab2_min_margin_pct": 20,
-        "slab2_range": "\u20b92L\u2013\u20b96L"
+        "slab2_range": "₹2L–₹6L"
       }
     },
     "COM": {
@@ -119,6 +101,6 @@
   },
   "defaults": {
     "hsn_solar": "8541",
-    "cover_note_template": "\ud83c\udf1e Thank you for considering Dakshayani Enterprises. We are pleased to share a clear and practical solar proposal tailored for your site."
+    "cover_note_template": "🌞 Thank you for considering Dakshayani Enterprises. We are pleased to share a clear and practical solar proposal tailored for your site."
   }
 }
