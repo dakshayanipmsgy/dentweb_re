@@ -324,7 +324,6 @@ $user = current_user();
     <div class="top">
       <div>
         <h1>Documents &amp; Billing Control Center</h1>
-        <p><a class="btn secondary" href="admin-quote-settings.php">Quote Visual Settings</a></p>
         <p class="muted">Admin: <?= htmlspecialchars((string) ($user['full_name'] ?? 'Administrator'), ENT_QUOTES) ?></p>
       </div>
       <div>

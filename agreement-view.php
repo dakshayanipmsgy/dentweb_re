@@ -106,7 +106,7 @@ $message = safe_text($_GET['message'] ?? '');
     <p><strong><?= htmlspecialchars((string) $agreement['agreement_no'], ENT_QUOTES) ?></strong> · Status: <?= htmlspecialchars((string) $agreement['status'], ENT_QUOTES) ?></p>
     <a class="btn secondary" href="admin-agreements.php">Back to Agreements</a>
     <a class="btn" target="_blank" href="agreement-print.php?id=<?= urlencode((string) $agreement['id']) ?>">Print</a>
-   
+    <a class="btn" href="agreement-pdf.php?id=<?= urlencode((string) $agreement['id']) ?>">Download PDF</a>
   </div>
 
   <form method="post">
