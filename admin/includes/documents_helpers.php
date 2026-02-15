@@ -201,6 +201,11 @@ function documents_quote_defaults_settings(): array
                 'emission_factor_kg_per_kwh' => 0.82,
                 'tree_absorption_kg_per_tree_per_year' => 20,
             ],
+            'quotation_defaults' => [
+                'default_hsn' => '8541',
+                'default_gst_mode' => 'SOLAR_70_30',
+                'default_igst_mode' => false,
+            ],
         ],
         'segments' => [
             'RES' => [
@@ -676,6 +681,13 @@ function documents_quote_defaults(): array
         'place_of_supply_state' => 'Jharkhand',
         'tax_type' => 'CGST_SGST',
         'input_total_gst_inclusive' => 0,
+        'line_items' => [],
+        'pricing_extras' => [
+            'transportation_rs' => 0,
+            'roundoff_rs' => 0,
+            'gst_mode' => 'SOLAR_70_30',
+            'igst_mode' => false,
+        ],
         'calc' => [
             'basic_total' => 0,
             'bucket_5_basic' => 0,
@@ -691,7 +703,15 @@ function documents_quote_defaults(): array
                 'igst_18' => 0,
             ],
             'grand_total' => 0,
+            'final_price_incl_gst' => 0,
+            'transportation_rs' => 0,
+            'roundoff_rs' => 0,
+            'gross_payable' => 0,
+            'total_gst' => 0,
+            'has_solar_split' => false,
         ],
+        'cover_note_html' => '',
+        'special_requests_text' => '',
         'special_requests_inclusive' => '',
         'special_requests_override_note' => true,
         'annexures_overrides' => [
@@ -738,6 +758,67 @@ function documents_quote_defaults(): array
         'pdf_path' => '',
         'pdf_generated_at' => '',
     ];
+}
+
+function documents_default_system_item_title(string $systemType): string
+{
+    $normalized = strtolower(trim($systemType));
+    if ($normalized === 'hybrid') {
+        return 'Hybrid Solar System';
+    }
+    if ($normalized === 'offgrid') {
+        return 'Off-grid Solar System';
+    }
+    return 'On-grid Solar System';
+}
+
+function documents_default_line_item(string $systemType, string $defaultHsn = '8541'): array
+{
+    return [
+        'title' => documents_default_system_item_title($systemType),
+        'description' => '',
+        'hsn' => $defaultHsn !== '' ? $defaultHsn : '8541',
+        'qty' => 1,
+        'unit' => 'Lot',
+        'tax_profile' => 'SOLAR_70_30',
+        'amount_incl_gst' => 0,
+    ];
+}
+
+function documents_normalize_line_items($items, string $systemType, string $defaultHsn): array
+{
+    $normalized = [];
+    if (is_array($items)) {
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $title = safe_text($item['title'] ?? '');
+            $amount = round((float) ($item['amount_incl_gst'] ?? 0), 2);
+            if ($title === '' && $amount <= 0) {
+                continue;
+            }
+            $taxProfile = safe_text($item['tax_profile'] ?? 'SOLAR_70_30');
+            if (!in_array($taxProfile, ['SOLAR_70_30', 'GST_5', 'GST_18', 'EXEMPT'], true)) {
+                $taxProfile = 'SOLAR_70_30';
+            }
+            $normalized[] = [
+                'title' => $title,
+                'description' => safe_text($item['description'] ?? ''),
+                'hsn' => safe_text($item['hsn'] ?? '') ?: $defaultHsn,
+                'qty' => max(0.01, (float) ($item['qty'] ?? 1)),
+                'unit' => safe_text($item['unit'] ?? 'Lot') ?: 'Lot',
+                'tax_profile' => $taxProfile,
+                'amount_incl_gst' => $amount,
+            ];
+        }
+    }
+
+    if ($normalized === []) {
+        $normalized[] = documents_default_line_item($systemType, $defaultHsn);
+    }
+
+    return $normalized;
 }
 
 function documents_proforma_defaults(): array
@@ -1127,6 +1208,100 @@ function documents_calc_pricing(float $grandTotal, string $pricingMode, string $
             'igst_18' => 0.0,
         ],
         'grand_total' => round($grandTotal, 2),
+    ];
+
+    if ($taxType === 'IGST') {
+        $calc['gst_split']['igst_5'] = round($bucket5Gst, 2);
+        $calc['gst_split']['igst_18'] = round($bucket18Gst, 2);
+    } else {
+        $calc['gst_split']['cgst_5'] = round($bucket5Gst / 2, 2);
+        $calc['gst_split']['sgst_5'] = round($bucket5Gst / 2, 2);
+        $calc['gst_split']['cgst_18'] = round($bucket18Gst / 2, 2);
+        $calc['gst_split']['sgst_18'] = round($bucket18Gst / 2, 2);
+    }
+
+    return $calc;
+}
+
+function documents_calc_itemized_pricing(array $lineItems, array $pricingExtras, string $taxType): array
+{
+    $bucket5Basic = 0.0;
+    $bucket5Gst = 0.0;
+    $bucket18Basic = 0.0;
+    $bucket18Gst = 0.0;
+    $basicTotal = 0.0;
+    $lineTotal = 0.0;
+    $hasSolarSplit = false;
+
+    foreach ($lineItems as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $inclusive = max(0, (float) ($item['amount_incl_gst'] ?? 0));
+        $lineTotal += $inclusive;
+        $profile = safe_text($item['tax_profile'] ?? 'SOLAR_70_30');
+        if ($profile === 'GST_5') {
+            $base = $inclusive / 1.05;
+            $gst = $inclusive - $base;
+            $bucket5Basic += $base;
+            $bucket5Gst += $gst;
+            $basicTotal += $base;
+            continue;
+        }
+        if ($profile === 'GST_18') {
+            $base = $inclusive / 1.18;
+            $gst = $inclusive - $base;
+            $bucket18Basic += $base;
+            $bucket18Gst += $gst;
+            $basicTotal += $base;
+            continue;
+        }
+        if ($profile === 'EXEMPT') {
+            $basicTotal += $inclusive;
+            continue;
+        }
+
+        $hasSolarSplit = true;
+        $base = $inclusive / 1.089;
+        $basic70 = 0.70 * $base;
+        $gst5 = $basic70 * 0.05;
+        $basic30 = 0.30 * $base;
+        $gst18 = $basic30 * 0.18;
+        $bucket5Basic += $basic70;
+        $bucket5Gst += $gst5;
+        $bucket18Basic += $basic30;
+        $bucket18Gst += $gst18;
+        $basicTotal += $base;
+    }
+
+    $transportation = (float) ($pricingExtras['transportation_rs'] ?? 0);
+    $roundoff = (float) ($pricingExtras['roundoff_rs'] ?? 0);
+    $finalPrice = $lineTotal + $roundoff;
+    $grossPayable = $finalPrice + $transportation;
+    $totalGst = $bucket5Gst + $bucket18Gst;
+
+    $calc = [
+        'basic_total' => round($basicTotal, 2),
+        'bucket_5_basic' => round($bucket5Basic, 2),
+        'bucket_5_gst' => round($bucket5Gst, 2),
+        'bucket_18_basic' => round($bucket18Basic, 2),
+        'bucket_18_gst' => round($bucket18Gst, 2),
+        'gst_split' => [
+            'cgst_5' => 0.0,
+            'sgst_5' => 0.0,
+            'cgst_18' => 0.0,
+            'sgst_18' => 0.0,
+            'igst_5' => 0.0,
+            'igst_18' => 0.0,
+        ],
+        'grand_total' => round($grossPayable, 2),
+        'final_price_incl_gst' => round($finalPrice, 2),
+        'transportation_rs' => round($transportation, 2),
+        'roundoff_rs' => round($roundoff, 2),
+        'gross_payable' => round($grossPayable, 2),
+        'total_gst' => round($totalGst, 2),
+        'has_solar_split' => $hasSolarSplit,
+        'input_total_gst_inclusive' => round($lineTotal, 2),
     ];
 
     if ($taxType === 'IGST') {
