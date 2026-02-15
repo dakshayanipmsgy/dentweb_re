@@ -15,15 +15,13 @@ if ($agreement === null) {
     exit;
 }
 
+$renderForPdf = safe_text($_GET['pdf'] ?? '') === '1';
 $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
-$globalStyle = documents_get_document_style_settings();
-$styleOverride = is_array(($agreement['style_override'] ?? null)) ? $agreement['style_override'] : [];
-$style = documents_merge_style_with_override($globalStyle, $styleOverride);
 $html = documents_render_agreement_body_html($agreement, $company);
 
-$background = safe_text((string) ($style['layout']['page_background_image'] ?? ($agreement['rendering']['background_image'] ?? '')));
-$bgOpacity = max(0.0, min(1.0, (float) ($style['layout']['page_background_opacity'] ?? ($agreement['rendering']['background_opacity'] ?? 1))));
-$backgroundResolved = !empty($style['layout']['page_background_enabled']) ? $background : '';
+$background = safe_text((string) ($agreement['rendering']['background_image'] ?? ''));
+$bgOpacity = max(0.1, min(1.0, (float) ($agreement['rendering']['background_opacity'] ?? 1)));
+$backgroundResolved = $renderForPdf ? (resolve_public_image_to_absolute($background) ?? $background) : $background;
 ?>
 <!doctype html>
 <html lang="en">
@@ -33,7 +31,7 @@ $backgroundResolved = !empty($style['layout']['page_background_enabled']) ? $bac
   <title>Agreement Print <?= htmlspecialchars((string) $agreement['agreement_no'], ENT_QUOTES) ?></title>
   <style>
     @page { size: A4; margin: 16mm 14mm; }
-    body{font-family:Arial,sans-serif;color:#111;font-size:<?= (int) ($style['typography']['base_font_size_px'] ?? 14) ?>px;line-height:1.5;margin:0}
+    body{font-family:Arial,sans-serif;color:#111;font-size:12.5px;line-height:1.5;margin:0}
     .page{position:relative;min-height:260mm;padding:2mm}
     .page-bg-img{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;opacity:<?= htmlspecialchars((string) $bgOpacity, ENT_QUOTES) ?>;z-index:-1}
     .meta{display:flex;justify-content:space-between;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #94a3b8}

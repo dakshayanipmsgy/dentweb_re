@@ -40,9 +40,6 @@ if ($viewerType === 'employee' && ((string) ($challan['created_by_type'] ?? '') 
 }
 
 $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
-$globalStyle = documents_get_document_style_settings();
-$styleOverride = is_array(($challan['style_override'] ?? null)) ? $challan['style_override'] : [];
-$style = documents_merge_style_with_override($globalStyle, $styleOverride);
 $bg = safe_text((string) ($challan['rendering']['background_image'] ?? ''));
 if ($bg === '') {
     $templates = json_load(documents_templates_dir() . '/template_sets.json', []);
@@ -56,13 +53,12 @@ if ($bg === '') {
         }
     }
 }
-$opacity = max(0.0, min(1.0, (float) ($style['layout']['page_background_opacity'] ?? ($challan['rendering']['background_opacity'] ?? 1))));
-if (empty($style['layout']['page_background_enabled'])) { $bg = ''; }
+$opacity = max(0.1, min(1.0, (float) ($challan['rendering']['background_opacity'] ?? 1)));
 ?>
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delivery Challan <?= htmlspecialchars((string) $challan['challan_no'], ENT_QUOTES) ?></title>
 <style>
 @page { size:A4; margin:14mm; }
-body { font-family: Arial, sans-serif; font-size:<?= (int) ($style['typography']['base_font_size_px'] ?? 14) ?>px; color:#111; }
+body { font-family: Arial, sans-serif; font-size:12px; color:#111; }
 .page-bg { position:fixed; inset:0; z-index:-1; opacity:<?= htmlspecialchars((string) $opacity, ENT_QUOTES) ?>; background: <?= $bg !== '' ? 'url(' . htmlspecialchars($bg, ENT_QUOTES) . ') center/cover no-repeat' : 'none' ?>; }
 .header { display:flex; justify-content:space-between; border-bottom:2px solid #111; margin-bottom:10px; padding-bottom:8px; }
 .title { font-size:24px; font-weight:700; margin:8px 0; text-align:center; }
@@ -79,5 +75,5 @@ th,td { border:1px solid #444; padding:6px; vertical-align:top; }
 <table><thead><tr><th>Sr</th><th>Item name + description</th><th>Unit</th><th>Qty</th><th>Remarks</th></tr></thead><tbody><?php foreach ($challan['items'] as $i => $it): ?><tr><td><?= $i + 1 ?></td><td><strong><?= htmlspecialchars((string) ($it['name'] ?? ''), ENT_QUOTES) ?></strong><br><?= htmlspecialchars((string) ($it['description'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($it['unit'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($it['qty'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($it['remarks'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; if ($challan['items']===[]): ?><tr><td colspan="5">No items listed.</td></tr><?php endif; ?></tbody></table>
 <?php if ((string) ($challan['delivery_notes'] ?? '') !== ''): ?><p><strong>Notes:</strong> <?= nl2br(htmlspecialchars((string) $challan['delivery_notes'], ENT_QUOTES)) ?></p><?php endif; ?>
 <div class="sign"><div><strong>Delivered by (Dakshayani)</strong><br><br>_______________________</div><div><strong>Received by (Customer)</strong><br><br>_______________________</div></div>
-<script>window.print();</script>
+<?php if (!isset($_GET['pdf'])): ?><script>window.print();</script><?php endif; ?>
 </body></html>

@@ -53,6 +53,16 @@ function documents_invoices_dir(): string
     return documents_base_dir() . '/invoices';
 }
 
+function documents_challan_pdf_dir(): string
+{
+    return documents_challans_dir() . '/pdfs';
+}
+
+function documents_agreement_pdf_dir(): string
+{
+    return documents_agreements_dir() . '/pdfs';
+}
+
 function documents_agreement_templates_path(): string
 {
     return documents_templates_dir() . '/agreement_templates.json';
@@ -106,7 +116,9 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_logs_dir());
     documents_ensure_dir(documents_quotations_dir());
     documents_ensure_dir(documents_agreements_dir());
+    documents_ensure_dir(documents_agreement_pdf_dir());
     documents_ensure_dir(documents_challans_dir());
+    documents_ensure_dir(documents_challan_pdf_dir());
     documents_ensure_dir(documents_proformas_dir());
     documents_ensure_dir(documents_invoices_dir());
     documents_ensure_dir(documents_public_branding_dir());
@@ -145,83 +157,10 @@ function documents_ensure_structure(): void
         json_save($libraryPath, []);
     }
 
-    $docStylePath = documents_settings_dir() . '/document_style.json';
-    if (!is_file($docStylePath)) {
-        json_save($docStylePath, documents_document_style_defaults());
-    }
-
     $logPath = documents_logs_dir() . '/documents.log';
     if (!is_file($logPath)) {
         @file_put_contents($logPath, '', LOCK_EX);
     }
-}
-
-function documents_document_style_defaults(): array
-{
-    return [
-        'theme' => [
-            'primary_color' => '#0b5fff',
-            'accent_color' => '#00b894',
-            'text_color' => '#111827',
-            'muted_text_color' => '#6b7280',
-            'bg_color' => '#ffffff',
-            'card_bg' => '#f8fafc',
-            'border_color' => '#e5e7eb',
-        ],
-        'typography' => [
-            'base_font_size_px' => 14,
-            'h1_px' => 26,
-            'h2_px' => 20,
-            'h3_px' => 16,
-            'line_height' => 1.45,
-        ],
-        'layout' => [
-            'page_background_enabled' => true,
-            'page_background_image' => '',
-            'page_background_opacity' => 0.18,
-            'show_cover_page' => true,
-            'continuous_flow' => true,
-        ],
-        'defaults' => [
-            'residential_unit_rate_rs_per_kwh' => 7.0,
-            'commercial_unit_rate_rs_per_kwh' => 9.0,
-            'industrial_unit_rate_rs_per_kwh' => 8.0,
-            'institutional_unit_rate_rs_per_kwh' => 7.5,
-            'default_bank_interest_rate_percent' => 10.0,
-            'default_loan_tenure_years' => 10,
-            'default_annual_generation_per_kw' => 1450,
-            'default_emission_factor_kg_per_kwh' => 0.82,
-            'kg_co2_absorbed_per_tree_per_year' => 20,
-        ],
-    ];
-}
-
-function documents_get_document_style_settings(): array
-{
-    $defaults = documents_document_style_defaults();
-    $loaded = json_load(documents_settings_dir() . '/document_style.json', $defaults);
-    if (!is_array($loaded)) {
-        return $defaults;
-    }
-
-    foreach (['theme', 'typography', 'layout', 'defaults'] as $section) {
-        $loaded[$section] = array_merge($defaults[$section], is_array($loaded[$section] ?? null) ? $loaded[$section] : []);
-    }
-
-    return $loaded;
-}
-
-function documents_merge_style_with_override(array $global, array $override): array
-{
-    $merged = $global;
-    foreach (['theme', 'typography', 'layout', 'defaults'] as $section) {
-        if (!is_array($override[$section] ?? null)) {
-            continue;
-        }
-        $merged[$section] = array_merge($merged[$section], $override[$section]);
-    }
-
-    return $merged;
 }
 
 function documents_agreement_template_defaults(): array
@@ -667,18 +606,12 @@ function documents_quote_defaults(): array
             'pm_subsidy_info' => '',
         ],
         'template_attachments' => documents_template_attachment_defaults(),
-        'style_override' => [],
-        'financial_inputs' => [
-            'estimated_monthly_bill_rs' => '',
-            'subsidy_expected_rs' => '',
-            'annual_generation_per_kw' => '',
-            'emission_factor_kg_per_kwh' => '',
-            'kg_co2_absorbed_per_tree_per_year' => '',
-        ],
         'rendering' => [
             'background_image' => '',
             'background_opacity' => 1.0,
         ],
+        'pdf_path' => '',
+        'pdf_generated_at' => '',
     ];
 }
 
@@ -881,7 +814,8 @@ function documents_agreement_defaults(): array
         'created_by_name' => '',
         'created_at' => '',
         'updated_at' => '',
-        'style_override' => [],
+        'pdf_path' => '',
+        'pdf_generated_at' => '',
     ];
 }
 
@@ -913,7 +847,8 @@ function documents_challan_defaults(): array
             'background_image' => '',
             'background_opacity' => 1.0,
         ],
-        'style_override' => [],
+        'pdf_path' => '',
+        'pdf_generated_at' => '',
     ];
 }
 
@@ -1213,6 +1148,10 @@ function documents_get_media_library(): array
     return is_array($rows) ? $rows : [];
 }
 
+function documents_quote_pdf_dir(): string
+{
+    return documents_quotations_dir() . '/pdfs';
+}
 
 function resolve_public_image_to_absolute(string $publicPath): ?string
 {
