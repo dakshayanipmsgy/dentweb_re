@@ -6,6 +6,8 @@ require_once __DIR__ . '/includes/employee_admin.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 require_once __DIR__ . '/includes/quotation_view_renderer.php';
 
+ini_set('display_errors', '0');
+
 documents_ensure_structure();
 $employeeStore = new EmployeeFsStore();
 $user = current_user();
@@ -199,4 +201,4 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 $quoteDefaults = load_quote_defaults();
 $company = documents_get_company_profile_for_quotes();
 $shareUrl=((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']!=='off')?'https://':'http://').($_SERVER['HTTP_HOST'] ?? 'localhost').'/quotation-public.php?token='.urlencode((string)($quote['share']['public_token'] ?? ''));
-quotation_render($quote, $quoteDefaults, $company, true, $shareUrl, $viewerType, $viewerId);
+quotation_render($quote, $quoteDefaults, $company, false, $shareUrl, $viewerType, $viewerId);

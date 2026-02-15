@@ -2,6 +2,8 @@
 declare(strict_types=1);
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 require_once __DIR__ . '/includes/quotation_view_renderer.php';
+
+ini_set('display_errors', '0');
 documents_ensure_structure();
 $token = safe_text($_GET['token'] ?? '');
 $quote = null;
