@@ -93,57 +93,6 @@ function documents_public_uploads_dir(): string
     return dirname(__DIR__, 2) . '/images/documents/uploads';
 }
 
-function documents_public_watermarks_dir(): string
-{
-    return dirname(__DIR__, 2) . '/images/documents/watermarks';
-}
-
-function documents_quotation_defaults_settings(): array
-{
-    $segmentDefaults = [
-        'unit_rate_rs_per_kwh' => 8.0,
-        'annual_generation_kwh_per_kw' => 1500,
-        'bank_interest_rate_percent' => 10.0,
-        'bank_tenure_years' => 7,
-    ];
-
-    return [
-        'segments' => [
-            'RES' => $segmentDefaults,
-            'COM' => $segmentDefaults,
-            'IND' => $segmentDefaults,
-            'INST' => $segmentDefaults,
-        ],
-        'emission_factor_kg_per_kwh' => 0.82,
-        'tree_absorption_kg_per_year' => 20,
-        'watermark' => [
-            'enabled' => true,
-            'image_path' => '',
-            'opacity' => 0.08,
-            'scale_percent' => 70,
-            'position' => 'center',
-        ],
-        'typography' => [
-            'base_font_size_px' => 14,
-            'heading_scale' => 1.0,
-        ],
-        'colors' => [
-            'primary' => '#0ea5e9',
-            'secondary' => '#22c55e',
-            'accent' => '#f59e0b',
-            'muted' => '#64748b',
-        ],
-    ];
-}
-
-function documents_get_quotation_settings(): array
-{
-    $defaults = documents_quotation_defaults_settings();
-    $settings = json_load(documents_settings_dir() . '/quotation_defaults.json', $defaults);
-    $settings = is_array($settings) ? $settings : [];
-    return array_replace_recursive($defaults, $settings);
-}
-
 function documents_log(string $message): void
 {
     documents_ensure_structure();
@@ -176,7 +125,6 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_public_backgrounds_dir());
     documents_ensure_dir(documents_public_diagrams_dir());
     documents_ensure_dir(documents_public_uploads_dir());
-    documents_ensure_dir(documents_public_watermarks_dir());
 
     $companyPath = documents_settings_dir() . '/company_profile.json';
     if (!is_file($companyPath)) {
@@ -186,11 +134,6 @@ function documents_ensure_structure(): void
     $rulesPath = documents_settings_dir() . '/numbering_rules.json';
     if (!is_file($rulesPath)) {
         json_save($rulesPath, documents_numbering_defaults());
-    }
-
-    $quotationDefaultsPath = documents_settings_dir() . '/quotation_defaults.json';
-    if (!is_file($quotationDefaultsPath)) {
-        json_save($quotationDefaultsPath, documents_quotation_defaults_settings());
     }
     documents_ensure_numbering_rules_for_proforma_invoice();
 
@@ -663,33 +606,6 @@ function documents_quote_defaults(): array
             'pm_subsidy_info' => '',
         ],
         'template_attachments' => documents_template_attachment_defaults(),
-
-        'visual_overrides' => [
-            'base_font_size_px' => null,
-            'colors' => [
-                'primary' => null,
-                'secondary' => null,
-                'accent' => null,
-            ],
-            'watermark' => [
-                'enabled' => null,
-                'image_path' => null,
-                'opacity' => null,
-                'scale_percent' => null,
-            ],
-        ],
-        'finance_inputs' => [
-            'segment' => 'RES',
-            'unit_rate_rs_per_kwh' => null,
-            'annual_generation_kwh_per_kw' => null,
-            'financing_mode' => 'loan',
-            'loan_interest_rate_percent' => null,
-            'loan_tenure_years' => null,
-            'down_payment_percent' => 10,
-            'monthly_bill_estimate_rs' => null,
-            'monthly_units_estimate_kwh' => null,
-            'analysis_years' => 10,
-        ],
         'rendering' => [
             'background_image' => '',
             'background_opacity' => 1.0,
@@ -1293,72 +1209,6 @@ function documents_list_quotes(): array
     });
 
     return $quotes;
-}
-
-
-function documents_quote_effective_finance_inputs(array $quote): array
-{
-    $settings = documents_get_quotation_settings();
-    $input = is_array($quote['finance_inputs'] ?? null) ? $quote['finance_inputs'] : [];
-    $segment = safe_text((string) ($input['segment'] ?? $quote['segment'] ?? 'RES'));
-    if (!in_array($segment, ['RES', 'COM', 'IND', 'INST'], true)) {
-        $segment = 'RES';
-    }
-    $segmentDefaults = is_array($settings['segments'][$segment] ?? null) ? $settings['segments'][$segment] : [];
-
-    return [
-        'segment' => $segment,
-        'unit_rate_rs_per_kwh' => is_numeric($input['unit_rate_rs_per_kwh'] ?? null) ? (float) $input['unit_rate_rs_per_kwh'] : (float) ($segmentDefaults['unit_rate_rs_per_kwh'] ?? 8.0),
-        'annual_generation_kwh_per_kw' => is_numeric($input['annual_generation_kwh_per_kw'] ?? null) ? (float) $input['annual_generation_kwh_per_kw'] : (float) ($segmentDefaults['annual_generation_kwh_per_kw'] ?? 1500),
-        'financing_mode' => in_array((string) ($input['financing_mode'] ?? 'loan'), ['loan', 'self'], true) ? (string) $input['financing_mode'] : 'loan',
-        'loan_interest_rate_percent' => is_numeric($input['loan_interest_rate_percent'] ?? null) ? (float) $input['loan_interest_rate_percent'] : (float) ($segmentDefaults['bank_interest_rate_percent'] ?? 10.0),
-        'loan_tenure_years' => is_numeric($input['loan_tenure_years'] ?? null) ? max(1, (int) $input['loan_tenure_years']) : max(1, (int) ($segmentDefaults['bank_tenure_years'] ?? 7)),
-        'down_payment_percent' => is_numeric($input['down_payment_percent'] ?? null) ? max(0.0, min(100.0, (float) $input['down_payment_percent'])) : 10.0,
-        'monthly_bill_estimate_rs' => is_numeric($input['monthly_bill_estimate_rs'] ?? null) ? max(0.0, (float) $input['monthly_bill_estimate_rs']) : null,
-        'monthly_units_estimate_kwh' => is_numeric($input['monthly_units_estimate_kwh'] ?? null) ? max(0.0, (float) $input['monthly_units_estimate_kwh']) : null,
-        'analysis_years' => is_numeric($input['analysis_years'] ?? null) ? max(1, min(25, (int) $input['analysis_years'])) : 10,
-    ];
-}
-
-function documents_quote_effective_visuals(array $quote): array
-{
-    $settings = documents_get_quotation_settings();
-    $overrides = is_array($quote['visual_overrides'] ?? null) ? $quote['visual_overrides'] : [];
-    $watermarkOverride = is_array($overrides['watermark'] ?? null) ? $overrides['watermark'] : [];
-
-    $fontSize = is_numeric($overrides['base_font_size_px'] ?? null) ? (float) $overrides['base_font_size_px'] : (float) ($settings['typography']['base_font_size_px'] ?? 14);
-    $colors = is_array($settings['colors'] ?? null) ? $settings['colors'] : [];
-    $colorOverride = is_array($overrides['colors'] ?? null) ? $overrides['colors'] : [];
-    foreach (['primary', 'secondary', 'accent'] as $colorKey) {
-        $value = safe_text((string) ($colorOverride[$colorKey] ?? ''));
-        if ($value !== '') {
-            $colors[$colorKey] = $value;
-        }
-    }
-
-    $watermark = is_array($settings['watermark'] ?? null) ? $settings['watermark'] : [];
-    foreach (['enabled', 'image_path', 'opacity', 'scale_percent'] as $key) {
-        if (array_key_exists($key, $watermarkOverride) && $watermarkOverride[$key] !== null && $watermarkOverride[$key] !== '') {
-            $watermark[$key] = $watermarkOverride[$key];
-        }
-    }
-    $watermark['enabled'] = (bool) ($watermark['enabled'] ?? false);
-    $watermark['opacity'] = max(0.02, min(0.2, (float) ($watermark['opacity'] ?? 0.08)));
-    $watermark['scale_percent'] = max(20, min(120, (float) ($watermark['scale_percent'] ?? 70)));
-
-    return [
-        'base_font_size_px' => max(11, min(20, $fontSize)),
-        'heading_scale' => max(0.8, min(1.4, (float) ($settings['typography']['heading_scale'] ?? 1.0))),
-        'colors' => [
-            'primary' => (string) ($colors['primary'] ?? '#0ea5e9'),
-            'secondary' => (string) ($colors['secondary'] ?? '#22c55e'),
-            'accent' => (string) ($colors['accent'] ?? '#f59e0b'),
-            'muted' => (string) ($colors['muted'] ?? '#64748b'),
-        ],
-        'watermark' => $watermark,
-        'emission_factor_kg_per_kwh' => (float) ($settings['emission_factor_kg_per_kwh'] ?? 0.82),
-        'tree_absorption_kg_per_year' => (float) ($settings['tree_absorption_kg_per_year'] ?? 20),
-    ];
 }
 
 function documents_get_quote(string $id): ?array
