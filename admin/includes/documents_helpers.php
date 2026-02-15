@@ -78,6 +78,11 @@ function documents_public_backgrounds_dir(): string
     return dirname(__DIR__, 2) . '/images/documents/backgrounds';
 }
 
+function documents_public_watermarks_dir(): string
+{
+    return dirname(__DIR__, 2) . '/images/documents/watermarks';
+}
+
 function documents_public_media_dir(): string
 {
     return dirname(__DIR__, 2) . '/images/documents';
@@ -123,6 +128,7 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_invoices_dir());
     documents_ensure_dir(documents_public_branding_dir());
     documents_ensure_dir(documents_public_backgrounds_dir());
+    documents_ensure_dir(documents_public_watermarks_dir());
     documents_ensure_dir(documents_public_diagrams_dir());
     documents_ensure_dir(documents_public_uploads_dir());
 
@@ -136,6 +142,11 @@ function documents_ensure_structure(): void
         json_save($rulesPath, documents_numbering_defaults());
     }
     documents_ensure_numbering_rules_for_proforma_invoice();
+
+    $quoteDefaultsPath = documents_settings_dir() . '/quote_visual_defaults.json';
+    if (!is_file($quoteDefaultsPath)) {
+        json_save($quoteDefaultsPath, documents_quote_visual_defaults());
+    }
 
     $templatesPath = documents_templates_dir() . '/template_sets.json';
     if (!is_file($templatesPath)) {
@@ -605,14 +616,77 @@ function documents_quote_defaults(): array
             'terms_conditions' => '',
             'pm_subsidy_info' => '',
         ],
-        'template_attachments' => documents_template_attachment_defaults(),
-        'rendering' => [
-            'background_image' => '',
-            'background_opacity' => 1.0,
+        'share' => [
+            'enabled' => false,
+            'token' => '',
+            'enabled_at' => '',
+            'disabled_at' => '',
         ],
+        'proposal_inputs' => documents_quote_proposal_input_defaults('RES'),
+        'proposal_overrides' => [],
+        'template_attachments' => documents_template_attachment_defaults(),
         'pdf_path' => '',
         'pdf_generated_at' => '',
     ];
+}
+
+function documents_quote_visual_defaults(): array
+{
+    return [
+        'RES' => ['unit_rate_rs' => 8, 'annual_generation_kwh_per_kw' => 1450, 'interest_rate_percent' => 7, 'tenure_years' => 5, 'down_payment_percent' => 10, 'remaining_bill_percent_after_solar' => 10],
+        'COM' => ['unit_rate_rs' => 9, 'annual_generation_kwh_per_kw' => 1450, 'interest_rate_percent' => 8, 'tenure_years' => 5, 'down_payment_percent' => 10, 'remaining_bill_percent_after_solar' => 15],
+        'IND' => ['unit_rate_rs' => 9, 'annual_generation_kwh_per_kw' => 1450, 'interest_rate_percent' => 8, 'tenure_years' => 6, 'down_payment_percent' => 15, 'remaining_bill_percent_after_solar' => 20],
+        'INST' => ['unit_rate_rs' => 8, 'annual_generation_kwh_per_kw' => 1450, 'interest_rate_percent' => 7, 'tenure_years' => 7, 'down_payment_percent' => 10, 'remaining_bill_percent_after_solar' => 15],
+        'environment' => ['emission_factor_kg_per_kwh' => 0.82, 'tree_absorption_kg_per_year' => 20],
+        'watermark' => ['enabled' => true, 'image_path' => '', 'opacity' => 0.12],
+    ];
+}
+
+function documents_get_quote_visual_defaults(): array
+{
+    $defaults = documents_quote_visual_defaults();
+    $raw = json_load(documents_settings_dir() . '/quote_visual_defaults.json', $defaults);
+    return is_array($raw) ? array_replace_recursive($defaults, $raw) : $defaults;
+}
+
+function documents_quote_proposal_input_defaults(string $segment = 'RES'): array
+{
+    $segment = in_array($segment, ['RES', 'COM', 'IND', 'INST'], true) ? $segment : 'RES';
+    $visual = documents_get_quote_visual_defaults();
+    $seg = is_array($visual[$segment] ?? null) ? $visual[$segment] : [];
+    $env = is_array($visual['environment'] ?? null) ? $visual['environment'] : [];
+
+    return [
+        'monthly_bill_rs' => 0,
+        'unit_rate_rs' => (float) ($seg['unit_rate_rs'] ?? 8),
+        'annual_generation_kwh_per_kw' => (float) ($seg['annual_generation_kwh_per_kw'] ?? 1450),
+        'emission_factor_kg_per_kwh' => (float) ($env['emission_factor_kg_per_kwh'] ?? 0.82),
+        'tree_absorption_kg_per_year' => (float) ($env['tree_absorption_kg_per_year'] ?? 20),
+        'financing_enabled' => true,
+        'interest_rate_percent' => (float) ($seg['interest_rate_percent'] ?? 7),
+        'tenure_years' => (int) ($seg['tenure_years'] ?? 5),
+        'down_payment_percent' => (float) ($seg['down_payment_percent'] ?? 10),
+        'remaining_bill_percent_after_solar' => (float) ($seg['remaining_bill_percent_after_solar'] ?? 10),
+        'analysis_years' => 10,
+        'transportation_rs' => 0,
+    ];
+}
+
+function documents_quote_resolve_proposal_inputs(array $quote): array
+{
+    $base = documents_quote_proposal_input_defaults((string) ($quote['segment'] ?? 'RES'));
+    $saved = is_array($quote['proposal_inputs'] ?? null) ? $quote['proposal_inputs'] : [];
+    $overrides = is_array($quote['proposal_overrides'] ?? null) ? $quote['proposal_overrides'] : [];
+    $merged = array_merge($base, $saved, $overrides);
+    $merged['financing_enabled'] = !empty($merged['financing_enabled']);
+    $merged['analysis_years'] = max(1, (int) ($merged['analysis_years'] ?? 10));
+    return $merged;
+}
+
+function documents_generate_share_token(int $bytes = 24): string
+{
+    $bytes = max(16, $bytes);
+    return bin2hex(random_bytes($bytes));
 }
 
 function documents_proforma_defaults(): array
