@@ -17,17 +17,57 @@
       "footer_bg": "#0f172a",
       "footer_text": "#e2e8f0",
       "chip_bg": "#ccfbf1",
-      "chip_text": "#134e4a"
+      "chip_text": "#134e4a",
+      "header_gradient_text": "#ecfeff",
+      "footer_gradient_text": "#e2e8f0"
     },
     "typography": {
       "base_font_px": 14,
       "heading_scale": 1,
-      "density": "comfortable"
+      "density": "comfortable",
+      "h1_px": 24,
+      "h2_px": 18,
+      "h3_px": 16,
+      "line_height": 1.6
     },
     "energy_defaults": {
       "annual_generation_per_kw": 1450,
       "emission_factor_kg_per_kwh": 0.82,
       "tree_absorption_kg_per_tree_per_year": 20
+    },
+    "ui_tokens": {
+      "colors": {
+        "primary": "#0ea5e9",
+        "accent": "#22c55e",
+        "text": "#0f172a",
+        "muted_text": "#475569",
+        "page_bg": "#f8fafc",
+        "card_bg": "#ffffff",
+        "border": "#e2e8f0"
+      },
+      "gradients": {
+        "header": {
+          "enabled": true,
+          "a": "#0ea5e9",
+          "b": "#22c55e",
+          "direction": "to right"
+        },
+        "footer": {
+          "enabled": true,
+          "a": "#0ea5e9",
+          "b": "#22c55e",
+          "direction": "to right"
+        }
+      },
+      "shadow": "soft",
+      "typography": {
+        "base_px": 14,
+        "h1_px": 24,
+        "h2_px": 18,
+        "h3_px": 16,
+        "line_height": 1.6
+      },
+      "border_radius": 12
     }
   },
   "segments": {

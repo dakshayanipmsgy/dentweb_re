@@ -188,6 +188,8 @@ function documents_quote_defaults_settings(): array
                 'footer_text' => '#e2e8f0',
                 'chip_bg' => '#ccfbf1',
                 'chip_text' => '#134e4a',
+                'header_gradient_text' => '#ecfeff',
+                'footer_gradient_text' => '#e2e8f0',
                 'logo_path' => '',
                 'tagline' => '',
                 'contact_line' => '',
@@ -201,6 +203,34 @@ function documents_quote_defaults_settings(): array
                 'base_font_px' => 14,
                 'heading_scale' => 1.0,
                 'density' => 'comfortable',
+                'h1_px' => 24,
+                'h2_px' => 18,
+                'h3_px' => 16,
+                'line_height' => 1.6,
+            ],
+            'ui_tokens' => [
+                'colors' => [
+                    'primary' => '#0ea5e9',
+                    'accent' => '#22c55e',
+                    'text' => '#0f172a',
+                    'muted_text' => '#475569',
+                    'page_bg' => '#f8fafc',
+                    'card_bg' => '#ffffff',
+                    'border' => '#e2e8f0',
+                ],
+                'gradients' => [
+                    'header' => ['enabled' => true, 'a' => '#0ea5e9', 'b' => '#22c55e', 'direction' => 'to right'],
+                    'footer' => ['enabled' => true, 'a' => '#0ea5e9', 'b' => '#22c55e', 'direction' => 'to right'],
+                ],
+                'shadow' => 'soft',
+                'typography' => [
+                    'base_px' => 14,
+                    'h1_px' => 24,
+                    'h2_px' => 18,
+                    'h3_px' => 16,
+                    'line_height' => 1.6,
+                ],
+                'border_radius' => 12,
             ],
             'energy_defaults' => [
                 'annual_generation_per_kw' => 1450,
@@ -1156,26 +1186,43 @@ function documents_normalize_quote_items(array $items, string $systemType = 'Ong
     return $rows;
 }
 
-function documents_calc_pricing_from_items(array $items, string $pricingMode, string $taxType, float $transportationRs = 0.0, float $subsidyExpectedRs = 0.0): array
+function documents_calc_pricing_from_items(array $items, string $pricingMode, string $taxType, float $transportationRs = 0.0, float $subsidyExpectedRs = 0.0, ?float $systemTotalInclGstRs = null): array
 {
     $pricingMode = in_array($pricingMode, ['solar_split_70_30', 'flat_5'], true) ? $pricingMode : 'solar_split_70_30';
     $taxType = $taxType === 'IGST' ? 'IGST' : 'CGST_SGST';
-    $baseTotal = 0.0;
-    foreach ($items as $item) {
-        if (!is_array($item)) { continue; }
-        $baseTotal += max(0, (float) ($item['basic_amount'] ?? 0));
-    }
-
-    if ($pricingMode === 'flat_5') {
+    $finalPrice = max(0, (float) ($systemTotalInclGstRs ?? 0));
+    if ($finalPrice <= 0) {
+        $baseTotal = 0.0;
+        foreach ($items as $item) {
+            if (!is_array($item)) { continue; }
+            $baseTotal += max(0, (float) ($item['basic_amount'] ?? 0));
+        }
+        if ($pricingMode === 'flat_5') {
+            $bucket5Basic = $baseTotal;
+            $bucket18Basic = 0.0;
+            $bucket5Gst = $bucket5Basic * 0.05;
+            $bucket18Gst = 0.0;
+            $finalPrice = $baseTotal + $bucket5Gst;
+        } else {
+            $bucket5Basic = $baseTotal * 0.70;
+            $bucket18Basic = $baseTotal * 0.30;
+            $bucket5Gst = $bucket5Basic * 0.05;
+            $bucket18Gst = $bucket18Basic * 0.18;
+            $finalPrice = $baseTotal + $bucket5Gst + $bucket18Gst;
+        }
+    } elseif ($pricingMode === 'flat_5') {
+        $baseTotal = $finalPrice / 1.05;
         $bucket5Basic = $baseTotal;
         $bucket18Basic = 0.0;
+        $bucket5Gst = $bucket5Basic * 0.05;
+        $bucket18Gst = 0.0;
     } else {
+        $baseTotal = $finalPrice / 1.089;
         $bucket5Basic = $baseTotal * 0.70;
         $bucket18Basic = $baseTotal * 0.30;
+        $bucket5Gst = $bucket5Basic * 0.05;
+        $bucket18Gst = $bucket18Basic * 0.18;
     }
-    $bucket5Gst = $bucket5Basic * 0.05;
-    $bucket18Gst = $bucket18Basic * 0.18;
-    $finalPrice = $baseTotal + $bucket5Gst + $bucket18Gst;
     $transportationRs = max(0, $transportationRs);
     $grossPayable = $finalPrice + $transportationRs;
     $subsidyExpectedRs = max(0, $subsidyExpectedRs);
