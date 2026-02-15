@@ -207,6 +207,8 @@ function documents_get_document_style_settings(): array
         return $defaults;
     }
 
+    $loaded = documents_normalize_document_style($loaded, $defaults);
+
     $updated = false;
     foreach (['theme', 'typography', 'layout', 'defaults'] as $section) {
         if (!isset($loaded[$section]) || !is_array($loaded[$section])) {
@@ -223,6 +225,63 @@ function documents_get_document_style_settings(): array
     }
 
     return $loaded;
+}
+
+function documents_normalize_document_style(array $style, ?array $defaults = null): array
+{
+    $defaults = $defaults ?? documents_document_style_defaults();
+    $legacyToThemeMap = [
+        'primary' => 'primary_color',
+        'primaryColor' => 'primary_color',
+        'secondary' => 'accent_color',
+        'secondaryColor' => 'accent_color',
+        'accent' => 'accent_color',
+        'accentColor' => 'accent_color',
+        'text' => 'text_color',
+        'textColor' => 'text_color',
+        'muted' => 'muted_text_color',
+        'mutedColor' => 'muted_text_color',
+        'muted_text' => 'muted_text_color',
+        'background' => 'bg_color',
+        'backgroundColor' => 'bg_color',
+        'cardBackground' => 'card_bg',
+        'card_background' => 'card_bg',
+        'cardBorder' => 'border_color',
+        'border' => 'border_color',
+        'borderColor' => 'border_color',
+    ];
+
+    $sourceTheme = is_array($style['theme'] ?? null) ? $style['theme'] : [];
+    foreach ($legacyToThemeMap as $legacyKey => $themeKey) {
+        if (!isset($sourceTheme[$themeKey]) && isset($style[$legacyKey])) {
+            $sourceTheme[$themeKey] = $style[$legacyKey];
+        }
+        if (!isset($sourceTheme[$themeKey]) && isset($sourceTheme[$legacyKey])) {
+            $sourceTheme[$themeKey] = $sourceTheme[$legacyKey];
+        }
+    }
+    $style['theme'] = array_merge($defaults['theme'], $sourceTheme);
+
+    $sourceTypography = is_array($style['typography'] ?? null) ? $style['typography'] : [];
+    if (!isset($sourceTypography['base_font_size_px']) && isset($style['base_font_size'])) {
+        $sourceTypography['base_font_size_px'] = $style['base_font_size'];
+    }
+    if (!isset($sourceTypography['line_height']) && isset($style['lineHeight'])) {
+        $sourceTypography['line_height'] = $style['lineHeight'];
+    }
+    $style['typography'] = array_merge($defaults['typography'], $sourceTypography);
+
+    $style['layout'] = array_merge(
+        $defaults['layout'],
+        is_array($style['layout'] ?? null) ? $style['layout'] : []
+    );
+
+    $style['defaults'] = array_merge(
+        $defaults['defaults'],
+        is_array($style['defaults'] ?? null) ? $style['defaults'] : []
+    );
+
+    return $style;
 }
 
 function documents_quote_is_pm_surya_ghar(array $quote): bool
@@ -254,7 +313,8 @@ function documents_calculate_pm_surya_subsidy(float $capacityKwp): float
 
 function documents_merge_style_with_override(array $global, array $override): array
 {
-    $merged = $global;
+    $merged = documents_normalize_document_style($global);
+    $override = documents_normalize_document_style($override);
     foreach (['theme', 'typography', 'layout', 'defaults'] as $section) {
         if (!is_array($override[$section] ?? null)) {
             continue;
