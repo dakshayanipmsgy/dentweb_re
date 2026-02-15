@@ -187,11 +187,9 @@ function documents_document_style_defaults(): array
             'commercial_unit_rate_rs_per_kwh' => 9.0,
             'industrial_unit_rate_rs_per_kwh' => 8.0,
             'institutional_unit_rate_rs_per_kwh' => 7.5,
-            'unit_rate_rs_per_kwh' => 7.0,
             'default_bank_interest_rate_percent' => 10.0,
             'default_loan_tenure_years' => 10,
             'default_annual_generation_per_kw' => 1450,
-            'minimum_fixed_charges_rs' => 200,
             'default_emission_factor_kg_per_kwh' => 0.82,
             'kg_co2_absorbed_per_tree_per_year' => 20,
         ],
@@ -201,55 +199,16 @@ function documents_document_style_defaults(): array
 function documents_get_document_style_settings(): array
 {
     $defaults = documents_document_style_defaults();
-    $path = documents_settings_dir() . '/document_style.json';
-    $loaded = json_load($path, $defaults);
+    $loaded = json_load(documents_settings_dir() . '/document_style.json', $defaults);
     if (!is_array($loaded)) {
         return $defaults;
     }
 
-    $updated = false;
     foreach (['theme', 'typography', 'layout', 'defaults'] as $section) {
-        if (!isset($loaded[$section]) || !is_array($loaded[$section])) {
-            $updated = true;
-        }
         $loaded[$section] = array_merge($defaults[$section], is_array($loaded[$section] ?? null) ? $loaded[$section] : []);
-        if (count(array_diff_key($defaults[$section], $loaded[$section])) > 0) {
-            $updated = true;
-        }
-    }
-
-    if ($updated) {
-        json_save($path, $loaded);
     }
 
     return $loaded;
-}
-
-function documents_quote_is_pm_surya_ghar(array $quote): bool
-{
-    $haystack = strtolower(implode(' ', array_filter([
-        (string) ($quote['scheme_type'] ?? ''),
-        (string) ($quote['customer_type'] ?? ''),
-        (string) ($quote['template_set_id'] ?? ''),
-        (string) ($quote['system_type'] ?? ''),
-    ])));
-
-    return strpos($haystack, 'pm') !== false && strpos($haystack, 'surya') !== false;
-}
-
-function documents_calculate_pm_surya_subsidy(float $capacityKwp): float
-{
-    if ($capacityKwp < 1) {
-        return 0.0;
-    }
-    if ($capacityKwp < 2) {
-        return 30000.0;
-    }
-    if ($capacityKwp < 3) {
-        return 60000.0;
-    }
-
-    return 78000.0;
 }
 
 function documents_merge_style_with_override(array $global, array $override): array
@@ -485,8 +444,6 @@ function documents_company_profile_defaults(): array
         'bank_ifsc' => '',
         'bank_branch' => '',
         'upi_id' => '',
-        'upi_qr_path' => '',
-        'pan' => '',
         'default_cta_line' => '',
         'logo_path' => '',
         'updated_at' => '',
@@ -713,14 +670,12 @@ function documents_quote_defaults(): array
         'style_override' => [],
         'financial_inputs' => [
             'estimated_monthly_bill_rs' => '',
-            'estimated_monthly_units_kwh' => '',
             'subsidy_expected_rs' => '',
             'unit_rate_rs_per_kwh' => '',
             'annual_generation_per_kw' => '',
             'interest_rate_percent' => '',
             'loan_tenure_years' => '',
-            'margin_money_percent' => 10,
-            'min_monthly_bill_rs_override' => '',
+            'min_monthly_bill_after_solar_rs' => 300,
             'analysis_mode' => 'simple_monthly',
             'years_for_cumulative_chart' => 25,
             'emission_factor_kg_per_kwh' => '',
