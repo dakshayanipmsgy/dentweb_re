@@ -178,6 +178,28 @@ function documents_quote_defaults_settings(): array
 {
     return [
         'global' => [
+            'theme' => [
+                'primary_color' => '#0f766e',
+                'accent_color' => '#f59e0b',
+                'text_color' => '#0f172a',
+                'muted_text_color' => '#475569',
+                'background_color' => '#eef3f9',
+                'card_background_color' => '#ffffff',
+                'border_color' => '#dbe1ea',
+                'shadow_strength' => 'soft',
+                'border_radius_px' => 14,
+                'base_font_px' => 14,
+                'h1_px' => 24,
+                'h2_px' => 18,
+                'h3_px' => 15,
+                'line_height' => 1.5,
+                'header_gradient_enabled' => false,
+                'header_gradient_from' => '#0f766e',
+                'header_gradient_to' => '#22c55e',
+                'footer_gradient_enabled' => false,
+                'footer_gradient_from' => '#0f172a',
+                'footer_gradient_to' => '#1e293b',
+            ],
             'branding' => [
                 'primary_color' => '#0f766e',
                 'secondary_color' => '#22c55e',
@@ -203,6 +225,17 @@ function documents_quote_defaults_settings(): array
                 'density' => 'comfortable',
             ],
             'energy_defaults' => [
+                'annual_generation_per_kw' => 1450,
+                'emission_factor_kg_per_kwh' => 0.82,
+                'tree_absorption_kg_per_tree_per_year' => 20,
+            ],
+            'calculation_defaults' => [
+                'unit_rate_residential' => 8,
+                'unit_rate_industrial' => 11,
+                'unit_rate_commercial' => 10,
+                'unit_rate_institutional' => 9,
+                'loan_bestcase_interest_pct' => 6.0,
+                'loan_bestcase_tenure_years' => 10,
                 'annual_generation_per_kw' => 1450,
                 'emission_factor_kg_per_kwh' => 0.82,
                 'tree_absorption_kg_per_tree_per_year' => 20,
@@ -1156,26 +1189,35 @@ function documents_normalize_quote_items(array $items, string $systemType = 'Ong
     return $rows;
 }
 
-function documents_calc_pricing_from_items(array $items, string $pricingMode, string $taxType, float $transportationRs = 0.0, float $subsidyExpectedRs = 0.0): array
+function documents_calc_pricing_from_items(array $items, string $pricingMode, string $taxType, float $transportationRs = 0.0, float $subsidyExpectedRs = 0.0, float $systemPriceInclGst = 0.0): array
 {
     $pricingMode = in_array($pricingMode, ['solar_split_70_30', 'flat_5'], true) ? $pricingMode : 'solar_split_70_30';
     $taxType = $taxType === 'IGST' ? 'IGST' : 'CGST_SGST';
-    $baseTotal = 0.0;
-    foreach ($items as $item) {
-        if (!is_array($item)) { continue; }
-        $baseTotal += max(0, (float) ($item['basic_amount'] ?? 0));
+    $finalPrice = max(0, $systemPriceInclGst);
+    if ($finalPrice <= 0) {
+        $baseFromItems = 0.0;
+        foreach ($items as $item) {
+            if (!is_array($item)) { continue; }
+            $baseFromItems += max(0, (float) ($item['basic_amount'] ?? 0));
+        }
+        if ($pricingMode === 'flat_5') {
+            $finalPrice = $baseFromItems * 1.05;
+        } else {
+            $finalPrice = $baseFromItems * 1.089;
+        }
     }
 
     if ($pricingMode === 'flat_5') {
+        $baseTotal = $finalPrice / 1.05;
         $bucket5Basic = $baseTotal;
         $bucket18Basic = 0.0;
     } else {
+        $baseTotal = $finalPrice / 1.089;
         $bucket5Basic = $baseTotal * 0.70;
         $bucket18Basic = $baseTotal * 0.30;
     }
     $bucket5Gst = $bucket5Basic * 0.05;
     $bucket18Gst = $bucket18Basic * 0.18;
-    $finalPrice = $baseTotal + $bucket5Gst + $bucket18Gst;
     $transportationRs = max(0, $transportationRs);
     $grossPayable = $finalPrice + $transportationRs;
     $subsidyExpectedRs = max(0, $subsidyExpectedRs);
