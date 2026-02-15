@@ -9,7 +9,7 @@ require_admin();
 $docTypes = ['quotation', 'proforma', 'agreement', 'challan', 'invoice_public', 'invoice_internal', 'receipt', 'sales_return'];
 $segments = ['RES', 'COM', 'IND', 'INST', 'PROD'];
 
-$companyPath = documents_settings_dir() . '/company_profile.json';
+$companyPath = documents_company_profile_path();
 $numberingPath = documents_settings_dir() . '/numbering_rules.json';
 $templatePath = documents_templates_dir() . '/template_sets.json';
 
@@ -34,8 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = safe_text($_POST['action'] ?? '');
 
     if ($action === 'save_company_profile') {
-        $profile = json_load($companyPath, documents_company_profile_defaults());
-        $profile = array_merge(documents_company_profile_defaults(), is_array($profile) ? $profile : []);
+        $profile = load_company_profile();
 
         $fields = array_keys(documents_company_profile_defaults());
         foreach ($fields as $field) {
@@ -53,13 +52,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $profile['logo_path'] = '/images/documents/branding/' . $upload['filename'];
         }
 
-        $profile['updated_at'] = date('c');
-        $saved = json_save($companyPath, $profile);
+        $waDigits = preg_replace('/\D+/', '', (string) ($profile['whatsapp_number'] ?? '')) ?? '';
+        if ($waDigits !== '' && (strlen($waDigits) < 10 || strlen($waDigits) > 12)) {
+            $redirectWith('company', 'error', 'WhatsApp number must contain 10 to 12 digits.');
+        }
+
+        $pan = strtoupper((string) ($profile['pan'] ?? ''));
+        $panWarning = ($pan !== '' && !preg_match('/^[A-Z]{5}[0-9]{4}[A-Z]$/', $pan));
+
+        $saved = save_company_profile($profile);
         if (!$saved['ok']) {
             $redirectWith('company', 'error', 'Unable to save company profile.');
         }
 
-        $redirectWith('company', 'success', 'Company profile saved successfully.');
+        $msg = $panWarning
+            ? 'Company profile saved. Warning: PAN format looks unusual (expected ABCDE1234F).'
+            : 'Company profile saved successfully.';
+        $redirectWith('company', 'success', $msg);
     }
 
     if ($action === 'save_numbering_rule') {
@@ -274,8 +283,7 @@ if (!in_array($activeTab, ['company', 'numbering', 'templates'], true)) {
 $status = safe_text($_GET['status'] ?? '');
 $message = safe_text($_GET['message'] ?? '');
 
-$company = json_load($companyPath, documents_company_profile_defaults());
-$company = array_merge(documents_company_profile_defaults(), is_array($company) ? $company : []);
+$company = load_company_profile();
 
 $numbering = json_load($numberingPath, documents_numbering_defaults());
 $numbering = array_merge(documents_numbering_defaults(), is_array($numbering) ? $numbering : []);
@@ -371,6 +379,7 @@ $user = current_user();
               <?php endif; ?>
             </div>
           </div>
+          <p class="muted">WhatsApp accepts 10-12 digits. PAN is optional but should look like ABCDE1234F.</p>
           <p class="muted">Last updated: <?= htmlspecialchars((string) ($company['updated_at'] ?: 'Never'), ENT_QUOTES) ?></p>
           <button class="btn" type="submit">Save Company Profile</button>
         </form>

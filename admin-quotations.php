@@ -12,7 +12,7 @@ $templates = array_values(array_filter(json_load(documents_templates_dir() . '/t
     return is_array($row) && !($row['archived_flag'] ?? false);
 }));
 $templateBlocks = documents_sync_template_block_entries($templates);
-$company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
+$company = load_company_profile();
 
 $redirectWith = static function (string $type, string $msg): void {
     header('Location: admin-quotations.php?' . http_build_query(['status' => $type, 'message' => $msg]));
@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = safe_text($_POST['action'] ?? '');
     if ($action === 'save_settings') {
-        $d = documents_get_quote_defaults_settings();
+        $d = load_quote_defaults();
         foreach (['primary','accent','text','muted_text','page_bg','card_bg','border'] as $k) { $d['global']['ui_tokens']['colors'][$k] = safe_text($_POST['ui_' . $k . '_hex'] ?? ($_POST['ui_' . $k] ?? ($d['global']['ui_tokens']['colors'][$k] ?? ''))); }
         foreach (['header','footer'] as $part) { $d['global']['ui_tokens']['gradients'][$part]['enabled'] = isset($_POST[$part . '_gradient_enabled']); $d['global']['ui_tokens']['gradients'][$part]['a'] = safe_text($_POST[$part . '_gradient_a_hex'] ?? ($_POST[$part . '_gradient_a'] ?? ($d['global']['ui_tokens']['gradients'][$part]['a'] ?? ''))); $d['global']['ui_tokens']['gradients'][$part]['b'] = safe_text($_POST[$part . '_gradient_b_hex'] ?? ($_POST[$part . '_gradient_b'] ?? ($d['global']['ui_tokens']['gradients'][$part]['b'] ?? ''))); $d['global']['ui_tokens']['gradients'][$part]['direction'] = safe_text($_POST[$part . '_gradient_direction'] ?? ($d['global']['ui_tokens']['gradients'][$part]['direction'] ?? 'to right')); }
         $d['global']['ui_tokens']['shadow'] = safe_text($_POST['ui_shadow'] ?? ($d['global']['ui_tokens']['shadow'] ?? 'soft'));
@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($whyPoints !== []) {
             $d['global']['quotation_ui']['why_dakshayani_points'] = $whyPoints;
         }
-        $saved = json_save(documents_settings_dir() . '/quote_defaults.json', $d);
+        $saved = save_quote_defaults($d);
         if (!($saved['ok'] ?? false)) { $redirectWith('error', 'Unable to save quotation settings.'); }
         header('Location: admin-quotations.php?' . http_build_query(['tab' => 'settings', 'status' => 'success', 'message' => 'Quotation settings saved.']));
         exit;

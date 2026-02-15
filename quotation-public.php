@@ -12,7 +12,7 @@ foreach (documents_list_quotes() as $q) {
     }
 }
 if ($token === '' || $quote === null) { http_response_code(404); echo '<h1>Link invalid or expired.</h1>'; exit; }
-$quoteDefaults = documents_get_quote_defaults_settings();
+$quoteDefaults = load_quote_defaults();
 $company = documents_get_company_profile_for_quotes();
 $shareUrl=((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']!=='off')?'https://':'http://').($_SERVER['HTTP_HOST'] ?? 'localhost').'/quotation-public.php?token='.urlencode((string)($quote['share']['public_token'] ?? ''));
 quotation_render($quote, $quoteDefaults, $company, false, $shareUrl);

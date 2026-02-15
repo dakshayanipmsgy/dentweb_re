@@ -132,7 +132,7 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_public_diagrams_dir());
     documents_ensure_dir(documents_public_uploads_dir());
 
-    $companyPath = documents_settings_dir() . '/company_profile.json';
+    $companyPath = documents_company_profile_path();
     if (!is_file($companyPath)) {
         json_save($companyPath, documents_company_profile_defaults());
     }
@@ -168,10 +168,20 @@ function documents_ensure_structure(): void
         @file_put_contents($logPath, '', LOCK_EX);
     }
 
-    $quoteDefaultsPath = documents_settings_dir() . '/quote_defaults.json';
+    $quoteDefaultsPath = documents_quote_defaults_path();
     if (!is_file($quoteDefaultsPath)) {
         json_save($quoteDefaultsPath, documents_quote_defaults_settings());
     }
+}
+
+function documents_quote_defaults_path(): string
+{
+    return documents_settings_dir() . '/quote_defaults.json';
+}
+
+function documents_company_profile_path(): string
+{
+    return documents_settings_dir() . '/company_profile.json';
 }
 
 function documents_quote_defaults_settings(): array
@@ -287,16 +297,40 @@ function documents_quote_defaults_settings(): array
 
 function documents_get_quote_defaults_settings(): array
 {
-    $path = documents_settings_dir() . '/quote_defaults.json';
+    $path = documents_quote_defaults_path();
     $stored = json_load($path, []);
     return array_replace_recursive(documents_quote_defaults_settings(), is_array($stored) ? $stored : []);
+}
+
+function load_quote_defaults(): array
+{
+    return documents_get_quote_defaults_settings();
+}
+
+function save_quote_defaults(array $settings): array
+{
+    $merged = array_replace_recursive(documents_quote_defaults_settings(), $settings);
+    return json_save(documents_quote_defaults_path(), $merged);
+}
+
+function load_company_profile(): array
+{
+    $profile = json_load(documents_company_profile_path(), []);
+    return array_merge(documents_company_profile_defaults(), is_array($profile) ? $profile : []);
+}
+
+function save_company_profile(array $profile): array
+{
+    $merged = array_merge(documents_company_profile_defaults(), $profile);
+    $merged['updated_at'] = date('c');
+    return json_save(documents_company_profile_path(), $merged);
 }
 
 function documents_get_company_profile_for_quotes(): array
 {
     $profile = array_merge(
         documents_company_profile_defaults(),
-        json_load(documents_settings_dir() . '/company_profile.json', [])
+        load_company_profile()
     );
 
     $brand = json_load(dirname(__DIR__, 2) . '/data/marketing/brand_profile.json', []);
@@ -520,11 +554,13 @@ function documents_company_profile_defaults(): array
         'pin' => '',
         'phone_primary' => '',
         'phone_secondary' => '',
+        'whatsapp_number' => '',
         'email_primary' => '',
         'email_secondary' => '',
         'website' => '',
         'gstin' => '',
         'udyam' => '',
+        'pan' => '',
         'jreda_license' => '',
         'dwsd_license' => '',
         'bank_name' => '',

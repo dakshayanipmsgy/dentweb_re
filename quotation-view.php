@@ -21,7 +21,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
  if($action==='approve_quote' && $viewerType==='admin'){ $quote['status']='Approved'; $quote['approval']['approved_by_name']=(string)($user['full_name'] ?? 'Admin'); $quote['approval']['approved_at']=date('c'); $quote['updated_at']=date('c'); documents_save_quote($quote); $redirect('success','Quotation approved.'); }
  if($action==='share_update'){ $quote['share']['public_enabled']=isset($_POST['public_enabled']); if(isset($_POST['generate_token']) || (string)($quote['share']['public_token'] ?? '')===''){ $quote['share']['public_token']=bin2hex(random_bytes(16)); } $quote['updated_at']=date('c'); documents_save_quote($quote); $redirect('success','Share settings updated.'); }
 }
-$quoteDefaults = documents_get_quote_defaults_settings();
+$quoteDefaults = load_quote_defaults();
 $company = documents_get_company_profile_for_quotes();
 $shareUrl=((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']!=='off')?'https://':'http://').($_SERVER['HTTP_HOST'] ?? 'localhost').'/quotation-public.php?token='.urlencode((string)($quote['share']['public_token'] ?? ''));
 quotation_render($quote, $quoteDefaults, $company, true, $shareUrl);
