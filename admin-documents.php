@@ -160,6 +160,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $redirectWith('numbering', 'success', $msg);
     }
 
+    if ($action === 'save_quotation_settings') {
+        $settings = documents_get_quotation_settings();
+        foreach (['RES', 'COM', 'IND', 'INST'] as $segment) {
+            $settings['segments'][$segment]['unit_rate_rs_per_kwh'] = (float) ($_POST['segment_' . $segment . '_unit_rate'] ?? $settings['segments'][$segment]['unit_rate_rs_per_kwh']);
+            $settings['segments'][$segment]['annual_generation_kwh_per_kw'] = (float) ($_POST['segment_' . $segment . '_annual_generation'] ?? $settings['segments'][$segment]['annual_generation_kwh_per_kw']);
+            $settings['segments'][$segment]['bank_interest_rate_percent'] = (float) ($_POST['segment_' . $segment . '_interest'] ?? $settings['segments'][$segment]['bank_interest_rate_percent']);
+            $settings['segments'][$segment]['bank_tenure_years'] = max(1, (int) ($_POST['segment_' . $segment . '_tenure'] ?? $settings['segments'][$segment]['bank_tenure_years']));
+        }
+
+        $settings['emission_factor_kg_per_kwh'] = max(0, (float) ($_POST['emission_factor_kg_per_kwh'] ?? $settings['emission_factor_kg_per_kwh']));
+        $settings['tree_absorption_kg_per_year'] = max(0.01, (float) ($_POST['tree_absorption_kg_per_year'] ?? $settings['tree_absorption_kg_per_year']));
+        $settings['watermark']['enabled'] = isset($_POST['watermark_enabled']);
+        $settings['watermark']['image_path'] = safe_text($_POST['watermark_image_path'] ?? $settings['watermark']['image_path']);
+        $settings['watermark']['opacity'] = max(0.02, min(0.2, (float) ($_POST['watermark_opacity'] ?? $settings['watermark']['opacity'])));
+        $settings['watermark']['scale_percent'] = max(20, min(120, (float) ($_POST['watermark_scale_percent'] ?? $settings['watermark']['scale_percent'])));
+
+        if (isset($_FILES['watermark_image_upload']) && (int) ($_FILES['watermark_image_upload']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            $upload = documents_handle_image_upload($_FILES['watermark_image_upload'], documents_public_watermarks_dir(), 'watermark_');
+            if (!$upload['ok']) {
+                $redirectWith('quotation_settings', 'error', (string) $upload['error']);
+            }
+            $settings['watermark']['image_path'] = '/images/documents/watermarks/' . $upload['filename'];
+        }
+
+        $settings['typography']['base_font_size_px'] = max(11, min(20, (float) ($_POST['base_font_size_px'] ?? $settings['typography']['base_font_size_px'])));
+        $settings['typography']['heading_scale'] = max(0.8, min(1.4, (float) ($_POST['heading_scale'] ?? $settings['typography']['heading_scale'])));
+        foreach (['primary', 'secondary', 'accent', 'muted'] as $colorKey) {
+            $color = safe_text($_POST['color_' . $colorKey] ?? '');
+            if ($color !== '') {
+                $settings['colors'][$colorKey] = $color;
+            }
+        }
+
+        $saved = json_save(documents_settings_dir() . '/quotation_defaults.json', $settings);
+        if (!$saved['ok']) {
+            $redirectWith('quotation_settings', 'error', 'Unable to save quotation settings.');
+        }
+        $redirectWith('quotation_settings', 'success', 'Quotation settings saved successfully.');
+    }
+
+
     if ($action === 'save_template_set' || $action === 'archive_template_set' || $action === 'unarchive_template_set') {
         $rows = json_load($templatePath, []);
         $rows = is_array($rows) ? $rows : [];
@@ -267,7 +308,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $activeTab = safe_text($_GET['tab'] ?? 'company');
-if (!in_array($activeTab, ['company', 'numbering', 'templates'], true)) {
+if (!in_array($activeTab, ['company', 'numbering', 'templates', 'quotation_settings'], true)) {
     $activeTab = 'company';
 }
 
@@ -283,6 +324,8 @@ $numbering['rules'] = is_array($numbering['rules']) ? $numbering['rules'] : [];
 
 $templates = json_load($templatePath, []);
 $templates = is_array($templates) ? $templates : [];
+$quotationSettings = documents_get_quotation_settings();
+$watermarkFiles = glob(documents_public_watermarks_dir() . '/*.{png,jpg,jpeg,webp,svg}', GLOB_BRACE) ?: [];
 
 $user = current_user();
 ?>
@@ -343,6 +386,7 @@ $user = current_user();
       <a class="tab <?= $activeTab === 'company' ? 'active' : '' ?>" href="?tab=company">Company Profile &amp; Branding</a>
       <a class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering">Numbering Rules</a>
       <a class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates">Template Sets</a>
+      <a class="tab <?= $activeTab === 'quotation_settings' ? 'active' : '' ?>" href="?tab=quotation_settings">Quotation Settings</a>
       <a class="tab" href="admin-templates.php">Template Blocks &amp; Media</a>
       <a class="tab" href="admin-quotations.php">Quotation Manager</a>
       <a class="tab" href="admin-challans.php">Challans</a>
@@ -426,6 +470,53 @@ $user = current_user();
           <div><label>Current Number</label><input type="number" name="seq_current" min="1" value="1" /></div>
           <div><label>Status</label><label><input type="checkbox" name="active" checked /> Active</label></div>
           <div><button class="btn" type="submit">Save Numbering Rule</button></div>
+        </form>
+      </section>
+    <?php endif; ?>
+
+
+    <?php if ($activeTab === 'quotation_settings'): ?>
+      <section class="panel">
+        <h2>Quotation Settings</h2>
+        <form method="post" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+          <input type="hidden" name="action" value="save_quotation_settings" />
+          <h3>Per Segment Defaults</h3>
+          <div class="grid">
+          <?php foreach (['RES','COM','IND','INST'] as $segment): $seg = $quotationSettings['segments'][$segment] ?? []; ?>
+            <div class="card" style="padding:10px;border:1px solid #dbe1ea;border-radius:10px;">
+              <strong><?= htmlspecialchars($segment, ENT_QUOTES) ?></strong>
+              <label>Unit Rate (₹/kWh)</label><input type="number" step="0.01" name="segment_<?= htmlspecialchars($segment, ENT_QUOTES) ?>_unit_rate" value="<?= htmlspecialchars((string) ($seg['unit_rate_rs_per_kwh'] ?? ''), ENT_QUOTES) ?>">
+              <label>Annual Generation (kWh per kW)</label><input type="number" step="1" name="segment_<?= htmlspecialchars($segment, ENT_QUOTES) ?>_annual_generation" value="<?= htmlspecialchars((string) ($seg['annual_generation_kwh_per_kw'] ?? ''), ENT_QUOTES) ?>">
+              <label>Bank Interest Rate (%)</label><input type="number" step="0.01" name="segment_<?= htmlspecialchars($segment, ENT_QUOTES) ?>_interest" value="<?= htmlspecialchars((string) ($seg['bank_interest_rate_percent'] ?? ''), ENT_QUOTES) ?>">
+              <label>Bank Tenure (Years)</label><input type="number" min="1" name="segment_<?= htmlspecialchars($segment, ENT_QUOTES) ?>_tenure" value="<?= htmlspecialchars((string) ($seg['bank_tenure_years'] ?? ''), ENT_QUOTES) ?>">
+            </div>
+          <?php endforeach; ?>
+          </div>
+          <h3>Environment</h3>
+          <div class="grid">
+            <div><label>Emission Factor (kg CO₂ per kWh)</label><input type="number" step="0.01" name="emission_factor_kg_per_kwh" value="<?= htmlspecialchars((string) ($quotationSettings['emission_factor_kg_per_kwh'] ?? ''), ENT_QUOTES) ?>"></div>
+            <div><label>Tree Absorption (kg CO₂/tree/year)</label><input type="number" step="0.01" name="tree_absorption_kg_per_year" value="<?= htmlspecialchars((string) ($quotationSettings['tree_absorption_kg_per_year'] ?? ''), ENT_QUOTES) ?>"></div>
+          </div>
+          <h3>Watermark</h3>
+          <div class="grid">
+            <div><label><input type="checkbox" name="watermark_enabled" <?= !empty($quotationSettings['watermark']['enabled']) ? 'checked' : '' ?>> Enable Watermark</label></div>
+            <div><label>Watermark Image Path</label><input name="watermark_image_path" value="<?= htmlspecialchars((string) ($quotationSettings['watermark']['image_path'] ?? ''), ENT_QUOTES) ?>"></div>
+            <div><label>Upload New Watermark</label><input type="file" name="watermark_image_upload" accept="image/*"></div>
+            <div><label>Opacity</label><input type="number" min="0.02" max="0.2" step="0.01" name="watermark_opacity" value="<?= htmlspecialchars((string) ($quotationSettings['watermark']['opacity'] ?? ''), ENT_QUOTES) ?>"></div>
+            <div><label>Scale %</label><input type="number" min="20" max="120" step="1" name="watermark_scale_percent" value="<?= htmlspecialchars((string) ($quotationSettings['watermark']['scale_percent'] ?? ''), ENT_QUOTES) ?>"></div>
+            <div><label>Available Watermarks</label><select onchange="this.form.watermark_image_path.value=this.value"><option value="">Select existing</option><?php foreach ($watermarkFiles as $file): $pub = '/images/documents/watermarks/' . basename((string) $file); ?><option value="<?= htmlspecialchars($pub, ENT_QUOTES) ?>"><?= htmlspecialchars(basename((string) $file), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
+          </div>
+          <h3>Typography & Colors</h3>
+          <div class="grid">
+            <div><label>Base Font Size (px)</label><input type="number" min="11" max="20" step="1" name="base_font_size_px" value="<?= htmlspecialchars((string) ($quotationSettings['typography']['base_font_size_px'] ?? ''), ENT_QUOTES) ?>"></div>
+            <div><label>Heading Scale</label><input type="number" min="0.8" max="1.4" step="0.1" name="heading_scale" value="<?= htmlspecialchars((string) ($quotationSettings['typography']['heading_scale'] ?? ''), ENT_QUOTES) ?>"></div>
+            <div><label>Primary</label><input type="color" name="color_primary" value="<?= htmlspecialchars((string) ($quotationSettings['colors']['primary'] ?? '#0ea5e9'), ENT_QUOTES) ?>"></div>
+            <div><label>Secondary</label><input type="color" name="color_secondary" value="<?= htmlspecialchars((string) ($quotationSettings['colors']['secondary'] ?? '#22c55e'), ENT_QUOTES) ?>"></div>
+            <div><label>Accent</label><input type="color" name="color_accent" value="<?= htmlspecialchars((string) ($quotationSettings['colors']['accent'] ?? '#f59e0b'), ENT_QUOTES) ?>"></div>
+            <div><label>Muted</label><input type="color" name="color_muted" value="<?= htmlspecialchars((string) ($quotationSettings['colors']['muted'] ?? '#64748b'), ENT_QUOTES) ?>"></div>
+          </div>
+          <p style="margin-top:12px;"><button class="btn" type="submit">Save Quotation Settings</button></p>
         </form>
       </section>
     <?php endif; ?>
