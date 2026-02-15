@@ -11,7 +11,12 @@
         "enabled": true,
         "image_path": "",
         "opacity": 0.08
-      }
+      },
+      "header_badges": [
+        "MNRE-Compliance EPC",
+        "JREDA / JBVNL Assistance",
+        "End-to-End Subsidy Support"
+      ]
     },
     "typography": {
       "base_font_px": 14,
@@ -27,18 +32,62 @@
   "segments": {
     "RES": {
       "unit_rate_rs_per_kwh": 8,
-      "subsidy": { "enabled": true, "cap_2kw": 60000, "cap_3kw_plus": 78000 },
+      "subsidy": {
+        "enabled": true,
+        "cap_2kw": 60000,
+        "cap_3kw_plus": 78000
+      },
       "loan_defaults": {
         "enabled": true,
         "tenure_years": 10,
         "slabs": [
-          { "max_loan": 200000, "margin_pct": 10, "interest_pct": 6 },
-          { "min_loan": 200001, "max_loan": 600000, "margin_pct": 20, "interest_pct": 8.15 }
+          {
+            "max_loan": 200000,
+            "margin_pct": 10,
+            "interest_pct": 6
+          },
+          {
+            "min_loan": 200001,
+            "max_loan": 600000,
+            "margin_pct": 20,
+            "interest_pct": 8.15
+          }
         ]
-      }
+      },
+      "estimated_bill_after_solar_rs": 200
     },
-    "COM": { "unit_rate_rs_per_kwh": 10, "subsidy": { "enabled": false }, "loan_defaults": { "enabled": true, "tenure_years": 7 } },
-    "IND": { "unit_rate_rs_per_kwh": 11, "subsidy": { "enabled": false }, "loan_defaults": { "enabled": true, "tenure_years": 7 } },
-    "INST": { "unit_rate_rs_per_kwh": 9, "subsidy": { "enabled": false }, "loan_defaults": { "enabled": true, "tenure_years": 7 } }
+    "COM": {
+      "unit_rate_rs_per_kwh": 10,
+      "subsidy": {
+        "enabled": false
+      },
+      "loan_defaults": {
+        "enabled": true,
+        "tenure_years": 7
+      },
+      "estimated_bill_after_solar_rs": 200
+    },
+    "IND": {
+      "unit_rate_rs_per_kwh": 11,
+      "subsidy": {
+        "enabled": false
+      },
+      "loan_defaults": {
+        "enabled": true,
+        "tenure_years": 7
+      },
+      "estimated_bill_after_solar_rs": 200
+    },
+    "INST": {
+      "unit_rate_rs_per_kwh": 9,
+      "subsidy": {
+        "enabled": false
+      },
+      "loan_defaults": {
+        "enabled": true,
+        "tenure_years": 7
+      },
+      "estimated_bill_after_solar_rs": 200
+    }
   }
 }
