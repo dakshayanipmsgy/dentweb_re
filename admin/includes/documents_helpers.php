@@ -206,6 +206,7 @@ function documents_quote_defaults_settings(): array
             'RES' => [
                 'unit_rate_rs_per_kwh' => 8,
                 'subsidy' => ['enabled' => true, 'cap_2kw' => 60000, 'cap_3kw_plus' => 78000],
+                'annual_generation_per_kw' => 1450,
                 'loan_defaults' => [
                     'enabled' => true,
                     'tenure_years' => 10,
@@ -213,6 +214,17 @@ function documents_quote_defaults_settings(): array
                         ['max_loan' => 200000, 'margin_pct' => 10, 'interest_pct' => 6.0],
                         ['min_loan' => 200001, 'max_loan' => 600000, 'margin_pct' => 20, 'interest_pct' => 8.15],
                     ],
+                ],
+                'loan_bestcase' => [
+                    'max_loan_rs' => 200000,
+                    'interest_pct' => 6.0,
+                    'tenure_years' => 10,
+                    'min_margin_pct' => 10,
+                ],
+                'loan_info' => [
+                    'slab2_interest_pct' => 8.15,
+                    'slab2_min_margin_pct' => 20,
+                    'slab2_range' => '₹2L–₹6L',
                 ],
             ],
             'COM' => ['unit_rate_rs_per_kwh' => 10, 'subsidy' => ['enabled' => false], 'loan_defaults' => ['enabled' => true, 'tenure_years' => 7]],
@@ -227,6 +239,27 @@ function documents_get_quote_defaults_settings(): array
     $path = documents_settings_dir() . '/quote_defaults.json';
     $stored = json_load($path, []);
     return array_replace_recursive(documents_quote_defaults_settings(), is_array($stored) ? $stored : []);
+}
+
+function documents_get_company_profile_for_quotes(): array
+{
+    $profile = array_merge(
+        documents_company_profile_defaults(),
+        json_load(documents_settings_dir() . '/company_profile.json', [])
+    );
+
+    $brand = json_load(dirname(__DIR__, 2) . '/data/marketing/brand_profile.json', []);
+    if (is_array($brand)) {
+        $profile['brand_name'] = (string) ($profile['brand_name'] ?: ($brand['firm_name'] ?? ''));
+        $profile['company_name'] = (string) ($profile['company_name'] ?: ($brand['firm_name'] ?? ''));
+        $profile['phone_primary'] = (string) ($profile['phone_primary'] ?: ($brand['primary_contact_number'] ?? ''));
+        $profile['phone_secondary'] = (string) ($profile['phone_secondary'] ?: ($brand['whatsapp_number'] ?? ''));
+        $profile['email_primary'] = (string) ($profile['email_primary'] ?: ($brand['email'] ?? ''));
+        $profile['website'] = (string) ($profile['website'] ?: ($brand['website_url'] ?? ''));
+        $profile['address_line'] = (string) ($profile['address_line'] ?: ($brand['physical_address'] ?? ''));
+    }
+
+    return $profile;
 }
 
 function documents_agreement_template_defaults(): array
@@ -676,6 +709,8 @@ function documents_quote_defaults(): array
             'monthly_bill_rs' => '',
             'unit_rate_rs_per_kwh' => '',
             'annual_generation_per_kw' => '',
+            'funding_mode_show_both' => true,
+            'customer_plans_bank_loan' => false,
             'loan' => [
                 'enabled' => true,
                 'interest_pct' => '',
