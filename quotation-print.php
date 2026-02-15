@@ -175,6 +175,21 @@ $showSection = static function (string $key, array $sectionsEnabled, string $htm
 
 $companyName = (string) ($company['company_name'] ?: $company['brand_name']);
 $licenses = array_filter([(string) ($company['jreda_license'] ?? ''), (string) ($company['dwsd_license'] ?? '')]);
+$companyTagline = trim((string) ($company['tagline'] ?? ''));
+$headerPhones = array_values(array_filter([(string) ($company['phone_primary'] ?? ''), (string) ($company['phone_secondary'] ?? '')]));
+$headerEmails = array_values(array_filter([(string) ($company['email_primary'] ?? ''), (string) ($company['email_secondary'] ?? '')]));
+$companyAddress = trim(implode(', ', array_filter([
+    (string) ($company['address_line'] ?? ''),
+    (string) ($company['city'] ?? ''),
+    (string) ($company['district'] ?? ''),
+    (string) ($company['state'] ?? ''),
+    (string) ($company['pin'] ?? ''),
+])));
+$identityParts = array_values(array_filter([
+    (string) ($company['gstin'] ?? '') !== '' ? ('GSTIN: ' . (string) $company['gstin']) : '',
+    (string) ($company['pan'] ?? '') !== '' ? ('PAN: ' . (string) $company['pan']) : '',
+    (string) ($company['udyam'] ?? '') !== '' ? ('Udyam: ' . (string) $company['udyam']) : '',
+]));
 $fields = [
     'Name' => (string) ($snapshot['name'] ?: $quote['customer_name']),
     'Mobile' => (string) ($snapshot['mobile'] ?: $quote['customer_mobile']),
@@ -195,13 +210,13 @@ $pmSubsidyHtml = $sectionHtml($ann, 'pm_subsidy_info', $safeHtml);
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Print <?= htmlspecialchars((string) $quote['quote_no'], ENT_QUOTES) ?></title>
 <style>
-:root{--p:<?= htmlspecialchars((string)($theme['primary_color'] ?? '#0b5fff'), ENT_QUOTES) ?>;--a:<?= htmlspecialchars((string)($theme['accent_color'] ?? '#00b894'), ENT_QUOTES) ?>;--txt:<?= htmlspecialchars((string)($theme['text_color'] ?? '#111827'), ENT_QUOTES) ?>;--mut:<?= htmlspecialchars((string)($theme['muted_text_color'] ?? '#6b7280'), ENT_QUOTES) ?>;--card:<?= htmlspecialchars((string)($theme['card_bg'] ?? '#f8fafc'), ENT_QUOTES) ?>;--bd:<?= htmlspecialchars((string)($theme['border_color'] ?? '#e5e7eb'), ENT_QUOTES) ?>;}
-body{font-family:Arial,sans-serif;color:var(--txt);margin:0;background:#f7fafc;font-size:<?= (int)($type['base_font_size_px'] ?? 14) ?>px;line-height:<?= (float)($type['line_height'] ?? 1.45) ?>}
-.wrap{max-width:980px;margin:0 auto;padding:14px}.section-card{background:#fff;border:1px solid var(--bd);border-radius:16px;padding:14px;margin-bottom:12px}.card-title{margin:0 0 8px;font-size:<?= (int)($type['h3_px'] ?? 16) ?>px}.mini-card-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.mini-card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px}.mini-card .label{font-size:12px;color:var(--mut)}.mini-card .value{font-weight:700;margin-top:4px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #e2e8f0;padding:8px;text-align:left;vertical-align:top}.muted{color:var(--mut);font-size:12px}.pricing-table td:last-child,.pricing-table th:last-child{text-align:right}.pricing-big{font-size:20px;font-weight:700;color:#0f172a}.cols-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.explainer{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px}.highlight{background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:10px}.checklist li{margin:6px 0}.graph-wrap canvas{width:100%;height:290px;border:1px solid var(--bd);border-radius:12px;background:#fff}.footer-card{background:#f8fafc}
-@media (max-width: 900px){.mini-card-grid,.cols-3{grid-template-columns:repeat(2,minmax(0,1fr));}}
+:root{--p:<?= htmlspecialchars((string)($theme['primary_color'] ?? '#0b5fff'), ENT_QUOTES) ?>;--a:<?= htmlspecialchars((string)($theme['accent_color'] ?? '#00b894'), ENT_QUOTES) ?>;--txt:<?= htmlspecialchars((string)($theme['text_color'] ?? '#111827'), ENT_QUOTES) ?>;--mut:<?= htmlspecialchars((string)($theme['muted_text_color'] ?? '#6b7280'), ENT_QUOTES) ?>;--card:<?= htmlspecialchars((string)($theme['card_bg'] ?? '#f8fafc'), ENT_QUOTES) ?>;--bd:<?= htmlspecialchars((string)($theme['border_color'] ?? '#e5e7eb'), ENT_QUOTES) ?>;--bg:<?= htmlspecialchars((string)($theme['bg_color'] ?? '#ffffff'), ENT_QUOTES) ?>;--heading:<?= htmlspecialchars((string)(($theme['heading_color'] ?? $theme['primary_color']) ?? '#0b5fff'), ENT_QUOTES) ?>;--section-bar:<?= htmlspecialchars((string)(($theme['section_title_bar_color'] ?? $theme['accent_color']) ?? '#00b894'), ENT_QUOTES) ?>;--chart-red:<?= htmlspecialchars((string)($theme['chart_red_color'] ?? '#dc2626'), ENT_QUOTES) ?>;--chart-yellow:<?= htmlspecialchars((string)($theme['chart_yellow_color'] ?? '#f59e0b'), ENT_QUOTES) ?>;--chart-green:<?= htmlspecialchars((string)($theme['chart_green_color'] ?? '#16a34a'), ENT_QUOTES) ?>;}
+body{font-family:Arial,sans-serif;color:var(--txt);margin:0;background:var(--bg);font-size:<?= (int)($type['base_font_size_px'] ?? 14) ?>px;line-height:<?= (float)($type['line_height'] ?? 1.45) ?>}
+.wrap{max-width:980px;margin:0 auto;padding:14px}.section-card{background:#fff;border:1px solid var(--bd);border-radius:16px;padding:14px;margin-bottom:12px}.card-title{margin:0 0 8px;font-size:<?= (int)($type['h3_px'] ?? 16) ?>px;color:var(--heading);padding-left:10px;border-left:4px solid var(--section-bar)}.mini-card-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.mini-card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px}.mini-card .label{font-size:12px;color:var(--mut)}.mini-card .value{font-weight:700;margin-top:4px}table{width:100%;border-collapse:collapse}th,td{border:1px solid var(--bd);padding:8px;text-align:left;vertical-align:top}th{background:var(--card)}.muted{color:var(--mut);font-size:12px}.pricing-table td:last-child,.pricing-table th:last-child{text-align:right}.pricing-big{font-size:20px;font-weight:700;color:var(--heading)}.cols-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.explainer{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px}.highlight{background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:10px}.checklist li{margin:6px 0}.graph-wrap canvas{width:100%;height:290px;border:1px solid var(--bd);border-radius:12px;background:#fff}.footer-card{background:var(--card)}.company-header{border-top:4px solid var(--section-bar)}.company-header-grid{display:grid;grid-template-columns:150px 1fr 1fr;gap:12px;align-items:center}.company-name{margin:0;color:var(--p);font-size:<?= (int)($type['h1_px'] ?? 26) ?>px}.top-meta{font-size:12px;color:var(--mut);margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)}.contact-lines{font-size:12px;line-height:1.4;text-align:right}.contact-lines div{margin:0 0 4px}
+@media (max-width: 900px){.mini-card-grid,.cols-3{grid-template-columns:repeat(2,minmax(0,1fr));}.company-header-grid{grid-template-columns:1fr}.contact-lines{text-align:left}}
 </style></head>
 <body><div class="wrap">
-<div class="section-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div><h1 style="margin:0;font-size:<?= (int)($type['h1_px'] ?? 26) ?>px"><?= htmlspecialchars($companyName, ENT_QUOTES) ?></h1><div class="muted">Quotation No: <?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></div></div><?php if ((string)($company['logo_path'] ?? '') !== ''): ?><img src="<?= htmlspecialchars((string)$company['logo_path'], ENT_QUOTES) ?>" alt="Logo" style="max-height:70px;max-width:180px"><?php endif; ?></div></div>
+<div class="section-card company-header"><div class="company-header-grid"><div><?php if ((string)($company['logo_path'] ?? '') !== ''): ?><img src="<?= htmlspecialchars((string)$company['logo_path'], ENT_QUOTES) ?>" alt="Logo" style="max-height:64px;max-width:140px"><?php endif; ?></div><div><h1 class="company-name"><?= htmlspecialchars($companyName, ENT_QUOTES) ?></h1><?php if ($companyTagline !== ''): ?><div><?= htmlspecialchars($companyTagline, ENT_QUOTES) ?></div><?php endif; ?><div class="muted">Quotation No: <?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></div></div><div class="contact-lines"><?php if (!empty($headerPhones)): ?><div><?= htmlspecialchars(implode(', ', $headerPhones), ENT_QUOTES) ?></div><?php endif; ?><?php if (!empty($headerEmails)): ?><div><?= htmlspecialchars(implode(', ', $headerEmails), ENT_QUOTES) ?></div><?php endif; ?><?php if ((string)($company['website'] ?? '') !== ''): ?><div><?= htmlspecialchars((string)$company['website'], ENT_QUOTES) ?></div><?php endif; ?></div></div><div class="top-meta"><?php if ($companyAddress !== ''): ?><div><?= htmlspecialchars($companyAddress, ENT_QUOTES) ?></div><?php endif; ?><?php if (!empty($identityParts)): ?><div><?= htmlspecialchars(implode(' | ', $identityParts), ENT_QUOTES) ?></div><?php endif; ?><?php if (!empty($licenses)): ?><div><?= htmlspecialchars(implode(' • ', $licenses), ENT_QUOTES) ?></div><?php endif; ?></div></div>
 
 <div class="section-card"><h2 class="card-title">👤 Customer Snapshot</h2><table><?php foreach ($fields as $label=>$value): if (trim((string)$value)==='') { continue; } ?><tr><th style="width:34%" ><?= htmlspecialchars($label, ENT_QUOTES) ?></th><td><?= nl2br(htmlspecialchars((string)$value, ENT_QUOTES)) ?></td></tr><?php endforeach; ?></table></div>
 
@@ -260,15 +275,18 @@ const data={
   netCostAfterSubsidy: <?= json_encode(round($netCostAfterSubsidy,2)) ?>,
   annualSavings: <?= json_encode(round($annualSavings,2)) ?>,
   paybackYears: <?= json_encode($paybackYears) ?>,
+  chartRed: getComputedStyle(document.documentElement).getPropertyValue('--chart-red').trim() || '#dc2626',
+  chartYellow: getComputedStyle(document.documentElement).getPropertyValue('--chart-yellow').trim() || '#f59e0b',
+  chartGreen: getComputedStyle(document.documentElement).getPropertyValue('--chart-green').trim() || '#16a34a',
 };
 const rupees=v=>'₹'+Math.round(v).toLocaleString('en-IN');
 function setupCanvas(id,h){const c=document.getElementById(id);if(!c){return null;}const r=window.devicePixelRatio||1;const w=Math.max(640,Math.floor(c.clientWidth||640));c.width=w*r;c.height=h*r;const ctx=c.getContext('2d');ctx.setTransform(r,0,0,r,0,0);return {ctx,w,h};}
 function axes(ctx,left,top,right,bottom,xLabel,yLabel){ctx.strokeStyle='#94a3b8';ctx.beginPath();ctx.moveTo(left,top);ctx.lineTo(left,bottom);ctx.lineTo(right,bottom);ctx.stroke();ctx.fillStyle='#334155';ctx.font='12px Arial';ctx.fillText(xLabel,(left+right)/2-20,bottom+24);ctx.save();ctx.translate(left-40,(top+bottom)/2+20);ctx.rotate(-Math.PI/2);ctx.fillText(yLabel,0,0);ctx.restore();}
 function drawGraph1(){const p=setupCanvas('graph1Monthly',290);if(!p)return;const {ctx,w,h}=p;ctx.clearRect(0,0,w,h);const left=70,right=w-22,top=30,bottom=h-45;axes(ctx,left,top,right,bottom,'Case','₹ per month');
 const bars=[
-{name:'Monthly Bill',color:'#dc2626',value:data.monthlyBill},
-{name:'EMI + Residual',color:'#f59e0b',value:data.emi+data.residualBill},
-{name:'Residual Only',color:'#16a34a',value:data.residualBill},
+{name:'Monthly Bill',color:data.chartRed,value:data.monthlyBill},
+{name:'EMI + Residual',color:data.chartYellow,value:data.emi+data.residualBill},
+{name:'Residual Only',color:data.chartGreen,value:data.residualBill},
 ];
 const max=Math.max(1,...bars.map(b=>b.value))*1.25;const bw=50;const gap=(right-left-3*bw)/4;
 bars.forEach((b,i)=>{const x=left+gap*(i+1)+bw*i;const bh=(bottom-top)*b.value/max;ctx.fillStyle=b.color;ctx.fillRect(x,bottom-bh,bw,bh);ctx.fillStyle='#111827';ctx.font='11px Arial';ctx.fillText(rupees(b.value),x-6,bottom-bh-6);ctx.fillText(b.name,x-8,bottom+16);});
@@ -280,7 +298,7 @@ const years=Math.max(1,data.yearsForCumulative);const red=[],yellow=[],green=[];
 for(let y=0;y<=years;y++){red.push(data.annualBill*y);if(y===0){yellow.push(data.marginMoney);green.push(data.netCostAfterSubsidy);}else{ycum+=y<=data.tenureYears?data.annualLoanSpend:data.annualAfterLoanSpend;yellow.push(ycum);green.push(data.netCostAfterSubsidy+data.annualAfterLoanSpend*y);}}
 const max=Math.max(1,...red,...yellow,...green);for(let i=0;i<=5;i++){const gy=bottom-((bottom-top)*i/5);ctx.strokeStyle='#e2e8f0';ctx.beginPath();ctx.moveTo(left,gy);ctx.lineTo(right,gy);ctx.stroke();}
 function line(arr,color){ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();arr.forEach((v,i)=>{const x=left+(right-left)*(i/years);const y=bottom-(bottom-top)*(v/max);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();}
-line(red,'#dc2626');line(yellow,'#f59e0b');line(green,'#16a34a');ctx.fillStyle='#dc2626';ctx.fillText('■ Without solar',left,bottom+18);ctx.fillStyle='#f59e0b';ctx.fillText('■ Solar + Loan',left+120,bottom+18);ctx.fillStyle='#16a34a';ctx.fillText('■ Self finance',left+230,bottom+18);
+line(red,data.chartRed);line(yellow,data.chartYellow);line(green,data.chartGreen);ctx.fillStyle=data.chartRed;ctx.fillText('■ Without solar',left,bottom+18);ctx.fillStyle=data.chartYellow;ctx.fillText('■ Solar + Loan',left+120,bottom+18);ctx.fillStyle=data.chartGreen;ctx.fillText('■ Self finance',left+230,bottom+18);
 }
 function renderPaybackCard(){const p=setupCanvas('graph3Payback',230);if(!p)return;const {ctx,w,h}=p;ctx.clearRect(0,0,w,h);ctx.fillStyle='#111827';ctx.font='13px Arial';ctx.fillText('Annual savings: '+rupees(data.annualSavings),20,30);ctx.fillText('Payback years (self finance): '+(data.paybackYears===null?'N/A':Number(data.paybackYears).toFixed(2)+'y'),20,54);
 const left=20,right=w-20,y=140;ctx.strokeStyle='#cbd5e1';ctx.lineWidth=10;ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(right,y);ctx.stroke();if(data.paybackYears!==null){const pos=Math.min(25,Math.max(0,data.paybackYears));const x=left+(right-left)*(pos/25);ctx.fillStyle='#22c55e';ctx.beginPath();ctx.arc(x,y,8,0,Math.PI*2);ctx.fill();ctx.fillStyle='#334155';ctx.fillText('0y',left,y+20);ctx.fillText('25y',right-20,y+20);} }
