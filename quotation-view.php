@@ -404,6 +404,7 @@ $printBlocked = $financialInputs['show_savings_graphs'] && $missingSavingsInputs
 <label><input type="checkbox" name="show_savings_graphs" value="1" <?= !empty($financialInputs['show_savings_graphs']) ? 'checked' : '' ?> <?= $editable ? '' : 'disabled' ?>> Show Savings Graphs</label>
 <label style="margin-left:10px"><input type="checkbox" name="allow_print_without_savings_inputs" value="1" <?= $allowPrintWithoutSavingsInputs ? 'checked' : '' ?> <?= $editable ? '' : 'disabled' ?>> Allow print without savings inputs</label>
 <div id="savingsInputWarn" style="display:none;font-size:12px;color:#b91c1c;margin-top:6px">To generate savings graphs, enter either previous monthly bill OR monthly units.</div>
+<?php if ($missingSavingsInputs): ?><div style="font-size:12px;color:#92400e;margin-top:6px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:6px 8px">Admin/Employee note: add customer bill or units to unlock full savings graphs in quotation print.</div><?php endif; ?>
 </td></tr>
 </table>
 <?php if ($editable): ?><p><button class="btn" type="submit">Save Financial Inputs</button></p><?php else: ?><p>Financial inputs are locked after quotation leaves Draft status.</p><?php endif; ?>
