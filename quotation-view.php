@@ -45,8 +45,6 @@ if ($viewerType === 'employee' && ((string) ($quote['created_by_type'] ?? '') !=
     exit;
 }
 
-$editable = documents_quote_can_edit($quote, $viewerType, $viewerId);
-
 $globalStyle = documents_get_document_style_settings();
 $styleDefaults = is_array($globalStyle['defaults'] ?? null) ? $globalStyle['defaults'] : [];
 $segmentRateKey = [
@@ -115,37 +113,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $minBillMode = safe_text($_POST['min_bill_mode'] ?? 'auto');
         $minOverride = $minBillMode === 'manual' ? (string) safe_text($_POST['min_monthly_bill_rs_override'] ?? '') : '';
 
-        $showSavingsGraphs = isset($_POST['show_savings_graphs']);
-        $allowPrintWithoutSavingsInputs = isset($_POST['allow_print_without_savings_inputs']);
-        $hasSavingsInputs = !($estimatedMonthlyBill === '' && $estimatedMonthlyUnits === '');
-        if ($showSavingsGraphs && !$hasSavingsInputs && !$allowPrintWithoutSavingsInputs) {
-            $redirect($id, 'error', 'Savings graphs need bill/units inputs when strict print mode is enabled.');
+        if ($estimatedMonthlyBill === '' && $estimatedMonthlyUnits === '') {
+            $redirect($id, 'error', 'Please fill either previous monthly electricity bill or monthly consumption units.');
         }
-
-        $quotationDateInput = safe_text($_POST['quotation_date'] ?? '');
-        $validUntilDateInput = safe_text($_POST['valid_until_date'] ?? '');
-        $validityDaysDefault = (int) safe_text($_POST['validity_days_default'] ?? (string) (($quote['meta']['validity_days_default'] ?? 15)));
-        $validityDaysDefault = $validityDaysDefault > 0 ? $validityDaysDefault : 15;
-
-        $quotationDate = $quotationDateInput;
-        if ($quotationDate === '' || strtotime($quotationDate) === false) {
-            $quotationDate = date('Y-m-d');
-        }
-
-        $validUntilDate = $validUntilDateInput;
-        if ($validUntilDate === '' || strtotime($validUntilDate) === false) {
-            $validUntilDate = date('Y-m-d', strtotime($quotationDate . ' +' . $validityDaysDefault . ' days'));
-        }
-
-        $transportMode = safe_text($_POST['transport_mode'] ?? 'included');
-        if (!in_array($transportMode, ['included', 'extra', 'not_applicable'], true)) {
-            $transportMode = 'included';
-        }
-        $transportCharge = safe_text($_POST['transport_charge_rs'] ?? '');
-        $transportCharge = $transportMode === 'extra' ? $transportCharge : '';
-        $transportDistrict = safe_text($_POST['transport_district'] ?? ((string) ($snapshot['district'] ?? $quote['district'] ?? '')));
-        $transportNotes = safe_text($_POST['transport_notes'] ?? '');
-        $pricingBaseForFinance = isset($_POST['pricing_base_for_finance_include_transport']) ? 'grand_total' : 'quotation';
 
         $capacity = (float) ($quote['capacity_kwp'] ?? 0);
         $isPm = documents_quote_is_pm_surya_ghar($quote);
@@ -170,19 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['financial_inputs']['min_monthly_bill_rs_override'] = $minOverride;
         $quote['financial_inputs']['analysis_mode'] = $analysisMode;
         $quote['financial_inputs']['years_for_cumulative_chart'] = $yearsForCumulative;
-        $quote['financial_inputs']['show_savings_graphs'] = $showSavingsGraphs;
         $quote['subsidy_expected_rs'] = $subsidyExpected > 0 ? round($subsidyExpected, 2) : 0;
-        $quote['transportation'] = [
-            'mode' => $transportMode,
-            'charge_rs' => $transportCharge,
-            'district' => $transportDistrict,
-            'notes' => $transportNotes,
-        ];
-        $quote['financial_calc']['pricing_base_for_finance'] = $pricingBaseForFinance;
-        $quote['financial_calc']['allow_print_without_savings_inputs'] = $allowPrintWithoutSavingsInputs;
-        $quote['meta']['quotation_date'] = $quotationDate;
-        $quote['meta']['valid_until_date'] = $validUntilDate;
-        $quote['meta']['validity_days_default'] = $validityDaysDefault;
         $quote['updated_at'] = date('c');
 
         $saved = documents_save_quote($quote);
@@ -265,6 +223,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$editable = documents_quote_can_edit($quote, $viewerType, $viewerId);
 $editLink = ($viewerType === 'admin' ? 'admin-quotations.php' : 'employee-quotations.php') . '?edit=' . urlencode((string) $quote['id']);
 $backLink = $viewerType === 'admin' ? 'admin-quotations.php' : 'employee-quotations.php';
 $statusMsg = safe_text($_GET['status'] ?? '');
@@ -301,40 +260,6 @@ $isPmQuote = documents_quote_is_pm_surya_ghar($quote);
 if ($isPmQuote && (string) ($financialInputs['subsidy_expected_rs'] ?? '') === '') {
     $financialInputs['subsidy_expected_rs'] = (string) documents_calculate_pm_surya_subsidy((float) ($quote['capacity_kwp'] ?? 0));
 }
-$financialInputs['show_savings_graphs'] = isset($financialInputs['show_savings_graphs']) ? (bool) $financialInputs['show_savings_graphs'] : true;
-
-$metaDefaults = [
-    'quotation_date' => date('Y-m-d', strtotime((string) ($quote['created_at'] ?? 'now'))),
-    'valid_until_date' => '',
-    'validity_days_default' => 15,
-];
-$meta = array_merge($metaDefaults, is_array($quote['meta'] ?? null) ? $quote['meta'] : []);
-$meta['quotation_date'] = safe_text((string) ($meta['quotation_date'] ?? $metaDefaults['quotation_date']));
-if ($meta['quotation_date'] === '' || strtotime($meta['quotation_date']) === false) {
-    $meta['quotation_date'] = $metaDefaults['quotation_date'];
-}
-$meta['validity_days_default'] = max(1, (int) ($meta['validity_days_default'] ?? 15));
-$meta['valid_until_date'] = safe_text((string) ($meta['valid_until_date'] ?? ''));
-if ($meta['valid_until_date'] === '' || strtotime($meta['valid_until_date']) === false) {
-    $meta['valid_until_date'] = date('Y-m-d', strtotime($meta['quotation_date'] . ' +' . $meta['validity_days_default'] . ' days'));
-}
-
-$transportationDefaults = [
-    'mode' => 'included',
-    'charge_rs' => '',
-    'district' => (string) ($snapshot['district'] ?? $quote['district'] ?? ''),
-    'notes' => '',
-];
-$transportation = array_merge($transportationDefaults, is_array($quote['transportation'] ?? null) ? $quote['transportation'] : []);
-
-$financialCalc = is_array($quote['financial_calc'] ?? null) ? $quote['financial_calc'] : [];
-$pricingBaseForFinance = (string) ($financialCalc['pricing_base_for_finance'] ?? 'grand_total');
-if (!in_array($pricingBaseForFinance, ['quotation', 'grand_total'], true)) {
-    $pricingBaseForFinance = 'grand_total';
-}
-$allowPrintWithoutSavingsInputs = isset($financialCalc['allow_print_without_savings_inputs']) ? (bool) $financialCalc['allow_print_without_savings_inputs'] : true;
-$missingSavingsInputs = (($financialInputs['estimated_monthly_bill_rs'] ?? '') === '' && ($financialInputs['estimated_monthly_units_kwh'] ?? '') === '');
-$printBlocked = $financialInputs['show_savings_graphs'] && $missingSavingsInputs && !$allowPrintWithoutSavingsInputs;
 ?>
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quotation <?= htmlspecialchars((string)$quote['quote_no'], ENT_QUOTES) ?></title>
@@ -343,11 +268,7 @@ $printBlocked = $financialInputs['show_savings_graphs'] && $missingSavingsInputs
 <?php if ($message !== ''): ?><div class="card <?= $statusMsg === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
 <div class="card"><h1>Quotation View</h1>
 <a class="btn secondary" href="<?= htmlspecialchars($backLink, ENT_QUOTES) ?>">Back</a>
-<?php if ($printBlocked): ?>
-<span class="btn" style="background:#9ca3af;cursor:not-allowed">Print locked (add bill/units)</span>
-<?php else: ?>
 <a class="btn" href="quotation-print.php?id=<?= urlencode((string)$quote['id']) ?>" target="_blank">Print</a>
-<?php endif; ?>
 
 <?php if ($editable): ?><a class="btn secondary" href="<?= htmlspecialchars($editLink, ENT_QUOTES) ?>">Edit</a><?php endif; ?>
 </div>
@@ -391,20 +312,6 @@ $printBlocked = $financialInputs['show_savings_graphs'] && $missingSavingsInputs
 <?php endif; ?>
 <div style="margin-top:6px"><input type="number" step="0.01" min="0" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($financialInputs['subsidy_expected_rs'] ?? ($quote['subsidy_expected_rs'] ?? '')), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></div>
 </td></tr>
-<tr><th>Prepared on</th><td><input type="date" name="quotation_date" value="<?= htmlspecialchars((string)$meta['quotation_date'], ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td></tr>
-<tr><th>Valid until</th><td><input type="date" name="valid_until_date" value="<?= htmlspecialchars((string)$meta['valid_until_date'], ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>><div style="font-size:12px;color:#475569;margin-top:4px">Default validity days: <input type="number" min="1" name="validity_days_default" value="<?= htmlspecialchars((string)$meta['validity_days_default'], ENT_QUOTES) ?>" style="width:90px" <?= $editable ? '' : 'disabled' ?>></div></td></tr>
-<tr><th>Transportation</th><td>
-<select name="transport_mode" <?= $editable ? '' : 'disabled' ?>><option value="included" <?= ($transportation['mode'] === 'included') ? 'selected' : '' ?>>Included (₹0)</option><option value="extra" <?= ($transportation['mode'] === 'extra') ? 'selected' : '' ?>>Extra (add charge)</option><option value="not_applicable" <?= ($transportation['mode'] === 'not_applicable') ? 'selected' : '' ?>>Not applicable</option></select>
-<div style="margin-top:6px" id="transportChargeWrap"><input type="number" step="0.01" min="0" name="transport_charge_rs" value="<?= htmlspecialchars((string)$transportation['charge_rs'], ENT_QUOTES) ?>" placeholder="Transportation Charge (₹)" <?= $editable ? '' : 'disabled' ?>></div>
-<div style="margin-top:6px"><input type="text" name="transport_district" value="<?= htmlspecialchars((string)$transportation['district'], ENT_QUOTES) ?>" placeholder="District" <?= $editable ? '' : 'disabled' ?>></div>
-<div style="margin-top:6px"><textarea name="transport_notes" rows="2" placeholder="Transportation notes (optional)" style="width:100%" <?= $editable ? '' : 'disabled' ?>><?= htmlspecialchars((string)$transportation['notes'], ENT_QUOTES) ?></textarea></div>
-</td></tr>
-<tr><th>Finance Base</th><td><label><input type="checkbox" name="pricing_base_for_finance_include_transport" value="1" <?= $pricingBaseForFinance === 'grand_total' ? 'checked' : '' ?> <?= $editable ? '' : 'disabled' ?>> Include transportation in financing calculations</label></td></tr>
-<tr><th>Savings Graph Control</th><td>
-<label><input type="checkbox" name="show_savings_graphs" value="1" <?= !empty($financialInputs['show_savings_graphs']) ? 'checked' : '' ?> <?= $editable ? '' : 'disabled' ?>> Show Savings Graphs</label>
-<label style="margin-left:10px"><input type="checkbox" name="allow_print_without_savings_inputs" value="1" <?= $allowPrintWithoutSavingsInputs ? 'checked' : '' ?> <?= $editable ? '' : 'disabled' ?>> Allow print without savings inputs</label>
-<div id="savingsInputWarn" style="display:none;font-size:12px;color:#b91c1c;margin-top:6px">To generate savings graphs, enter either previous monthly bill OR monthly units.</div>
-</td></tr>
 </table>
 <?php if ($editable): ?><p><button class="btn" type="submit">Save Financial Inputs</button></p><?php else: ?><p>Financial inputs are locked after quotation leaves Draft status.</p><?php endif; ?>
 </form></div>
@@ -432,35 +339,13 @@ $printBlocked = $financialInputs['show_savings_graphs'] && $missingSavingsInputs
 (function(){
   const manualInput=document.querySelector('input[name="min_monthly_bill_rs_override"]');
   const radios=document.querySelectorAll('input[name="min_bill_mode"]');
-  const transportMode=document.querySelector('select[name="transport_mode"]');
-  const transportChargeWrap=document.getElementById('transportChargeWrap');
-  const transportChargeInput=document.querySelector('input[name="transport_charge_rs"]');
-  const showSavingsInput=document.querySelector('input[name="show_savings_graphs"]');
-  const billInput=document.querySelector('input[name="estimated_monthly_bill_rs"]');
-  const unitsInput=document.querySelector('input[name="estimated_monthly_units_kwh"]');
-  const savingsWarn=document.getElementById('savingsInputWarn');
   function sync(){
     const manual=document.querySelector('input[name="min_bill_mode"][value="manual"]');
     if(!manualInput||!manual){return;}
     manualInput.disabled=!manual.checked;
   }
-  function syncTransport(){
-    if(!transportMode||!transportChargeWrap||!transportChargeInput){return;}
-    const isExtra=transportMode.value==='extra';
-    transportChargeWrap.style.display=isExtra?'block':'none';
-    transportChargeInput.disabled=!isExtra;
-  }
-  function syncSavingsWarning(){
-    if(!showSavingsInput||!savingsWarn||!billInput||!unitsInput){return;}
-    const missing=(billInput.value.trim()===''&&unitsInput.value.trim()==='');
-    savingsWarn.style.display=(showSavingsInput.checked&&missing)?'block':'none';
-  }
   radios.forEach(r=>r.addEventListener('change',sync));
-  if(transportMode){transportMode.addEventListener('change',syncTransport);}
-  [showSavingsInput,billInput,unitsInput].forEach(function(el){if(el){el.addEventListener('input',syncSavingsWarning);el.addEventListener('change',syncSavingsWarning);}});
   sync();
-  syncTransport();
-  syncSavingsWarning();
 })();
 </script>
 </body></html>
