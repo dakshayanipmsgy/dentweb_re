@@ -72,30 +72,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $companyState = strtolower(trim((string) ($company['state'] ?? 'Jharkhand')));
         $taxType = strtolower($placeOfSupply) === $companyState ? 'CGST_SGST' : 'IGST';
 
-
-        $fontScaleInput = safe_text($_POST['quotation_font_scale'] ?? '');
-        $fontScale = null;
-        if ($fontScaleInput !== '') {
-            $fontScale = max(0.8, min(1.3, (float) $fontScaleInput));
-        }
-
-        $assumptionFields = [
-            'unit_rate_rs_per_kwh',
-            'monthly_bill_rs',
-            'annual_generation_per_kw',
-            'emission_factor_kg_per_kwh',
-            'tree_absorption_kg_per_year',
-            'loan_interest_percent',
-            'loan_tenure_months',
-            'downpayment_percent',
-            'electricity_escalation_percent',
-        ];
-        $assumptionsOverride = [];
-        foreach ($assumptionFields as $field) {
-            $raw = safe_text($_POST['assumption_' . $field] ?? '');
-            $assumptionsOverride[$field] = $raw === '' ? null : (float) $raw;
-        }
-
         $annexure = [
             'cover_notes' => safe_text($_POST['ann_cover_notes'] ?? ''),
             'system_inclusions' => safe_text($_POST['ann_system_inclusions'] ?? ''),
@@ -188,8 +164,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['special_requests_override_note'] = true;
         $quote['annexures_overrides'] = $annexure;
         $quote['template_attachments'] = (($templateBlocks[$templateSetId]['attachments'] ?? null) && is_array($templateBlocks[$templateSetId]['attachments'])) ? $templateBlocks[$templateSetId]['attachments'] : documents_template_attachment_defaults();
-        $quote['rendering']['font_scale'] = $fontScale;
-        $quote['assumptions'] = array_merge(is_array($quote['assumptions'] ?? null) ? $quote['assumptions'] : [], $assumptionsOverride);
+        $quote['rendering']['background_image'] = (string) (($selectedTemplate['default_doc_theme']['page_background_image'] ?? '') ?: '');
+        $quote['rendering']['background_opacity'] = (float) (($selectedTemplate['default_doc_theme']['page_background_opacity'] ?? 1) ?: 1);
         $quote['updated_at'] = date('c');
 
         $saved = documents_save_quote($quote);
@@ -261,18 +237,6 @@ if ($lookup !== null) {
 <div><label>Division</label><input name="division_name" value="<?= htmlspecialchars((string)(($editing['division_name'] !== '') ? $editing['division_name'] : ($quoteSnapshot['division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
-<div><label>Font size (Quotation only: 0.8 - 1.3)</label><input type="number" step="0.01" min="0.8" max="1.3" name="quotation_font_scale" value="<?= htmlspecialchars((string) ($editing['rendering']['font_scale'] ?? ''), ENT_QUOTES) ?>"></div>
-<div style="grid-column:1/-1"><h3>Assumptions (leave blank for segment defaults)</h3></div>
-<div><label>Unit rate ₹/kWh</label><input type="number" step="0.01" name="assumption_unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string) ($editing['assumptions']['unit_rate_rs_per_kwh'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Monthly bill ₹</label><input type="number" step="0.01" name="assumption_monthly_bill_rs" value="<?= htmlspecialchars((string) ($editing['assumptions']['monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Annual generation per kW</label><input type="number" step="0.01" name="assumption_annual_generation_per_kw" value="<?= htmlspecialchars((string) ($editing['assumptions']['annual_generation_per_kw'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Emission factor kg/kWh</label><input type="number" step="0.01" name="assumption_emission_factor_kg_per_kwh" value="<?= htmlspecialchars((string) ($editing['assumptions']['emission_factor_kg_per_kwh'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Tree absorption kg/year</label><input type="number" step="0.01" name="assumption_tree_absorption_kg_per_year" value="<?= htmlspecialchars((string) ($editing['assumptions']['tree_absorption_kg_per_year'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Loan interest %</label><input type="number" step="0.01" name="assumption_loan_interest_percent" value="<?= htmlspecialchars((string) ($editing['assumptions']['loan_interest_percent'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Loan tenure months</label><input type="number" step="1" name="assumption_loan_tenure_months" value="<?= htmlspecialchars((string) ($editing['assumptions']['loan_tenure_months'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Downpayment %</label><input type="number" step="0.01" name="assumption_downpayment_percent" value="<?= htmlspecialchars((string) ($editing['assumptions']['downpayment_percent'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Escalation %</label><input type="number" step="0.01" name="assumption_electricity_escalation_percent" value="<?= htmlspecialchars((string) ($editing['assumptions']['electricity_escalation_percent'] ?? ''), ENT_QUOTES) ?>"></div>
-
 <div style="grid-column:1/-1"><label>Special Requests From Customer (Inclusive in the rate)</label><textarea name="special_requests_inclusive"><?= htmlspecialchars((string)$editing['special_requests_inclusive'], ENT_QUOTES) ?></textarea><div class="muted">In case of conflict, Special Requests will be given priority over Annexure inclusions.</div></div>
 <div style="grid-column:1/-1"><div class="muted">Annexures are based on template snapshot; edit below.</div></div><?php foreach (['cover_notes'=>'Cover Notes','system_inclusions'=>'System Inclusions','payment_terms'=>'Payment Terms','warranty'=>'Warranty','system_type_explainer'=>'System Type Explainer','transportation'=>'Transportation','terms_conditions'=>'Terms & Conditions','pm_subsidy_info'=>'PM Subsidy Info'] as $key=>$label): ?><div style="grid-column:1/-1"><label><?= $label ?></label><textarea name="ann_<?= $key ?>"><?= htmlspecialchars((string)($editing['annexures_overrides'][$key] ?? ''), ENT_QUOTES) ?></textarea></div><?php endforeach; ?>
 </div><br><button class="btn" type="submit">Save Quotation</button></form></div>

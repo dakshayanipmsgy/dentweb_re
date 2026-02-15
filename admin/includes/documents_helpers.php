@@ -93,119 +93,6 @@ function documents_public_uploads_dir(): string
     return dirname(__DIR__, 2) . '/images/documents/uploads';
 }
 
-function documents_public_watermarks_dir(): string
-{
-    return dirname(__DIR__, 2) . '/images/documents/watermarks';
-}
-
-function documents_document_appearance_defaults(): array
-{
-    return [
-        'global' => [
-            'font_scale' => 1.0,
-            'base_font_family' => 'system',
-            'primary_color' => '#0b5',
-            'accent_color' => '#0a58ca',
-            'muted_color' => '#6c757d',
-            'card_radius_px' => 12,
-            'card_shadow' => true,
-        ],
-        'print_watermark' => [
-            'enabled' => true,
-            'image_path' => '',
-            'opacity' => 0.08,
-            'size_percent' => 70,
-            'position' => 'center',
-            'repeat' => 'no-repeat',
-        ],
-    ];
-}
-
-function documents_quotation_assumptions_defaults(): array
-{
-    return [
-        'defaults_by_segment' => [
-            'RES' => [
-                'unit_rate_rs_per_kwh' => 7.0,
-                'monthly_bill_rs' => 1200,
-                'annual_generation_per_kw' => 1450,
-                'emission_factor_kg_per_kwh' => 0.82,
-                'tree_absorption_kg_per_year' => 20,
-                'loan_interest_percent' => 7.0,
-                'loan_tenure_months' => 120,
-                'downpayment_percent' => 10,
-                'electricity_escalation_percent' => 0,
-            ],
-            'COM' => [
-                'unit_rate_rs_per_kwh' => 9.0,
-                'monthly_bill_rs' => 8000,
-                'annual_generation_per_kw' => 1450,
-                'emission_factor_kg_per_kwh' => 0.82,
-                'tree_absorption_kg_per_year' => 20,
-                'loan_interest_percent' => 8.0,
-                'loan_tenure_months' => 120,
-                'downpayment_percent' => 15,
-                'electricity_escalation_percent' => 0,
-            ],
-            'IND' => [
-                'unit_rate_rs_per_kwh' => 8.0,
-                'monthly_bill_rs' => 50000,
-                'annual_generation_per_kw' => 1450,
-                'emission_factor_kg_per_kwh' => 0.82,
-                'tree_absorption_kg_per_year' => 20,
-                'loan_interest_percent' => 9.0,
-                'loan_tenure_months' => 120,
-                'downpayment_percent' => 20,
-                'electricity_escalation_percent' => 0,
-            ],
-            'INST' => [
-                'unit_rate_rs_per_kwh' => 7.5,
-                'monthly_bill_rs' => 3000,
-                'annual_generation_per_kw' => 1450,
-                'emission_factor_kg_per_kwh' => 0.82,
-                'tree_absorption_kg_per_year' => 20,
-                'loan_interest_percent' => 7.0,
-                'loan_tenure_months' => 120,
-                'downpayment_percent' => 10,
-                'electricity_escalation_percent' => 0,
-            ],
-        ],
-    ];
-}
-
-
-function documents_load_document_appearance(): array
-{
-    $defaults = documents_document_appearance_defaults();
-    $data = json_load(documents_settings_dir() . '/document_appearance.json', $defaults);
-    if (!is_array($data)) {
-        return $defaults;
-    }
-    $global = array_merge($defaults['global'], is_array($data['global'] ?? null) ? $data['global'] : []);
-    $wm = array_merge($defaults['print_watermark'], is_array($data['print_watermark'] ?? null) ? $data['print_watermark'] : []);
-    $wm['opacity'] = max(0.0, min(0.5, (float) ($wm['opacity'] ?? 0.08)));
-    $wm['size_percent'] = max(30, min(120, (int) ($wm['size_percent'] ?? 70)));
-    $wm['repeat'] = ((string) ($wm['repeat'] ?? 'no-repeat')) === 'repeat' ? 'repeat' : 'no-repeat';
-
-    return ['global' => $global, 'print_watermark' => $wm];
-}
-
-function documents_load_quotation_assumptions(): array
-{
-    $defaults = documents_quotation_assumptions_defaults();
-    $data = json_load(documents_settings_dir() . '/quotation_assumptions.json', $defaults);
-    if (!is_array($data)) {
-        return $defaults;
-    }
-    $out = $defaults;
-    $segments = ['RES', 'COM', 'IND', 'INST'];
-    foreach ($segments as $segment) {
-        $row = is_array($data['defaults_by_segment'][$segment] ?? null) ? $data['defaults_by_segment'][$segment] : [];
-        $out['defaults_by_segment'][$segment] = array_merge($defaults['defaults_by_segment'][$segment], $row);
-    }
-    return $out;
-}
-
 function documents_log(string $message): void
 {
     documents_ensure_structure();
@@ -238,7 +125,6 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_public_backgrounds_dir());
     documents_ensure_dir(documents_public_diagrams_dir());
     documents_ensure_dir(documents_public_uploads_dir());
-    documents_ensure_dir(documents_public_watermarks_dir());
 
     $companyPath = documents_settings_dir() . '/company_profile.json';
     if (!is_file($companyPath)) {
@@ -274,16 +160,6 @@ function documents_ensure_structure(): void
     $logPath = documents_logs_dir() . '/documents.log';
     if (!is_file($logPath)) {
         @file_put_contents($logPath, '', LOCK_EX);
-    }
-
-    $appearancePath = documents_settings_dir() . '/document_appearance.json';
-    if (!is_file($appearancePath)) {
-        json_save($appearancePath, documents_document_appearance_defaults());
-    }
-
-    $assumptionsPath = documents_settings_dir() . '/quotation_assumptions.json';
-    if (!is_file($assumptionsPath)) {
-        json_save($assumptionsPath, documents_quotation_assumptions_defaults());
     }
 }
 
@@ -731,19 +607,11 @@ function documents_quote_defaults(): array
         ],
         'template_attachments' => documents_template_attachment_defaults(),
         'rendering' => [
-            'font_scale' => null,
+            'background_image' => '',
+            'background_opacity' => 1.0,
         ],
-        'assumptions' => [
-            'unit_rate_rs_per_kwh' => null,
-            'monthly_bill_rs' => null,
-            'annual_generation_per_kw' => null,
-            'emission_factor_kg_per_kwh' => null,
-            'tree_absorption_kg_per_year' => null,
-            'loan_interest_percent' => null,
-            'loan_tenure_months' => null,
-            'downpayment_percent' => null,
-            'electricity_escalation_percent' => null,
-        ],
+        'pdf_path' => '',
+        'pdf_generated_at' => '',
     ];
 }
 
@@ -946,6 +814,8 @@ function documents_agreement_defaults(): array
         'created_by_name' => '',
         'created_at' => '',
         'updated_at' => '',
+        'pdf_path' => '',
+        'pdf_generated_at' => '',
     ];
 }
 
@@ -977,6 +847,8 @@ function documents_challan_defaults(): array
             'background_image' => '',
             'background_opacity' => 1.0,
         ],
+        'pdf_path' => '',
+        'pdf_generated_at' => '',
     ];
 }
 
