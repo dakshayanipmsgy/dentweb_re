@@ -76,6 +76,48 @@ $documentTypeLabel = [
     'invoice' => 'Invoice',
 ];
 
+$resolveAgreementTemplateId = static function (array $quote, array $templates): string {
+    $activeTemplates = array_filter($templates, static fn($row): bool => is_array($row) && !documents_is_archived($row));
+    if ($activeTemplates === []) {
+        $activeTemplates = documents_agreement_template_defaults();
+    }
+
+    foreach ($activeTemplates as $row) {
+        if (is_array($row) && !empty($row['is_default'])) {
+            return (string) ($row['id'] ?? 'default_pm_surya_ghar_agreement');
+        }
+    }
+
+    $schemeSignals = [
+        (string) ($quote['project_type'] ?? ''),
+        (string) ($quote['scheme_type'] ?? ''),
+        (string) ($quote['customer_type'] ?? ''),
+        (string) ($quote['project_summary_line'] ?? ''),
+    ];
+    $isPm = false;
+    foreach ($schemeSignals as $signal) {
+        if (str_contains(strtolower($signal), 'pm surya')) {
+            $isPm = true;
+            break;
+        }
+    }
+
+    if ($isPm && isset($activeTemplates['default_pm_surya_ghar_agreement'])) {
+        return 'default_pm_surya_ghar_agreement';
+    }
+
+    if (isset($activeTemplates['default_agreement'])) {
+        return 'default_agreement';
+    }
+
+    if (isset($activeTemplates['default_pm_surya_ghar_agreement'])) {
+        return 'default_pm_surya_ghar_agreement';
+    }
+
+    $first = reset($activeTemplates);
+    return is_array($first) ? (string) ($first['id'] ?? 'default_pm_surya_ghar_agreement') : 'default_pm_surya_ghar_agreement';
+};
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
         $redirectWith('company', 'error', 'Security validation failed. Please retry.');
@@ -119,6 +161,273 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? 'Company profile saved. Warning: PAN format looks unusual (expected ABCDE1234F).'
             : 'Company profile saved successfully.';
         $redirectWith('company', 'success', $msg);
+    }
+
+    if (in_array($action, ['create_agreement', 'create_receipt', 'create_delivery_challan', 'create_pi', 'create_invoice'], true)) {
+        $tab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
+        $view = safe_text($_POST['quotation_id'] ?? safe_text($_POST['return_view'] ?? ''));
+        if ($view === '') {
+            $redirectDocuments($tab, 'error', 'Quotation is required.');
+        }
+
+        $quote = documents_get_quote($view);
+        if ($quote === null) {
+            $redirectDocuments($tab, 'error', 'Quotation not found.', ['view' => $view]);
+        }
+        $quote = documents_quote_prepare($quote);
+        $snapshot = documents_quote_resolve_snapshot($quote);
+        $companyProfile = load_company_profile();
+        $viewer = [
+            'type' => 'admin',
+            'id' => (string) ($user['id'] ?? ''),
+            'name' => (string) ($user['full_name'] ?? 'Admin'),
+        ];
+
+        if ($action === 'create_agreement') {
+            $existingAgreementId = safe_text((string) ($quote['workflow']['agreement_id'] ?? ''));
+            if ($existingAgreementId !== '') {
+                $existingAgreement = documents_get_sales_document('agreement', $existingAgreementId);
+                if ($existingAgreement !== null && !documents_is_archived($existingAgreement)) {
+                    header('Location: agreement-view.php?id=' . urlencode($existingAgreementId) . '&status=success&message=' . urlencode('Agreement already exists.'));
+                    exit;
+                }
+            }
+
+            $number = documents_generate_agreement_number(safe_text((string) ($quote['segment'] ?? 'RES')) ?: 'RES');
+            if (!$number['ok']) {
+                $redirectDocuments($tab, 'error', (string) ($number['error'] ?? 'Unable to generate agreement number.'), ['view' => $view]);
+            }
+
+            $templates = documents_get_agreement_templates();
+            $templateId = $resolveAgreementTemplateId($quote, $templates);
+            $templateRow = $templates[$templateId] ?? null;
+            if (!is_array($templateRow)) {
+                $defaults = documents_agreement_template_defaults();
+                $templateRow = $defaults['default_pm_surya_ghar_agreement'] ?? [];
+                $templateId = (string) ($templateRow['id'] ?? 'default_pm_surya_ghar_agreement');
+            }
+
+            $agreement = documents_agreement_defaults();
+            $agreement['id'] = 'agr_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+            $agreement['agreement_no'] = (string) ($number['agreement_no'] ?? '');
+            $agreement['status'] = 'Draft';
+            $agreement['template_id'] = $templateId;
+            $agreement['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+            $agreement['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
+            $agreement['consumer_account_no'] = safe_text((string) ($quote['consumer_account_no'] ?? $snapshot['consumer_account_no'] ?? ''));
+            $agreement['consumer_address'] = safe_text((string) ($snapshot['address'] ?? ''));
+            $agreement['site_address'] = safe_text((string) ($quote['site_address'] ?? $snapshot['address'] ?? ''));
+            $agreement['execution_date'] = date('Y-m-d');
+            $agreement['system_capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? ''));
+            $agreement['total_cost'] = documents_format_money_indian((float) ($quote['calc']['gross_payable'] ?? $quote['input_total_gst_inclusive'] ?? 0));
+            $agreement['linked_quote_id'] = (string) ($quote['id'] ?? '');
+            $agreement['linked_quote_no'] = (string) ($quote['quote_no'] ?? '');
+            $agreement['district'] = safe_text((string) ($quote['district'] ?? $snapshot['district'] ?? ''));
+            $agreement['city'] = safe_text((string) ($quote['city'] ?? $snapshot['city'] ?? ''));
+            $agreement['state'] = safe_text((string) ($quote['state'] ?? $snapshot['state'] ?? ''));
+            $agreement['pin_code'] = safe_text((string) ($quote['pin'] ?? $snapshot['pin_code'] ?? ''));
+            $agreement['created_by_type'] = 'admin';
+            $agreement['created_by_id'] = $viewer['id'];
+            $agreement['created_by_name'] = $viewer['name'];
+            $agreement['created_at'] = date('c');
+            $agreement['updated_at'] = date('c');
+
+            $savedAgreement = documents_save_agreement($agreement);
+            if (!$savedAgreement['ok']) {
+                $redirectDocuments($tab, 'error', 'Failed to create agreement draft.', ['view' => $view]);
+            }
+
+            $renderedAgreementHtml = documents_render_agreement_body_html($agreement, $companyProfile);
+
+            $salesAgreement = documents_sales_document_defaults('agreement');
+            $salesAgreement['id'] = (string) $agreement['id'];
+            $salesAgreement['quotation_id'] = (string) ($quote['id'] ?? '');
+            $salesAgreement['customer_mobile'] = (string) $agreement['customer_mobile'];
+            $salesAgreement['customer_name'] = (string) $agreement['customer_name'];
+            $salesAgreement['execution_date'] = (string) $agreement['execution_date'];
+            $salesAgreement['agreement_no'] = (string) $agreement['agreement_no'];
+            $salesAgreement['template_id'] = $templateId;
+            $salesAgreement['template_name'] = (string) ($templateRow['name'] ?? 'Agreement Template');
+            $salesAgreement['html_rendered'] = $renderedAgreementHtml;
+            $salesAgreement['status'] = 'draft';
+            $salesAgreement['created_by'] = $viewer;
+            $salesAgreement['created_at'] = (string) $agreement['created_at'];
+            $savedSalesAgreement = documents_save_sales_document('agreement', $salesAgreement);
+            if (!$savedSalesAgreement['ok']) {
+                $redirectDocuments($tab, 'error', 'Failed to update agreement workflow.', ['view' => $view]);
+            }
+
+            documents_quote_link_workflow_doc($quote, 'agreement', (string) $agreement['id']);
+            $quote['updated_at'] = date('c');
+            $savedQuote = documents_save_quote($quote);
+            if (!$savedQuote['ok']) {
+                $redirectDocuments($tab, 'error', 'Agreement created, but quotation workflow update failed.', ['view' => $view]);
+            }
+
+            header('Location: agreement-view.php?id=' . urlencode((string) $agreement['id']) . '&status=success&message=' . urlencode('Agreement created from default template.'));
+            exit;
+        }
+
+        if ($action === 'create_receipt') {
+            $receipt = documents_sales_document_defaults('receipt');
+            $receipt['id'] = documents_generate_simple_document_id('rcpt');
+            $receipt['quotation_id'] = (string) ($quote['id'] ?? '');
+            $receipt['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+            $receipt['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
+            $receipt['receipt_date'] = date('Y-m-d');
+            $receipt['amount_received'] = '';
+            $receipt['mode'] = '';
+            $receipt['reference'] = '';
+            $receipt['status'] = 'draft';
+            $receipt['created_by'] = $viewer;
+            $receipt['created_at'] = date('c');
+
+            $saved = documents_save_sales_document('receipt', $receipt);
+            if (!$saved['ok']) {
+                $redirectDocuments($tab, 'error', 'Unable to create receipt draft.', ['view' => $view]);
+            }
+            documents_quote_link_workflow_doc($quote, 'receipt', (string) $receipt['id']);
+            $quote['updated_at'] = date('c');
+            documents_save_quote($quote);
+            $redirectDocuments($tab, 'success', 'Receipt draft created.', ['view' => $view]);
+        }
+
+        if ($action === 'create_delivery_challan') {
+            $challan = documents_challan_defaults();
+            $number = documents_generate_challan_number(safe_text((string) ($quote['segment'] ?? 'RES')) ?: 'RES');
+            if (!$number['ok']) {
+                $redirectDocuments($tab, 'error', (string) ($number['error'] ?? 'Unable to create challan number.'), ['view' => $view]);
+            }
+            $challan['id'] = 'dc_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+            $challan['challan_no'] = (string) ($number['challan_no'] ?? '');
+            $challan['status'] = 'Draft';
+            $challan['linked_quote_id'] = (string) ($quote['id'] ?? '');
+            $challan['linked_quote_no'] = (string) ($quote['quote_no'] ?? '');
+            $challan['segment'] = safe_text((string) ($quote['segment'] ?? 'RES')) ?: 'RES';
+            $challan['customer_snapshot'] = $snapshot;
+            $challan['site_address'] = safe_text((string) ($quote['site_address'] ?? $snapshot['address'] ?? ''));
+            $challan['delivery_address'] = $challan['site_address'];
+            $challan['delivery_date'] = date('Y-m-d');
+            $challan['items'] = [];
+            $challan['created_by_type'] = 'admin';
+            $challan['created_by_id'] = $viewer['id'];
+            $challan['created_by_name'] = $viewer['name'];
+            $challan['created_at'] = date('c');
+            $challan['updated_at'] = date('c');
+
+            $savedChallan = documents_save_challan($challan);
+            if (!$savedChallan['ok']) {
+                $redirectDocuments($tab, 'error', 'Unable to create delivery challan draft.', ['view' => $view]);
+            }
+
+            $salesChallan = documents_sales_document_defaults('delivery_challan');
+            $salesChallan['id'] = (string) $challan['id'];
+            $salesChallan['quotation_id'] = (string) ($quote['id'] ?? '');
+            $salesChallan['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+            $salesChallan['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
+            $salesChallan['challan_no'] = (string) $challan['challan_no'];
+            $salesChallan['challan_date'] = (string) $challan['delivery_date'];
+            $salesChallan['items'] = [];
+            $salesChallan['status'] = 'draft';
+            $salesChallan['created_by'] = $viewer;
+            $salesChallan['created_at'] = (string) $challan['created_at'];
+            $savedSales = documents_save_sales_document('delivery_challan', $salesChallan);
+            if (!$savedSales['ok']) {
+                $redirectDocuments($tab, 'error', 'Delivery challan created, but pack workflow update failed.', ['view' => $view]);
+            }
+
+            documents_quote_link_workflow_doc($quote, 'delivery_challan', (string) $challan['id']);
+            $quote['updated_at'] = date('c');
+            documents_save_quote($quote);
+            header('Location: challan-view.php?id=' . urlencode((string) $challan['id']) . '&status=success&message=' . urlencode('Delivery challan draft created.'));
+            exit;
+        }
+
+        if ($action === 'create_pi') {
+            $existingId = safe_text((string) ($quote['workflow']['proforma_invoice_id'] ?? ''));
+            if ($existingId !== '') {
+                $existing = documents_get_sales_document('proforma', $existingId);
+                if ($existing !== null && !documents_is_archived($existing)) {
+                    header('Location: admin-proformas.php?id=' . urlencode($existingId));
+                    exit;
+                }
+            }
+
+            $created = documents_create_proforma_from_quote($quote);
+            if (!($created['ok'] ?? false)) {
+                $redirectDocuments($tab, 'error', (string) ($created['error'] ?? 'Unable to create PI.'), ['view' => $view]);
+            }
+            $piId = (string) ($created['proforma_id'] ?? '');
+            $piDoc = $piId !== '' ? documents_get_proforma($piId) : null;
+            if ($piDoc === null || $piId === '') {
+                $redirectDocuments($tab, 'error', 'PI created but could not be loaded.', ['view' => $view]);
+            }
+
+            $salesPi = documents_sales_document_defaults('proforma');
+            $salesPi['id'] = $piId;
+            $salesPi['quotation_id'] = (string) ($quote['id'] ?? '');
+            $salesPi['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+            $salesPi['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
+            $salesPi['proforma_no'] = (string) ($piDoc['proforma_no'] ?? '');
+            $salesPi['pi_date'] = date('Y-m-d');
+            $salesPi['amount'] = (float) ($piDoc['input_total_gst_inclusive'] ?? 0);
+            $salesPi['status'] = 'draft';
+            $salesPi['created_by'] = $viewer;
+            $salesPi['created_at'] = (string) ($piDoc['created_at'] ?? date('c'));
+            $savedSalesPi = documents_save_sales_document('proforma', $salesPi);
+            if (!$savedSalesPi['ok']) {
+                $redirectDocuments($tab, 'error', 'PI created, but workflow update failed.', ['view' => $view]);
+            }
+
+            documents_quote_link_workflow_doc($quote, 'proforma', $piId);
+            $quote['updated_at'] = date('c');
+            documents_save_quote($quote);
+            header('Location: admin-proformas.php?id=' . urlencode($piId));
+            exit;
+        }
+
+        if ($action === 'create_invoice') {
+            $existingId = safe_text((string) ($quote['workflow']['invoice_id'] ?? ''));
+            if ($existingId !== '') {
+                $existing = documents_get_sales_document('invoice', $existingId);
+                if ($existing !== null && !documents_is_archived($existing)) {
+                    header('Location: admin-invoices.php?id=' . urlencode($existingId));
+                    exit;
+                }
+            }
+
+            $created = documents_create_invoice_from_quote($quote);
+            if (!($created['ok'] ?? false)) {
+                $redirectDocuments($tab, 'error', (string) ($created['error'] ?? 'Unable to create invoice.'), ['view' => $view]);
+            }
+            $invoiceId = (string) ($created['invoice_id'] ?? '');
+            $invoiceDoc = $invoiceId !== '' ? documents_get_invoice($invoiceId) : null;
+            if ($invoiceDoc === null || $invoiceId === '') {
+                $redirectDocuments($tab, 'error', 'Invoice created but could not be loaded.', ['view' => $view]);
+            }
+
+            $salesInvoice = documents_sales_document_defaults('invoice');
+            $salesInvoice['id'] = $invoiceId;
+            $salesInvoice['quotation_id'] = (string) ($quote['id'] ?? '');
+            $salesInvoice['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+            $salesInvoice['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
+            $salesInvoice['invoice_no'] = (string) ($invoiceDoc['invoice_no'] ?? '');
+            $salesInvoice['invoice_date'] = date('Y-m-d');
+            $salesInvoice['amount'] = (float) ($invoiceDoc['input_total_gst_inclusive'] ?? 0);
+            $salesInvoice['status'] = 'draft';
+            $salesInvoice['created_by'] = $viewer;
+            $salesInvoice['created_at'] = (string) ($invoiceDoc['created_at'] ?? date('c'));
+            $savedSalesInvoice = documents_save_sales_document('invoice', $salesInvoice);
+            if (!$savedSalesInvoice['ok']) {
+                $redirectDocuments($tab, 'error', 'Invoice created, but workflow update failed.', ['view' => $view]);
+            }
+
+            documents_quote_link_workflow_doc($quote, 'invoice', $invoiceId);
+            $quote['updated_at'] = date('c');
+            documents_save_quote($quote);
+            header('Location: admin-invoices.php?id=' . urlencode($invoiceId));
+            exit;
+        }
     }
 
     if ($action === 'save_numbering_rule') {
@@ -684,7 +993,14 @@ usort($archivedRows, static function (array $a, array $b): int {
 
           <h3>B) Vendor Consumer Agreement</h3>
           <?php if ($packAgreements === []): ?>
-            <p class="muted">No agreement found. <a class="btn" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">Create Agreement</a></p>
+            <form method="post" class="inline-form">
+              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+              <input type="hidden" name="action" value="create_agreement" />
+              <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+              <input type="hidden" name="return_tab" value="accepted_customers" />
+              <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+              <p class="muted">No agreement found. <button class="btn" type="submit">Create Agreement</button></p>
+            </form>
           <?php else: ?>
             <table>
               <thead><tr><th>ID</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
@@ -695,7 +1011,7 @@ usort($archivedRows, static function (array $a, array $b): int {
                     <td><?= htmlspecialchars((string) ($row['execution_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td>
                     <td><?= htmlspecialchars((string) ($row['status'] ?? 'active'), ENT_QUOTES) ?></td>
                     <td class="row-actions">
-                      <a class="btn secondary" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">View / Edit</a>
+                      <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View / Edit</a>
                       <?php if ($isAdmin): ?>
                         <form class="inline-form" method="post">
                           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
@@ -716,7 +1032,14 @@ usort($archivedRows, static function (array $a, array $b): int {
           <?php endif; ?>
 
           <h3>C) Payment Receipts</h3>
-          <p><a class="btn" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">Add Receipt</a></p>
+          <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+            <input type="hidden" name="action" value="create_receipt" />
+            <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+            <input type="hidden" name="return_tab" value="accepted_customers" />
+            <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+            <button class="btn" type="submit">Add Receipt</button>
+          </form>
           <table>
             <thead><tr><th>ID</th><th>Date</th><th>Amount</th><th>Mode/Ref</th><th>Actions</th></tr></thead>
             <tbody>
@@ -727,7 +1050,7 @@ usort($archivedRows, static function (array $a, array $b): int {
                   <td><?= htmlspecialchars($inr((float) ($row['amount_received'] ?? $row['amount'] ?? 0)), ENT_QUOTES) ?></td>
                   <td><?= htmlspecialchars((string) ($row['mode'] ?? ''), ENT_QUOTES) ?> <?= htmlspecialchars((string) ($row['reference'] ?? ''), ENT_QUOTES) ?></td>
                   <td class="row-actions">
-                    <a class="btn secondary" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">View/Edit</a>
+                    <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => $packQuoteId, 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">View/Edit</a>
                     <?php if ($isAdmin): ?>
                       <form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="receipt" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form>
                     <?php endif; ?>
@@ -739,30 +1062,51 @@ usort($archivedRows, static function (array $a, array $b): int {
           </table>
 
           <h3>D) Delivery Challans</h3>
-          <p><a class="btn" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">Create DC</a></p>
+          <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+            <input type="hidden" name="action" value="create_delivery_challan" />
+            <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+            <input type="hidden" name="return_tab" value="accepted_customers" />
+            <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+            <button class="btn" type="submit">Create DC</button>
+          </form>
           <table><thead><tr><th>ID</th><th>Date</th><th>Items</th><th>Actions</th></tr></thead><tbody>
           <?php foreach ($packChallans as $row): ?>
             <tr>
               <td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td>
               <td><?= htmlspecialchars((string) ($row['challan_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td>
               <td><?= count(is_array($row['items'] ?? null) ? $row['items'] : []) ?></td>
-              <td class="row-actions"><a class="btn secondary" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="delivery_challan" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td>
+              <td class="row-actions"><a class="btn secondary" href="challan-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="delivery_challan" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td>
             </tr>
           <?php endforeach; ?>
           <?php if ($packChallans === []): ?><tr><td colspan="4" class="muted">No delivery challans available.</td></tr><?php endif; ?>
           </tbody></table>
 
           <h3>E) Proforma Invoice (PI)</h3>
-          <p><a class="btn" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">Create PI</a></p>
+          <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+            <input type="hidden" name="action" value="create_pi" />
+            <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+            <input type="hidden" name="return_tab" value="accepted_customers" />
+            <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+            <button class="btn" type="submit">Create PI</button>
+          </form>
           <table><thead><tr><th>ID</th><th>Date</th><th>Actions</th></tr></thead><tbody>
-          <?php foreach ($packProformas as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['pi_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="proforma" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
+          <?php foreach ($packProformas as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['pi_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="admin-proformas.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="proforma" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
           <?php if ($packProformas === []): ?><tr><td colspan="3" class="muted">No PI found.</td></tr><?php endif; ?>
           </tbody></table>
 
           <h3>F) Invoice</h3>
-          <p><a class="btn" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">Create Invoice</a></p>
+          <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+            <input type="hidden" name="action" value="create_invoice" />
+            <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+            <input type="hidden" name="return_tab" value="accepted_customers" />
+            <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+            <button class="btn" type="submit">Create Invoice</button>
+          </form>
           <table><thead><tr><th>ID</th><th>Date</th><th>Actions</th></tr></thead><tbody>
-          <?php foreach ($packInvoices as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['invoice_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="invoice" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
+          <?php foreach ($packInvoices as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['invoice_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="admin-invoices.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="invoice" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
           <?php if ($packInvoices === []): ?><tr><td colspan="3" class="muted">No invoice found.</td></tr><?php endif; ?>
           </tbody></table>
         <?php else: ?>
