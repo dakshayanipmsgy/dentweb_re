@@ -104,7 +104,6 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
     $loanTenureMonths = max(1, (int) round($loanTenureYears * 12));
 
     $annualGeneration = (float) ($quote['finance_inputs']['annual_generation_per_kw'] ?? $segmentDefaults['annual_generation_per_kw'] ?? $quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450);
-    $monthlyPerKwp = $annualGeneration / 12;
     $unitRate = (float) ($quote['finance_inputs']['unit_rate_rs_per_kwh'] ?? $segmentDefaults['unit_rate_rs_per_kwh'] ?? $quoteDefaults['segments']['RES']['unit_rate_rs_per_kwh'] ?? 8);
     $emissionFactor = (float) ($quoteDefaults['global']['energy_defaults']['emission_factor_kg_per_kwh'] ?? 0.82);
     $treeAbsorption = (float) ($quoteDefaults['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'] ?? 20);
@@ -151,7 +150,7 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
 <style>
 :root{--color-primary:<?= htmlspecialchars((string)($colors['primary'] ?? '#0ea5e9'), ENT_QUOTES) ?>;--color-accent:<?= htmlspecialchars((string)($colors['accent'] ?? '#22c55e'), ENT_QUOTES) ?>;--color-text:<?= htmlspecialchars((string)($colors['text'] ?? '#0f172a'), ENT_QUOTES) ?>;--color-muted:<?= htmlspecialchars((string)($colors['muted_text'] ?? '#475569'), ENT_QUOTES) ?>;--page-bg:<?= htmlspecialchars((string)($colors['page_bg'] ?? '#f8fafc'), ENT_QUOTES) ?>;--card-bg:<?= htmlspecialchars((string)($colors['card_bg'] ?? '#ffffff'), ENT_QUOTES) ?>;--border-color:<?= htmlspecialchars((string)($colors['border'] ?? '#e2e8f0'), ENT_QUOTES) ?>;--base-font-size:<?= (int)($typo['base_px'] ?? 14) ?>px;--h1-size:<?= (int)($typo['h1_px'] ?? 24) ?>px;--h2-size:<?= (int)($typo['h2_px'] ?? 18) ?>px;--h3-size:<?= (int)($typo['h3_px'] ?? 16) ?>px;--line-height:<?= (float)($typo['line_height'] ?? 1.6) ?>;--shadow-preset:<?= quotation_shadow_css((string)($tokens['shadow'] ?? 'soft')) ?>;--header-bg:<?= htmlspecialchars($headerBg, ENT_QUOTES) ?>;--footer-bg:<?= htmlspecialchars($footerBg, ENT_QUOTES) ?>;--header-text-color:<?= htmlspecialchars($headerText, ENT_QUOTES) ?>;--footer-text-color:<?= htmlspecialchars($footerText, ENT_QUOTES) ?>}
 body{font-family:Inter,Arial,sans-serif;background:var(--page-bg);margin:0;color:var(--color-text);font-size:var(--base-font-size);line-height:var(--line-height)}
-h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-size)}.wrap{max-width:1100px;margin:0 auto;padding:12px}.card{background:var(--card-bg);border:1px solid var(--border-color);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow-preset)}.h{font-weight:700}.sec{border-bottom:2px solid var(--color-primary);padding-bottom:5px;margin-bottom:8px}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.metric{background:var(--page-bg);border:1px solid var(--border-color);border-radius:10px;padding:8px}.hero{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.hero .metric b{display:block;font-size:1.2rem;margin-top:4px}.save-line{margin-top:10px;padding:10px 12px;border:1px solid #86efac;background:#f0fdf4;color:#166534;border-radius:10px;font-weight:700}.chip{background:#ccfbf1;color:#134e4a;border-radius:99px;padding:5px 10px;display:inline-block;margin:3px 6px 0 0}.muted{color:var(--color-muted)}table{width:100%;border-collapse:collapse}th,td{border:1px solid var(--border-color);padding:8px;text-align:left}th{background:#f8fafc}.right{text-align:right}.center{text-align:center}.footer{background:var(--footer-bg);color:var(--footer-text-color)}.footer a,.footer a:visited{color:var(--footer-text-color)}.header{background:var(--header-bg);color:var(--header-text-color)}.header a,.header a:visited{color:var(--header-text-color)}.header-top{display:flex;align-items:center;gap:12px}.header-logo{background:rgba(255,255,255,.18);padding:4px 8px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center}.header-logo img{max-height:50px;width:auto;display:block}.header-main{min-width:0}.screen-only{display:block}.hide-print{display:block}@media (max-width:700px){.header-top{flex-direction:column;align-items:flex-start}}@media print{.hide-print,.screen-only{display:none!important}.card{break-inside:avoid;box-shadow:none}}</style>
+h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-size)}.wrap{max-width:1100px;margin:0 auto;padding:12px}.card{background:var(--card-bg);border:1px solid var(--border-color);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow-preset)}.h{font-weight:700}.sec{border-bottom:2px solid var(--color-primary);padding-bottom:5px;margin-bottom:8px}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.metric{background:var(--page-bg);border:1px solid var(--border-color);border-radius:10px;padding:8px}.hero{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.hero .metric b{display:block;font-size:1.2rem;margin-top:4px}.save-line{margin-top:10px;padding:10px 12px;border:1px solid #86efac;background:#f0fdf4;color:#166534;border-radius:10px;font-weight:700}.chip{background:#ccfbf1;color:#134e4a;border-radius:99px;padding:5px 10px;display:inline-block;margin:3px 6px 0 0}.muted{color:var(--color-muted)}table{width:100%;border-collapse:collapse}th,td{border:1px solid var(--border-color);padding:8px;text-align:left}th{background:#f8fafc}.right{text-align:right}.center{text-align:center}.footer{background:var(--footer-bg);color:var(--footer-text-color)}.footer a,.footer a:visited{color:var(--footer-text-color)}.header{background:var(--header-bg);color:var(--header-text-color)}.header a,.header a:visited{color:var(--header-text-color)}.header-top{display:flex;align-items:center;gap:12px}.header-logo{background:rgba(255,255,255,.18);padding:4px 8px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center}.header-logo img{max-height:50px;width:auto;display:block}.header-main{min-width:0}.screen-only{display:block}.hide-print{display:block}.chart-block{margin-bottom:12px}.chart-title{font-weight:700;margin:2px 0 8px}.chart-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}.legend-item{display:flex;align-items:center;gap:6px;font-size:.92rem}.legend-swatch{width:12px;height:12px;border-radius:3px;display:inline-block}.bar-chart{display:flex;align-items:flex-end;justify-content:space-around;gap:10px;height:180px;padding:8px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.bar-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1}.bar{width:52px;max-width:100%;border-radius:8px 8px 4px 4px;min-height:2px}.bar-label{font-size:.82rem;text-align:center}.axis-label{font-size:.82rem;color:var(--color-muted);text-align:center;margin-top:6px}.line-chart svg{width:100%;height:220px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.payback-meter{width:100%;height:16px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px}.payback-meter-fill{height:100%;background:linear-gradient(to right,var(--color-primary),var(--color-accent));width:0}.scenario-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}@media (max-width:700px){.header-top{flex-direction:column;align-items:flex-start}.scenario-grid{grid-template-columns:1fr}}@media print{.hide-print,.screen-only{display:none!important}.card{break-inside:avoid;box-shadow:none}}</style>
 </head><body><main class="wrap">
 <div class="card screen-only" style="border-style:dashed">For clean printing: disable ‘Headers and footers’ in Print settings.</div>
 <section class="card header"><div class="header-top"><?php if ($hasLogo): ?><div class="header-logo"><img src="<?= htmlspecialchars($logoSrc, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($companyName, ENT_QUOTES) ?> logo" /></div><?php endif; ?><div class="header-main"><div class="h"><?= htmlspecialchars($companyName, ENT_QUOTES) ?></div><div><?= htmlspecialchars((string)($company['address_line'] ?? ''), ENT_QUOTES) ?>, <?= htmlspecialchars((string)($company['city'] ?? ''), ENT_QUOTES) ?></div><div><?= implode(' | ', $phoneBits) ?><?= $phoneBits !== [] ? ' | ' : '' ?>✉️ <?= htmlspecialchars((string)($company['email_primary'] ?? ''), ENT_QUOTES) ?> · 🌐 <?= htmlspecialchars($website, ENT_QUOTES) ?><?= $waLink !== '' ? ' · <a href="' . htmlspecialchars($waLink, ENT_QUOTES) . '">Chat</a>' : '' ?></div><div>GSTIN <?= htmlspecialchars((string)($company['gstin'] ?? ''), ENT_QUOTES) ?> · UDYAM <?= htmlspecialchars((string)($company['udyam'] ?? ''), ENT_QUOTES) ?> · PAN <?= htmlspecialchars((string)($company['pan'] ?? ''), ENT_QUOTES) ?></div><div>Quote No <b><?= htmlspecialchars((string)($quote['quote_no'] ?? ''), ENT_QUOTES) ?></b></div></div></div></section>
@@ -162,9 +161,28 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <section class="card"><div class="h sec">📦 Item summary</div><table><thead><tr><th>#</th><th>Particular</th><th>Description</th><th class="center">Qty</th><th class="center">Unit</th></tr></thead><tbody><?php $items = is_array($quote['items'] ?? null) ? $quote['items'] : []; if ($items === []): ?><tr><td colspan="5" class="center muted">No line items added.</td></tr><?php else: foreach ($items as $idx => $item): ?><tr><td><?= (int)$idx + 1 ?></td><td><?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['qty'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
 <?php if($specialReq!==''): ?><section class="card"><div class="h sec">✍️ Special Requests From Consumer (Inclusive in the rate)</div><div><?= quotation_sanitize_html($specialReq) ?></div><div><i>In case of conflict between annexures and special requests, special requests will be prioritized.</i></div></section><?php endif; ?>
 <section class="card"><div class="h sec">💰 Pricing summary</div><table><thead><tr><th>#</th><th>Particular</th><th class="right">Amount</th></tr></thead><tbody><tr><td>1</td><td>Gross payable</td><td class="right" id="upfront"></td></tr><tr><td>2</td><td>Subsidy expected</td><td class="right"><?= quotation_format_inr_indian((float)($calc['subsidy_expected_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td>3</td><td><b>Net upfront</b></td><td class="right"><b id="upfrontNet"></b></td></tr></tbody></table></section>
-<section class="card"><div class="h sec">📊 Charts &amp; graphics</div><div class="grid4"><div class="metric">Monthly residual bill (Bank)<b id="residual">-</b></div><div class="metric">Monthly total outflow (Bank)<b id="outflow">-</b></div><div class="metric">Monthly outflow (Self funded)<b id="selfResidual">-</b></div><div class="metric">Savings snapshot<b><span id="heroSavingChart">-</span></b></div></div></section>
-<section class="card"><div class="h sec">🏦 Finance clarity</div><div class="grid4"><div class="metric">Interest<b><?= htmlspecialchars((string)$loanInterest, ENT_QUOTES) ?>%</b></div><div class="metric">Tenure<b><?= htmlspecialchars((string)$loanTenureYears, ENT_QUOTES) ?> yrs</b></div><div class="metric">Annual generation/kW<b><?= htmlspecialchars((string)$annualGeneration, ENT_QUOTES) ?></b></div><div class="metric">Unit rate<b><?= quotation_format_inr_indian($unitRate, $showDecimals) ?></b></div></div><div class="grid4" style="margin-top:8px"><div class="metric">Margin<b id="margin">-</b></div><div class="metric">Loan eligible<b id="loan">-</b></div><div class="metric">Effective loan<b id="loanEff">-</b></div><div class="metric">EMI<b id="emi">-</b></div></div></section>
-<section class="card"><div class="h sec">🔆 Generation estimate</div><div class="grid4"><div class="metric">Monthly generation<b id="genMonthly">-</b></div><div class="metric">Annual generation<b id="genAnnual">-</b></div><div class="metric">Payback<b id="payback">-</b></div><div class="metric">Monthly per kWp<b><?= quotation_format_inr_indian($monthlyPerKwp, $showDecimals) ?> units</b></div></div></section>
+<section class="card"><div class="h sec">📊 Charts &amp; graphics</div>
+<div class="chart-block">
+<div class="chart-title">Monthly Outflow Comparison</div>
+<div id="monthlyOutflowChart" class="bar-chart"></div>
+<div class="axis-label">Scenario</div>
+<div class="axis-label">Monthly Outflow (₹)</div>
+<div id="monthlyOutflowLegend" class="chart-legend"></div>
+</div>
+<div class="chart-block">
+<div class="chart-title">Cumulative Expense Over 25 Years</div>
+<div id="cumulativeLegend" class="chart-legend"></div>
+<div class="line-chart"><svg id="cumulativeExpenseChart" viewBox="0 0 920 220" preserveAspectRatio="none"></svg></div>
+<div class="axis-label">Years</div>
+<div class="axis-label">Cumulative Expense (₹)</div>
+</div>
+<div class="chart-block">
+<div class="chart-title">Payback Meter</div>
+<div class="metric">Estimated payback<b id="payback">-</b><div class="payback-meter"><div class="payback-meter-fill" id="paybackMeterFill"></div></div></div>
+</div>
+</section>
+<section class="card"><div class="h sec">🏦 Finance clarity</div><div class="scenario-grid"><div class="metric"><b>With Loan</b><div style="margin-top:6px">Margin<b id="margin">-</b></div><div>Loan eligible<b id="loan">-</b></div><div>Effective principal<b id="loanEff">-</b></div><div>EMI<b id="emi">-</b></div><div>Residual bill<b id="residual">-</b></div><div>Total outflow<b id="outflow">-</b></div></div><div class="metric"><b>Self Funded</b><div style="margin-top:6px">Upfront investment<b id="upfrontFinance">-</b></div><div>Investment minus subsidy<b id="upfrontNetFinance">-</b></div><div>Residual bill<b id="selfResidual">-</b></div></div></div></section>
+<section class="card"><div class="h sec">🔆 Generation estimate</div><table><tbody><tr><th>Expected monthly generation (units)</th><td class="right" id="genMonthly">-</td></tr><tr><th>Expected annual generation (units)</th><td class="right" id="genAnnual">-</td></tr><tr><th>Estimated payback period (years)</th><td class="right" id="genPayback">-</td></tr><tr><th>Units produced in 25 years (units)</th><td class="right" id="gen25">-</td></tr></tbody></table></section>
 <section class="card"><div class="h sec">🌱 Your Green Impact</div><div class="grid4"><div class="metric">CO₂/year<b id="co2y">-</b></div><div class="metric">Trees/year<b id="treey">-</b></div><div class="metric">CO₂ over 25 years<b id="co225">-</b></div><div class="metric">Trees over 25 years<b id="tree25">-</b></div></div></section>
 <section class="card"><div class="h sec">⭐ Why <?= htmlspecialchars($companyName, ENT_QUOTES) ?></div><ul><?php foreach ($whyPoints as $point): ?><li><?= htmlspecialchars((string)$point, ENT_QUOTES) ?></li><?php endforeach; ?></ul></section>
 <section class="card"><div class="h sec">📑 Annexures</div><?php foreach(['warranty'=>'Warranty','system_inclusions'=>'System inclusions','pm_subsidy_info'=>'PM subsidy info','completion_milestones'=>'Completion milestones','payment_terms'=>'Payment terms','system_type_explainer'=>'System Type explainer (ongrid vs hybrid vs offgrid)','transportation'=>'Transportation','terms_conditions'=>'Terms and conditions'] as $k=>$label): ?><div class="metric"><div class="h"><?= htmlspecialchars($label, ENT_QUOTES) ?></div><div><?= quotation_sanitize_html((string)($ann[$k] ?? '')) ?></div></div><?php endforeach; ?></section>
@@ -176,17 +194,60 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 const q={gross:<?= json_encode((float)$calc['gross_payable']) ?>,subsidy:<?= json_encode((float)$calc['subsidy_expected_rs']) ?>,subsidyProvided:<?= json_encode($subsidyProvided) ?>,monthly:<?= json_encode((float)($quote['finance_inputs']['monthly_bill_rs'] ?? 0)) ?>,unit:<?= json_encode($unitRate) ?>,cap:<?= json_encode((float)($quote['capacity_kwp'] ?? 0)) ?>,gen:<?= json_encode($annualGeneration) ?>};
 const showDecimals=<?= json_encode($showDecimals) ?>;
 const r=x=>'₹'+Number(x).toLocaleString('en-IN',{minimumFractionDigits:showDecimals?2:0,maximumFractionDigits:showDecimals?2:0});
+const nUnits=x=>Number(x).toLocaleString('en-US',{maximumFractionDigits:0});
 const rr=(<?= json_encode($loanInterest) ?>)/100/12,n=<?= json_encode($loanTenureMonths) ?>;
 const minMargin=q.gross*0.10,loan=Math.max(0,q.gross-minMargin),margin=q.gross-loan,loanEff=Math.max(0,loan-q.subsidy),emi=loanEff>0?(loanEff*rr*Math.pow(1+rr,n))/((Math.pow(1+rr,n))-1):0,mUnits=q.monthly/Math.max(0.1,q.unit),solar=(q.cap*q.gen)/12,res=Math.max(0,mUnits-solar)*q.unit,out=emi+res;
-['margin','loan','loanEff','emi','residual','outflow','upfront','upfrontNet','selfResidual'].forEach((id)=>{const map={margin,loan,loanEff,emi,residual:res,outflow:out,upfront:q.gross,upfrontNet:q.gross-q.subsidy,selfResidual:res};const el=document.getElementById(id);if(el)el.textContent=r(map[id]);});
-const heroSaving=Math.max(0,q.monthly-res);document.getElementById('heroOutflowBank').textContent=r(out);document.getElementById('heroOutflowSelf').textContent=r(res);document.getElementById('heroSaving').textContent=r(heroSaving);const heroSavingChart=document.getElementById('heroSavingChart');if(heroSavingChart){heroSavingChart.textContent=r(heroSaving);}
-const paybackEl=document.getElementById('payback');
-const invested=q.subsidyProvided?Math.max(0,q.gross-q.subsidy):q.gross;
+['margin','loan','loanEff','emi','residual','outflow','selfResidual'].forEach((id)=>{const map={margin,loan,loanEff,emi,residual:res,outflow:out,selfResidual:res};const el=document.getElementById(id);if(el)el.textContent=r(map[id]);});
+const upfrontNet=q.gross-q.subsidy;
+const financeMap={upfront:q.gross,upfrontNet,upfrontFinance:q.gross,upfrontNetFinance:upfrontNet};
+Object.keys(financeMap).forEach((id)=>{const el=document.getElementById(id);if(el)el.textContent=r(financeMap[id]);});
+const heroSaving=Math.max(0,q.monthly-res);document.getElementById('heroOutflowBank').textContent=r(out);document.getElementById('heroOutflowSelf').textContent=r(res);document.getElementById('heroSaving').textContent=r(heroSaving);
+const invested=q.subsidyProvided?Math.max(0,upfrontNet):q.gross;
 const annualValue=q.cap*q.gen*q.unit;
-if(!Number.isFinite(annualValue)||annualValue<=0){paybackEl.textContent='—';}else{const paybackYears=invested/annualValue;paybackEl.textContent='~'+(Number.isFinite(paybackYears)?paybackYears.toFixed(1):'—')+' years';}
+let paybackYears=NaN;
+const paybackEl=document.getElementById('payback');
+if(!Number.isFinite(annualValue)||annualValue<=0){paybackEl.textContent='—';}else{paybackYears=invested/annualValue;paybackEl.textContent='~'+(Number.isFinite(paybackYears)?paybackYears.toFixed(1):'—')+' years';}
+const genPaybackEl=document.getElementById('genPayback');if(genPaybackEl){genPaybackEl.textContent=Number.isFinite(paybackYears)?paybackYears.toFixed(1):'—';}
+const paybackFill=document.getElementById('paybackMeterFill');if(paybackFill){const pct=Number.isFinite(paybackYears)?Math.max(0,Math.min(100,(paybackYears/25)*100)):0;paybackFill.style.width=pct.toFixed(1)+'%';}
+
+const monthlySeries=[
+  {label:'No Solar',value:Math.max(0,q.monthly),color:'#ef4444'},
+  {label:'With Solar (Loan)',value:Math.max(0,out),color:'#0ea5e9'},
+  {label:'With Solar (Self funded)',value:Math.max(0,res),color:'#22c55e'}
+];
+const monthlyChart=document.getElementById('monthlyOutflowChart');
+const monthlyLegend=document.getElementById('monthlyOutflowLegend');
+if(monthlyChart&&monthlyLegend){
+  const maxVal=Math.max(1,...monthlySeries.map((x)=>x.value));
+  monthlyChart.innerHTML=monthlySeries.map((item)=>{const h=(item.value/maxVal)*160;return `<div class="bar-wrap"><div class="bar" style="background:${item.color};height:${Math.max(2,h)}px"></div><div class="bar-label">${item.label}<br>${r(item.value)}</div></div>`;}).join('');
+  monthlyLegend.innerHTML=monthlySeries.map((item)=>`<span class="legend-item"><span class="legend-swatch" style="background:${item.color}"></span>${item.label}</span>`).join('');
+}
+
+const cumSeries=[
+  {label:'No Solar',color:'#ef4444',points:[]},
+  {label:'With Solar (Loan)',color:'#0ea5e9',points:[]},
+  {label:'With Solar (Self funded)',color:'#22c55e',points:[]}
+];
+for(let y=0;y<=25;y+=1){const m=y*12;cumSeries[0].points.push({x:y,y:m*q.monthly});cumSeries[1].points.push({x:y,y:m*out});cumSeries[2].points.push({x:y,y:q.gross+(m*res)});}
+const svg=document.getElementById('cumulativeExpenseChart');
+const cumLegend=document.getElementById('cumulativeLegend');
+if(svg&&cumLegend){
+  const w=920,h=220,p=26;
+  const allY=cumSeries.flatMap((s)=>s.points.map((pt)=>pt.y));
+  const maxY=Math.max(1,...allY);
+  const xToPx=(x)=>p+((w-(2*p))*x/25);
+  const yToPx=(y)=>h-p-((h-(2*p))*y/maxY);
+  let lines=`<line x1="${p}" y1="${h-p}" x2="${w-p}" y2="${h-p}" stroke="#94a3b8" stroke-width="1"/><line x1="${p}" y1="${p}" x2="${p}" y2="${h-p}" stroke="#94a3b8" stroke-width="1"/>`;
+  for(let yr=0;yr<=25;yr+=5){const x=xToPx(yr);lines+=`<text x="${x}" y="${h-6}" text-anchor="middle" font-size="10" fill="#64748b">${yr}</text>`;}
+  [0,0.25,0.5,0.75,1].forEach((tick)=>{const yVal=maxY*tick;const yy=yToPx(yVal);lines+=`<line x1="${p}" y1="${yy}" x2="${w-p}" y2="${yy}" stroke="#e2e8f0" stroke-width="1"/>`;});
+  cumSeries.forEach((series)=>{const d=series.points.map((pt,i)=>`${i===0?'M':'L'} ${xToPx(pt.x)} ${yToPx(pt.y)}`).join(' ');lines+=`<path d="${d}" fill="none" stroke="${series.color}" stroke-width="2.5"/>`;});
+  svg.innerHTML=lines;
+  cumLegend.innerHTML=cumSeries.map((item)=>`<span class="legend-item"><span class="legend-swatch" style="background:${item.color}"></span>${item.label}</span>`).join('');
+}
+
 const yearly=q.cap*q.gen,co2=yearly*<?= json_encode($emissionFactor) ?>,tree=co2/Math.max(0.1,<?= json_encode($treeAbsorption) ?>);
 document.getElementById('co2y').textContent=co2.toFixed(0)+' kg';document.getElementById('treey').textContent=tree.toFixed(1);document.getElementById('co225').textContent=(co2*25).toFixed(0)+' kg';document.getElementById('tree25').textContent=(tree*25).toFixed(1);
-document.getElementById('genMonthly').textContent=Math.round(solar)+' units';document.getElementById('genAnnual').textContent=Math.round(yearly)+' units';
+document.getElementById('genMonthly').textContent=nUnits(solar);document.getElementById('genAnnual').textContent=nUnits(yearly);const gen25El=document.getElementById('gen25');if(gen25El){gen25El.textContent=nUnits(yearly*25);}
 </script>
 </body></html>
 <?php
