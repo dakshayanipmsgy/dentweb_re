@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $pricingMode = safe_text($_POST['pricing_mode'] ?? 'solar_split_70_30');
-        if (!in_array($pricingMode, ['solar_split_70_30', 'flat_5'], true)) {
+        if (!in_array($pricingMode, ['solar_split_70_30', 'flat_5', 'custom_split'], true)) {
             $pricingMode = 'solar_split_70_30';
         }
         $placeOfSupply = safe_text($_POST['place_of_supply_state'] ?? 'Jharkhand');
@@ -165,7 +165,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['capacity_kwp'] = $capacity;
         $quote['project_summary_line'] = safe_text($_POST['project_summary_line'] ?? '');
         $quote['valid_until'] = safe_text($_POST['valid_until'] ?? '');
-        $quote['pricing_mode'] = $pricingMode;
         $quote['place_of_supply_state'] = $placeOfSupply;
         $quote['tax_type'] = $taxType;
         $itemNames = is_array($_POST['item_name'] ?? null) ? $_POST['item_name'] : [];
@@ -188,10 +187,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $defaultHsn = safe_text((string) ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
         $quote['items'] = documents_normalize_quote_items($rawItems, $quote['system_type'], (float) $quote['capacity_kwp'], $defaultHsn);
+        $split5Pct = (float) ($_POST['split_5_pct'] ?? 70);
+        $split18Pct = (float) ($_POST['split_18_pct'] ?? 30);
+        $split = documents_pricing_split_from_mode($pricingMode, $split5Pct, $split18Pct);
+        $quote['pricing_mode'] = (string) ($split['pricing_mode'] ?? $pricingMode);
+        $quote['split_5_pct'] = (float) ($split['split_5_pct'] ?? 70);
+        $quote['split_18_pct'] = (float) ($split['split_18_pct'] ?? 30);
         $systemTotalInclGstRs = (float) ($_POST['system_total_incl_gst_rs'] ?? 0);
         $transportationRs = (float) ($_POST['transportation_rs'] ?? 0);
         $subsidyExpectedRs = (float) ($_POST['subsidy_expected_rs'] ?? 0);
-        $quote['calc'] = documents_calc_pricing_from_items($quote['items'], $pricingMode, $taxType, $transportationRs, $subsidyExpectedRs, $systemTotalInclGstRs);
+        $quote['calc'] = documents_calc_pricing_from_items($quote['items'], $quote['pricing_mode'], $taxType, $transportationRs, $subsidyExpectedRs, $systemTotalInclGstRs, $quote['split_5_pct'], $quote['split_18_pct']);
         $quote['input_total_gst_inclusive'] = $systemTotalInclGstRs;
         $quote['cover_note_text'] = trim((string) ($_POST['cover_note_text'] ?? ''));
         $quote['special_requests_text'] = trim((string) ($_POST['special_requests_text'] ?? ''));
@@ -345,7 +350,7 @@ if ($lookup !== null) {
 <div><label>Capacity kWp</label><input name="capacity_kwp" required value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>"></div>
 <div><label>Valid Until</label><input type="date" name="valid_until" value="<?= htmlspecialchars((string)$editing['valid_until'], ENT_QUOTES) ?>"></div>
 <div><label>Cover note paragraph</label><textarea name="cover_note_text"><?= htmlspecialchars((string)($editing['cover_note_text'] ?: ($quoteDefaults['defaults']['cover_note_template'] ?? '')), ENT_QUOTES) ?></textarea></div>
-<div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div><div><label>Total system price (including GST) ₹</label><input type="number" step="0.01" required name="system_total_incl_gst_rs" value="<?= htmlspecialchars((string)($editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
+<div><label>Pricing Mode</label><select name="pricing_mode" id="pricingMode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>Standard 5% on 70% + 18% on 30%</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>Single GST 5% on 100%</option><option value="custom_split" <?= $editing['pricing_mode']==='custom_split'?'selected':'' ?>>Custom dual GST split</option></select></div><div><label>Total system price (including GST) ₹</label><input type="number" step="0.01" required name="system_total_incl_gst_rs" value="<?= htmlspecialchars((string)($editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div><div><label>5% GST share (%)</label><input type="number" min="0" max="100" step="0.01" name="split_5_pct" id="split5Pct" value="<?= htmlspecialchars((string)($editing['split_5_pct'] ?? ($editing['calc']['split_5_pct'] ?? 70)), ENT_QUOTES) ?>"></div><div><label>18% GST share (%)</label><input type="number" min="0" max="100" step="0.01" name="split_18_pct" id="split18Pct" value="<?= htmlspecialchars((string)($editing['split_18_pct'] ?? ($editing['calc']['split_18_pct'] ?? 30)), ENT_QUOTES) ?>"><div class="muted">Used only for custom split; totals are auto-normalized to 100%.</div></div>
 <div><label>Place of Supply State</label><input name="place_of_supply_state" value="<?= htmlspecialchars((string)$editing['place_of_supply_state'], ENT_QUOTES) ?>"></div>
 <div><label>District</label><input name="district" value="<?= htmlspecialchars((string)($quoteSnapshot['district'] ?? $editing['district']), ENT_QUOTES) ?>"></div><div><label>City</label><input name="city" value="<?= htmlspecialchars((string)($quoteSnapshot['city'] ?? $editing['city']), ENT_QUOTES) ?>"></div><div><label>State</label><input name="state" value="<?= htmlspecialchars((string)($quoteSnapshot['state'] ?? $editing['state']), ENT_QUOTES) ?>"></div><div><label>PIN</label><input name="pin" value="<?= htmlspecialchars((string)($quoteSnapshot['pin_code'] ?? $editing['pin']), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Billing Address</label><textarea name="billing_address"><?= htmlspecialchars((string)((($editing['billing_address'] !== '') ? $editing['billing_address'] : ($quoteSnapshot['address'] ?? ''))), ENT_QUOTES) ?></textarea></div>
@@ -378,4 +383,5 @@ if ($lookup !== null) {
 <div class="card"><h2>My Quote List</h2><table><thead><tr><th>Quote No</th><th>Name</th><th>Status</th><th>Amount</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
 <?php foreach ($quotes as $q): ?><tr><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'employee'), ENT_QUOTES) ?></td><td>₹<?= number_format((float)$q['calc']['grand_total'],2) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td><td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <?php if (documents_quote_can_edit($q, 'employee', (string) ($employee['id'] ?? ''))): ?><a class="btn secondary" href="employee-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?></td></tr><?php endforeach; if ($quotes===[]): ?><tr><td colspan="6">No quotations yet.</td></tr><?php endif; ?></tbody></table></div>
 <script>document.addEventListener('click',function(e){if(e.target&&e.target.id==='addItemBtn'){const tb=document.querySelector('#itemsTable tbody');if(!tb)return;const tr=document.createElement('tr');const dH='<?= htmlspecialchars((string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>';tr.innerHTML='<td></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="'+dH+'"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';tb.appendChild(tr);ren();}if(e.target&&e.target.classList.contains('rm-item')){e.target.closest('tr')?.remove();ren();}});function ren(){document.querySelectorAll('#itemsTable tbody tr').forEach((tr,i)=>{const td=tr.querySelector('td');if(td)td.textContent=String(i+1);});}ren();</script>
+<script>(function(){const mode=document.getElementById('pricingMode');const s5=document.getElementById('split5Pct');const s18=document.getElementById('split18Pct');if(!mode||!s5||!s18){return;}const sync=(source)=>{const m=mode.value;if(m==='flat_5'){s5.value='100';s18.value='0';}else if(m==='solar_split_70_30'){s5.value='70';s18.value='30';}const custom=m==='custom_split';s5.readOnly=!custom;s18.readOnly=!custom;s5.style.backgroundColor=custom?'':'#f1f5f9';s18.style.backgroundColor=custom?'':'#f1f5f9';if(custom){const a=parseFloat(s5.value||'0');const b=parseFloat(s18.value||'0');if(source==='s5'&&a>=0&&a<=100){s18.value=(100-a).toFixed(2);}if(source==='s18'&&b>=0&&b<=100){s5.value=(100-b).toFixed(2);}}};mode.addEventListener('change',()=>sync('mode'));s5.addEventListener('input',()=>sync('s5'));s18.addEventListener('input',()=>sync('s18'));sync('init');})();</script>
 <script>window.quoteFormAutofillConfig={settingsBySegment:<?= json_encode($autofillSegments, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,defaultEnergy:<?= json_encode((float)($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450)) ?>};</script><script src="assets/js/quote-form-autofill.js"></script></main></body></html>
