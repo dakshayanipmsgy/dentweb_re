@@ -38,8 +38,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($existing !== null && (($existing['created_by_type'] ?? '') !== 'employee' || (string) ($existing['created_by_id'] ?? '') !== (string) ($employee['id'] ?? ''))) {
             $redirectWith('error', 'You can only edit your own quotations.');
         }
-        if ($existing !== null && (string) ($existing['status'] ?? 'Draft') !== 'Draft') {
-            $redirectWith('error', 'Only Draft quotations can be edited.');
+        if ($existing !== null) {
+            $existingStatus = documents_quote_normalize_status((string) ($existing['status'] ?? 'draft'));
+            if ($existingStatus !== 'draft') {
+                $redirectWith('error', 'This quotation is not editable because its status is: ' . ucfirst(str_replace('_', ' ', $existingStatus)) . '.');
+            }
         }
 
         $templateSetId = safe_text($_POST['template_set_id'] ?? '');
@@ -232,7 +235,7 @@ $segmentDefaults = is_array($quoteDefaults['segments'][$editing['segment'] ?? ''
 if ($editing !== null && ((string) ($editing['created_by_type'] ?? '') !== 'employee' || (string) ($editing['created_by_id'] ?? '') !== (string) ($employee['id'] ?? ''))) {
     $editing = null;
 }
-if ($editing !== null && (string) ($editing['status'] ?? 'Draft') !== 'Draft') {
+if ($editing !== null && documents_quote_normalize_status((string) ($editing['status'] ?? 'draft')) !== 'draft') {
     $editing = null;
 }
 if ($editing === null) {

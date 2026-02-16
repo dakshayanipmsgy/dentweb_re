@@ -82,9 +82,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'save_quote') {
         $quoteId = safe_text($_POST['quote_id'] ?? '');
-$existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
-        if ($existing !== null && (string) ($existing['status'] ?? 'Draft') !== 'Draft') {
-            $redirectWith('error', 'Only Draft quotations can be edited.');
+        $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
+        if ($existing !== null) {
+            $existingStatus = documents_quote_normalize_status((string) ($existing['status'] ?? 'draft'));
+            if ($existingStatus !== 'draft') {
+                $redirectWith('error', 'This quotation is not editable because its status is: ' . ucfirst(str_replace('_', ' ', $existingStatus)) . '.');
+            }
         }
 
         $templateSetId = safe_text($_POST['template_set_id'] ?? '');
