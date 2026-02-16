@@ -368,32 +368,14 @@ function save_quote_defaults(array $settings): array
 function load_company_profile(): array
 {
     $profile = json_load(documents_company_profile_path(), []);
-    $merged = array_replace_recursive(documents_company_profile_defaults(), is_array($profile) ? $profile : []);
-
-    $legacyBankMap = [
-        'bank_name' => 'bank_name',
-        'bank_account_name' => 'account_name',
-        'bank_account_no' => 'account_no',
-        'bank_ifsc' => 'ifsc',
-        'bank_branch' => 'branch',
-        'upi_id' => 'upi_id',
-    ];
-    foreach ($legacyBankMap as $legacyKey => $bankKey) {
-        $legacyValue = trim((string) ($profile[$legacyKey] ?? ''));
-        if ($legacyValue !== '' && trim((string) ($merged['bank'][$bankKey] ?? '')) === '') {
-            $merged['bank'][$bankKey] = $legacyValue;
-        }
-    }
-
-    $merged['bank'] = documents_normalize_company_bank_details($merged['bank'] ?? []);
+    $merged = array_merge(documents_company_profile_defaults(), is_array($profile) ? $profile : []);
     $merged['logo_path'] = documents_normalize_public_asset_path($merged['logo_path'] ?? '');
     return $merged;
 }
 
 function save_company_profile(array $profile): array
 {
-    $merged = array_replace_recursive(documents_company_profile_defaults(), $profile);
-    $merged['bank'] = documents_normalize_company_bank_details($merged['bank'] ?? []);
+    $merged = array_merge(documents_company_profile_defaults(), $profile);
     $merged['updated_at'] = date('c');
     return json_save(documents_company_profile_path(), $merged);
 }
@@ -428,7 +410,7 @@ function documents_normalize_public_asset_path($rawPath): string
 
 function documents_get_company_profile_for_quotes(): array
 {
-    $profile = array_replace_recursive(
+    $profile = array_merge(
         documents_company_profile_defaults(),
         load_company_profile()
     );
@@ -445,34 +427,8 @@ function documents_get_company_profile_for_quotes(): array
     }
 
     $profile['logo_path'] = documents_normalize_public_asset_path($profile['logo_path'] ?? '');
-    $profile['bank'] = documents_normalize_company_bank_details($profile['bank'] ?? []);
 
     return $profile;
-}
-
-function documents_company_bank_defaults(): array
-{
-    return [
-        'bank_name' => '',
-        'account_name' => '',
-        'account_no' => '',
-        'ifsc' => '',
-        'branch' => '',
-        'upi_id' => '',
-    ];
-}
-
-function documents_normalize_company_bank_details($bank): array
-{
-    $merged = array_merge(documents_company_bank_defaults(), is_array($bank) ? $bank : []);
-
-    foreach ($merged as $key => $value) {
-        $merged[$key] = safe_text((string) $value);
-    }
-
-    $merged['ifsc'] = strtoupper((string) ($merged['ifsc'] ?? ''));
-
-    return $merged;
 }
 
 function documents_agreement_template_defaults(): array
@@ -691,7 +647,12 @@ function documents_company_profile_defaults(): array
         'pan' => '',
         'jreda_license' => '',
         'dwsd_license' => '',
-        'bank' => documents_company_bank_defaults(),
+        'bank_name' => '',
+        'bank_account_name' => '',
+        'bank_account_no' => '',
+        'bank_ifsc' => '',
+        'bank_branch' => '',
+        'upi_id' => '',
         'default_cta_line' => '',
         'logo_path' => '',
         'updated_at' => '',
