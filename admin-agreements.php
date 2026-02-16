@@ -133,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectWith('error', 'Unable to save agreement record.');
         }
 
-        header('Location: agreement-view.php?id=' . urlencode($id) . '&status=success&message=' . urlencode('Agreement created successfully.'));
+        header('Location: agreement-view.php?id=' . urlencode($id) . '&mode=edit&status=success&message=' . urlencode('Agreement created successfully.'));
         exit;
     }
 
@@ -353,7 +353,8 @@ $message = safe_text($_GET['message'] ?? '');
           <td>₹<?= htmlspecialchars((string) $row['total_cost'], ENT_QUOTES) ?></td>
           <td><?= htmlspecialchars((string) $row['status'], ENT_QUOTES) ?></td>
           <td>
-            <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) $row['id']) ?>">View/Edit</a>
+            <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) $row['id']) ?>&mode=edit">View/Edit</a>
+            <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) $row['id']) ?>" target="_blank" rel="noopener">View as HTML</a>
             
             <?php if (!documents_is_archived($row)): ?>
             <form method="post" style="display:inline-block">
