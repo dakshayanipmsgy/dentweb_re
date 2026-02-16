@@ -356,7 +356,42 @@ if ($statusFilter !== '') {
 $editingId = safe_text($_GET['edit'] ?? '');
 $editing = $editingId !== '' ? documents_get_quote($editingId) : null;
 $quoteDefaults = documents_get_quote_defaults_settings();
-$segmentDefaults = is_array($quoteDefaults['segments'][$editing['segment'] ?? ''] ?? null) ? $quoteDefaults['segments'][$editing['segment']] : [];
+$resolveSegmentDefaults = static function (string $segmentCode) use ($quoteDefaults): array {
+    $segments = is_array($quoteDefaults['segments'] ?? null) ? $quoteDefaults['segments'] : [];
+    $segmentCode = strtoupper(trim($segmentCode));
+    $segment = is_array($segments[$segmentCode] ?? null) ? $segments[$segmentCode] : [];
+    $fallbackRes = is_array($segments['RES'] ?? null) ? $segments['RES'] : [];
+
+    $loanSegment = is_array($segment['loan_bestcase'] ?? null) ? $segment['loan_bestcase'] : [];
+    $loanRes = is_array($fallbackRes['loan_bestcase'] ?? null) ? $fallbackRes['loan_bestcase'] : [];
+
+    return [
+        'unit_rate_rs_per_kwh' => (float) ($segment['unit_rate_rs_per_kwh'] ?? ($fallbackRes['unit_rate_rs_per_kwh'] ?? 0)),
+        'annual_generation_per_kw' => (float) ($segment['annual_generation_per_kw'] ?? ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450)),
+        'loan_bestcase' => [
+            'max_loan_rs' => (float) ($loanSegment['max_loan_rs'] ?? ($loanRes['max_loan_rs'] ?? 200000)),
+            'interest_pct' => (float) ($loanSegment['interest_pct'] ?? ($loanRes['interest_pct'] ?? 6.0)),
+            'tenure_years' => (int) ($loanSegment['tenure_years'] ?? ($loanRes['tenure_years'] ?? (($segment['loan_defaults']['tenure_years'] ?? ($fallbackRes['loan_defaults']['tenure_years'] ?? 10))))),
+            'min_margin_pct' => (float) ($loanSegment['min_margin_pct'] ?? ($loanRes['min_margin_pct'] ?? 10)),
+        ],
+    ];
+};
+$editingSegment = safe_text((string) ($editing['segment'] ?? ''));
+if ($editingSegment === '' && $editing['id'] === '') {
+    $selectedTemplateId = safe_text((string) ($editing['template_set_id'] ?? ''));
+    foreach ($templates as $tpl) {
+        if ((string) ($tpl['id'] ?? '') === $selectedTemplateId) {
+            $editingSegment = safe_text((string) ($tpl['segment'] ?? ''));
+            break;
+        }
+    }
+}
+$segmentDefaults = $resolveSegmentDefaults($editingSegment !== '' ? $editingSegment : 'RES');
+$autofillSegments = [];
+foreach (['RES', 'COM', 'IND', 'INST'] as $segCode) {
+    $autofillSegments[$segCode] = $resolveSegmentDefaults($segCode);
+}
+
 if ($editing !== null && documents_quote_normalize_status((string) ($editing['status'] ?? 'draft')) !== 'draft') {
     $editing = null;
 }
@@ -380,6 +415,11 @@ if ($editing['id'] === '' && $fromLeadId !== '') {
         $editing['state'] = (string) ($prefill['state'] ?? '');
         $editing['billing_address'] = (string) ($prefill['locality'] ?? '');
         $editing['site_address'] = (string) ($prefill['locality'] ?? '');
+        $editing['area_or_locality'] = (string) ($prefill['locality'] ?? '');
+        $editing['customer_snapshot']['city'] = (string) ($prefill['city'] ?? '');
+        $editing['customer_snapshot']['district'] = (string) ($prefill['district'] ?? '');
+        $editing['customer_snapshot']['state'] = (string) ($prefill['state'] ?? '');
+        $editing['customer_snapshot']['address'] = (string) ($prefill['locality'] ?? '');
         if ($editing['cover_note_text'] === '' && (string) ($prefill['notes'] ?? '') !== '') {
             $editing['cover_note_text'] = (string) ($prefill['notes'] ?? '');
         }
@@ -418,7 +458,7 @@ if ($lookup !== null) {
 <input type="hidden" name="source_lead_id" value="<?= htmlspecialchars((string) ($editing['source']['lead_id'] ?? ''), ENT_QUOTES) ?>">
 <input type="hidden" name="source_lead_mobile" value="<?= htmlspecialchars((string) ($editing['source']['lead_mobile'] ?? ''), ENT_QUOTES) ?>">
 <div class="grid">
-<div><label>Template Set</label><select name="template_set_id" required><?php foreach ($templates as $tpl): ?><option value="<?= htmlspecialchars((string)$tpl['id'], ENT_QUOTES) ?>" <?= ((string)$editing['template_set_id']===(string)$tpl['id'])?'selected':'' ?>><?= htmlspecialchars((string)$tpl['name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$tpl['segment'], ENT_QUOTES) ?>)</option><?php endforeach; ?></select></div>
+<div><label>Template Set</label><select name="template_set_id" required><?php foreach ($templates as $tpl): ?><option value="<?= htmlspecialchars((string)$tpl['id'], ENT_QUOTES) ?>" data-segment="<?= htmlspecialchars((string)($tpl['segment'] ?? 'RES'), ENT_QUOTES) ?>" <?= ((string)$editing['template_set_id']===(string)$tpl['id'])?'selected':'' ?>><?= htmlspecialchars((string)$tpl['name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$tpl['segment'], ENT_QUOTES) ?>)</option><?php endforeach; ?></select></div>
 <div><label>Party Type</label><select name="party_type"><option value="customer" <?= $editing['party_type']==='customer'?'selected':'' ?>>Customer</option><option value="lead" <?= $editing['party_type']!=='customer'?'selected':'' ?>>Lead</option></select></div>
 <div><label>Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string)(($lookupMobile !== '' && $lookup !== null) ? $lookupMobile : $editing['customer_mobile']), ENT_QUOTES) ?>"></div>
 <div><label>Name</label><input name="customer_name" required value="<?= htmlspecialchars((string)($quoteSnapshot['name'] ?? $editing['customer_name']), ENT_QUOTES) ?>"></div>
@@ -431,9 +471,9 @@ if ($lookup !== null) {
 <div><label>Cover note paragraph</label><textarea name="cover_note_text"><?= htmlspecialchars((string)($editing['cover_note_text'] ?: ($quoteDefaults['defaults']['cover_note_template'] ?? '')), ENT_QUOTES) ?></textarea></div>
 <div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div><div><label>Total system price (including GST) ₹</label><input type="number" step="0.01" required name="system_total_incl_gst_rs" value="<?= htmlspecialchars((string)($editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
 <div><label>Place of Supply State</label><input name="place_of_supply_state" value="<?= htmlspecialchars((string)$editing['place_of_supply_state'], ENT_QUOTES) ?>"></div>
-<div><label>District</label><input name="district" value="<?= htmlspecialchars((string)($quoteSnapshot['district'] ?? $editing['district']), ENT_QUOTES) ?>"></div>
-<div><label>City</label><input name="city" value="<?= htmlspecialchars((string)($quoteSnapshot['city'] ?? $editing['city']), ENT_QUOTES) ?>"></div>
-<div><label>State</label><input name="state" value="<?= htmlspecialchars((string)($quoteSnapshot['state'] ?? $editing['state']), ENT_QUOTES) ?>"></div>
+<div><label>District</label><input name="district" value="<?= htmlspecialchars((string)($editing['district'] !== '' ? $editing['district'] : ($quoteSnapshot['district'] ?? '')), ENT_QUOTES) ?>"></div>
+<div><label>City</label><input name="city" value="<?= htmlspecialchars((string)($editing['city'] !== '' ? $editing['city'] : ($quoteSnapshot['city'] ?? '')), ENT_QUOTES) ?>"></div>
+<div><label>State</label><input name="state" value="<?= htmlspecialchars((string)($editing['state'] !== '' ? $editing['state'] : ($quoteSnapshot['state'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>PIN</label><input name="pin" value="<?= htmlspecialchars((string)($quoteSnapshot['pin_code'] ?? $editing['pin']), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Billing Address</label><textarea name="billing_address"><?= htmlspecialchars((string)((($editing['billing_address'] !== '') ? $editing['billing_address'] : ($quoteSnapshot['address'] ?? ''))), ENT_QUOTES) ?></textarea></div>
 <div style="grid-column:1/-1"><label>Site Address</label><textarea name="site_address"><?= htmlspecialchars((string)((($editing['site_address'] !== '') ? $editing['site_address'] : ($quoteSnapshot['address'] ?? ''))), ENT_QUOTES) ?></textarea></div>
@@ -447,7 +487,7 @@ if ($lookup !== null) {
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
 <div style="grid-column:1/-1"><h3>Items Table</h3><table id="itemsTable"><thead><tr><th>Sr No</th><th>Item Name</th><th>Description/Specs</th><th>HSN</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody><?php $qItems = is_array($editing['items'] ?? null) && $editing['items'] !== [] ? $editing['items'] : documents_normalize_quote_items([], (string)$editing['system_type'], (float)$editing['capacity_kwp'], (string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541')); foreach ($qItems as $ix => $item): ?><tr><td><?= $ix+1 ?></td><td><input name="item_name[]" value="<?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_description[]" value="<?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_hsn[]" value="<?= htmlspecialchars((string)($item['hsn'] ?? ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')), ENT_QUOTES) ?>"></td><td><input type="number" step="0.01" name="item_qty[]" value="<?= htmlspecialchars((string)($item['qty'] ?? 1), ENT_QUOTES) ?>"></td><td><input name="item_unit[]" value="<?= htmlspecialchars((string)($item['unit'] ?? 'set'), ENT_QUOTES) ?>"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addItemBtn">Add item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
-<div><label>Monthly electricity bill (₹)</label><input type="number" step="0.01" name="monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Monthly electricity bill (₹)</label><input type="number" step="0.01" name="monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted">Suggested bill based on generation & tariff. You can change it. <a href="#" id="resetMonthlySuggestion">Reset suggestion</a></div></div>
 <div><label>Unit rate (₹/kWh)</label><input type="number" step="0.01" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['finance_inputs']['unit_rate_rs_per_kwh'] ?: ($segmentDefaults['unit_rate_rs_per_kwh'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($editing['finance_inputs']['annual_generation_per_kw'] ?: ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Transportation ₹</label><input type="number" step="0.01" name="transportation_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['transportation_rs'] ?? ''), ENT_QUOTES) ?>"></div>
@@ -456,7 +496,7 @@ if ($lookup !== null) {
 <div><label><input type="checkbox" name="loan_enabled" <?= !empty($editing['finance_inputs']['loan']['enabled']) ? 'checked' : '' ?>> Loan enabled</label></div>
 <div><label>Loan interest %</label><input type="number" step="0.01" name="loan_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['interest_pct'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Loan tenure years</label><input type="number" step="1" name="loan_tenure_years" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Margin money %</label><input type="number" step="0.01" name="loan_margin_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['margin_pct'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Margin money ₹</label><input type="number" step="0.01" name="loan_margin_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['margin_pct'] ?? ''), ENT_QUOTES) ?>"><div class="muted"><a href="#" id="resetLoanDefaults">Reset to defaults</a></div></div>
 <div style="grid-column:1/-1"><label>Notes for customer</label><textarea name="notes_for_customer"><?= htmlspecialchars((string)($editing['finance_inputs']['notes_for_customer'] ?? ''), ENT_QUOTES) ?></textarea></div>
 <div style="grid-column:1/-1"><h3>Typography & Watermark Overrides</h3></div>
 <div><label>Base font px</label><input type="number" step="1" name="style_base_font_px" value="<?= htmlspecialchars((string)($editing['style_overrides']['typography']['base_font_px'] ?? ''), ENT_QUOTES) ?>"></div>
@@ -488,4 +528,197 @@ if ($lookup !== null) {
 <?php foreach ($allQuotes as $q): ?><tr><td><input type="checkbox" name="selected_ids[]" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"></td><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td></tr><?php endforeach; ?>
 </tbody></table>
 </form></div>
-<script>document.addEventListener('click',function(e){if(e.target&&e.target.id==='addItemBtn'){const tb=document.querySelector('#itemsTable tbody');if(!tb)return;const tr=document.createElement('tr');const dH='<?= htmlspecialchars((string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>';tr.innerHTML='<td></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="'+dH+'"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';tb.appendChild(tr);ren();}if(e.target&&e.target.classList.contains('rm-item')){e.target.closest('tr')?.remove();ren();}});function ren(){document.querySelectorAll('#itemsTable tbody tr').forEach((tr,i)=>{const td=tr.querySelector('td');if(td)td.textContent=String(i+1);});}ren();(function(){const settingsForm=document.querySelector('form.grid input[name="action"][value="save_settings"]')?.form;if(!settingsForm)return;const normalizeHex=(value)=>{const v=String(value||'').trim().toUpperCase();const short=v.match(/^#([0-9A-F]{3})$/);if(short){const c=short[1];return '#'+c[0]+c[0]+c[1]+c[1]+c[2]+c[2];}if(/^#[0-9A-F]{6}$/.test(v)){return v;}return '';};settingsForm.querySelectorAll('div').forEach((pair)=>{const picker=pair.querySelector('input[type="color"]');const hex=pair.querySelector('input[name$="_hex"]');if(!picker||!hex)return;picker.dataset.role='picker';hex.dataset.role='hex';picker.addEventListener('input',()=>{hex.value=String(picker.value||'').toUpperCase();hex.setCustomValidity('');});hex.addEventListener('input',()=>{const normalized=normalizeHex(hex.value);if(normalized===''){hex.setCustomValidity('Invalid hex color');return;}hex.setCustomValidity('');if(picker.value.toUpperCase()!==normalized){picker.value=normalized;}});const initial=normalizeHex(hex.value)||normalizeHex(picker.value);if(initial!==''){picker.value=initial;hex.value=initial;}});})();</script></main></body></html>
+<script>
+document.addEventListener('click', function (e) {
+    if (e.target && e.target.id === 'addItemBtn') {
+        const tb = document.querySelector('#itemsTable tbody');
+        if (!tb) return;
+        const tr = document.createElement('tr');
+        const dH = '<?= htmlspecialchars((string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>';
+        tr.innerHTML = '<td></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="' + dH + '"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';
+        tb.appendChild(tr);
+        renumberItems();
+    }
+    if (e.target && e.target.classList.contains('rm-item')) {
+        e.target.closest('tr')?.remove();
+        renumberItems();
+    }
+});
+
+function renumberItems() {
+    document.querySelectorAll('#itemsTable tbody tr').forEach((tr, i) => {
+        const td = tr.querySelector('td');
+        if (td) td.textContent = String(i + 1);
+    });
+}
+renumberItems();
+
+(function () {
+    const settingsForm = document.querySelector('form.grid input[name="action"][value="save_settings"]')?.form;
+    if (!settingsForm) return;
+    const normalizeHex = (value) => {
+        const v = String(value || '').trim().toUpperCase();
+        const short = v.match(/^#([0-9A-F]{3})$/);
+        if (short) {
+            const c = short[1];
+            return '#' + c[0] + c[0] + c[1] + c[1] + c[2] + c[2];
+        }
+        if (/^#[0-9A-F]{6}$/.test(v)) return v;
+        return '';
+    };
+    settingsForm.querySelectorAll('div').forEach((pair) => {
+        const picker = pair.querySelector('input[type="color"]');
+        const hex = pair.querySelector('input[name$="_hex"]');
+        if (!picker || !hex) return;
+        picker.addEventListener('input', () => {
+            hex.value = String(picker.value || '').toUpperCase();
+            hex.setCustomValidity('');
+        });
+        hex.addEventListener('input', () => {
+            const normalized = normalizeHex(hex.value);
+            if (normalized === '') {
+                hex.setCustomValidity('Invalid hex color');
+                return;
+            }
+            hex.setCustomValidity('');
+            if (picker.value.toUpperCase() !== normalized) picker.value = normalized;
+        });
+        const initial = normalizeHex(hex.value) || normalizeHex(picker.value);
+        if (initial !== '') {
+            picker.value = initial;
+            hex.value = initial;
+        }
+    });
+})();
+
+(function () {
+    const quoteForm = document.querySelector('form input[name="action"][value="save_quote"]')?.form;
+    if (!quoteForm) return;
+
+    const settingsBySegment = <?= json_encode($autofillSegments, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const defaultEnergy = <?= json_encode((float)($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450)) ?>;
+
+    const field = (name) => quoteForm.querySelector('[name="' + name + '"]');
+    const loanEnabled = field('loan_enabled');
+    const templateSet = field('template_set_id');
+    const totalInput = field('system_total_incl_gst_rs');
+    const transportInput = field('transportation_rs');
+    const subsidyInput = field('subsidy_expected_rs');
+    const capacityInput = field('capacity_kwp');
+    const unitRateInput = field('unit_rate_rs_per_kwh');
+    const annualGenerationInput = field('annual_generation_per_kw');
+    const monthlyBillInput = field('monthly_bill_rs');
+    const loanAmountInput = field('loan_amount');
+    const loanInterestInput = field('loan_interest_pct');
+    const loanTenureInput = field('loan_tenure_years');
+    const loanMarginInput = field('loan_margin_pct');
+
+    const resetLoanBtn = document.getElementById('resetLoanDefaults');
+    const resetMonthlyBtn = document.getElementById('resetMonthlySuggestion');
+
+    const managedFields = [monthlyBillInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].filter(Boolean);
+    managedFields.forEach((input) => {
+        if (!input) return;
+        input.addEventListener('input', () => { input.dataset.touched = '1'; });
+    });
+
+    const parseNum = (value) => {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : 0;
+    };
+    const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
+    const setIfAllowed = (input, value, {force = false, noDecimals = false} = {}) => {
+        if (!input) return;
+        if (!force && input.dataset.touched === '1' && !fieldEmpty(input)) return;
+        const val = noDecimals ? Math.round(value) : Math.round(value * 100) / 100;
+        input.value = String(val);
+    };
+
+    const currentSegmentCode = () => {
+        const selected = templateSet?.selectedOptions?.[0];
+        const code = String(selected?.dataset?.segment || 'RES').toUpperCase();
+        return settingsBySegment[code] ? code : 'RES';
+    };
+
+    const currentSegmentSettings = () => {
+        const code = currentSegmentCode();
+        return settingsBySegment[code] || settingsBySegment.RES || {
+            unit_rate_rs_per_kwh: 0,
+            annual_generation_per_kw: defaultEnergy,
+            loan_bestcase: { max_loan_rs: 200000, interest_pct: 6, tenure_years: 10, min_margin_pct: 10 }
+        };
+    };
+
+    const computeGrossPayable = () => parseNum(totalInput?.value) + parseNum(transportInput?.value);
+
+    const applyLoanDefaults = (force = false) => {
+        if (!loanEnabled || !loanEnabled.checked) return;
+        const segSettings = currentSegmentSettings();
+        const loanCfg = segSettings.loan_bestcase || {};
+        const grossPayable = computeGrossPayable();
+        const maxLoan = parseNum(loanCfg.max_loan_rs || 200000);
+        const minMarginPct = parseNum(loanCfg.min_margin_pct || 10);
+        const desiredLoan = grossPayable - (grossPayable * (minMarginPct / 100));
+        const loanAmount = Math.max(0, Math.min(desiredLoan, maxLoan));
+        const marginAmount = Math.max(0, grossPayable - loanAmount);
+
+        setIfAllowed(loanAmountInput, loanAmount, { force });
+        setIfAllowed(loanMarginInput, marginAmount, { force });
+        setIfAllowed(loanInterestInput, parseNum(loanCfg.interest_pct || 6), { force });
+        setIfAllowed(loanTenureInput, parseNum(loanCfg.tenure_years || 10), { force, noDecimals: true });
+    };
+
+    const applyMonthlySuggestion = (force = false) => {
+        const segSettings = currentSegmentSettings();
+        if (fieldEmpty(unitRateInput) && (!unitRateInput?.dataset?.touched || force)) {
+            unitRateInput.value = String(parseNum(segSettings.unit_rate_rs_per_kwh || 0));
+        }
+        if (fieldEmpty(annualGenerationInput) && (!annualGenerationInput?.dataset?.touched || force)) {
+            annualGenerationInput.value = String(parseNum(segSettings.annual_generation_per_kw || defaultEnergy));
+        }
+
+        const capacity = parseNum(capacityInput?.value);
+        const annualGeneration = parseNum(annualGenerationInput?.value || segSettings.annual_generation_per_kw || defaultEnergy);
+        const unitRate = parseNum(unitRateInput?.value || segSettings.unit_rate_rs_per_kwh || 0);
+        const suggestion = (capacity * annualGeneration * unitRate) / 12;
+        setIfAllowed(monthlyBillInput, suggestion, { force, noDecimals: true });
+    };
+
+    const bindRecalc = (input, handler) => { if (input) input.addEventListener('input', handler); };
+    bindRecalc(totalInput, () => applyLoanDefaults(false));
+    bindRecalc(transportInput, () => applyLoanDefaults(false));
+    bindRecalc(subsidyInput, () => applyLoanDefaults(false));
+    bindRecalc(capacityInput, () => applyMonthlySuggestion(false));
+    bindRecalc(unitRateInput, () => applyMonthlySuggestion(false));
+    bindRecalc(annualGenerationInput, () => applyMonthlySuggestion(false));
+
+    if (loanEnabled) {
+        loanEnabled.addEventListener('change', () => {
+            if (loanEnabled.checked) applyLoanDefaults(false);
+        });
+    }
+    if (templateSet) {
+        templateSet.addEventListener('change', () => {
+            applyLoanDefaults(false);
+            applyMonthlySuggestion(false);
+        });
+    }
+
+    resetLoanBtn?.addEventListener('click', (e) => {
+        e.preventDefault();
+        [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].forEach((input) => {
+            if (input) input.dataset.touched = '';
+        });
+        applyLoanDefaults(true);
+    });
+
+    resetMonthlyBtn?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (monthlyBillInput) monthlyBillInput.dataset.touched = '';
+        applyMonthlySuggestion(true);
+    });
+
+    applyLoanDefaults(false);
+    applyMonthlySuggestion(false);
+})();
+</script></main></body></html>

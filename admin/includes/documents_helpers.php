@@ -1688,13 +1688,22 @@ function documents_get_quote_prefill_from_lead(string $leadId): array
         return ['ok' => false, 'error' => 'Lead is missing required name/mobile fields.', 'lead' => $lead, 'prefill' => []];
     }
 
+    $location = is_array($lead['location'] ?? null) ? $lead['location'] : [];
+    $leadCity = trim((string) ($lead['city'] ?? ''));
+    if ($leadCity === '') {
+        $leadCity = trim((string) ($lead['lead_city'] ?? ''));
+    }
+    if ($leadCity === '') {
+        $leadCity = trim((string) ($location['city'] ?? ''));
+    }
+
     $prefill = [
         'customer_name' => $name,
         'customer_mobile' => $mobile,
-        'city' => trim((string) ($lead['city'] ?? '')),
-        'district' => trim((string) ($lead['district'] ?? '')),
-        'state' => trim((string) ($lead['state'] ?? '')),
-        'locality' => trim((string) ($lead['area_or_locality'] ?? '')),
+        'city' => $leadCity,
+        'district' => trim((string) ($lead['district'] ?? ($location['district'] ?? ''))),
+        'state' => trim((string) ($lead['state'] ?? ($location['state'] ?? ''))),
+        'locality' => trim((string) ($lead['area_or_locality'] ?? ($location['area_or_locality'] ?? ($location['locality'] ?? '')))),
         'notes' => trim((string) ($lead['notes'] ?? '')),
         'source' => [
             'type' => 'lead',
