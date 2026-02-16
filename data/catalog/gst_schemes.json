@@ -1,0 +1,15 @@
+[
+  {
+    "id": "gst_split_70_30_default",
+    "name": "Solar split 70/30 (5% & 18%)",
+    "mode": "split",
+    "rate_pct": 0,
+    "parts": [
+      {"base_share_pct": 70, "rate_pct": 5},
+      {"base_share_pct": 30, "rate_pct": 18}
+    ],
+    "archived_flag": false,
+    "created_at": "",
+    "updated_at": ""
+  }
+]
