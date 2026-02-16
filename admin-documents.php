@@ -76,6 +76,24 @@ $documentTypeLabel = [
     'invoice' => 'Invoice',
 ];
 
+$archiveByAdmin = static function (array $record, array $viewer): array {
+    $record['archived_flag'] = true;
+    $record['archived_at'] = date('c');
+    $record['archived_by'] = [
+        'type' => 'admin',
+        'id' => (string) ($viewer['id'] ?? ''),
+        'name' => (string) ($viewer['name'] ?? 'Admin'),
+    ];
+    return $record;
+};
+
+$unarchiveRecord = static function (array $record): array {
+    $record['archived_flag'] = false;
+    $record['archived_at'] = '';
+    $record['archived_by'] = ['type' => '', 'id' => '', 'name' => ''];
+    return $record;
+};
+
 $resolveAgreementTemplateId = static function (array $quote, array $templates): string {
     $activeTemplates = array_filter($templates, static fn($row): bool => is_array($row) && !documents_is_archived($row));
     if ($activeTemplates === []) {
@@ -648,14 +666,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $redirectDocuments($tab, 'error', 'Quotation not found.', $view !== '' ? ['view' => $view] : []);
             }
             if ($shouldArchive) {
-                $quote = documents_set_archived($quote, [
-                    'type' => 'admin',
+                $quote = $archiveByAdmin($quote, [
                     'id' => (string) ($user['id'] ?? ''),
                     'name' => (string) ($user['full_name'] ?? 'Admin'),
                 ]);
             } else {
-                $quote = documents_set_unarchived($quote);
-                $quote['status'] = !empty($quote['accepted_at']) ? 'accepted' : 'approved';
+                $quote = $unarchiveRecord($quote);
             }
             $quote['updated_at'] = date('c');
             $saved = documents_save_quote($quote);
@@ -715,6 +731,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $redirectDocuments($tab, 'success', $shouldArchive ? 'Document archived.' : 'Document unarchived.', $view !== '' ? ['view' => $view] : []);
     }
 
+    if ($action === 'archive_accepted_customer' || $action === 'unarchive_accepted_customer') {
+        $quotationId = safe_text($_POST['quotation_id'] ?? '');
+        if ($quotationId === '') {
+            $redirectDocuments('accepted_customers', 'error', 'Accepted quotation is required.');
+        }
+
+        $quote = documents_get_quote($quotationId);
+        if ($quote === null) {
+            $redirectDocuments('accepted_customers', 'error', 'Accepted quotation not found.');
+        }
+
+        $statusNormalized = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
+        if ($statusNormalized !== 'accepted') {
+            $redirectDocuments('accepted_customers', 'error', 'Only accepted quotations can be archived from this action.');
+        }
+
+        if ($action === 'archive_accepted_customer') {
+            $quote = $archiveByAdmin($quote, [
+                'id' => (string) ($user['id'] ?? ''),
+                'name' => (string) ($user['full_name'] ?? 'Admin'),
+            ]);
+            $messageText = 'Accepted customer archived.';
+        } else {
+            $quote = $unarchiveRecord($quote);
+            $messageText = 'Accepted customer unarchived.';
+        }
+
+        $quote['updated_at'] = date('c');
+        $saved = documents_save_quote($quote);
+        if (!$saved['ok']) {
+            $redirectDocuments('accepted_customers', 'error', 'Unable to update accepted customer archive state.');
+        }
+
+        $returnTab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
+        if (!in_array($returnTab, ['accepted_customers', 'archived'], true)) {
+            $returnTab = 'accepted_customers';
+        }
+        $redirectDocuments($returnTab, 'success', $messageText);
+    }
+
 }
 
 $activeTab = safe_text($_GET['tab'] ?? 'company');
@@ -766,12 +822,11 @@ foreach ($quotes as $quote) {
         continue;
     }
     $statusNormalized = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
+    if ($statusNormalized !== 'accepted') {
+        continue;
+    }
     $isArchived = $isArchivedRecord($quote);
-    if ($isArchived) {
-        if (!$includeArchivedAccepted) {
-            continue;
-        }
-    } elseif ($statusNormalized !== 'accepted') {
+    if ($isArchived && !$includeArchivedAccepted) {
         continue;
     }
     $mobile = normalize_customer_mobile((string) ($quote['customer_mobile'] ?? ''));
@@ -833,6 +888,7 @@ foreach ($quotes as $quote) {
     $archivedRows[] = [
         'type' => 'quotation',
         'doc_id' => (string) ($quote['id'] ?? ''),
+        'quotation_status' => documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')),
         'customer' => (string) ($quote['customer_name'] ?? ''),
         'mobile' => (string) ($quote['customer_mobile'] ?? ''),
         'quotation_id' => (string) ($quote['id'] ?? ''),
@@ -988,6 +1044,15 @@ usort($archivedRows, static function (array $a, array $b): int {
           <h3>A) Quotation</h3>
           <p>
             <a class="btn secondary" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">View Quotation</a>
+            <?php if ($isAdmin && documents_quote_normalize_status((string) ($packQuote['status'] ?? 'draft')) === 'accepted'): ?>
+              <form class="inline-form" method="post" style="display:inline-flex; margin-left:0.45rem;">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                <input type="hidden" name="action" value="archive_accepted_customer" />
+                <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+                <input type="hidden" name="return_tab" value="accepted_customers" />
+                <button class="btn warn" type="submit">Archive this accepted customer</button>
+              </form>
+            <?php endif; ?>
             <?php if ($isArchivedRecord($packQuote)): ?><span class="pill archived">ARCHIVED</span><?php endif; ?>
           </p>
 
@@ -1115,18 +1180,29 @@ usort($archivedRows, static function (array $a, array $b): int {
           <form method="get" class="grid" style="margin-bottom:1rem;">
             <input type="hidden" name="tab" value="accepted_customers" />
             <div><label>Search (name/mobile)</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div>
-            <div><label>&nbsp;</label><label><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Include archived quotations</label></div>
+            <div><label>&nbsp;</label><label><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived accepted customers</label></div>
             <div><label>&nbsp;</label><button class="btn" type="submit">Apply</button></div>
           </form>
           <table>
-            <thead><tr><th>Sr No</th><th>Customer Name</th><th>View</th><th>Quotation Amount</th><th>Payment Received</th><th>Receivables</th></tr></thead>
+            <thead><tr><th>Sr No</th><th>Customer Name</th><th>Actions</th><th>Quotation Amount</th><th>Payment Received</th><th>Receivables</th></tr></thead>
             <tbody>
               <?php foreach ($acceptedRows as $index => $row): ?>
                 <?php $quote = $row['quote']; ?>
                 <tr>
                   <td><?= $index + 1 ?></td>
                   <td><?= htmlspecialchars((string) ($quote['customer_name'] ?? ''), ENT_QUOTES) ?><?php if (!empty($row['is_archived'])): ?> <span class="pill archived">ARCHIVED</span><?php endif; ?><br><span class="muted"><?= htmlspecialchars((string) ($quote['customer_mobile'] ?? ''), ENT_QUOTES) ?></span></td>
-                  <td><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => (string) ($quote['id'] ?? ''), 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">View</a></td>
+                  <td class="row-actions">
+                    <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => (string) ($quote['id'] ?? ''), 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">View</a>
+                    <?php if ($isAdmin && empty($row['is_archived'])): ?>
+                      <form class="inline-form" method="post">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                        <input type="hidden" name="action" value="archive_accepted_customer" />
+                        <input type="hidden" name="quotation_id" value="<?= htmlspecialchars((string) ($quote['id'] ?? ''), ENT_QUOTES) ?>" />
+                        <input type="hidden" name="return_tab" value="accepted_customers" />
+                        <button class="btn warn" type="submit">Archive</button>
+                      </form>
+                    <?php endif; ?>
+                  </td>
                   <td><?= htmlspecialchars($inr((float) $row['quotation_amount']), ENT_QUOTES) ?></td>
                   <td><?= htmlspecialchars($inr((float) $row['payment_received']), ENT_QUOTES) ?></td>
                   <td><?= htmlspecialchars($inr((float) $row['receivables']), ENT_QUOTES) ?><?php if (!empty($row['advance'])): ?><br><span class="muted">(Advance)</span><?php endif; ?><?php if (($row['receivables'] ?? 0) > 0): ?> <span class="pill warn">Due</span><?php endif; ?></td>
@@ -1164,24 +1240,40 @@ usort($archivedRows, static function (array $a, array $b): int {
           <tbody>
             <?php foreach ($archivedRows as $row): ?>
               <tr>
-                <td><?= htmlspecialchars($documentTypeLabel[(string) ($row['type'] ?? '')] ?? (string) ($row['type'] ?? ''), ENT_QUOTES) ?></td>
+                <td>
+                  <?php if ((string) ($row['type'] ?? '') === 'quotation' && (string) ($row['quotation_status'] ?? '') === 'accepted'): ?>
+                    Accepted Customer (Quotation) <span class="pill archived">Accepted</span>
+                  <?php else: ?>
+                    <?= htmlspecialchars($documentTypeLabel[(string) ($row['type'] ?? '')] ?? (string) ($row['type'] ?? ''), ENT_QUOTES) ?>
+                  <?php endif; ?>
+                </td>
                 <td><?= htmlspecialchars((string) ($row['doc_id'] ?? ''), ENT_QUOTES) ?></td>
                 <td><?= htmlspecialchars((string) ($row['customer'] ?? ''), ENT_QUOTES) ?><br><span class="muted"><?= htmlspecialchars((string) ($row['mobile'] ?? ''), ENT_QUOTES) ?></span></td>
                 <td><?= htmlspecialchars((string) ($row['quotation_id'] ?? ''), ENT_QUOTES) ?></td>
                 <td><?= htmlspecialchars($inr((float) ($row['amount'] ?? 0)), ENT_QUOTES) ?></td>
                 <td><?= htmlspecialchars((string) ($row['archived_at'] ?? ''), ENT_QUOTES) ?></td>
                 <td class="row-actions">
-                  <?php if ((string) ($row['type'] ?? '') === 'agreement'): ?><a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['doc_id'] ?? '')) ?>" target="_blank" rel="noopener">View as HTML</a><a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['doc_id'] ?? '')) ?>&mode=edit" target="_blank" rel="noopener">View / Edit</a><?php elseif ((string) ($row['quotation_id'] ?? '') !== ''): ?><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string) ($row['quotation_id'] ?? '')) ?>" target="_blank" rel="noopener">View</a><?php endif; ?>
+                  <?php if ((string) ($row['type'] ?? '') === 'agreement'): ?><a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['doc_id'] ?? '')) ?>" target="_blank" rel="noopener">View as HTML</a><a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['doc_id'] ?? '')) ?>&mode=edit" target="_blank" rel="noopener">View / Edit</a><?php elseif ((string) ($row['type'] ?? '') === 'quotation' && (string) ($row['quotation_status'] ?? '') === 'accepted'): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => (string) ($row['quotation_id'] ?? ''), 'include_archived_pack' => '1']), ENT_QUOTES) ?>">View pack</a><?php elseif ((string) ($row['quotation_id'] ?? '') !== ''): ?><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string) ($row['quotation_id'] ?? '')) ?>" target="_blank" rel="noopener">View</a><?php endif; ?>
                   <?php if ($isAdmin): ?>
-                    <form class="inline-form" method="post">
-                      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
-                      <input type="hidden" name="action" value="set_archive_state" />
-                      <input type="hidden" name="doc_type" value="<?= htmlspecialchars((string) ($row['type'] ?? ''), ENT_QUOTES) ?>" />
-                      <input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['doc_id'] ?? ''), ENT_QUOTES) ?>" />
-                      <input type="hidden" name="archive_state" value="unarchive" />
-                      <input type="hidden" name="return_tab" value="archived" />
-                      <button class="btn secondary" type="submit">Unarchive</button>
-                    </form>
+                    <?php if ((string) ($row['type'] ?? '') === 'quotation' && (string) ($row['quotation_status'] ?? '') === 'accepted'): ?>
+                      <form class="inline-form" method="post">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                        <input type="hidden" name="action" value="unarchive_accepted_customer" />
+                        <input type="hidden" name="quotation_id" value="<?= htmlspecialchars((string) ($row['doc_id'] ?? ''), ENT_QUOTES) ?>" />
+                        <input type="hidden" name="return_tab" value="archived" />
+                        <button class="btn secondary" type="submit">Unarchive</button>
+                      </form>
+                    <?php else: ?>
+                      <form class="inline-form" method="post">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                        <input type="hidden" name="action" value="set_archive_state" />
+                        <input type="hidden" name="doc_type" value="<?= htmlspecialchars((string) ($row['type'] ?? ''), ENT_QUOTES) ?>" />
+                        <input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['doc_id'] ?? ''), ENT_QUOTES) ?>" />
+                        <input type="hidden" name="archive_state" value="unarchive" />
+                        <input type="hidden" name="return_tab" value="archived" />
+                        <button class="btn secondary" type="submit">Unarchive</button>
+                      </form>
+                    <?php endif; ?>
                   <?php endif; ?>
                 </td>
               </tr>
