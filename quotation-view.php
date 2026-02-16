@@ -48,28 +48,18 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     if (!($valid['ok'] ?? false)) {
         $redirect('error', (string)($valid['error'] ?? 'Acceptance data missing.'));
     }
-    $quote = documents_quote_mark_accepted($quote, $viewerType, $viewerId, $viewerName);
+    $quote['status']='accepted';
+    $quote['accepted_at']=date('c');
+    $quote['accepted_by']=['type'=>$viewerType,'id'=>$viewerId,'name'=>$viewerName];
+    $quote['acceptance']['accepted_by_admin_id']=$viewerId;
+    $quote['acceptance']['accepted_by_admin_name']=$viewerName;
+    $quote['acceptance']['accepted_at']=$quote['accepted_at'];
     $quote['workflow']=array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
     $syncResult = documents_sync_after_quote_accepted($quote);
     $quote = $syncResult['quote'];
     $quote['updated_at']=date('c');
     documents_save_quote($quote);
     $redirect('success','Quotation marked accepted by customer.');
- }
-
- if($action==='create_revision' && $viewerType==='admin'){
-    $revisionReason = trim((string)($_POST['revision_reason'] ?? ''));
-    $revision = documents_quote_create_revision($quote, 'admin', $viewerId, $viewerName, $revisionReason);
-    if (!($revision['ok'] ?? false)) {
-        $redirect('error', (string)($revision['error'] ?? 'Unable to create revision.'));
-    }
-    $newQuoteId = (string) (($revision['quote']['id'] ?? ''));
-    header('Location: admin-quotations.php?' . http_build_query([
-        'edit' => $newQuoteId,
-        'status' => 'success',
-        'message' => 'Revision created successfully. You can now edit the new version.'
-    ]));
-    exit;
  }
 
  if($action==='archive_quote' && $viewerType==='admin'){

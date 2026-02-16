@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($existing !== null) {
             $existingStatus = documents_quote_normalize_status((string) ($existing['status'] ?? 'draft'));
             if ($existingStatus !== 'draft') {
-                $redirectWith('error', 'This quotation is locked because it was accepted. Create a revision to make changes.');
+                $redirectWith('error', 'This quotation is not editable because its status is: ' . ucfirst(str_replace('_', ' ', $existingStatus)) . '.');
             }
         }
 
@@ -274,7 +274,7 @@ foreach (['RES', 'COM', 'IND', 'INST'] as $segCode) {
 if ($editing !== null && ((string) ($editing['created_by_type'] ?? '') !== 'employee' || (string) ($editing['created_by_id'] ?? '') !== (string) ($employee['id'] ?? ''))) {
     $editing = null;
 }
-if ($editing !== null && !documents_quote_can_edit($editing, 'employee', (string) ($employee['id'] ?? ''))) {
+if ($editing !== null && documents_quote_normalize_status((string) ($editing['status'] ?? 'draft')) !== 'draft') {
     $editing = null;
 }
 if ($editing === null) {
