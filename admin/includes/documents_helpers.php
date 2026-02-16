@@ -896,8 +896,6 @@ function documents_quote_defaults(): array
         'project_summary_line' => '',
         'valid_until' => '',
         'pricing_mode' => 'solar_split_70_30',
-        'split_5_pct' => 70,
-        'split_18_pct' => 30,
         'place_of_supply_state' => 'Jharkhand',
         'tax_type' => 'CGST_SGST',
         'input_total_gst_inclusive' => 0,
@@ -907,8 +905,6 @@ function documents_quote_defaults(): array
             'bucket_5_gst' => 0,
             'bucket_18_basic' => 0,
             'bucket_18_gst' => 0,
-            'split_5_pct' => 70,
-            'split_18_pct' => 30,
             'gst_split' => [
                 'cgst_5' => 0,
                 'sgst_5' => 0,
@@ -995,8 +991,6 @@ function documents_proforma_defaults(): array
         'customer_snapshot' => documents_customer_snapshot_defaults(),
         'capacity_kwp' => '',
         'pricing_mode' => 'solar_split_70_30',
-        'split_5_pct' => 70,
-        'split_18_pct' => 30,
         'input_total_gst_inclusive' => 0,
         'calc' => [],
         'created_at' => '',
@@ -1016,8 +1010,6 @@ function documents_invoice_defaults(): array
         'customer_snapshot' => documents_customer_snapshot_defaults(),
         'capacity_kwp' => '',
         'pricing_mode' => 'solar_split_70_30',
-        'split_5_pct' => 70,
-        'split_18_pct' => 30,
         'input_total_gst_inclusive' => 0,
         'calc' => [],
         'created_at' => '',
@@ -1394,30 +1386,6 @@ function documents_quote_item_defaults(): array
     ];
 }
 
-function documents_pricing_split_from_mode(string $pricingMode, $fivePercentShare = null, $eighteenPercentShare = null): array
-{
-    $pricingMode = in_array($pricingMode, ['solar_split_70_30', 'flat_5', 'custom_split'], true) ? $pricingMode : 'solar_split_70_30';
-    if ($pricingMode === 'flat_5') {
-        return ['pricing_mode' => $pricingMode, 'split_5_pct' => 100.0, 'split_18_pct' => 0.0];
-    }
-    if ($pricingMode === 'solar_split_70_30') {
-        return ['pricing_mode' => $pricingMode, 'split_5_pct' => 70.0, 'split_18_pct' => 30.0];
-    }
-
-    $split5 = max(0.0, min(100.0, (float) $fivePercentShare));
-    $split18 = max(0.0, min(100.0, (float) $eighteenPercentShare));
-    $total = $split5 + $split18;
-    if ($total <= 0.00001) {
-        $split5 = 70.0;
-        $split18 = 30.0;
-    } elseif (abs($total - 100.0) > 0.001) {
-        $split5 = ($split5 / $total) * 100.0;
-        $split18 = ($split18 / $total) * 100.0;
-    }
-
-    return ['pricing_mode' => $pricingMode, 'split_5_pct' => round($split5, 4), 'split_18_pct' => round($split18, 4)];
-}
-
 function documents_normalize_quote_items(array $items, string $systemType = 'Ongrid', float $capacityKwp = 0.0, string $defaultHsn = '8541'): array
 {
     $rows = [];
@@ -1452,29 +1420,43 @@ function documents_normalize_quote_items(array $items, string $systemType = 'Ong
     return $rows;
 }
 
-function documents_calc_pricing_from_items(array $items, string $pricingMode, string $taxType, float $transportationRs = 0.0, float $subsidyExpectedRs = 0.0, ?float $systemTotalInclGstRs = null, $fivePercentShare = null, $eighteenPercentShare = null): array
+function documents_calc_pricing_from_items(array $items, string $pricingMode, string $taxType, float $transportationRs = 0.0, float $subsidyExpectedRs = 0.0, ?float $systemTotalInclGstRs = null): array
 {
-    $split = documents_pricing_split_from_mode($pricingMode, $fivePercentShare, $eighteenPercentShare);
-    $pricingMode = (string) ($split['pricing_mode'] ?? 'solar_split_70_30');
-    $split5 = ((float) ($split['split_5_pct'] ?? 70.0)) / 100.0;
-    $split18 = ((float) ($split['split_18_pct'] ?? 30.0)) / 100.0;
+    $pricingMode = in_array($pricingMode, ['solar_split_70_30', 'flat_5'], true) ? $pricingMode : 'solar_split_70_30';
     $taxType = $taxType === 'IGST' ? 'IGST' : 'CGST_SGST';
     $finalPrice = max(0, (float) ($systemTotalInclGstRs ?? 0));
-    $blendedRate = ($split5 * 0.05) + ($split18 * 0.18);
     if ($finalPrice <= 0) {
         $baseTotal = 0.0;
         foreach ($items as $item) {
             if (!is_array($item)) { continue; }
             $baseTotal += max(0, (float) ($item['basic_amount'] ?? 0));
         }
+        if ($pricingMode === 'flat_5') {
+            $bucket5Basic = $baseTotal;
+            $bucket18Basic = 0.0;
+            $bucket5Gst = $bucket5Basic * 0.05;
+            $bucket18Gst = 0.0;
+            $finalPrice = $baseTotal + $bucket5Gst;
+        } else {
+            $bucket5Basic = $baseTotal * 0.70;
+            $bucket18Basic = $baseTotal * 0.30;
+            $bucket5Gst = $bucket5Basic * 0.05;
+            $bucket18Gst = $bucket18Basic * 0.18;
+            $finalPrice = $baseTotal + $bucket5Gst + $bucket18Gst;
+        }
+    } elseif ($pricingMode === 'flat_5') {
+        $baseTotal = $finalPrice / 1.05;
+        $bucket5Basic = $baseTotal;
+        $bucket18Basic = 0.0;
+        $bucket5Gst = $bucket5Basic * 0.05;
+        $bucket18Gst = 0.0;
     } else {
-        $baseTotal = $blendedRate > 0 ? $finalPrice / (1 + $blendedRate) : $finalPrice;
+        $baseTotal = $finalPrice / 1.089;
+        $bucket5Basic = $baseTotal * 0.70;
+        $bucket18Basic = $baseTotal * 0.30;
+        $bucket5Gst = $bucket5Basic * 0.05;
+        $bucket18Gst = $bucket18Basic * 0.18;
     }
-    $bucket5Basic = $baseTotal * $split5;
-    $bucket18Basic = $baseTotal * $split18;
-    $bucket5Gst = $bucket5Basic * 0.05;
-    $bucket18Gst = $bucket18Basic * 0.18;
-    $finalPrice = $baseTotal + $bucket5Gst + $bucket18Gst;
     $transportationRs = max(0, $transportationRs);
     $grossPayable = $finalPrice + $transportationRs;
     $subsidyExpectedRs = max(0, $subsidyExpectedRs);
@@ -1485,8 +1467,6 @@ function documents_calc_pricing_from_items(array $items, string $pricingMode, st
         'bucket_5_gst' => round($bucket5Gst, 2),
         'bucket_18_basic' => round($bucket18Basic, 2),
         'bucket_18_gst' => round($bucket18Gst, 2),
-        'split_5_pct' => round($split5 * 100, 2),
-        'split_18_pct' => round($split18 * 100, 2),
         'gst_split' => [
             'cgst_5' => 0.0,
             'sgst_5' => 0.0,
@@ -2213,8 +2193,6 @@ function documents_create_proforma_from_quote(array $quote): array
     $doc['customer_snapshot'] = $snapshot;
     $doc['capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? ''));
     $doc['pricing_mode'] = safe_text((string) ($quote['pricing_mode'] ?? 'solar_split_70_30'));
-    $doc['split_5_pct'] = (float) ($quote['split_5_pct'] ?? (($quote['calc']['split_5_pct'] ?? 70)));
-    $doc['split_18_pct'] = (float) ($quote['split_18_pct'] ?? (($quote['calc']['split_18_pct'] ?? 30)));
     $doc['input_total_gst_inclusive'] = (float) ($quote['input_total_gst_inclusive'] ?? 0);
     $doc['calc'] = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
     $doc['created_at'] = date('c');
@@ -2255,8 +2233,6 @@ function documents_create_invoice_from_quote(array $quote): array
     $doc['customer_snapshot'] = $snapshot;
     $doc['capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? ''));
     $doc['pricing_mode'] = safe_text((string) ($quote['pricing_mode'] ?? 'solar_split_70_30'));
-    $doc['split_5_pct'] = (float) ($quote['split_5_pct'] ?? (($quote['calc']['split_5_pct'] ?? 70)));
-    $doc['split_18_pct'] = (float) ($quote['split_18_pct'] ?? (($quote['calc']['split_18_pct'] ?? 30)));
     $doc['input_total_gst_inclusive'] = (float) ($quote['input_total_gst_inclusive'] ?? 0);
     $doc['calc'] = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
     $doc['created_at'] = date('c');
@@ -2515,10 +2491,6 @@ function documents_quote_prepare(array $quote): array
     $quote['quote_items'] = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
     $quote['accepted_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['accepted_by'] ?? null) ? $quote['accepted_by'] : []);
     $quote['archived_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['archived_by'] ?? null) ? $quote['archived_by'] : []);
-    $split = documents_pricing_split_from_mode((string) ($quote['pricing_mode'] ?? 'solar_split_70_30'), $quote['split_5_pct'] ?? null, $quote['split_18_pct'] ?? null);
-    $quote['pricing_mode'] = (string) ($split['pricing_mode'] ?? 'solar_split_70_30');
-    $quote['split_5_pct'] = (float) ($split['split_5_pct'] ?? 70);
-    $quote['split_18_pct'] = (float) ($split['split_18_pct'] ?? 30);
     if (!array_key_exists('quote_series_id', $original) || safe_text((string) ($quote['quote_series_id'] ?? '')) === '') {
         $quote['quote_series_id'] = (string) ($quote['id'] ?? '');
     }
