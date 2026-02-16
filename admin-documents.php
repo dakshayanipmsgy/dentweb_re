@@ -813,20 +813,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
 
-    if (in_array($action, ['save_component','toggle_component_archive','save_kit','toggle_kit_archive','save_tax_profile','toggle_tax_profile_archive','save_variant','toggle_variant_archive','create_inventory_tx','edit_inventory_tx'], true)) {
-        $masterActions = ['save_component','toggle_component_archive','save_kit','toggle_kit_archive','save_tax_profile','toggle_tax_profile_archive','save_variant','toggle_variant_archive'];
+    if (in_array($action, ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive','create_inventory_tx','edit_inventory_tx'], true)) {
+        $masterActions = ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive'];
         if (in_array($action, $masterActions, true) && !$isAdmin) {
             $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'components']);
         }
 
-
-        if ($action === 'save_component') {
+        if (in_array($action, ['save_component', 'save_component_edit'], true)) {
+            $editing = $action === 'save_component_edit';
             $componentId = safe_text((string) ($_POST['component_id'] ?? ''));
             $components = documents_inventory_components(true);
+            if ($editing && $componentId === '') {
+                $redirectDocuments('items', 'error', 'Component not found for edit.', ['items_subtab' => 'components']);
+            }
             $isCuttable = isset($_POST['is_cuttable']);
             $defaultUnit = safe_text((string) ($_POST['default_unit'] ?? 'pcs'));
             if ($isCuttable && strtolower($defaultUnit) !== 'ft') {
-                $redirectDocuments('items', 'error', 'Cuttable component must use ft as default unit.');
+                $redirectDocuments('items', 'error', 'Cuttable component must use ft as default unit.', ['items_subtab' => 'components']);
             }
             $row = documents_inventory_component_defaults();
             if ($componentId !== '') {
@@ -840,9 +843,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $row['id'] = 'CMP-' . date('Y') . '-' . bin2hex(random_bytes(2));
                 $row['created_at'] = date('c');
             }
+            if ($editing && (string) ($row['id'] ?? '') !== $componentId) {
+                $redirectDocuments('items', 'error', 'Component not found for edit.', ['items_subtab' => 'components']);
+            }
             $row['name'] = safe_text((string) ($_POST['name'] ?? ''));
             if ($row['name'] === '') {
-                $redirectDocuments('items', 'error', 'Component name is required.');
+                $redirectDocuments('items', 'error', 'Component name is required.', ['items_subtab' => 'components']);
             }
             $row['category'] = safe_text((string) ($_POST['category'] ?? ''));
             $row['hsn'] = safe_text((string) ($_POST['hsn'] ?? ''));
@@ -869,7 +875,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $savedRows[] = $row;
             }
             $result = documents_inventory_save_components($savedRows);
-            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? 'Component saved.' : 'Failed to save component.', ['items_subtab' => 'components']);
+            $msg = $editing ? 'Component updated.' : 'Component saved.';
+            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? $msg : 'Failed to save component.', ['items_subtab' => 'components']);
         }
 
         if ($action === 'toggle_component_archive') {
@@ -887,7 +894,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? 'Component archive state updated.' : 'Failed to update component.', ['items_subtab' => 'components']);
         }
 
-        if ($action === 'save_kit') {
+        if (in_array($action, ['save_kit_create', 'save_kit_edit'], true)) {
+            $editing = $action === 'save_kit_edit';
             $kitId = safe_text((string) ($_POST['kit_id'] ?? ''));
             $kits = documents_inventory_kits(true);
             $row = documents_inventory_kit_defaults();
@@ -902,6 +910,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $row['id'] = 'KIT-' . date('Y') . '-' . bin2hex(random_bytes(2));
                 $row['created_at'] = date('c');
             }
+            if ($editing && ((string) ($row['id'] ?? '') !== $kitId || $kitId === '')) {
+                $redirectDocuments('items', 'error', 'Kit not found for edit.', ['items_subtab' => 'kits']);
+            }
             $row['name'] = safe_text((string) ($_POST['name'] ?? ''));
             if ($row['name'] === '') {
                 $redirectDocuments('items', 'error', 'Kit name is required.', ['items_subtab' => 'kits']);
@@ -910,24 +921,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $row['description'] = safe_text((string) ($_POST['description'] ?? ''));
             $row['tax_profile_id'] = safe_text((string) ($_POST['tax_profile_id'] ?? ''));
             $row['updated_at'] = date('c');
-            $bomComponent = is_array($_POST['bom_component_id'] ?? null) ? $_POST['bom_component_id'] : [];
+            $selectedComponentIds = is_array($_POST['selected_component_ids'] ?? null) ? $_POST['selected_component_ids'] : [];
             $bomQty = is_array($_POST['bom_qty'] ?? null) ? $_POST['bom_qty'] : [];
             $bomUnit = is_array($_POST['bom_unit'] ?? null) ? $_POST['bom_unit'] : [];
             $bomRemarks = is_array($_POST['bom_remarks'] ?? null) ? $_POST['bom_remarks'] : [];
             $items = [];
-            foreach ($bomComponent as $i => $compIdRaw) {
+            foreach ($selectedComponentIds as $compIdRaw) {
                 $compId = safe_text((string) $compIdRaw);
-                $qty = max(0, (float) ($bomQty[$i] ?? 0));
-                if ($compId === '' || $qty <= 0) {
+                if ($compId === '') {
                     continue;
                 }
                 $component = documents_inventory_get_component($compId);
-                $isCuttable = is_array($component) && !empty($component['is_cuttable']);
+                if (!is_array($component) || !empty($component['archived_flag'])) {
+                    continue;
+                }
+                $qty = (float) ($bomQty[$compId] ?? 0);
+                $unitInput = safe_text((string) ($bomUnit[$compId] ?? ''));
+                $remarks = safe_text((string) ($bomRemarks[$compId] ?? ''));
+                $unit = !empty($component['is_cuttable']) ? 'ft' : ($unitInput !== '' ? $unitInput : (string) ($component['default_unit'] ?? ''));
+                if ($qty <= 0) {
+                    $redirectDocuments('items', 'error', 'Each selected component must have quantity greater than 0.', ['items_subtab' => 'kits', 'edit' => $editing ? $kitId : '']);
+                }
+                if ($unit === '') {
+                    $redirectDocuments('items', 'error', 'Unit is required for all selected components.', ['items_subtab' => 'kits', 'edit' => $editing ? $kitId : '']);
+                }
                 $items[] = [
                     'component_id' => $compId,
                     'qty' => $qty,
-                    'unit' => $isCuttable ? 'ft' : safe_text((string) ($bomUnit[$i] ?? (($component['default_unit'] ?? 'pcs')))),
-                    'remarks' => safe_text((string) ($bomRemarks[$i] ?? '')),
+                    'unit' => $unit,
+                    'remarks' => $remarks,
                 ];
             }
             $row['items'] = $items;
@@ -945,10 +967,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $savedRows[] = $row;
             }
             $result = documents_inventory_save_kits($savedRows);
-            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? 'Kit saved.' : 'Failed to save kit.', ['items_subtab' => 'kits']);
+            $msg = $editing ? 'Kit updated.' : 'Kit created.';
+            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? $msg : 'Failed to save kit.', ['items_subtab' => 'kits']);
         }
 
-        if ($action === 'save_tax_profile') {
+        if (in_array($action, ['save_tax_profile', 'save_tax_profile_edit'], true)) {
+            $editing = $action === 'save_tax_profile_edit';
             $profileId = safe_text((string) ($_POST['tax_profile_id'] ?? ''));
             $rows = documents_inventory_tax_profiles(true);
             $row = documents_tax_profile_defaults();
@@ -962,6 +986,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $row['id'] = 'TAX-' . date('Y') . '-' . bin2hex(random_bytes(2));
                 $row['created_at'] = date('c');
+            }
+            if ($editing && ((string) ($row['id'] ?? '') !== $profileId || $profileId === '')) {
+                $redirectDocuments('items', 'error', 'Tax profile not found for edit.', ['items_subtab' => 'tax_profiles']);
             }
             $row['name'] = safe_text((string) ($_POST['name'] ?? ''));
             $row['mode'] = safe_text((string) ($_POST['mode'] ?? 'single'));
@@ -983,7 +1010,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $row['updated_at'] = date('c');
             $validated = documents_validate_tax_profile($row);
             if (!($validated['ok'] ?? false)) {
-                $redirectDocuments('items', 'error', (string) ($validated['error'] ?? 'Invalid tax profile.'), ['items_subtab' => 'tax_profiles']);
+                $redirectDocuments('items', 'error', (string) ($validated['error'] ?? 'Invalid tax profile.'), ['items_subtab' => 'tax_profiles', 'edit' => $editing ? $profileId : '']);
             }
             $row = (array) ($validated['profile'] ?? $row);
 
@@ -1001,7 +1028,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $savedRows[] = $row;
             }
             $result = documents_inventory_save_tax_profiles($savedRows);
-            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? 'Tax profile saved.' : 'Failed to save tax profile.', ['items_subtab' => 'tax_profiles']);
+            $msg = $editing ? 'Tax profile updated.' : 'Tax profile saved.';
+            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? $msg : 'Failed to save tax profile.', ['items_subtab' => 'tax_profiles']);
         }
 
         if ($action === 'toggle_tax_profile_archive') {
@@ -1019,7 +1047,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? 'Tax profile archive state updated.' : 'Failed to update tax profile.', ['items_subtab' => 'tax_profiles']);
         }
 
-        if ($action === 'save_variant') {
+        if (in_array($action, ['save_variant', 'save_variant_edit'], true)) {
+            $editing = $action === 'save_variant_edit';
             $variantId = safe_text((string) ($_POST['variant_id'] ?? ''));
             $rows = documents_inventory_component_variants(true);
             $row = documents_component_variant_defaults();
@@ -1033,6 +1062,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $row['id'] = 'VAR-' . date('Y') . '-' . bin2hex(random_bytes(2));
                 $row['created_at'] = date('c');
+            }
+            if ($editing && ((string) ($row['id'] ?? '') !== $variantId || $variantId === '')) {
+                $redirectDocuments('items', 'error', 'Variant not found for edit.', ['items_subtab' => 'variants']);
             }
             $row['component_id'] = safe_text((string) ($_POST['component_id'] ?? ''));
             if ($row['component_id'] === '') {
@@ -1067,7 +1099,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $savedRows[] = $row;
             }
             $result = documents_inventory_save_component_variants($savedRows);
-            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? 'Variant saved.' : 'Failed to save variant.', ['items_subtab' => 'variants', 'component_filter' => (string) $row['component_id']]);
+            $msg = $editing ? 'Variant updated.' : 'Variant saved.';
+            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? $msg : 'Failed to save variant.', ['items_subtab' => 'variants', 'component_filter' => (string) $row['component_id']]);
         }
 
         if ($action === 'toggle_variant_archive') {
@@ -1367,10 +1400,11 @@ $packViewId = safe_text($_GET['view'] ?? '');
 $includeArchivedPack = isset($_GET['include_archived_pack']) && $_GET['include_archived_pack'] === '1';
 $archiveTypeFilter = safe_text($_GET['archive_type'] ?? 'all');
 $archiveSearch = strtolower(trim(safe_text($_GET['archive_q'] ?? '')));
-$itemsSubtab = safe_text($_GET['items_subtab'] ?? 'components');
+$itemsSubtab = safe_text($_GET['items_subtab'] ?? ($_GET['sub'] ?? 'components'));
 if (!in_array($itemsSubtab, ['components', 'kits', 'tax_profiles', 'variants', 'inventory', 'transactions'], true)) {
     $itemsSubtab = 'components';
 }
+$itemsEditId = safe_text((string) ($_GET['edit'] ?? ''));
 $componentFilter = safe_text((string) ($_GET['component_filter'] ?? ''));
 
 $quotes = documents_list_quotes();
@@ -1402,6 +1436,23 @@ $componentMap = [];
 foreach ($inventoryComponents as $cmpRow) {
     if (is_array($cmpRow)) {
         $componentMap[(string) ($cmpRow['id'] ?? '')] = $cmpRow;
+    }
+}
+
+$editingComponent = null;
+$editingKit = null;
+$editingTaxProfile = null;
+$editingVariant = null;
+
+if ($itemsEditId !== '') {
+    if ($itemsSubtab === 'components') {
+        $editingComponent = documents_inventory_get_component($itemsEditId);
+    } elseif ($itemsSubtab === 'kits') {
+        $editingKit = documents_inventory_get_kit($itemsEditId);
+    } elseif ($itemsSubtab === 'tax_profiles') {
+        $editingTaxProfile = documents_inventory_get_tax_profile($itemsEditId);
+    } elseif ($itemsSubtab === 'variants') {
+        $editingVariant = documents_inventory_get_component_variant($itemsEditId);
     }
 }
 
@@ -1872,22 +1923,24 @@ usort($archivedRows, static function (array $a, array $b): int {
         <?php if ($itemsSubtab === 'components'): ?>
           <h3>Components</h3>
           <?php if ($isAdmin): ?>
-          <form method="post" class="grid" style="margin-bottom:1rem;">
-            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
-            <input type="hidden" name="action" value="save_component" />
-            <div><label>Component ID (for edit)</label><input name="component_id" placeholder="Leave blank for new" /></div>
-            <div><label>Name</label><input name="name" required /></div>
-            <div><label>Category</label><input name="category" /></div>
-            <div><label>HSN</label><input name="hsn" /></div>
-            <div><label>Default Unit</label><input name="default_unit" placeholder="pcs / ft / set" required /></div>
-            <div><label>Tax Profile</label><select name="tax_profile_id"><option value="">-- none --</option><?php foreach ($activeTaxProfiles as $profile): ?><option value="<?= htmlspecialchars((string) ($profile['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($profile['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-            <div><label>Standard Length (ft)</label><input type="number" step="0.01" min="0" name="standard_length_ft" /></div>
-            <div><label>Min Issue (ft)</label><input type="number" step="0.01" min="0.01" name="min_issue_ft" value="1" /></div>
-            <div><label><input type="checkbox" name="is_cuttable" value="1" /> Cuttable (feet)</label></div>
-            <div><label><input type="checkbox" name="has_variants" value="1" /> Has variants</label></div>
-            <div style="grid-column:1/-1"><label>Notes</label><textarea name="notes"></textarea></div>
-            <div><label>&nbsp;</label><button class="btn" type="submit">Save Component</button></div>
-          </form>
+            <?php $componentForm = is_array($editingComponent) ? $editingComponent : documents_inventory_component_defaults(); ?>
+            <form method="post" class="grid" style="margin-bottom:1rem;">
+              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+              <input type="hidden" name="action" value="<?= is_array($editingComponent) ? 'save_component_edit' : 'save_component' ?>" />
+              <?php if (is_array($editingComponent)): ?><input type="hidden" name="component_id" value="<?= htmlspecialchars((string) ($componentForm['id'] ?? ''), ENT_QUOTES) ?>" /><?php endif; ?>
+              <div><label>Component ID</label><input value="<?= htmlspecialchars((string) ($componentForm['id'] ?? 'Auto'), ENT_QUOTES) ?>" readonly /></div>
+              <div><label>Name</label><input name="name" required value="<?= htmlspecialchars((string) ($componentForm['name'] ?? ''), ENT_QUOTES) ?>" /></div>
+              <div><label>Category</label><input name="category" value="<?= htmlspecialchars((string) ($componentForm['category'] ?? ''), ENT_QUOTES) ?>" /></div>
+              <div><label>HSN</label><input name="hsn" value="<?= htmlspecialchars((string) ($componentForm['hsn'] ?? ''), ENT_QUOTES) ?>" /></div>
+              <div><label>Default Unit</label><input name="default_unit" required value="<?= htmlspecialchars((string) ($componentForm['default_unit'] ?? ''), ENT_QUOTES) ?>" /></div>
+              <div><label>Tax Profile</label><select name="tax_profile_id"><option value="">-- none --</option><?php foreach ($activeTaxProfiles as $profile): ?><option value="<?= htmlspecialchars((string) ($profile['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($componentForm['tax_profile_id'] ?? '') === (string) ($profile['id'] ?? '')) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($profile['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
+              <div><label>Standard Length (ft)</label><input type="number" step="0.01" min="0" name="standard_length_ft" value="<?= htmlspecialchars((string) ($componentForm['standard_length_ft'] ?? 0), ENT_QUOTES) ?>" /></div>
+              <div><label>Min Issue (ft)</label><input type="number" step="0.01" min="0.01" name="min_issue_ft" value="<?= htmlspecialchars((string) ($componentForm['min_issue_ft'] ?? 1), ENT_QUOTES) ?>" /></div>
+              <div><label><input type="checkbox" name="is_cuttable" value="1" <?= !empty($componentForm['is_cuttable']) ? 'checked' : '' ?> /> Cuttable (feet)</label></div>
+              <div><label><input type="checkbox" name="has_variants" value="1" <?= !empty($componentForm['has_variants']) ? 'checked' : '' ?> /> Has variants</label></div>
+              <div style="grid-column:1/-1"><label>Notes</label><textarea name="notes"><?= htmlspecialchars((string) ($componentForm['notes'] ?? ''), ENT_QUOTES) ?></textarea></div>
+              <div><label>&nbsp;</label><button class="btn" type="submit"><?= is_array($editingComponent) ? 'Update Component' : 'Save Component' ?></button></div>
+            </form>
           <?php endif; ?>
           <table><thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Tax Profile</th><th>Variants</th><th>Cuttable</th><th>Status</th><th>Action</th></tr></thead><tbody>
             <?php foreach ($inventoryComponents as $component): ?>
@@ -1896,20 +1949,103 @@ usort($archivedRows, static function (array $a, array $b): int {
                 <td><?php $cmpTax = documents_inventory_get_tax_profile((string) ($component['tax_profile_id'] ?? '')); ?><?= htmlspecialchars((string) ($cmpTax['name'] ?? ''), ENT_QUOTES) ?></td>
                 <td><?= !empty($component['has_variants']) ? 'Yes' : 'No' ?></td><td><?= !empty($component['is_cuttable']) ? 'Yes' : 'No' ?></td>
                 <td><?= !empty($component['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td>
-                <td><?php if ($isAdmin): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_component_archive" /><input type="hidden" name="component_id" value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($component['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($component['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php else: ?><span class="muted">View only</span><?php endif; ?></td>
+                <td class="row-actions"><?php if ($isAdmin): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'components', 'sub' => 'components', 'edit' => (string) ($component['id'] ?? '')]), ENT_QUOTES) ?>">Edit</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_component_archive" /><input type="hidden" name="component_id" value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($component['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($component['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php else: ?><span class="muted">View only</span><?php endif; ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody></table>
         <?php elseif ($itemsSubtab === 'kits'): ?>
           <h3>Kits</h3>
-          <?php if ($isAdmin): ?><form method="post" class="grid" style="margin-bottom:1rem;"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="save_kit" /><div><label>Kit ID (for edit)</label><input name="kit_id" /></div><div><label>Name</label><input name="name" required /></div><div><label>Category</label><input name="category" /></div><div><label>Tax</label><select name="tax_profile_id"><option value="">-- none --</option><?php foreach ($activeTaxProfiles as $profile): ?><option value="<?= htmlspecialchars((string) ($profile['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($profile['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div><div style="grid-column:1/-1"><label>Description</label><textarea name="description"></textarea></div><div><label>&nbsp;</label><button class="btn" type="submit">Save Kit</button></div></form><?php else: ?><p class="muted">Read-only for employees.</p><?php endif; ?>
-          <table><thead><tr><th>ID</th><th>Name</th><th>Category</th><th>Tax</th><th>Items</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($inventoryKits as $kit): ?><tr><td><?= htmlspecialchars((string) ($kit['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($kit['name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($kit['category'] ?? ''), ENT_QUOTES) ?></td><td><?php $kitTax = documents_inventory_get_tax_profile((string) ($kit['tax_profile_id'] ?? '')); ?><?= htmlspecialchars((string) ($kitTax['name'] ?? ''), ENT_QUOTES) ?></td><td><?= count((array) ($kit['items'] ?? [])) ?></td><td><?= !empty($kit['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td><td><?php if ($isAdmin): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_kit_archive" /><input type="hidden" name="kit_id" value="<?= htmlspecialchars((string) ($kit['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($kit['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($kit['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table>
+          <?php if ($isAdmin): ?>
+            <?php $kitForm = is_array($editingKit) ? $editingKit : documents_inventory_kit_defaults(); ?>
+            <?php $kitItemsByComponent = []; foreach ((array) ($kitForm['items'] ?? []) as $kitItem) { if (!is_array($kitItem)) { continue; } $cid = (string) ($kitItem['component_id'] ?? ''); if ($cid === '') { continue; } $kitItemsByComponent[$cid] = $kitItem; } ?>
+            <form method="post" style="margin-bottom:1rem;">
+              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+              <input type="hidden" name="action" value="<?= is_array($editingKit) ? 'save_kit_edit' : 'save_kit_create' ?>" />
+              <?php if (is_array($editingKit)): ?><input type="hidden" name="kit_id" value="<?= htmlspecialchars((string) ($kitForm['id'] ?? ''), ENT_QUOTES) ?>" /><?php endif; ?>
+              <div class="grid">
+                <div><label>Kit ID</label><input value="<?= htmlspecialchars((string) ($kitForm['id'] ?? 'Auto'), ENT_QUOTES) ?>" readonly /></div>
+                <div><label>Name</label><input name="name" required value="<?= htmlspecialchars((string) ($kitForm['name'] ?? ''), ENT_QUOTES) ?>" /></div>
+                <div><label>Category</label><input name="category" value="<?= htmlspecialchars((string) ($kitForm['category'] ?? ''), ENT_QUOTES) ?>" /></div>
+                <div><label>Tax</label><select name="tax_profile_id"><option value="">-- none --</option><?php foreach ($activeTaxProfiles as $profile): ?><option value="<?= htmlspecialchars((string) ($profile['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($kitForm['tax_profile_id'] ?? '') === (string) ($profile['id'] ?? '')) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($profile['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
+                <div style="grid-column:1/-1"><label>Description</label><textarea name="description"><?= htmlspecialchars((string) ($kitForm['description'] ?? ''), ENT_QUOTES) ?></textarea></div>
+              </div>
+              <h4>Select Components for this Kit</h4>
+              <div><label>Search Components</label><input type="text" id="kitComponentSearch" placeholder="Search component name/category" /></div>
+              <table id="kitComponentSelector"><thead><tr><th>Select</th><th>Name</th><th>Default Unit</th><th>Cuttable?</th><th>Has Variants?</th><th>Tax Profile</th></tr></thead><tbody>
+              <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag'])) { continue; } $cid = (string) ($component['id'] ?? ''); $cmpTax = documents_inventory_get_tax_profile((string) ($component['tax_profile_id'] ?? '')); ?>
+                <tr data-kit-component-row="1">
+                  <td><input type="checkbox" class="kit-component-checkbox" data-component-id="<?= htmlspecialchars($cid, ENT_QUOTES) ?>" <?= isset($kitItemsByComponent[$cid]) ? 'checked' : '' ?> /></td>
+                  <td><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) ($component['default_unit'] ?? ''), ENT_QUOTES) ?></td>
+                  <td><?= !empty($component['is_cuttable']) ? 'Yes' : 'No' ?></td>
+                  <td><?= !empty($component['has_variants']) ? 'Yes' : 'No' ?></td>
+                  <td><?= htmlspecialchars((string) ($cmpTax['name'] ?? ''), ENT_QUOTES) ?></td>
+                </tr>
+              <?php endforeach; ?>
+              </tbody></table>
+              <h4>Selected Components</h4>
+              <table id="kitSelectedBomTable"><thead><tr><th>Component</th><th>Qty</th><th>Unit</th><th>Remarks</th><th>Remove</th></tr></thead><tbody>
+              <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag'])) { continue; } $cid=(string)($component['id']??''); $selected = isset($kitItemsByComponent[$cid]); $item=$selected ? (array)$kitItemsByComponent[$cid] : []; $unitDefault = !empty($component['is_cuttable']) ? 'ft' : (string)($component['default_unit']??''); ?>
+                <tr class="kit-bom-row" data-component-id="<?= htmlspecialchars($cid, ENT_QUOTES) ?>" style="<?= $selected ? '' : 'display:none;' ?>">
+                  <td><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?><input type="hidden" class="kit-selected-component-id" name="selected_component_ids[]" value="<?= $selected ? htmlspecialchars($cid, ENT_QUOTES) : '' ?>" /></td>
+                  <td><input type="number" step="0.01" min="0" name="bom_qty[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]" value="<?= $selected ? htmlspecialchars((string) ($item['qty'] ?? ''), ENT_QUOTES) : '' ?>" /></td>
+                  <td><input name="bom_unit[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]" value="<?= $selected ? htmlspecialchars((string) ($item['unit'] ?? $unitDefault), ENT_QUOTES) : htmlspecialchars($unitDefault, ENT_QUOTES) ?>" <?= !empty($component['is_cuttable']) ? 'readonly' : '' ?> /></td>
+                  <td><input name="bom_remarks[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]" value="<?= $selected ? htmlspecialchars((string) ($item['remarks'] ?? ''), ENT_QUOTES) : '' ?>" /></td>
+                  <td><button type="button" class="btn secondary kit-remove-component" data-component-id="<?= htmlspecialchars($cid, ENT_QUOTES) ?>">Remove</button></td>
+                </tr>
+              <?php endforeach; ?>
+              </tbody></table>
+              <button class="btn" type="submit"><?= is_array($editingKit) ? 'Update Kit BOM' : 'Create Kit BOM' ?></button>
+            </form>
+          <?php else: ?><p class="muted">Read-only for employees.</p><?php endif; ?>
+          <table><thead><tr><th>ID</th><th>Name</th><th>Category</th><th>Tax</th><th>Items</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($inventoryKits as $kit): ?><tr><td><?= htmlspecialchars((string) ($kit['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($kit['name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($kit['category'] ?? ''), ENT_QUOTES) ?></td><td><?php $kitTax = documents_inventory_get_tax_profile((string) ($kit['tax_profile_id'] ?? '')); ?><?= htmlspecialchars((string) ($kitTax['name'] ?? ''), ENT_QUOTES) ?></td><td><?= count((array) ($kit['items'] ?? [])) ?></td><td><?= !empty($kit['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td><td class="row-actions"><?php if ($isAdmin): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'kits', 'sub' => 'kits', 'edit' => (string) ($kit['id'] ?? '')]), ENT_QUOTES) ?>">Edit</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_kit_archive" /><input type="hidden" name="kit_id" value="<?= htmlspecialchars((string) ($kit['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($kit['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($kit['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table>
         <?php elseif ($itemsSubtab === 'tax_profiles'): ?>
           <h3>Tax Profiles</h3>
-          <?php if ($isAdmin): ?><form method="post" class="grid" style="margin-bottom:1rem;"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="save_tax_profile" /><div><label>Profile ID (for edit)</label><input name="tax_profile_id" /></div><div><label>Name</label><input name="name" required /></div><div><label>Mode</label><select name="mode"><option value="single">Single</option><option value="split">Split</option></select></div><div><label>Single rate %</label><input type="number" step="0.01" min="0" name="rate_pct" value="5" /></div><div><label>Slab1 share%</label><input type="number" step="0.01" min="0" name="slab_share_1" value="70" /></div><div><label>Slab1 rate%</label><input type="number" step="0.01" min="0" name="slab_rate_1" value="5" /></div><div><label>Slab2 share%</label><input type="number" step="0.01" min="0" name="slab_share_2" value="30" /></div><div><label>Slab2 rate%</label><input type="number" step="0.01" min="0" name="slab_rate_2" value="18" /></div><div style="grid-column:1/-1"><label>Notes</label><textarea name="notes"></textarea></div><div><label>&nbsp;</label><button class="btn" type="submit">Save Tax Profile</button></div></form><?php endif; ?><table><thead><tr><th>ID</th><th>Name</th><th>Mode</th><th>Slabs</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($inventoryTaxProfiles as $profile): ?><tr><td><?= htmlspecialchars((string) ($profile['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($profile['name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($profile['mode'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) json_encode((array) ($profile['slabs'] ?? [])), ENT_QUOTES) ?></td><td><?= !empty($profile['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td><td><?php if ($isAdmin): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_tax_profile_archive" /><input type="hidden" name="tax_profile_id" value="<?= htmlspecialchars((string) ($profile['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($profile['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($profile['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table>
+          <?php if ($isAdmin): ?>
+            <?php $taxForm = is_array($editingTaxProfile) ? $editingTaxProfile : documents_tax_profile_defaults(); $taxSlabs = is_array($taxForm['slabs'] ?? null) ? $taxForm['slabs'] : []; if ($taxSlabs === []) { $taxSlabs = [['share_pct' => 100, 'rate_pct' => 0]]; } ?>
+            <form method="post" class="grid" style="margin-bottom:1rem;">
+              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+              <input type="hidden" name="action" value="<?= is_array($editingTaxProfile) ? 'save_tax_profile_edit' : 'save_tax_profile' ?>" />
+              <?php if (is_array($editingTaxProfile)): ?><input type="hidden" name="tax_profile_id" value="<?= htmlspecialchars((string) ($taxForm['id'] ?? ''), ENT_QUOTES) ?>" /><?php endif; ?>
+              <div><label>Profile ID</label><input value="<?= htmlspecialchars((string) ($taxForm['id'] ?? 'Auto'), ENT_QUOTES) ?>" readonly /></div>
+              <div><label>Name</label><input name="name" required value="<?= htmlspecialchars((string) ($taxForm['name'] ?? ''), ENT_QUOTES) ?>" /></div>
+              <div><label>Mode</label><select name="mode"><option value="single" <?= ((string) ($taxForm['mode'] ?? '') === 'single') ? 'selected' : '' ?>>Single</option><option value="split" <?= ((string) ($taxForm['mode'] ?? '') === 'split') ? 'selected' : '' ?>>Split</option></select></div>
+              <div style="grid-column:1/-1"><label>Notes</label><textarea name="notes"><?= htmlspecialchars((string) ($taxForm['notes'] ?? ''), ENT_QUOTES) ?></textarea></div>
+              <div style="grid-column:1/-1">
+                <table id="taxSlabsTable"><thead><tr><th>Share %</th><th>Rate %</th></tr></thead><tbody>
+                <?php foreach ($taxSlabs as $slab): ?>
+                  <tr><td><input type="number" step="0.01" min="0" max="100" name="slab_share_pct[]" value="<?= htmlspecialchars((string) ($slab['share_pct'] ?? 0), ENT_QUOTES) ?>" /></td><td><input type="number" step="0.01" min="0" name="slab_rate_pct[]" value="<?= htmlspecialchars((string) ($slab['rate_pct'] ?? 0), ENT_QUOTES) ?>" /></td></tr>
+                <?php endforeach; ?>
+                </tbody></table>
+                <button type="button" class="btn secondary" id="addTaxSlabBtn">Add slab</button>
+              </div>
+              <div><label>&nbsp;</label><button class="btn" type="submit"><?= is_array($editingTaxProfile) ? 'Update Tax Profile' : 'Save Tax Profile' ?></button></div>
+            </form>
+          <?php endif; ?>
+          <table><thead><tr><th>ID</th><th>Name</th><th>Mode</th><th>Slabs</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($inventoryTaxProfiles as $profile): ?><tr><td><?= htmlspecialchars((string) ($profile['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($profile['name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($profile['mode'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) json_encode((array) ($profile['slabs'] ?? [])), ENT_QUOTES) ?></td><td><?= !empty($profile['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td><td class="row-actions"><?php if ($isAdmin): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'tax_profiles', 'sub' => 'tax_profiles', 'edit' => (string) ($profile['id'] ?? '')]), ENT_QUOTES) ?>">Edit</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_tax_profile_archive" /><input type="hidden" name="tax_profile_id" value="<?= htmlspecialchars((string) ($profile['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($profile['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($profile['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table>
         <?php elseif ($itemsSubtab === 'variants'): ?>
           <h3>Component Variants</h3>
-          <?php if ($isAdmin): ?><form method="post" class="grid" style="margin-bottom:1rem;"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="save_variant" /><div><label>Variant ID (for edit)</label><input name="variant_id" /></div><div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div><div><label>Display Name</label><input name="display_name" /></div><div><label>Brand</label><input name="brand" /></div><div><label>Technology</label><input name="technology" /></div><div><label>Wattage</label><input type="number" step="0.01" min="0" name="wattage_wp" /></div><div><label>Model No</label><input name="model_no" /></div><div><label>HSN Override</label><input name="hsn_override" /></div><div><label>Tax Override</label><select name="tax_profile_id_override"><option value="">-- none --</option><?php foreach ($activeTaxProfiles as $profile): ?><option value="<?= htmlspecialchars((string) ($profile['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($profile['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div><div><label>Unit Override</label><input name="default_unit_override" /></div><div style="grid-column:1/-1"><label>Notes</label><textarea name="notes"></textarea></div><div><label>&nbsp;</label><button class="btn" type="submit">Save Variant</button></div></form><?php endif; ?><table><thead><tr><th>ID</th><th>Component</th><th>Display</th><th>Specs</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($inventoryVariants as $variant): ?><tr><td><?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($componentMap[(string) ($variant['component_id'] ?? '')]['name'] ?? $variant['component_id'] ?? '')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($variant['display_name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) trim(((string) ($variant['brand'] ?? '')) . ' ' . ((string) ($variant['technology'] ?? '')) . ' ' . ((string) ($variant['model_no'] ?? ''))), ENT_QUOTES) ?></td><td><?= !empty($variant['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td><td><?php if ($isAdmin): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_variant_archive" /><input type="hidden" name="variant_id" value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($variant['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($variant['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table>
+          <?php if ($isAdmin): ?>
+            <?php $variantForm = is_array($editingVariant) ? $editingVariant : documents_component_variant_defaults(); ?>
+            <form method="post" class="grid" style="margin-bottom:1rem;">
+              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+              <input type="hidden" name="action" value="<?= is_array($editingVariant) ? 'save_variant_edit' : 'save_variant' ?>" />
+              <?php if (is_array($editingVariant)): ?><input type="hidden" name="variant_id" value="<?= htmlspecialchars((string) ($variantForm['id'] ?? ''), ENT_QUOTES) ?>" /><?php endif; ?>
+              <div><label>Variant ID</label><input value="<?= htmlspecialchars((string) ($variantForm['id'] ?? 'Auto'), ENT_QUOTES) ?>" readonly /></div>
+              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variantForm['component_id'] ?? '') === (string) ($component['id'] ?? '')) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
+              <div><label>Display Name</label><input name="display_name" value="<?= htmlspecialchars((string) ($variantForm['display_name'] ?? ''), ENT_QUOTES) ?>" /></div>
+              <div><label>Brand</label><input name="brand" value="<?= htmlspecialchars((string) ($variantForm['brand'] ?? ''), ENT_QUOTES) ?>" /></div>
+              <div><label>Technology</label><input name="technology" value="<?= htmlspecialchars((string) ($variantForm['technology'] ?? ''), ENT_QUOTES) ?>" /></div>
+              <div><label>Wattage</label><input type="number" step="0.01" min="0" name="wattage_wp" value="<?= htmlspecialchars((string) ($variantForm['wattage_wp'] ?? ''), ENT_QUOTES) ?>" /></div>
+              <div><label>Model No</label><input name="model_no" value="<?= htmlspecialchars((string) ($variantForm['model_no'] ?? ''), ENT_QUOTES) ?>" /></div>
+              <div><label>HSN Override</label><input name="hsn_override" value="<?= htmlspecialchars((string) ($variantForm['hsn_override'] ?? ''), ENT_QUOTES) ?>" /></div>
+              <div><label>Tax Override</label><select name="tax_profile_id_override"><option value="">-- none --</option><?php foreach ($activeTaxProfiles as $profile): ?><option value="<?= htmlspecialchars((string) ($profile['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variantForm['tax_profile_id_override'] ?? '') === (string) ($profile['id'] ?? '')) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($profile['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
+              <div><label>Unit Override</label><input name="default_unit_override" value="<?= htmlspecialchars((string) ($variantForm['default_unit_override'] ?? ''), ENT_QUOTES) ?>" /></div>
+              <div style="grid-column:1/-1"><label>Notes</label><textarea name="notes"><?= htmlspecialchars((string) ($variantForm['notes'] ?? ''), ENT_QUOTES) ?></textarea></div>
+              <div><label>&nbsp;</label><button class="btn" type="submit"><?= is_array($editingVariant) ? 'Update Variant' : 'Save Variant' ?></button></div>
+            </form>
+          <?php endif; ?>
+          <table><thead><tr><th>ID</th><th>Component</th><th>Display</th><th>Specs</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($inventoryVariants as $variant): ?><tr><td><?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($componentMap[(string) ($variant['component_id'] ?? '')]['name'] ?? $variant['component_id'] ?? '')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($variant['display_name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) trim(((string) ($variant['brand'] ?? '')) . ' ' . ((string) ($variant['technology'] ?? '')) . ' ' . ((string) ($variant['model_no'] ?? ''))), ENT_QUOTES) ?></td><td><?= !empty($variant['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td><td class="row-actions"><?php if ($isAdmin): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'variants', 'sub' => 'variants', 'edit' => (string) ($variant['id'] ?? '')]), ENT_QUOTES) ?>">Edit</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_variant_archive" /><input type="hidden" name="variant_id" value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($variant['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($variant['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table>
         <?php elseif ($itemsSubtab === 'inventory'): ?>
           <h3>Inventory Transactions</h3>
           <div class="grid" style="margin-bottom:1rem;">
@@ -2166,14 +2302,6 @@ usort($archivedRows, static function (array $a, array $b): int {
   </main>
 <script>
 document.addEventListener('click', function (e) {
-  if (e.target && e.target.id === 'addBomLineBtn') {
-    const body = document.querySelector('#kitBomTable tbody');
-    if (!body) return;
-    const tr = document.createElement('tr');
-    tr.innerHTML = '<td><select name="bom_component_id[]"><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="bom_qty[]" value="1" /></td><td><input name="bom_unit[]" value="pcs" /></td><td><input name="bom_remarks[]" /></td>';
-    body.appendChild(tr);
-  }
-
   if (e.target && e.target.id === 'addTaxSlabBtn') {
     const body = document.querySelector('#taxSlabsTable tbody');
     if (!body) return;
@@ -2181,6 +2309,48 @@ document.addEventListener('click', function (e) {
     tr.innerHTML = '<td><input type="number" step="0.01" min="0" max="100" name="slab_share_pct[]" /></td><td><input type="number" step="0.01" min="0" name="slab_rate_pct[]" /></td>';
     body.appendChild(tr);
   }
+
+  if (e.target && e.target.classList && e.target.classList.contains('kit-remove-component')) {
+    const componentId = e.target.getAttribute('data-component-id') || '';
+    if (componentId === '') return;
+    const checkbox = document.querySelector('.kit-component-checkbox[data-component-id="' + componentId.replace(/"/g, '\"') + '"]');
+    if (checkbox) {
+      checkbox.checked = false;
+      checkbox.dispatchEvent(new Event('change'));
+    }
+  }
+});
+
+document.addEventListener('change', function (e) {
+  if (!(e.target && e.target.classList && e.target.classList.contains('kit-component-checkbox'))) {
+    return;
+  }
+  const componentId = e.target.getAttribute('data-component-id') || '';
+  if (componentId === '') return;
+  const row = document.querySelector('.kit-bom-row[data-component-id="' + componentId.replace(/"/g, '\"') + '"]');
+  if (!row) return;
+  const hidden = row.querySelector('.kit-selected-component-id');
+  const qtyInput = row.querySelector('input[name="bom_qty[' + componentId.replace(/"/g, '\"') + ']"]');
+  if (e.target.checked) {
+    row.style.display = '';
+    if (hidden) hidden.value = componentId;
+    if (qtyInput && qtyInput.value === '0') qtyInput.value = '';
+  } else {
+    row.style.display = 'none';
+    if (hidden) hidden.value = '';
+    if (qtyInput) qtyInput.value = '';
+  }
+});
+
+document.addEventListener('input', function (e) {
+  if (!(e.target && e.target.id === 'kitComponentSearch')) {
+    return;
+  }
+  const q = (e.target.value || '').toLowerCase().trim();
+  document.querySelectorAll('#kitComponentSelector tbody tr[data-kit-component-row="1"]').forEach(function (row) {
+    const hay = (row.textContent || '').toLowerCase();
+    row.style.display = q === '' || hay.indexOf(q) !== -1 ? '' : 'none';
+  });
 });
 </script>
 </body>
