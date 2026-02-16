@@ -130,20 +130,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $fields = array_keys(documents_company_profile_defaults());
         foreach ($fields as $field) {
-            if (in_array($field, ['logo_path', 'updated_at', 'bank'], true)) {
+            if ($field === 'logo_path' || $field === 'updated_at') {
                 continue;
             }
             $profile[$field] = safe_text($_POST[$field] ?? '');
         }
-
-        $profile['bank'] = documents_normalize_company_bank_details([
-            'bank_name' => safe_text($_POST['bank_name'] ?? ''),
-            'account_name' => safe_text($_POST['bank_account_name'] ?? ''),
-            'account_no' => safe_text($_POST['bank_account_no'] ?? ''),
-            'ifsc' => safe_text($_POST['bank_ifsc'] ?? ''),
-            'branch' => safe_text($_POST['bank_branch'] ?? ''),
-            'upi_id' => safe_text($_POST['upi_id'] ?? ''),
-        ]);
 
         if (isset($_FILES['company_logo_upload']) && (int) ($_FILES['company_logo_upload']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
             $upload = documents_handle_image_upload($_FILES['company_logo_upload'], documents_public_branding_dir(), 'logo_');
@@ -1206,45 +1197,13 @@ usort($archivedRows, static function (array $a, array $b): int {
           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
           <input type="hidden" name="action" value="save_company_profile" />
           <div class="grid">
-            <?php
-              $companyTextFields = [
-                'company_name', 'brand_name', 'address_line', 'city', 'district', 'state', 'pin',
-                'phone_primary', 'phone_secondary', 'whatsapp_number', 'email_primary', 'email_secondary',
-                'website', 'gstin', 'udyam', 'pan', 'jreda_license', 'dwsd_license', 'default_cta_line'
-              ];
-              foreach ($companyTextFields as $key):
-            ?>
+            <?php foreach ($company as $key => $value): ?>
+              <?php if ($key === 'logo_path' || $key === 'updated_at') { continue; } ?>
               <div>
                 <label for="<?= htmlspecialchars($key, ENT_QUOTES) ?>"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $key)), ENT_QUOTES) ?></label>
-                <input id="<?= htmlspecialchars($key, ENT_QUOTES) ?>" type="text" name="<?= htmlspecialchars($key, ENT_QUOTES) ?>" value="<?= htmlspecialchars((string) ($company[$key] ?? ''), ENT_QUOTES) ?>" />
+                <input id="<?= htmlspecialchars($key, ENT_QUOTES) ?>" type="text" name="<?= htmlspecialchars($key, ENT_QUOTES) ?>" value="<?= htmlspecialchars((string) $value, ENT_QUOTES) ?>" />
               </div>
             <?php endforeach; ?>
-
-            <?php $bank = is_array($company['bank'] ?? null) ? $company['bank'] : documents_company_bank_defaults(); ?>
-            <div>
-              <label for="bank_name">Bank Name</label>
-              <input id="bank_name" type="text" name="bank_name" value="<?= htmlspecialchars((string) ($bank['bank_name'] ?? ''), ENT_QUOTES) ?>" />
-            </div>
-            <div>
-              <label for="bank_account_name">Bank Account Name</label>
-              <input id="bank_account_name" type="text" name="bank_account_name" value="<?= htmlspecialchars((string) ($bank['account_name'] ?? ''), ENT_QUOTES) ?>" />
-            </div>
-            <div>
-              <label for="bank_account_no">Bank Account Number</label>
-              <input id="bank_account_no" type="text" name="bank_account_no" value="<?= htmlspecialchars((string) ($bank['account_no'] ?? ''), ENT_QUOTES) ?>" />
-            </div>
-            <div>
-              <label for="bank_ifsc">IFSC</label>
-              <input id="bank_ifsc" type="text" name="bank_ifsc" value="<?= htmlspecialchars((string) ($bank['ifsc'] ?? ''), ENT_QUOTES) ?>" />
-            </div>
-            <div>
-              <label for="bank_branch">Branch</label>
-              <input id="bank_branch" type="text" name="bank_branch" value="<?= htmlspecialchars((string) ($bank['branch'] ?? ''), ENT_QUOTES) ?>" />
-            </div>
-            <div>
-              <label for="upi_id">UPI ID</label>
-              <input id="upi_id" type="text" name="upi_id" value="<?= htmlspecialchars((string) ($bank['upi_id'] ?? ''), ENT_QUOTES) ?>" />
-            </div>
             <div>
               <label for="company_logo_upload">Company Logo Upload</label>
               <input id="company_logo_upload" type="file" name="company_logo_upload" accept="image/*" />
