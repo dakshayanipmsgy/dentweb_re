@@ -40,6 +40,12 @@ if ($viewerType === 'employee' && ((string) ($challan['created_by_type'] ?? '') 
     exit;
 }
 
+
+$packingList = null;
+if ((string) ($challan['linked_quote_id'] ?? '') !== '') {
+    $packingList = documents_get_packing_list_for_quote((string) ($challan['linked_quote_id'] ?? ''), true);
+}
+
 $redirectWith = static function (string $status, string $message) use ($id): void {
     header('Location: challan-view.php?id=' . urlencode($id) . '&status=' . urlencode($status) . '&message=' . urlencode($message));
     exit;
@@ -66,13 +72,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $challan['customer_snapshot']['consumer_account_no'] = safe_text($_POST['consumer_account_no'] ?? ($challan['customer_snapshot']['consumer_account_no'] ?? ''));
 
             $items = [];
+            $packNameMap = [];
+            if ($packingList !== null) {
+                foreach ((array) ($packingList['required_items'] ?? []) as $line) {
+                    if (is_array($line)) {
+                        $packNameMap[strtolower(trim((string) ($line['component_name_snapshot'] ?? '')))] = (string) ($line['component_id'] ?? '');
+                    }
+                }
+            }
             foreach ((array) ($_POST['item_name'] ?? []) as $i => $name) {
+                $itemName = safe_text((string) $name);
                 $items[] = [
-                    'name' => safe_text((string) $name),
+                    'name' => $itemName,
                     'description' => safe_text((string) (($_POST['item_description'][$i] ?? ''))),
                     'unit' => safe_text((string) (($_POST['item_unit'][$i] ?? 'Nos'))),
                     'qty' => (float) (($_POST['item_qty'][$i] ?? 0)),
                     'remarks' => safe_text((string) (($_POST['item_remarks'][$i] ?? ''))),
+                    'component_id' => (string) ($packNameMap[strtolower(trim($itemName))] ?? ''),
+                    'dispatch_qty' => 0,
+                    'dispatch_ft' => 0,
                 ];
             }
             $challan['items'] = documents_normalize_challan_items($items);
@@ -82,6 +100,107 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!documents_challan_has_valid_items($challan)) {
                 $redirectWith('error', 'At least one valid item is required before issuing.');
             }
+
+            if ($packingList !== null) {
+                $requiredMap = [];
+                foreach ((array) ($packingList['required_items'] ?? []) as $line) {
+                    if (is_array($line)) {
+                        $requiredMap[(string) ($line['component_id'] ?? '')] = $line;
+                    }
+                }
+
+                $dispatchRows = [];
+                foreach ((array) ($challan['items'] ?? []) as $line) {
+                    if (!is_array($line)) {
+                        continue;
+                    }
+                    $componentId = (string) ($line['component_id'] ?? '');
+                    if ($componentId === '') {
+                        continue;
+                    }
+                    $qty = max(0, (float) ($line['qty'] ?? 0));
+                    if ($qty <= 0) {
+                        continue;
+                    }
+                    $unit = strtolower((string) ($line['unit'] ?? ''));
+                    $dispatchRows[] = [
+                        'component_id' => $componentId,
+                        'dispatch_qty' => $unit === 'ft' ? 0 : $qty,
+                        'dispatch_ft' => $unit === 'ft' ? $qty : 0,
+                    ];
+                }
+
+                $stock = documents_inventory_load_stock();
+                foreach ($dispatchRows as $dispatch) {
+                    $componentId = (string) ($dispatch['component_id'] ?? '');
+                    $requiredLine = $requiredMap[$componentId] ?? null;
+                    if (!is_array($requiredLine)) {
+                        $redirectWith('error', 'One or more challan items are not part of packing list.');
+                    }
+                    if ((float) ($dispatch['dispatch_qty'] ?? 0) > (float) ($requiredLine['pending_qty'] ?? 0) + 0.00001 || (float) ($dispatch['dispatch_ft'] ?? 0) > (float) ($requiredLine['pending_ft'] ?? 0) + 0.00001) {
+                        $redirectWith('error', 'Dispatch cannot exceed pending quantity.');
+                    }
+
+                    $component = documents_inventory_get_component($componentId);
+                    if ($component === null) {
+                        $redirectWith('error', 'Component not found in inventory.');
+                    }
+                    $entry = documents_inventory_component_stock($stock, $componentId);
+                    if (!empty($component['is_cuttable'])) {
+                        if ((float) ($dispatch['dispatch_ft'] ?? 0) > documents_inventory_total_remaining_ft($entry) + 0.00001) {
+                            $redirectWith('error', 'Insufficient cuttable stock.');
+                        }
+                    } else {
+                        if ((float) ($dispatch['dispatch_qty'] ?? 0) > (float) ($entry['on_hand_qty'] ?? 0) + 0.00001) {
+                            $redirectWith('error', 'Insufficient stock quantity.');
+                        }
+                    }
+                }
+
+                foreach ($dispatchRows as $dispatch) {
+                    $componentId = (string) ($dispatch['component_id'] ?? '');
+                    $component = documents_inventory_get_component($componentId);
+                    if ($component === null) {
+                        continue;
+                    }
+                    $entry = documents_inventory_component_stock($stock, $componentId);
+                    $tx = [
+                        'id' => 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)),
+                        'type' => 'OUT',
+                        'component_id' => $componentId,
+                        'qty' => 0,
+                        'length_ft' => 0,
+                        'lot_consumption' => [],
+                        'ref_type' => 'delivery_challan',
+                        'ref_id' => (string) ($challan['id'] ?? ''),
+                        'created_at' => date('c'),
+                        'created_by' => (string) ($user['full_name'] ?? $viewerType),
+                    ];
+
+                    if (!empty($component['is_cuttable'])) {
+                        $needFt = (float) ($dispatch['dispatch_ft'] ?? 0);
+                        $consume = documents_inventory_consume_fifo_lots((array) ($entry['lots'] ?? []), $needFt);
+                        if (!($consume['ok'] ?? false)) {
+                            $redirectWith('error', 'Insufficient lot balance for cuttable stock.');
+                        }
+                        $entry['lots'] = (array) ($consume['lots'] ?? []);
+                        $tx['length_ft'] = $needFt;
+                        $tx['lot_consumption'] = (array) ($consume['lot_consumption'] ?? []);
+                    } else {
+                        $needQty = (float) ($dispatch['dispatch_qty'] ?? 0);
+                        $entry['on_hand_qty'] = (float) ($entry['on_hand_qty'] ?? 0) - $needQty;
+                        $tx['qty'] = $needQty;
+                    }
+                    $entry['updated_at'] = date('c');
+                    $stock['stock_by_component_id'][$componentId] = $entry;
+                    documents_inventory_append_transaction($tx);
+                }
+
+                documents_inventory_save_stock($stock);
+                $packingList = documents_apply_dispatch_to_packing_list($packingList, (string) ($challan['id'] ?? ''), $dispatchRows);
+                documents_save_packing_list($packingList);
+            }
+
             $challan['status'] = 'Issued';
         }
 
@@ -105,7 +224,7 @@ $editable = (string) ($challan['status'] ?? 'Draft') === 'Draft';
 $status = safe_text($_GET['status'] ?? '');
 $message = safe_text($_GET['message'] ?? '');
 $backLink = $viewerType === 'admin' ? 'admin-challans.php' : 'employee-challans.php';
-$units = ['Nos', 'Set', 'm', 'kWp', 'Box', 'Lot'];
+$units = ['Nos', 'Set', 'm', 'ft', 'kWp', 'Box', 'Lot'];
 if ($challan['items'] === []) {
     $challan['items'] = [documents_challan_item_defaults()];
 }

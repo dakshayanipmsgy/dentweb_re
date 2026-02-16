@@ -327,6 +327,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $challan['delivery_address'] = $challan['site_address'];
             $challan['delivery_date'] = date('Y-m-d');
             $challan['items'] = [];
+            $packForQuote = documents_get_packing_list_for_quote((string) ($quote['id'] ?? ''), false);
+            if ($packForQuote !== null) {
+                $challan['packing_list_id'] = (string) ($packForQuote['id'] ?? '');
+                $prefillItems = [];
+                foreach ((array) ($packForQuote['required_items'] ?? []) as $line) {
+                    if (!is_array($line)) {
+                        continue;
+                    }
+                    $pendingQty = max(0, (float) ($line['pending_qty'] ?? 0));
+                    $pendingFt = max(0, (float) ($line['pending_ft'] ?? 0));
+                    if ($pendingQty <= 0 && $pendingFt <= 0) {
+                        continue;
+                    }
+                    $prefillItems[] = [
+                        'name' => (string) ($line['component_name_snapshot'] ?? ''),
+                        'description' => 'From packing list',
+                        'unit' => (string) ($line['unit'] ?? (($pendingFt > 0) ? 'ft' : 'Nos')),
+                        'qty' => $pendingFt > 0 ? $pendingFt : $pendingQty,
+                        'remarks' => '',
+                        'component_id' => (string) ($line['component_id'] ?? ''),
+                        'dispatch_qty' => 0,
+                        'dispatch_ft' => 0,
+                    ];
+                }
+                $challan['items'] = $prefillItems;
+            }
             $challan['created_by_type'] = 'admin';
             $challan['created_by_id'] = $viewer['id'];
             $challan['created_by_name'] = $viewer['name'];
@@ -771,10 +797,227 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $redirectDocuments($returnTab, 'success', $messageText);
     }
 
+
+    if (in_array($action, ['save_component','toggle_component_archive','save_kit','toggle_kit_archive','add_stock','adjust_stock'], true)) {
+        if (!$isAdmin) {
+            $redirectDocuments('items', 'error', 'Only admin can manage inventory.');
+        }
+
+        if ($action === 'save_component') {
+            $componentId = safe_text((string) ($_POST['component_id'] ?? ''));
+            $components = documents_inventory_components(true);
+            $isCuttable = isset($_POST['is_cuttable']);
+            $defaultUnit = safe_text((string) ($_POST['default_unit'] ?? 'pcs'));
+            if ($isCuttable && strtolower($defaultUnit) !== 'ft') {
+                $redirectDocuments('items', 'error', 'Cuttable component must use ft as default unit.');
+            }
+            $row = documents_inventory_component_defaults();
+            if ($componentId !== '') {
+                foreach ($components as $existing) {
+                    if ((string) ($existing['id'] ?? '') === $componentId) {
+                        $row = array_merge($row, $existing);
+                        break;
+                    }
+                }
+            } else {
+                $row['id'] = 'CMP-' . date('Y') . '-' . bin2hex(random_bytes(2));
+                $row['created_at'] = date('c');
+            }
+            $row['name'] = safe_text((string) ($_POST['name'] ?? ''));
+            if ($row['name'] === '') {
+                $redirectDocuments('items', 'error', 'Component name is required.');
+            }
+            $row['category'] = safe_text((string) ($_POST['category'] ?? ''));
+            $row['hsn'] = safe_text((string) ($_POST['hsn'] ?? ''));
+            $row['default_unit'] = $defaultUnit;
+            $row['is_cuttable'] = $isCuttable;
+            $row['standard_length_ft'] = max(0, (float) ($_POST['standard_length_ft'] ?? 0));
+            $row['min_issue_ft'] = max(0.01, (float) ($_POST['min_issue_ft'] ?? 1));
+            $row['notes'] = safe_text((string) ($_POST['notes'] ?? ''));
+            $row['updated_at'] = date('c');
+
+            $savedRows = [];
+            $updated = false;
+            foreach ($components as $component) {
+                if ((string) ($component['id'] ?? '') === (string) ($row['id'] ?? '')) {
+                    $savedRows[] = $row;
+                    $updated = true;
+                } else {
+                    $savedRows[] = $component;
+                }
+            }
+            if (!$updated) {
+                $savedRows[] = $row;
+            }
+            $result = documents_inventory_save_components($savedRows);
+            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? 'Component saved.' : 'Failed to save component.', ['items_subtab' => 'components']);
+        }
+
+        if ($action === 'toggle_component_archive') {
+            $componentId = safe_text((string) ($_POST['component_id'] ?? ''));
+            $archiveState = safe_text((string) ($_POST['archive_state'] ?? 'archive'));
+            $components = documents_inventory_components(true);
+            foreach ($components as &$component) {
+                if ((string) ($component['id'] ?? '') === $componentId) {
+                    $component['archived_flag'] = $archiveState === 'archive';
+                    $component['updated_at'] = date('c');
+                }
+            }
+            unset($component);
+            $result = documents_inventory_save_components($components);
+            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? 'Component archive state updated.' : 'Failed to update component.', ['items_subtab' => 'components']);
+        }
+
+        if ($action === 'save_kit') {
+            $kitId = safe_text((string) ($_POST['kit_id'] ?? ''));
+            $kits = documents_inventory_kits(true);
+            $row = documents_inventory_kit_defaults();
+            if ($kitId !== '') {
+                foreach ($kits as $existing) {
+                    if ((string) ($existing['id'] ?? '') === $kitId) {
+                        $row = array_merge($row, $existing);
+                        break;
+                    }
+                }
+            } else {
+                $row['id'] = 'KIT-' . date('Y') . '-' . bin2hex(random_bytes(2));
+                $row['created_at'] = date('c');
+            }
+            $row['name'] = safe_text((string) ($_POST['name'] ?? ''));
+            if ($row['name'] === '') {
+                $redirectDocuments('items', 'error', 'Kit name is required.', ['items_subtab' => 'kits']);
+            }
+            $row['category'] = safe_text((string) ($_POST['category'] ?? ''));
+            $row['description'] = safe_text((string) ($_POST['description'] ?? ''));
+            $row['updated_at'] = date('c');
+            $bomComponent = is_array($_POST['bom_component_id'] ?? null) ? $_POST['bom_component_id'] : [];
+            $bomQty = is_array($_POST['bom_qty'] ?? null) ? $_POST['bom_qty'] : [];
+            $bomUnit = is_array($_POST['bom_unit'] ?? null) ? $_POST['bom_unit'] : [];
+            $bomRemarks = is_array($_POST['bom_remarks'] ?? null) ? $_POST['bom_remarks'] : [];
+            $items = [];
+            foreach ($bomComponent as $i => $compIdRaw) {
+                $compId = safe_text((string) $compIdRaw);
+                $qty = max(0, (float) ($bomQty[$i] ?? 0));
+                if ($compId === '' || $qty <= 0) {
+                    continue;
+                }
+                $component = documents_inventory_get_component($compId);
+                $isCuttable = is_array($component) && !empty($component['is_cuttable']);
+                $items[] = [
+                    'component_id' => $compId,
+                    'qty' => $qty,
+                    'unit' => $isCuttable ? 'ft' : safe_text((string) ($bomUnit[$i] ?? (($component['default_unit'] ?? 'pcs')))),
+                    'remarks' => safe_text((string) ($bomRemarks[$i] ?? '')),
+                ];
+            }
+            $row['items'] = $items;
+            $savedRows = [];
+            $updated = false;
+            foreach ($kits as $kit) {
+                if ((string) ($kit['id'] ?? '') === (string) ($row['id'] ?? '')) {
+                    $savedRows[] = $row;
+                    $updated = true;
+                } else {
+                    $savedRows[] = $kit;
+                }
+            }
+            if (!$updated) {
+                $savedRows[] = $row;
+            }
+            $result = documents_inventory_save_kits($savedRows);
+            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? 'Kit saved.' : 'Failed to save kit.', ['items_subtab' => 'kits']);
+        }
+
+        if ($action === 'toggle_kit_archive') {
+            $kitId = safe_text((string) ($_POST['kit_id'] ?? ''));
+            $archiveState = safe_text((string) ($_POST['archive_state'] ?? 'archive'));
+            $kits = documents_inventory_kits(true);
+            foreach ($kits as &$kit) {
+                if ((string) ($kit['id'] ?? '') === $kitId) {
+                    $kit['archived_flag'] = $archiveState === 'archive';
+                    $kit['updated_at'] = date('c');
+                }
+            }
+            unset($kit);
+            $result = documents_inventory_save_kits($kits);
+            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? 'Kit archive state updated.' : 'Failed to update kit.', ['items_subtab' => 'kits']);
+        }
+
+        if (in_array($action, ['add_stock', 'adjust_stock'], true)) {
+            $componentId = safe_text((string) ($_POST['component_id'] ?? ''));
+            $component = documents_inventory_get_component($componentId);
+            if ($component === null) {
+                $redirectDocuments('items', 'error', 'Component not found.', ['items_subtab' => 'inventory']);
+            }
+            $stock = documents_inventory_load_stock();
+            $entry = documents_inventory_component_stock($stock, $componentId);
+            $txType = $action === 'add_stock' ? 'IN' : 'ADJUST';
+
+            if (!empty($component['is_cuttable'])) {
+                $pieceCount = max(0, (int) ($_POST['piece_count'] ?? 0));
+                $pieceLength = max(0, (float) ($_POST['piece_length_ft'] ?? 0));
+                if ($pieceLength <= 0) {
+                    $pieceLength = max(0, (float) ($component['standard_length_ft'] ?? 0));
+                }
+                if ($pieceCount <= 0 || $pieceLength <= 0) {
+                    $redirectDocuments('items', 'error', 'Piece count and length are required for cuttable stock.', ['items_subtab' => 'inventory']);
+                }
+                for ($i = 0; $i < $pieceCount; $i++) {
+                    $entry['lots'][] = [
+                        'lot_id' => 'LOT-' . date('YmdHis') . '-' . bin2hex(random_bytes(2)),
+                        'received_at' => date('c'),
+                        'source_ref' => safe_text((string) ($_POST['source_ref'] ?? '')),
+                        'original_length_ft' => $pieceLength,
+                        'remaining_length_ft' => $pieceLength,
+                        'notes' => safe_text((string) ($_POST['notes'] ?? '')),
+                    ];
+                }
+                $entry['updated_at'] = date('c');
+                $stock['stock_by_component_id'][$componentId] = $entry;
+                documents_inventory_save_stock($stock);
+                documents_inventory_append_transaction([
+                    'id' => 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)),
+                    'type' => $txType,
+                    'component_id' => $componentId,
+                    'length_ft' => $pieceCount * $pieceLength,
+                    'ref_type' => 'manual',
+                    'ref_id' => '',
+                    'created_at' => date('c'),
+                    'created_by' => (string) ($user['full_name'] ?? 'admin'),
+                ]);
+            } else {
+                $qty = (float) ($_POST['qty'] ?? 0);
+                if ($action === 'add_stock') {
+                    if ($qty <= 0) {
+                        $redirectDocuments('items', 'error', 'Quantity must be greater than zero.', ['items_subtab' => 'inventory']);
+                    }
+                    $entry['on_hand_qty'] = (float) ($entry['on_hand_qty'] ?? 0) + $qty;
+                } else {
+                    $entry['on_hand_qty'] = $qty;
+                }
+                $entry['updated_at'] = date('c');
+                $stock['stock_by_component_id'][$componentId] = $entry;
+                documents_inventory_save_stock($stock);
+                documents_inventory_append_transaction([
+                    'id' => 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)),
+                    'type' => $txType,
+                    'component_id' => $componentId,
+                    'qty' => $qty,
+                    'ref_type' => 'manual',
+                    'ref_id' => '',
+                    'created_at' => date('c'),
+                    'created_by' => (string) ($user['full_name'] ?? 'admin'),
+                ]);
+            }
+
+            $redirectDocuments('items', 'success', $action === 'add_stock' ? 'Stock added.' : 'Stock adjusted.', ['items_subtab' => 'inventory']);
+        }
+    }
+
 }
 
 $activeTab = safe_text($_GET['tab'] ?? 'company');
-if (!in_array($activeTab, ['company', 'numbering', 'templates', 'accepted_customers', 'archived'], true)) {
+if (!in_array($activeTab, ['company', 'numbering', 'templates', 'accepted_customers', 'items', 'archived'], true)) {
     $activeTab = 'company';
 }
 
@@ -796,6 +1039,10 @@ $packViewId = safe_text($_GET['view'] ?? '');
 $includeArchivedPack = isset($_GET['include_archived_pack']) && $_GET['include_archived_pack'] === '1';
 $archiveTypeFilter = safe_text($_GET['archive_type'] ?? 'all');
 $archiveSearch = strtolower(trim(safe_text($_GET['archive_q'] ?? '')));
+$itemsSubtab = safe_text($_GET['items_subtab'] ?? 'components');
+if (!in_array($itemsSubtab, ['components', 'kits', 'inventory', 'transactions'], true)) {
+    $itemsSubtab = 'components';
+}
 
 $quotes = documents_list_quotes();
 $salesAgreements = documents_list_sales_documents('agreement');
@@ -803,6 +1050,16 @@ $salesReceipts = documents_list_sales_documents('receipt');
 $salesChallans = documents_list_sales_documents('delivery_challan');
 $salesProformas = documents_list_sales_documents('proforma');
 $salesInvoices = documents_list_sales_documents('invoice');
+$inventoryComponents = documents_inventory_components(true);
+$inventoryKits = documents_inventory_kits(true);
+$inventoryStock = documents_inventory_load_stock();
+$inventoryTransactions = documents_inventory_load_transactions();
+$componentMap = [];
+foreach ($inventoryComponents as $cmpRow) {
+    if (is_array($cmpRow)) {
+        $componentMap[(string) ($cmpRow['id'] ?? '')] = $cmpRow;
+    }
+}
 
 $receiptsByQuote = [];
 foreach ($salesReceipts as $receipt) {
@@ -1027,6 +1284,7 @@ usort($archivedRows, static function (array $a, array $b): int {
       <a class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering">Numbering Rules</a>
       <a class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates">Template Sets</a>
       <a class="tab <?= $activeTab === 'accepted_customers' ? 'active' : '' ?>" href="?tab=accepted_customers">Accepted Customers</a>
+      <a class="tab <?= $activeTab === 'items' ? 'active' : '' ?>" href="?tab=items">Items</a>
       <a class="tab <?= $activeTab === 'archived' ? 'active' : '' ?>" href="?tab=archived">Archived</a>
       <a class="tab" href="admin-templates.php">Template Blocks &amp; Media</a>
       <a class="tab" href="admin-quotations.php">Quotation Manager</a>
@@ -1055,6 +1313,31 @@ usort($archivedRows, static function (array $a, array $b): int {
             <input type="hidden" name="view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
             <label><input type="checkbox" name="include_archived_pack" value="1" <?= $includeArchivedPack ? 'checked' : '' ?> onchange="this.form.submit()" /> Include Archived in Pack</label>
           </form>
+
+          <?php $packPackingList = documents_get_packing_list_for_quote($packQuoteId, $includeArchivedPack); ?>
+          <h3>Packing &amp; Dispatch Status</h3>
+          <?php if ($packPackingList !== null): ?>
+            <table><thead><tr><th>Component</th><th>Required</th><th>Dispatched</th><th>Pending</th></tr></thead><tbody>
+              <?php foreach ((array) ($packPackingList['required_items'] ?? []) as $line): ?>
+                <tr>
+                  <td><?= htmlspecialchars((string) ($line['component_name_snapshot'] ?? ''), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ($line['required_ft'] . ' ft') : ($line['required_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ($line['dispatched_ft'] . ' ft') : ($line['dispatched_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ($line['pending_ft'] . ' ft') : ($line['pending_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
+                </tr>
+              <?php endforeach; ?>
+              <?php if ((array) ($packPackingList['required_items'] ?? []) === []): ?><tr><td colspan="4" class="muted">No structured items in packing list.</td></tr><?php endif; ?>
+            </tbody></table>
+            <h4>Dispatch Log</h4>
+            <table><thead><tr><th>Delivery Challan</th><th>Date</th><th>Items Count</th></tr></thead><tbody>
+              <?php foreach ((array) ($packPackingList['dispatch_log'] ?? []) as $dispatchRow): ?>
+                <tr><td><?= htmlspecialchars((string) ($dispatchRow['delivery_challan_id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($dispatchRow['at'] ?? ''), ENT_QUOTES) ?></td><td><?= count((array) ($dispatchRow['items'] ?? [])) ?></td></tr>
+              <?php endforeach; ?>
+              <?php if ((array) ($packPackingList['dispatch_log'] ?? []) === []): ?><tr><td colspan="3" class="muted">No dispatch yet.</td></tr><?php endif; ?>
+            </tbody></table>
+          <?php else: ?>
+            <p class="muted">No packing list available. It is created automatically only when quotation has structured items.</p>
+          <?php endif; ?>
 
           <h3>A) Quotation</h3>
           <p>
@@ -1226,6 +1509,125 @@ usort($archivedRows, static function (array $a, array $b): int {
               <?php if ($acceptedRows === []): ?><tr><td colspan="6" class="muted">No accepted customers found.</td></tr><?php endif; ?>
             </tbody>
           </table>
+        <?php endif; ?>
+      </section>
+    <?php endif; ?>
+
+    <?php if ($activeTab === 'items'): ?>
+      <section class="panel">
+        <h2 style="margin-top:0;">Items Master &amp; Inventory</h2>
+        <nav class="tabs" style="margin-top:0.5rem;">
+          <a class="tab <?= $itemsSubtab === 'components' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'components']), ENT_QUOTES) ?>">Components</a>
+          <a class="tab <?= $itemsSubtab === 'kits' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'kits']), ENT_QUOTES) ?>">Kits</a>
+          <a class="tab <?= $itemsSubtab === 'inventory' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'inventory']), ENT_QUOTES) ?>">Inventory</a>
+          <a class="tab <?= $itemsSubtab === 'transactions' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'transactions']), ENT_QUOTES) ?>">Transactions</a>
+        </nav>
+
+        <?php if ($itemsSubtab === 'components'): ?>
+          <h3>Components</h3>
+          <form method="post" class="grid" style="margin-bottom:1rem;">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+            <input type="hidden" name="action" value="save_component" />
+            <div><label>Component ID (for edit)</label><input name="component_id" placeholder="Leave blank for new" /></div>
+            <div><label>Name</label><input name="name" required /></div>
+            <div><label>Category</label><input name="category" /></div>
+            <div><label>HSN</label><input name="hsn" /></div>
+            <div><label>Default Unit</label><input name="default_unit" placeholder="pcs / ft / set" required /></div>
+            <div><label>Standard Length (ft)</label><input type="number" step="0.01" min="0" name="standard_length_ft" /></div>
+            <div><label>Min Issue (ft)</label><input type="number" step="0.01" min="0.01" name="min_issue_ft" value="1" /></div>
+            <div><label><input type="checkbox" name="is_cuttable" value="1" /> Cuttable (feet)</label></div>
+            <div style="grid-column:1/-1"><label>Notes</label><textarea name="notes"></textarea></div>
+            <div><label>&nbsp;</label><button class="btn" type="submit">Save Component</button></div>
+          </form>
+          <table><thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Cuttable</th><th>Status</th><th>Action</th></tr></thead><tbody>
+            <?php foreach ($inventoryComponents as $component): ?>
+              <tr>
+                <td><?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?></td>
+                <td><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></td>
+                <td><?= htmlspecialchars((string) ($component['default_unit'] ?? ''), ENT_QUOTES) ?></td>
+                <td><?= !empty($component['is_cuttable']) ? 'Yes' : 'No' ?></td>
+                <td><?= !empty($component['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td>
+                <td>
+                  <form method="post" class="inline-form">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                    <input type="hidden" name="action" value="toggle_component_archive" />
+                    <input type="hidden" name="component_id" value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>" />
+                    <input type="hidden" name="archive_state" value="<?= !empty($component['archived_flag']) ? 'unarchive' : 'archive' ?>" />
+                    <button class="btn secondary" type="submit"><?= !empty($component['archived_flag']) ? 'Unarchive' : 'Archive' ?></button>
+                  </form>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            <?php if ($inventoryComponents === []): ?><tr><td colspan="6" class="muted">No components yet.</td></tr><?php endif; ?>
+          </tbody></table>
+        <?php elseif ($itemsSubtab === 'kits'): ?>
+          <h3>Kits</h3>
+          <form method="post" style="margin-bottom:1rem;">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+            <input type="hidden" name="action" value="save_kit" />
+            <div class="grid">
+              <div><label>Kit ID (for edit)</label><input name="kit_id" placeholder="Leave blank for new" /></div>
+              <div><label>Name</label><input name="name" required /></div>
+              <div><label>Category</label><input name="category" /></div>
+              <div style="grid-column:1/-1"><label>Description</label><textarea name="description"></textarea></div>
+            </div>
+            <h4>BOM Lines</h4>
+            <table id="kitBomTable"><thead><tr><th>Component</th><th>Qty</th><th>Unit</th><th>Remarks</th></tr></thead><tbody>
+              <tr><td><select name="bom_component_id[]"><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="bom_qty[]" value="1" /></td><td><input name="bom_unit[]" value="pcs" /></td><td><input name="bom_remarks[]" /></td></tr>
+            </tbody></table>
+            <button class="btn secondary" type="button" id="addBomLineBtn">Add BOM Line</button>
+            <button class="btn" type="submit">Save Kit</button>
+          </form>
+          <table><thead><tr><th>ID</th><th>Name</th><th>BOM lines</th><th>Status</th><th>Action</th></tr></thead><tbody>
+            <?php foreach ($inventoryKits as $kit): ?>
+              <tr>
+                <td><?= htmlspecialchars((string) ($kit['id'] ?? ''), ENT_QUOTES) ?></td>
+                <td><?= htmlspecialchars((string) ($kit['name'] ?? ''), ENT_QUOTES) ?></td>
+                <td><?= count((array) ($kit['items'] ?? [])) ?></td>
+                <td><?= !empty($kit['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td>
+                <td><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_kit_archive" /><input type="hidden" name="kit_id" value="<?= htmlspecialchars((string) ($kit['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($kit['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($kit['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form></td>
+              </tr>
+            <?php endforeach; ?>
+            <?php if ($inventoryKits === []): ?><tr><td colspan="5" class="muted">No kits yet.</td></tr><?php endif; ?>
+          </tbody></table>
+        <?php elseif ($itemsSubtab === 'inventory'): ?>
+          <h3>Inventory</h3>
+          <table><thead><tr><th>Component</th><th>On hand / Remaining</th><th>Lots</th><th>Add/Adjust</th></tr></thead><tbody>
+            <?php foreach ($inventoryComponents as $component): ?>
+              <?php $entry = documents_inventory_component_stock($inventoryStock, (string) ($component['id'] ?? '')); $remainingFt = documents_inventory_total_remaining_ft($entry); ?>
+              <tr>
+                <td><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></td>
+                <td><?= !empty($component['is_cuttable']) ? htmlspecialchars((string) ($remainingFt . ' ft'), ENT_QUOTES) : htmlspecialchars((string) ($entry['on_hand_qty'] ?? 0), ENT_QUOTES) ?></td>
+                <td><?= !empty($component['is_cuttable']) ? count((array) ($entry['lots'] ?? [])) : '-' ?></td>
+                <td>
+                  <form method="post" class="inline-form" style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                    <input type="hidden" name="component_id" value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>" />
+                    <?php if (!empty($component['is_cuttable'])): ?>
+                      <input type="number" name="piece_count" min="1" placeholder="Pieces" style="width:90px" />
+                      <input type="number" step="0.01" min="0" name="piece_length_ft" placeholder="Length(ft)" style="width:110px" />
+                    <?php else: ?>
+                      <input type="number" step="0.01" name="qty" placeholder="Qty" style="width:110px" />
+                    <?php endif; ?>
+                    <button class="btn secondary" type="submit" name="action" value="add_stock">Add</button>
+                    <button class="btn secondary" type="submit" name="action" value="adjust_stock">Adjust</button>
+                  </form>
+                </td>
+              </tr>
+              <?php if (!empty($component['is_cuttable']) && !empty($entry['lots'])): ?>
+                <tr><td colspan="4"><table><thead><tr><th>Lot ID</th><th>Original(ft)</th><th>Remaining(ft)</th><th>Received</th></tr></thead><tbody><?php foreach ((array) $entry['lots'] as $lot): ?><tr><td><?= htmlspecialchars((string) ($lot['lot_id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($lot['original_length_ft'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($lot['remaining_length_ft'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($lot['received_at'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table></td></tr>
+              <?php endif; ?>
+            <?php endforeach; ?>
+          </tbody></table>
+        <?php else: ?>
+          <h3>Transactions</h3>
+          <table><thead><tr><th>ID</th><th>Type</th><th>Component</th><th>Qty/FT</th><th>Ref</th><th>At</th></tr></thead><tbody>
+            <?php foreach ($inventoryTransactions as $tx): ?>
+              <?php $componentName = (string) (($componentMap[(string) ($tx['component_id'] ?? '')]['name'] ?? ($tx['component_id'] ?? ''))); ?>
+              <tr><td><?= htmlspecialchars((string) ($tx['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($tx['type'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars($componentName, ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['qty'] ?? 0) > 0 ? ($tx['qty'] . ' qty') : (($tx['length_ft'] ?? 0) . ' ft')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['ref_type'] ?? '') . ':' . ($tx['ref_id'] ?? '')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($tx['created_at'] ?? ''), ENT_QUOTES) ?></td></tr>
+            <?php endforeach; ?>
+            <?php if ($inventoryTransactions === []): ?><tr><td colspan="6" class="muted">No transactions yet.</td></tr><?php endif; ?>
+          </tbody></table>
         <?php endif; ?>
       </section>
     <?php endif; ?>

@@ -13,6 +13,8 @@ $templates = array_values(array_filter(json_load(documents_templates_dir() . '/t
 }));
 $templateBlocks = documents_sync_template_block_entries($templates);
 $company = load_company_profile();
+$inventoryComponents = documents_inventory_components(false);
+$inventoryKits = documents_inventory_kits(false);
 
 $redirectWith = static function (string $type, string $msg): void {
     header('Location: admin-quotations.php?' . http_build_query(['status' => $type, 'message' => $msg]));
@@ -250,6 +252,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $defaultHsn = safe_text((string) ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
         $quote['items'] = documents_normalize_quote_items($rawItems, $quote['system_type'], (float) $quote['capacity_kwp'], $defaultHsn);
+        $structuredTypes = is_array($_POST['quote_item_type'] ?? null) ? $_POST['quote_item_type'] : [];
+        $structuredKitIds = is_array($_POST['quote_item_kit_id'] ?? null) ? $_POST['quote_item_kit_id'] : [];
+        $structuredComponentIds = is_array($_POST['quote_item_component_id'] ?? null) ? $_POST['quote_item_component_id'] : [];
+        $structuredQtys = is_array($_POST['quote_item_qty'] ?? null) ? $_POST['quote_item_qty'] : [];
+        $structuredUnits = is_array($_POST['quote_item_unit'] ?? null) ? $_POST['quote_item_unit'] : [];
+        $structuredItems = [];
+        $structuredCount = count($structuredTypes);
+        for ($i = 0; $i < $structuredCount; $i++) {
+            $structuredItems[] = [
+                'type' => safe_text((string) ($structuredTypes[$i] ?? 'component')),
+                'kit_id' => safe_text((string) ($structuredKitIds[$i] ?? '')),
+                'component_id' => safe_text((string) ($structuredComponentIds[$i] ?? '')),
+                'qty' => (float) ($structuredQtys[$i] ?? 0),
+                'unit' => safe_text((string) ($structuredUnits[$i] ?? '')),
+                'name_snapshot' => safe_text((string) ($_POST['quote_item_name_snapshot'][$i] ?? '')),
+                'meta' => [],
+            ];
+        }
+        $quote['quote_items'] = documents_normalize_quote_structured_items($structuredItems);
         $systemTotalInclGstRs = (float) ($_POST['system_total_incl_gst_rs'] ?? 0);
         $transportationRs = (float) ($_POST['transportation_rs'] ?? 0);
         $subsidyExpectedRs = (float) ($_POST['subsidy_expected_rs'] ?? 0);
@@ -518,6 +539,7 @@ if ($editing['id'] === '' && $fromLeadId !== '') {
 }
 
 $status = safe_text($_GET['status'] ?? '');
+$editingQuoteItems = documents_normalize_quote_structured_items(is_array($editing['quote_items'] ?? null) ? $editing['quote_items'] : []);
 $message = safe_text($_GET['message'] ?? '');
 $lookupMobile = safe_text($_GET['lookup_mobile'] ?? '');
 $lookup = $lookupMobile !== '' ? documents_find_customer_by_mobile($lookupMobile) : null;
@@ -573,7 +595,7 @@ if ($lookup !== null) {
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
-<div style="grid-column:1/-1"><h3>Items Table</h3><table id="itemsTable"><thead><tr><th>Sr No</th><th>Item Name</th><th>Description/Specs</th><th>HSN</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody><?php $qItems = is_array($editing['items'] ?? null) && $editing['items'] !== [] ? $editing['items'] : documents_normalize_quote_items([], (string)$editing['system_type'], (float)$editing['capacity_kwp'], (string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541')); foreach ($qItems as $ix => $item): ?><tr><td><?= $ix+1 ?></td><td><input name="item_name[]" value="<?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_description[]" value="<?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_hsn[]" value="<?= htmlspecialchars((string)($item['hsn'] ?? ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')), ENT_QUOTES) ?>"></td><td><input type="number" step="0.01" name="item_qty[]" value="<?= htmlspecialchars((string)($item['qty'] ?? 1), ENT_QUOTES) ?>"></td><td><input name="item_unit[]" value="<?= htmlspecialchars((string)($item['unit'] ?? 'set'), ENT_QUOTES) ?>"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addItemBtn">Add item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
+<div style="grid-column:1/-1"><h3>Items Table</h3><table id="itemsTable"><thead><tr><th>Sr No</th><th>Item Name</th><th>Description/Specs</th><th>HSN</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody><?php $qItems = is_array($editing['items'] ?? null) && $editing['items'] !== [] ? $editing['items'] : documents_normalize_quote_items([], (string)$editing['system_type'], (float)$editing['capacity_kwp'], (string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541')); foreach ($qItems as $ix => $item): ?><tr><td><?= $ix+1 ?></td><td><input name="item_name[]" value="<?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_description[]" value="<?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_hsn[]" value="<?= htmlspecialchars((string)($item['hsn'] ?? ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')), ENT_QUOTES) ?>"></td><td><input type="number" step="0.01" name="item_qty[]" value="<?= htmlspecialchars((string)($item['qty'] ?? 1), ENT_QUOTES) ?>"></td><td><input name="item_unit[]" value="<?= htmlspecialchars((string)($item['unit'] ?? 'set'), ENT_QUOTES) ?>"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addItemBtn">Add item</button></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Optional: add kits/components for packing list and dispatch workflows.</div><table id="structuredItemsTable"><thead><tr><th>Type</th><th>Kit</th><th>Component</th><th>Qty</th><th>Unit</th><th>Name Snapshot</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]"><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]"><option value="">-- select --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]"><option value="">-- select --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="quote_item_name_snapshot[]" value="<?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?>"></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
 <div><label>Monthly electricity bill (₹)</label><input type="number" step="0.01" name="monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted">Suggested bill based on generation & tariff. You can change it. <a href="#" id="resetMonthlySuggestion">Reset suggestion</a></div></div>
 <div><label>Unit rate (₹/kWh)</label><input type="number" step="0.01" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['finance_inputs']['unit_rate_rs_per_kwh'] ?: ($segmentDefaults['unit_rate_rs_per_kwh'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($editing['finance_inputs']['annual_generation_per_kw'] ?: ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? '')), ENT_QUOTES) ?>"></div>
@@ -639,6 +661,19 @@ function renumberItems() {
     });
 }
 renumberItems();
+
+document.addEventListener('click', function (e) {
+    if (e.target && e.target.id === 'addStructuredItemBtn') {
+        const tb = document.querySelector('#structuredItemsTable tbody');
+        if (!tb) return;
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td><select name="quote_item_type[]"><option value="kit">Kit</option><option value="component" selected>Component</option></select></td><td><select name="quote_item_kit_id[]"><option value="">-- select --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]"><option value="">-- select --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="1"></td><td><input name="quote_item_unit[]" value=""></td><td><input name="quote_item_name_snapshot[]" value=""></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td>';
+        tb.appendChild(tr);
+    }
+    if (e.target && e.target.classList.contains('rm-structured-item')) {
+        e.target.closest('tr')?.remove();
+    }
+});
 
 (function () {
     const settingsForm = document.querySelector('form.grid input[name="action"][value="save_settings"]')?.form;
