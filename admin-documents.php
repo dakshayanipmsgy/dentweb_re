@@ -130,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $fields = array_keys(documents_company_profile_defaults());
         foreach ($fields as $field) {
-            if ($field === 'logo_path' || $field === 'updated_at') {
+            if ($field === 'logo_path' || $field === 'updated_at' || $field === 'bank') {
                 continue;
             }
             $profile[$field] = safe_text($_POST[$field] ?? '');
@@ -1198,12 +1198,39 @@ usort($archivedRows, static function (array $a, array $b): int {
           <input type="hidden" name="action" value="save_company_profile" />
           <div class="grid">
             <?php foreach ($company as $key => $value): ?>
-              <?php if ($key === 'logo_path' || $key === 'updated_at') { continue; } ?>
+              <?php if ($key === 'logo_path' || $key === 'updated_at' || $key === 'bank' || is_array($value)) { continue; } ?>
               <div>
                 <label for="<?= htmlspecialchars($key, ENT_QUOTES) ?>"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $key)), ENT_QUOTES) ?></label>
                 <input id="<?= htmlspecialchars($key, ENT_QUOTES) ?>" type="text" name="<?= htmlspecialchars($key, ENT_QUOTES) ?>" value="<?= htmlspecialchars((string) $value, ENT_QUOTES) ?>" />
               </div>
             <?php endforeach; ?>
+
+            <div style="grid-column:1 / -1;"><h3 style="margin:0;">🏦 Bank Details</h3></div>
+            <div>
+              <label for="bank_account_name">Account Holder Name</label>
+              <input id="bank_account_name" type="text" name="bank_account_name" value="<?= htmlspecialchars((string) ($company['bank_account_name'] ?? ''), ENT_QUOTES) ?>" />
+            </div>
+            <div>
+              <label for="bank_name">Bank Name</label>
+              <input id="bank_name" type="text" name="bank_name" value="<?= htmlspecialchars((string) ($company['bank_name'] ?? ''), ENT_QUOTES) ?>" />
+            </div>
+            <div>
+              <label for="bank_account_no">Account Number</label>
+              <input id="bank_account_no" type="text" name="bank_account_no" value="<?= htmlspecialchars((string) ($company['bank_account_no'] ?? ''), ENT_QUOTES) ?>" />
+            </div>
+            <div>
+              <label for="bank_ifsc">IFSC Code</label>
+              <input id="bank_ifsc" type="text" name="bank_ifsc" value="<?= htmlspecialchars((string) ($company['bank_ifsc'] ?? ''), ENT_QUOTES) ?>" />
+            </div>
+            <div>
+              <label for="bank_branch">Branch (optional)</label>
+              <input id="bank_branch" type="text" name="bank_branch" value="<?= htmlspecialchars((string) ($company['bank_branch'] ?? ''), ENT_QUOTES) ?>" />
+            </div>
+            <div>
+              <label for="upi_id">UPI ID (optional)</label>
+              <input id="upi_id" type="text" name="upi_id" value="<?= htmlspecialchars((string) ($company['upi_id'] ?? ''), ENT_QUOTES) ?>" />
+            </div>
+
             <div>
               <label for="company_logo_upload">Company Logo Upload</label>
               <input id="company_logo_upload" type="file" name="company_logo_upload" accept="image/*" />
