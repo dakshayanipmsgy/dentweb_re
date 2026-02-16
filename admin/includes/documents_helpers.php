@@ -928,6 +928,14 @@ function documents_quote_defaults(): array
         ],
         'pdf_path' => '',
         'pdf_generated_at' => '',
+        'quote_series_id' => '',
+        'version_no' => 1,
+        'is_current_version' => true,
+        'revised_from_quote_id' => null,
+        'revision_reason' => null,
+        'revision_child_ids' => [],
+        'locked_flag' => false,
+        'locked_at' => null,
     ];
 }
 
@@ -1749,6 +1757,9 @@ function documents_archive_lead_from_quote_source(array $quote): bool
 function documents_sync_after_quote_accepted(array $quote): array
 {
     $quote = documents_quote_prepare($quote);
+    $quote['locked_flag'] = true;
+    $quote['locked_at'] = date('c');
+    $quote['is_current_version'] = true;
 
     $customerResult = documents_upsert_customer_from_quote($quote);
     if (($customerResult['ok'] ?? false) && is_array($customerResult['customer'] ?? null)) {
@@ -1763,6 +1774,26 @@ function documents_sync_after_quote_accepted(array $quote): array
         'customer_upserted' => (bool) ($customerResult['ok'] ?? false),
         'lead_archived' => $leadArchived,
     ];
+}
+
+
+function documents_normalize_quotes_store(): void
+{
+    documents_ensure_structure();
+    $files = glob(documents_quotations_dir() . '/*.json') ?: [];
+    foreach ($files as $file) {
+        if (!is_string($file) || !is_file($file)) {
+            continue;
+        }
+        $row = json_load($file, []);
+        if (!is_array($row)) {
+            continue;
+        }
+        $prepared = documents_quote_prepare($row);
+        $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
+        $prepared['items'] = documents_normalize_quote_items(is_array($prepared['items'] ?? null) ? $prepared['items'] : [], (string) ($prepared['system_type'] ?? 'Ongrid'), (float) ($prepared['capacity_kwp'] ?? 0), $defaultHsn);
+        json_save($file, $prepared);
+    }
 }
 
 function documents_list_quotes(): array
@@ -1904,7 +1935,7 @@ function documents_generate_invoice_public_number(string $segment): array
 
 function documents_quote_can_edit(array $quote, string $viewerType, string $viewerId = ''): bool
 {
-    if (documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')) !== 'draft') {
+    if (documents_quote_is_locked($quote) || documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')) !== 'draft') {
         return false;
     }
     if ($viewerType === 'admin') {
@@ -2376,13 +2407,122 @@ function documents_quote_workflow_defaults(): array
 
 function documents_quote_prepare(array $quote): array
 {
+    $original = $quote;
     $quote = array_merge(documents_quote_defaults(), $quote);
     $quote['status'] = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
     $quote['workflow'] = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
     $quote['accepted_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['accepted_by'] ?? null) ? $quote['accepted_by'] : []);
     $quote['archived_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['archived_by'] ?? null) ? $quote['archived_by'] : []);
+    if (!array_key_exists('quote_series_id', $original) || safe_text((string) ($quote['quote_series_id'] ?? '')) === '') {
+        $quote['quote_series_id'] = (string) ($quote['id'] ?? '');
+    }
+    if (!array_key_exists('version_no', $original) || (int) ($quote['version_no'] ?? 0) <= 0) {
+        $quote['version_no'] = 1;
+    } else {
+        $quote['version_no'] = (int) $quote['version_no'];
+    }
+    if (!array_key_exists('is_current_version', $original)) {
+        $quote['is_current_version'] = true;
+    } else {
+        $quote['is_current_version'] = (bool) ($quote['is_current_version'] ?? false);
+    }
+    $quote['revised_from_quote_id'] = safe_text((string) ($quote['revised_from_quote_id'] ?? '')) ?: null;
+    $revisionReason = trim((string) ($quote['revision_reason'] ?? ''));
+    $quote['revision_reason'] = $revisionReason === '' ? null : $revisionReason;
+    $quote['revision_child_ids'] = array_values(array_filter(array_map(static fn($v): string => safe_text((string) $v), is_array($quote['revision_child_ids'] ?? null) ? $quote['revision_child_ids'] : []), static fn(string $v): bool => $v !== ''));
+    $isAccepted = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')) === 'accepted';
+    $quote['locked_flag'] = (bool) ($quote['locked_flag'] ?? false) || $isAccepted;
+    if ($quote['locked_flag'] === true) {
+        $lockedAt = safe_text((string) ($quote['locked_at'] ?? ''));
+        if ($lockedAt === '') {
+            $quote['locked_at'] = safe_text((string) ($quote['accepted_at'] ?? '')) ?: date('c');
+        }
+    } else {
+        $quote['locked_at'] = safe_text((string) ($quote['locked_at'] ?? '')) ?: null;
+    }
     $quote['archived_flag'] = documents_is_archived($quote);
     return $quote;
+}
+
+function documents_quote_is_locked(array $quote): bool
+{
+    $status = strtolower(trim((string) ($quote['status'] ?? 'draft')));
+    return ($quote['locked_flag'] ?? false) === true || $status === 'accepted';
+}
+
+function documents_quote_has_workflow_documents(array $quote): bool
+{
+    $workflow = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
+    if (safe_text((string) ($workflow['proforma_invoice_id'] ?? '')) !== '') {
+        return true;
+    }
+    if (safe_text((string) ($workflow['invoice_id'] ?? '')) !== '') {
+        return true;
+    }
+    if (is_array($workflow['receipt_ids'] ?? null) && count($workflow['receipt_ids']) > 0) {
+        return true;
+    }
+    if (is_array($workflow['delivery_challan_ids'] ?? null) && count($workflow['delivery_challan_ids']) > 0) {
+        return true;
+    }
+    return false;
+}
+
+function documents_archive_quote_sales_documents(array $quote, array $viewer): void
+{
+    $workflow = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
+    $archiveDoc = static function (string $type, string $id) use ($viewer): void {
+        if ($id === '') {
+            return;
+        }
+        $doc = documents_get_sales_document($type, $id);
+        if ($doc === null) {
+            return;
+        }
+        $doc['archived_flag'] = true;
+        $doc['archived_at'] = date('c');
+        $doc['archived_by'] = [
+            'type' => (string) ($viewer['type'] ?? 'admin'),
+            'id' => (string) ($viewer['id'] ?? ''),
+            'name' => (string) ($viewer['name'] ?? 'Admin'),
+        ];
+        documents_save_sales_document($type, $doc);
+    };
+
+    $archiveDoc('proforma', safe_text((string) ($workflow['proforma_invoice_id'] ?? '')));
+    $archiveDoc('invoice', safe_text((string) ($workflow['invoice_id'] ?? '')));
+}
+
+function documents_quote_versions(string $seriesId): array
+{
+    $seriesId = safe_text($seriesId);
+    if ($seriesId === '') {
+        return [];
+    }
+    $versions = array_values(array_filter(documents_list_quotes(), static function (array $quote) use ($seriesId): bool {
+        return (string) ($quote['quote_series_id'] ?? '') === $seriesId;
+    }));
+    usort($versions, static fn(array $a, array $b): int => ((int) ($a['version_no'] ?? 1)) <=> ((int) ($b['version_no'] ?? 1)));
+    return $versions;
+}
+
+function documents_quote_set_current_for_series(array $acceptedQuote): void
+{
+    $seriesId = safe_text((string) ($acceptedQuote['quote_series_id'] ?? ''));
+    $acceptedId = safe_text((string) ($acceptedQuote['id'] ?? ''));
+    if ($seriesId === '' || $acceptedId === '') {
+        return;
+    }
+    foreach (documents_quote_versions($seriesId) as $seriesQuote) {
+        $seriesQuote['is_current_version'] = ((string) ($seriesQuote['id'] ?? '') === $acceptedId);
+        if ((string) ($seriesQuote['id'] ?? '') === $acceptedId) {
+            $seriesQuote['status'] = 'accepted';
+            $seriesQuote['locked_flag'] = true;
+            $seriesQuote['locked_at'] = safe_text((string) ($seriesQuote['locked_at'] ?? '')) ?: date('c');
+        }
+        $seriesQuote['updated_at'] = date('c');
+        documents_save_quote($seriesQuote);
+    }
 }
 
 function documents_read_sales_store(string $path): array
