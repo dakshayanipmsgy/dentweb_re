@@ -87,7 +87,7 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
     $segmentDefaults = is_array($quoteDefaults['segments'][$segment] ?? null) ? $quoteDefaults['segments'][$segment] : [];
     $transport = (float) ($quote['calc']['transportation_rs'] ?? $quote['finance_inputs']['transportation_rs'] ?? 0);
     $subsidy = (float) ($quote['calc']['subsidy_expected_rs'] ?? $quote['finance_inputs']['subsidy_expected_rs'] ?? 0);
-    $calc = documents_calc_pricing_from_items((array) ($quote['items'] ?? []), (string) ($quote['pricing_mode'] ?? 'solar_split_70_30'), (string) ($quote['tax_type'] ?? 'CGST_SGST'), $transport, $subsidy, (float) ($quote['input_total_gst_inclusive'] ?? 0), (float) ($quote['split_5_pct'] ?? ($quote['calc']['split_5_pct'] ?? 70)), (float) ($quote['split_18_pct'] ?? ($quote['calc']['split_18_pct'] ?? 30)));
+    $calc = documents_calc_pricing_from_items((array) ($quote['items'] ?? []), (string) ($quote['pricing_mode'] ?? 'solar_split_70_30'), (string) ($quote['tax_type'] ?? 'CGST_SGST'), $transport, $subsidy, (float) ($quote['input_total_gst_inclusive'] ?? 0));
     $ann = is_array($quote['annexures_overrides'] ?? null) ? $quote['annexures_overrides'] : [];
     $coverNote = trim((string) ($quote['cover_note_text'] ?? '')) ?: trim((string) ($quoteDefaults['defaults']['cover_note_template'] ?? ''));
     $specialReq = trim((string) ($quote['special_requests_text'] ?? $quote['special_requests_inclusive'] ?? ''));
