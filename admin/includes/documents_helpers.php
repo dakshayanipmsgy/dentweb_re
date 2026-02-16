@@ -9,21 +9,6 @@ function documents_base_dir(): string
     return dirname(__DIR__, 2) . '/data/documents';
 }
 
-function documents_catalog_dir(): string
-{
-    return dirname(__DIR__, 2) . '/data/catalog';
-}
-
-function documents_catalog_items_path(): string
-{
-    return documents_catalog_dir() . '/items.json';
-}
-
-function documents_catalog_gst_schemes_path(): string
-{
-    return documents_catalog_dir() . '/gst_schemes.json';
-}
-
 function documents_settings_dir(): string
 {
     return documents_base_dir() . '/settings';
@@ -182,7 +167,6 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_public_watermarks_dir());
     documents_ensure_dir(documents_public_diagrams_dir());
     documents_ensure_dir(documents_public_uploads_dir());
-    documents_ensure_dir(documents_catalog_dir());
 
     $companyPath = documents_company_profile_path();
     if (!is_file($companyPath)) {
@@ -236,159 +220,6 @@ function documents_ensure_structure(): void
             json_save($storePath, []);
         }
     }
-
-    if (!is_file(documents_catalog_items_path())) {
-        json_save(documents_catalog_items_path(), []);
-    }
-    if (!is_file(documents_catalog_gst_schemes_path())) {
-        json_save(documents_catalog_gst_schemes_path(), [[
-            'id' => 'gst_split_70_30_default',
-            'name' => 'Solar split 70/30 (5% & 18%)',
-            'mode' => 'split',
-            'rate_pct' => 0,
-            'parts' => [
-                ['base_share_pct' => 70, 'rate_pct' => 5],
-                ['base_share_pct' => 30, 'rate_pct' => 18],
-            ],
-            'archived_flag' => false,
-            'created_at' => date('c'),
-            'updated_at' => date('c'),
-        ]]);
-    }
-}
-
-function documents_normalize_gst_scheme(array $row): array
-{
-    $id = safe_text((string) ($row['id'] ?? ''));
-    if ($id === '') {
-        $id = 'gst_' . date('YmdHis') . '_' . bin2hex(random_bytes(2));
-    }
-    $mode = safe_text((string) ($row['mode'] ?? 'single'));
-    $mode = in_array($mode, ['single', 'split'], true) ? $mode : 'single';
-    $parts = [];
-    foreach ((array) ($row['parts'] ?? []) as $part) {
-        if (!is_array($part)) { continue; }
-        $parts[] = [
-            'base_share_pct' => (float) ($part['base_share_pct'] ?? 0),
-            'rate_pct' => (float) ($part['rate_pct'] ?? 0),
-        ];
-    }
-    if ($mode === 'split') {
-        $sum = 0.0;
-        foreach ($parts as $part) {
-            $sum += (float) $part['base_share_pct'];
-        }
-        if (abs($sum - 100.0) > 0.01) {
-            $parts = [];
-        }
-    } else {
-        $parts = [];
-    }
-
-    return [
-        'id' => $id,
-        'name' => safe_text((string) ($row['name'] ?? '')),
-        'mode' => $mode,
-        'rate_pct' => (float) ($row['rate_pct'] ?? 0),
-        'parts' => $parts,
-        'archived_flag' => !empty($row['archived_flag']),
-        'created_at' => safe_text((string) ($row['created_at'] ?? date('c'))),
-        'updated_at' => safe_text((string) ($row['updated_at'] ?? date('c'))),
-    ];
-}
-
-function documents_list_gst_schemes(bool $includeArchived = false): array
-{
-    documents_ensure_structure();
-    $rows = [];
-    foreach ((array) json_load(documents_catalog_gst_schemes_path(), []) as $row) {
-        if (!is_array($row)) { continue; }
-        $scheme = documents_normalize_gst_scheme($row);
-        if (!$includeArchived && !empty($scheme['archived_flag'])) { continue; }
-        $rows[] = $scheme;
-    }
-    return $rows;
-}
-
-function documents_save_gst_schemes(array $schemes): array
-{
-    return json_save(documents_catalog_gst_schemes_path(), $schemes);
-}
-
-function documents_get_gst_scheme_by_id(string $id): ?array
-{
-    foreach (documents_list_gst_schemes(true) as $scheme) {
-        if ((string) ($scheme['id'] ?? '') === $id) {
-            return $scheme;
-        }
-    }
-    return null;
-}
-
-function documents_gst_scheme_effective_rate(array $scheme): float
-{
-    $mode = (string) ($scheme['mode'] ?? 'single');
-    if ($mode === 'split') {
-        $rate = 0.0;
-        foreach ((array) ($scheme['parts'] ?? []) as $part) {
-            if (!is_array($part)) { continue; }
-            $rate += ((float) ($part['base_share_pct'] ?? 0) / 100) * ((float) ($part['rate_pct'] ?? 0));
-        }
-        return $rate;
-    }
-    return (float) ($scheme['rate_pct'] ?? 0);
-}
-
-function documents_normalize_catalog_item(array $row): array
-{
-    $id = safe_text((string) ($row['id'] ?? ''));
-    if ($id === '') {
-        $id = 'item_' . date('YmdHis') . '_' . bin2hex(random_bytes(2));
-    }
-    $category = safe_text((string) ($row['category'] ?? 'other'));
-    if (!in_array($category, ['solar_system', 'accessories', 'service', 'other'], true)) {
-        $category = 'other';
-    }
-    return [
-        'id' => $id,
-        'name' => safe_text((string) ($row['name'] ?? '')),
-        'description' => safe_text((string) ($row['description'] ?? '')),
-        'hsn' => safe_text((string) ($row['hsn'] ?? '')),
-        'unit' => safe_text((string) ($row['unit'] ?? 'set')),
-        'default_gst_scheme_id' => safe_text((string) ($row['default_gst_scheme_id'] ?? '')),
-        'category' => $category,
-        'archived_flag' => !empty($row['archived_flag']),
-        'created_at' => safe_text((string) ($row['created_at'] ?? date('c'))),
-        'updated_at' => safe_text((string) ($row['updated_at'] ?? date('c'))),
-    ];
-}
-
-function documents_list_catalog_items(bool $includeArchived = false): array
-{
-    documents_ensure_structure();
-    $rows = [];
-    foreach ((array) json_load(documents_catalog_items_path(), []) as $row) {
-        if (!is_array($row)) { continue; }
-        $item = documents_normalize_catalog_item($row);
-        if (!$includeArchived && !empty($item['archived_flag'])) { continue; }
-        $rows[] = $item;
-    }
-    return $rows;
-}
-
-function documents_save_catalog_items(array $items): array
-{
-    return json_save(documents_catalog_items_path(), $items);
-}
-
-function documents_get_catalog_item_by_id(string $id): ?array
-{
-    foreach (documents_list_catalog_items(true) as $item) {
-        if ((string) ($item['id'] ?? '') === $id) {
-            return $item;
-        }
-    }
-    return null;
 }
 
 function documents_quote_defaults_path(): string
@@ -1496,12 +1327,6 @@ function documents_save_challan(array $challan): array
 function documents_quote_item_defaults(): array
 {
     return [
-        'catalog_item_id' => '',
-        'snapshot_name' => '',
-        'snapshot_description' => '',
-        'snapshot_hsn' => '8541',
-        'snapshot_unit' => 'set',
-        'selected_gst_scheme_id' => '',
         'name' => '',
         'description' => '',
         'hsn' => '8541',
@@ -1518,12 +1343,6 @@ function documents_normalize_quote_items(array $items, string $systemType = 'Ong
     foreach ($items as $row) {
         if (!is_array($row)) { continue; }
         $item = array_merge(documents_quote_item_defaults(), $row);
-        $item['catalog_item_id'] = safe_text((string) ($item['catalog_item_id'] ?? ''));
-        $item['snapshot_name'] = safe_text((string) ($item['snapshot_name'] ?? $item['name'] ?? ''));
-        $item['snapshot_description'] = safe_text((string) ($item['snapshot_description'] ?? $item['description'] ?? ''));
-        $item['snapshot_hsn'] = safe_text((string) ($item['snapshot_hsn'] ?? $item['hsn'] ?? '')) ?: $defaultHsn;
-        $item['snapshot_unit'] = safe_text((string) ($item['snapshot_unit'] ?? $item['unit'] ?? 'set'));
-        $item['selected_gst_scheme_id'] = safe_text((string) ($item['selected_gst_scheme_id'] ?? ''));
         $item['name'] = safe_text((string) ($item['name'] ?? ''));
         $item['description'] = safe_text((string) ($item['description'] ?? ''));
         $item['hsn'] = safe_text((string) ($item['hsn'] ?? '')) ?: $defaultHsn;
@@ -1539,12 +1358,6 @@ function documents_normalize_quote_items(array $items, string $systemType = 'Ong
     if ($rows === []) {
         $label = strtolower($systemType) === 'hybrid' ? 'Hybrid Solar System' : 'On-grid Solar System';
         $rows[] = [
-            'catalog_item_id' => '',
-            'snapshot_name' => $label,
-            'snapshot_description' => 'System package',
-            'snapshot_hsn' => $defaultHsn,
-            'snapshot_unit' => $capacityKwp > 0 ? 'kWp' : 'set',
-            'selected_gst_scheme_id' => '',
             'name' => $label,
             'description' => 'System package',
             'hsn' => $defaultHsn,
@@ -1563,63 +1376,13 @@ function documents_calc_pricing_from_items(array $items, string $pricingMode, st
     $pricingMode = in_array($pricingMode, ['solar_split_70_30', 'flat_5'], true) ? $pricingMode : 'solar_split_70_30';
     $taxType = $taxType === 'IGST' ? 'IGST' : 'CGST_SGST';
     $finalPrice = max(0, (float) ($systemTotalInclGstRs ?? 0));
-    $hasPerItemScheme = false;
-    $itemTaxBreakup = [];
-
     if ($finalPrice <= 0) {
         $baseTotal = 0.0;
-        $gstTotal = 0.0;
-        $bucket5Basic = 0.0;
-        $bucket18Basic = 0.0;
-        $bucket5Gst = 0.0;
-        $bucket18Gst = 0.0;
         foreach ($items as $item) {
             if (!is_array($item)) { continue; }
-            $base = max(0, (float) ($item['basic_amount'] ?? 0));
-            $baseTotal += $base;
-            $schemeId = safe_text((string) ($item['selected_gst_scheme_id'] ?? ''));
-            $scheme = $schemeId !== '' ? documents_get_gst_scheme_by_id($schemeId) : null;
-            if ($scheme !== null && empty($scheme['archived_flag'])) {
-                $hasPerItemScheme = true;
-                $itemGst = 0.0;
-                if ((string) ($scheme['mode'] ?? 'single') === 'split') {
-                    foreach ((array) ($scheme['parts'] ?? []) as $part) {
-                        if (!is_array($part)) { continue; }
-                        $partBase = $base * ((float) ($part['base_share_pct'] ?? 0) / 100);
-                        $partRate = (float) ($part['rate_pct'] ?? 0);
-                        $partGst = $partBase * ($partRate / 100);
-                        $itemGst += $partGst;
-                        if (abs($partRate - 5.0) < 0.0001) {
-                            $bucket5Basic += $partBase;
-                            $bucket5Gst += $partGst;
-                        } elseif (abs($partRate - 18.0) < 0.0001) {
-                            $bucket18Basic += $partBase;
-                            $bucket18Gst += $partGst;
-                        }
-                    }
-                } else {
-                    $rate = (float) ($scheme['rate_pct'] ?? 0);
-                    $itemGst = $base * ($rate / 100);
-                    if (abs($rate - 5.0) < 0.0001) {
-                        $bucket5Basic += $base;
-                        $bucket5Gst += $itemGst;
-                    } elseif (abs($rate - 18.0) < 0.0001) {
-                        $bucket18Basic += $base;
-                        $bucket18Gst += $itemGst;
-                    }
-                }
-                $gstTotal += $itemGst;
-                $itemTaxBreakup[] = [
-                    'name' => (string) ($item['name'] ?? ''),
-                    'scheme_id' => $schemeId,
-                    'taxable_base' => round($base, 2),
-                    'gst_amount' => round($itemGst, 2),
-                ];
-            }
+            $baseTotal += max(0, (float) ($item['basic_amount'] ?? 0));
         }
-        if ($hasPerItemScheme) {
-            $finalPrice = $baseTotal + $gstTotal;
-        } elseif ($pricingMode === 'flat_5') {
+        if ($pricingMode === 'flat_5') {
             $bucket5Basic = $baseTotal;
             $bucket18Basic = 0.0;
             $bucket5Gst = $bucket5Basic * 0.05;
@@ -1649,72 +1412,6 @@ function documents_calc_pricing_from_items(array $items, string $pricingMode, st
     $grossPayable = $finalPrice + $transportationRs;
     $subsidyExpectedRs = max(0, $subsidyExpectedRs);
 
-    if ($finalPrice > 0 && !$hasPerItemScheme) {
-        // For GST inclusive inputs, respect per-item selected schemes by proportional split.
-        $schemedItems = [];
-        $baseSumBySchemeRate = 0.0;
-        foreach ($items as $item) {
-            if (!is_array($item)) { continue; }
-            $schemeId = safe_text((string) ($item['selected_gst_scheme_id'] ?? ''));
-            $scheme = $schemeId !== '' ? documents_get_gst_scheme_by_id($schemeId) : null;
-            if ($scheme === null || !empty($scheme['archived_flag'])) { continue; }
-            $hasPerItemScheme = true;
-            $base = max(0, (float) ($item['basic_amount'] ?? 0));
-            $effRatePct = documents_gst_scheme_effective_rate($scheme);
-            $baseSumBySchemeRate += $base * (1 + ($effRatePct / 100));
-            $schemedItems[] = ['item' => $item, 'scheme' => $scheme, 'base' => $base];
-        }
-        if ($hasPerItemScheme && $baseSumBySchemeRate > 0) {
-            $baseTotal = 0.0;
-            $bucket5Basic = 0.0;
-            $bucket18Basic = 0.0;
-            $bucket5Gst = 0.0;
-            $bucket18Gst = 0.0;
-            foreach ($schemedItems as $entry) {
-                $item = $entry['item'];
-                $scheme = $entry['scheme'];
-                $rawBase = (float) $entry['base'];
-                $shareBaseIncl = $rawBase * (1 + (documents_gst_scheme_effective_rate($scheme) / 100));
-                $itemIncl = $finalPrice * ($shareBaseIncl / $baseSumBySchemeRate);
-                $itemBase = $itemIncl / (1 + (documents_gst_scheme_effective_rate($scheme) / 100));
-                $itemGst = 0.0;
-                $baseTotal += $itemBase;
-                if ((string) ($scheme['mode'] ?? 'single') === 'split') {
-                    foreach ((array) ($scheme['parts'] ?? []) as $part) {
-                        if (!is_array($part)) { continue; }
-                        $partBase = $itemBase * ((float) ($part['base_share_pct'] ?? 0) / 100);
-                        $partRate = (float) ($part['rate_pct'] ?? 0);
-                        $partGst = $partBase * ($partRate / 100);
-                        $itemGst += $partGst;
-                        if (abs($partRate - 5.0) < 0.0001) {
-                            $bucket5Basic += $partBase;
-                            $bucket5Gst += $partGst;
-                        } elseif (abs($partRate - 18.0) < 0.0001) {
-                            $bucket18Basic += $partBase;
-                            $bucket18Gst += $partGst;
-                        }
-                    }
-                } else {
-                    $rate = (float) ($scheme['rate_pct'] ?? 0);
-                    $itemGst = $itemBase * ($rate / 100);
-                    if (abs($rate - 5.0) < 0.0001) {
-                        $bucket5Basic += $itemBase;
-                        $bucket5Gst += $itemGst;
-                    } elseif (abs($rate - 18.0) < 0.0001) {
-                        $bucket18Basic += $itemBase;
-                        $bucket18Gst += $itemGst;
-                    }
-                }
-                $itemTaxBreakup[] = [
-                    'name' => (string) ($item['name'] ?? ''),
-                    'scheme_id' => (string) ($scheme['id'] ?? ''),
-                    'taxable_base' => round($itemBase, 2),
-                    'gst_amount' => round($itemGst, 2),
-                ];
-            }
-        }
-    }
-
     $calc = [
         'basic_total' => round($baseTotal, 2),
         'bucket_5_basic' => round($bucket5Basic, 2),
@@ -1735,8 +1432,6 @@ function documents_calc_pricing_from_items(array $items, string $pricingMode, st
         'gross_payable' => round($grossPayable, 2),
         'subsidy_expected_rs' => round($subsidyExpectedRs, 2),
         'net_after_subsidy' => round($grossPayable - $subsidyExpectedRs, 2),
-        'uses_item_gst_schemes' => $hasPerItemScheme,
-        'item_tax_breakup' => $itemTaxBreakup,
     ];
     if ($taxType === 'IGST') {
         $calc['gst_split']['igst_5'] = round($bucket5Gst, 2);
