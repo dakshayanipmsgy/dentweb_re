@@ -2,12 +2,40 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/employee_portal.php';
+require_once __DIR__ . '/includes/employee_admin.php';
+require_once __DIR__ . '/includes/quotation_view_renderer.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 
-require_admin();
+ini_set('display_errors', '0');
 documents_ensure_structure();
 
+$employeeStore = new EmployeeFsStore();
+$user = current_user();
+$viewerType = '';
+$viewerId = '';
+$viewerName = '';
+
+if (is_array($user) && (($user['role_name'] ?? '') === 'admin')) {
+    $viewerType = 'admin';
+    $viewerId = (string) ($user['id'] ?? '');
+    $viewerName = (string) ($user['full_name'] ?? 'Admin');
+} else {
+    $employee = employee_portal_current_employee($employeeStore);
+    if ($employee !== null) {
+        $viewerType = 'employee';
+        $viewerId = (string) ($employee['id'] ?? '');
+        $viewerName = (string) ($employee['name'] ?? 'Employee');
+    }
+}
+
+if ($viewerType === '') {
+    header('Location: login.php');
+    exit;
+}
+
 $id = safe_text($_GET['id'] ?? '');
+$mode = safe_text($_GET['mode'] ?? 'html');
 $agreement = documents_get_agreement($id);
 if ($agreement === null) {
     http_response_code(404);
@@ -15,70 +43,93 @@ if ($agreement === null) {
     exit;
 }
 
-$redirectWith = static function (string $status, string $message) use ($id): void {
-    header('Location: agreement-view.php?id=' . urlencode($id) . '&status=' . urlencode($status) . '&message=' . urlencode($message));
-    exit;
-};
+$linkedQuoteId = safe_text((string) ($agreement['linked_quote_id'] ?? ''));
+$linkedQuote = $linkedQuoteId !== '' ? documents_get_quote($linkedQuoteId) : null;
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
-        $redirectWith('error', 'Security validation failed.');
-    }
+if ($viewerType === 'employee') {
+    $canViewByAgreementOwner = ((string) ($agreement['created_by_type'] ?? '') === 'employee') && ((string) ($agreement['created_by_id'] ?? '') === $viewerId);
+    $canViewByQuoteOwner = is_array($linkedQuote)
+        && ((string) ($linkedQuote['created_by_type'] ?? '') === 'employee')
+        && ((string) ($linkedQuote['created_by_id'] ?? '') === $viewerId);
 
-    $action = safe_text($_POST['action'] ?? '');
-    if (in_array($action, ['save', 'mark_final', 'archive'], true)) {
-        $agreement['execution_date'] = safe_text($_POST['execution_date'] ?? $agreement['execution_date']);
-        $agreement['system_capacity_kwp'] = safe_text($_POST['system_capacity_kwp'] ?? $agreement['system_capacity_kwp']);
-        $agreement['total_cost'] = safe_text($_POST['total_cost'] ?? $agreement['total_cost']);
-        $agreement['consumer_account_no'] = safe_text($_POST['consumer_account_no'] ?? $agreement['consumer_account_no']);
-        $agreement['consumer_address'] = safe_text($_POST['consumer_address'] ?? $agreement['consumer_address']);
-        $agreement['site_address'] = safe_text($_POST['site_address'] ?? $agreement['site_address']);
-        $agreement['party_snapshot']['customer_mobile'] = (string) $agreement['customer_mobile'];
-        $agreement['party_snapshot']['customer_name'] = (string) $agreement['customer_name'];
-        $agreement['party_snapshot']['consumer_account_no'] = (string) $agreement['consumer_account_no'];
-        $agreement['party_snapshot']['consumer_address'] = (string) $agreement['consumer_address'];
-        $agreement['party_snapshot']['site_address'] = (string) $agreement['site_address'];
-        $agreement['party_snapshot']['system_capacity_kwp'] = (string) $agreement['system_capacity_kwp'];
-        $agreement['party_snapshot']['total_cost'] = (string) $agreement['total_cost'];
-
-        $agreement['overrides']['fields_override']['execution_date'] = safe_text($_POST['override_execution_date'] ?? '');
-        $agreement['overrides']['fields_override']['system_capacity_kwp'] = safe_text($_POST['override_system_capacity_kwp'] ?? '');
-        $agreement['overrides']['fields_override']['total_cost'] = safe_text($_POST['override_total_cost'] ?? '');
-        $agreement['overrides']['fields_override']['consumer_account_no'] = safe_text($_POST['override_consumer_account_no'] ?? '');
-        $agreement['overrides']['fields_override']['consumer_address'] = safe_text($_POST['override_consumer_address'] ?? '');
-        $agreement['overrides']['fields_override']['site_address'] = safe_text($_POST['override_site_address'] ?? '');
-
-        $agreement['overrides']['html_override'] = trim((string) ($_POST['html_override'] ?? ''));
-        $agreement['rendering']['background_image'] = safe_text($_POST['background_image'] ?? '');
-        $agreement['rendering']['background_opacity'] = max(0.1, min(1.0, (float) ($_POST['background_opacity'] ?? 1)));
-
-        if ($action === 'mark_final') {
-            $agreement['status'] = 'Final';
-        } elseif ($action === 'archive') {
-            $agreement['status'] = 'Archived';
-        }
-
-        $agreement['updated_at'] = date('c');
-        $saved = documents_save_agreement($agreement);
-        if (!$saved['ok']) {
-            $redirectWith('error', 'Unable to save agreement changes.');
-        }
-
-        $msg = 'Agreement saved.';
-        if ($action === 'mark_final') {
-            $msg = 'Agreement marked as Final.';
-        } elseif ($action === 'archive') {
-            $msg = 'Agreement archived.';
-        }
-        $redirectWith('success', $msg);
+    if (!$canViewByAgreementOwner && !$canViewByQuoteOwner) {
+        http_response_code(403);
+        echo 'Access denied.';
+        exit;
     }
 }
 
-$company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
-$previewHtml = documents_render_agreement_body_html($agreement, $company);
-$status = safe_text($_GET['status'] ?? '');
-$message = safe_text($_GET['message'] ?? '');
-?>
+$redirectWith = static function (string $status, string $message) use ($id): void {
+    header('Location: agreement-view.php?id=' . urlencode($id) . '&mode=edit&status=' . urlencode($status) . '&message=' . urlencode($message));
+    exit;
+};
+
+if ($mode === 'edit') {
+    if ($viewerType !== 'admin') {
+        http_response_code(403);
+        echo 'Access denied.';
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+            $redirectWith('error', 'Security validation failed.');
+        }
+
+        $action = safe_text($_POST['action'] ?? '');
+        if (in_array($action, ['save', 'mark_final', 'archive'], true)) {
+            $agreement['execution_date'] = safe_text($_POST['execution_date'] ?? $agreement['execution_date']);
+            $agreement['system_capacity_kwp'] = safe_text($_POST['system_capacity_kwp'] ?? $agreement['system_capacity_kwp']);
+            $agreement['total_cost'] = safe_text($_POST['total_cost'] ?? $agreement['total_cost']);
+            $agreement['consumer_account_no'] = safe_text($_POST['consumer_account_no'] ?? $agreement['consumer_account_no']);
+            $agreement['consumer_address'] = safe_text($_POST['consumer_address'] ?? $agreement['consumer_address']);
+            $agreement['site_address'] = safe_text($_POST['site_address'] ?? $agreement['site_address']);
+            $agreement['party_snapshot']['customer_mobile'] = (string) $agreement['customer_mobile'];
+            $agreement['party_snapshot']['customer_name'] = (string) $agreement['customer_name'];
+            $agreement['party_snapshot']['consumer_account_no'] = (string) $agreement['consumer_account_no'];
+            $agreement['party_snapshot']['consumer_address'] = (string) $agreement['consumer_address'];
+            $agreement['party_snapshot']['site_address'] = (string) $agreement['site_address'];
+            $agreement['party_snapshot']['system_capacity_kwp'] = (string) $agreement['system_capacity_kwp'];
+            $agreement['party_snapshot']['total_cost'] = (string) $agreement['total_cost'];
+
+            $agreement['overrides']['fields_override']['execution_date'] = safe_text($_POST['override_execution_date'] ?? '');
+            $agreement['overrides']['fields_override']['system_capacity_kwp'] = safe_text($_POST['override_system_capacity_kwp'] ?? '');
+            $agreement['overrides']['fields_override']['total_cost'] = safe_text($_POST['override_total_cost'] ?? '');
+            $agreement['overrides']['fields_override']['consumer_account_no'] = safe_text($_POST['override_consumer_account_no'] ?? '');
+            $agreement['overrides']['fields_override']['consumer_address'] = safe_text($_POST['override_consumer_address'] ?? '');
+            $agreement['overrides']['fields_override']['site_address'] = safe_text($_POST['override_site_address'] ?? '');
+
+            $agreement['overrides']['html_override'] = trim((string) ($_POST['html_override'] ?? ''));
+            $agreement['rendering']['background_image'] = safe_text($_POST['background_image'] ?? '');
+            $agreement['rendering']['background_opacity'] = max(0.1, min(1.0, (float) ($_POST['background_opacity'] ?? 1)));
+
+            if ($action === 'mark_final') {
+                $agreement['status'] = 'Final';
+            } elseif ($action === 'archive') {
+                $agreement['status'] = 'Archived';
+            }
+
+            $agreement['updated_at'] = date('c');
+            $saved = documents_save_agreement($agreement);
+            if (!$saved['ok']) {
+                $redirectWith('error', 'Unable to save agreement changes.');
+            }
+
+            $msg = 'Agreement saved.';
+            if ($action === 'mark_final') {
+                $msg = 'Agreement marked as Final.';
+            } elseif ($action === 'archive') {
+                $msg = 'Agreement archived.';
+            }
+            $redirectWith('success', $msg);
+        }
+    }
+
+    $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
+    $previewHtml = quotation_sanitize_html(documents_render_agreement_body_html($agreement, $company));
+    $status = safe_text($_GET['status'] ?? '');
+    $message = safe_text($_GET['message'] ?? '');
+    ?>
 <!doctype html>
 <html lang="en">
 <head>
@@ -105,7 +156,7 @@ $message = safe_text($_GET['message'] ?? '');
     <h1 style="margin:0 0 10px 0">Agreement View</h1>
     <p><strong><?= htmlspecialchars((string) $agreement['agreement_no'], ENT_QUOTES) ?></strong> · Status: <?= htmlspecialchars((string) $agreement['status'], ENT_QUOTES) ?></p>
     <a class="btn secondary" href="admin-agreements.php">Back to Agreements</a>
-    
+    <a class="btn secondary" href="agreement-view.php?id=<?= urlencode($id) ?>" target="_blank" rel="noopener">View as HTML</a>
   </div>
 
   <form method="post">
@@ -160,5 +211,53 @@ $message = safe_text($_GET['message'] ?? '');
     <div class="preview"><?= $previewHtml ?></div>
   </div>
 </main>
+</body>
+</html>
+    <?php
+    exit;
+}
+
+$company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
+$customer = null;
+if ((string) ($agreement['customer_mobile'] ?? '') !== '') {
+    $customerStore = new CustomerFsStore();
+    $customer = $customerStore->findByMobile((string) ($agreement['customer_mobile'] ?? ''));
+}
+
+if (is_array($linkedQuote)) {
+    $agreement['customer_name'] = safe_text((string) ($agreement['customer_name'] ?: ($linkedQuote['customer_name'] ?? '')));
+    $agreement['execution_date'] = safe_text((string) ($agreement['execution_date'] ?: ($linkedQuote['accepted_at'] ?? '')));
+    $agreement['system_capacity_kwp'] = safe_text((string) ($agreement['system_capacity_kwp'] ?: ($linkedQuote['capacity_kwp'] ?? '')));
+    $agreement['total_cost'] = safe_text((string) ($agreement['total_cost'] ?: ($linkedQuote['input_total_gst_inclusive'] ?? '')));
+}
+if (is_array($customer)) {
+    $agreement['consumer_account_no'] = safe_text((string) ($agreement['consumer_account_no'] ?: ($customer['jbvnl_account_number'] ?? '')));
+    $agreement['consumer_address'] = safe_text((string) ($agreement['consumer_address'] ?: ($customer['address'] ?? '')));
+    $agreement['site_address'] = safe_text((string) ($agreement['site_address'] ?: ($customer['address'] ?? '')));
+}
+
+$previewHtml = quotation_sanitize_html(documents_render_agreement_body_html($agreement, $company));
+?>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Agreement <?= htmlspecialchars((string) $agreement['agreement_no'], ENT_QUOTES) ?></title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #e5e7eb; }
+    .a4-page { width: 210mm; min-height: 297mm; margin: 8mm auto; padding: 15mm; box-sizing: border-box; background: #fff; color: #111827; }
+    .a4-page p { line-height: 1.45; margin: 0 0 8px; }
+    .a4-page table { width: 100%; border-collapse: collapse; }
+    .a4-page td, .a4-page th { border: 1px solid #111827; padding: 6px; vertical-align: top; }
+    @media print {
+      @page { size: A4; margin: 0; }
+      body { background: #fff; }
+      .a4-page { margin: 0; width: auto; min-height: auto; padding: 10mm; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="a4-page"><?= $previewHtml ?></div>
 </body>
 </html>

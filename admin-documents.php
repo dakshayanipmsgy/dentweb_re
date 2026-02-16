@@ -188,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($existingAgreementId !== '') {
                 $existingAgreement = documents_get_sales_document('agreement', $existingAgreementId);
                 if ($existingAgreement !== null && !documents_is_archived($existingAgreement)) {
-                    header('Location: agreement-view.php?id=' . urlencode($existingAgreementId) . '&status=success&message=' . urlencode('Agreement already exists.'));
+                    header('Location: agreement-view.php?id=' . urlencode($existingAgreementId) . '&mode=edit&status=success&message=' . urlencode('Agreement already exists.'));
                     exit;
                 }
             }
@@ -264,7 +264,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $redirectDocuments($tab, 'error', 'Agreement created, but quotation workflow update failed.', ['view' => $view]);
             }
 
-            header('Location: agreement-view.php?id=' . urlencode((string) $agreement['id']) . '&status=success&message=' . urlencode('Agreement created from default template.'));
+            header('Location: agreement-view.php?id=' . urlencode((string) $agreement['id']) . '&mode=edit&status=success&message=' . urlencode('Agreement created from default template.'));
             exit;
         }
 
@@ -1011,7 +1011,8 @@ usort($archivedRows, static function (array $a, array $b): int {
                     <td><?= htmlspecialchars((string) ($row['execution_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td>
                     <td><?= htmlspecialchars((string) ($row['status'] ?? 'active'), ENT_QUOTES) ?></td>
                     <td class="row-actions">
-                      <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View / Edit</a>
+                      <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>&mode=edit" target="_blank" rel="noopener">View / Edit</a>
+                      <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View as HTML</a>
                       <?php if ($isAdmin): ?>
                         <form class="inline-form" method="post">
                           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
@@ -1170,7 +1171,7 @@ usort($archivedRows, static function (array $a, array $b): int {
                 <td><?= htmlspecialchars($inr((float) ($row['amount'] ?? 0)), ENT_QUOTES) ?></td>
                 <td><?= htmlspecialchars((string) ($row['archived_at'] ?? ''), ENT_QUOTES) ?></td>
                 <td class="row-actions">
-                  <?php if ((string) ($row['type'] ?? '') === 'agreement'): ?><a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['doc_id'] ?? '')) ?>" target="_blank" rel="noopener">View</a><?php elseif ((string) ($row['quotation_id'] ?? '') !== ''): ?><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string) ($row['quotation_id'] ?? '')) ?>" target="_blank" rel="noopener">View</a><?php endif; ?>
+                  <?php if ((string) ($row['type'] ?? '') === 'agreement'): ?><a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['doc_id'] ?? '')) ?>" target="_blank" rel="noopener">View as HTML</a><a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['doc_id'] ?? '')) ?>&mode=edit" target="_blank" rel="noopener">View / Edit</a><?php elseif ((string) ($row['quotation_id'] ?? '') !== ''): ?><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string) ($row['quotation_id'] ?? '')) ?>" target="_blank" rel="noopener">View</a><?php endif; ?>
                   <?php if ($isAdmin): ?>
                     <form class="inline-form" method="post">
                       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
