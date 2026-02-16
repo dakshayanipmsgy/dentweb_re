@@ -24,6 +24,16 @@ function documents_inventory_kits_path(): string
     return documents_inventory_dir() . '/kits.json';
 }
 
+function documents_inventory_tax_profiles_path(): string
+{
+    return documents_inventory_dir() . '/tax_profiles.json';
+}
+
+function documents_inventory_component_variants_path(): string
+{
+    return documents_inventory_dir() . '/component_variants.json';
+}
+
 function documents_inventory_stock_path(): string
 {
     return documents_inventory_dir() . '/stock.json';
@@ -248,6 +258,8 @@ function documents_ensure_structure(): void
         documents_sales_invoice_store_path(),
         documents_inventory_components_path(),
         documents_inventory_kits_path(),
+        documents_inventory_tax_profiles_path(),
+        documents_inventory_component_variants_path(),
         documents_inventory_transactions_path(),
         documents_packing_lists_path(),
     ] as $storePath) {
@@ -352,6 +364,7 @@ function documents_quote_defaults_settings(): array
         ],
         'defaults' => [
             'hsn_solar' => '8541',
+            'quotation_tax_profile_id' => '',
             'cover_note_template' => '<p>Namaste! Thank you for considering Dakshayani Enterprises for your rooftop solar journey.</p><p>As a Jharkhand-based EPC partner, we handle complete design, installation, and support with local execution accountability.</p><p>Our team will also guide you through DISCOM approvals, net-metering paperwork, and PM Surya Ghar process steps so your transition stays smooth and transparent.</p>',
         ],
         'segments' => [
@@ -896,6 +909,15 @@ function documents_quote_defaults(): array
         'project_summary_line' => '',
         'valid_until' => '',
         'pricing_mode' => 'solar_split_70_30',
+        'tax_profile_id' => '',
+        'gst_mode_snapshot' => 'single',
+        'gst_slabs_snapshot' => [],
+        'tax_breakdown' => [
+            'basic_total' => 0,
+            'gst_total' => 0,
+            'gross_incl_gst' => 0,
+            'slabs' => [],
+        ],
         'place_of_supply_state' => 'Jharkhand',
         'tax_type' => 'CGST_SGST',
         'input_total_gst_inclusive' => 0,
@@ -1490,6 +1512,110 @@ function documents_calc_pricing_from_items(array $items, string $pricingMode, st
         $calc['gst_split']['sgst_5'] = round($bucket5Gst / 2, 2);
         $calc['gst_split']['cgst_18'] = round($bucket18Gst / 2, 2);
         $calc['gst_split']['sgst_18'] = round($bucket18Gst / 2, 2);
+    }
+
+    return $calc;
+}
+
+function documents_resolve_tax_profile_for_quote(array $quote, array $settings = []): array
+{
+    $selectedId = safe_text((string) ($quote['tax_profile_id'] ?? ''));
+    if ($selectedId !== '') {
+        $selected = documents_inventory_get_tax_profile($selectedId);
+        if (is_array($selected)) {
+            return $selected;
+        }
+    }
+
+    $defaultId = safe_text((string) ($settings['defaults']['quotation_tax_profile_id'] ?? ''));
+    if ($defaultId !== '') {
+        $selected = documents_inventory_get_tax_profile($defaultId);
+        if (is_array($selected)) {
+            return $selected;
+        }
+    }
+
+    $mode = safe_text((string) ($quote['pricing_mode'] ?? 'solar_split_70_30'));
+    return $mode === 'flat_5' ? documents_flat5_tax_profile() : documents_default_tax_profile();
+}
+
+function documents_calc_quote_pricing_with_tax_profile(array $quote, float $transportationRs = 0.0, float $subsidyExpectedRs = 0.0, ?float $systemTotalInclGstRs = null, array $settings = []): array
+{
+    $taxType = ((string) ($quote['tax_type'] ?? 'CGST_SGST')) === 'IGST' ? 'IGST' : 'CGST_SGST';
+    $gross = max(0, (float) ($systemTotalInclGstRs ?? ($quote['input_total_gst_inclusive'] ?? 0)));
+    $profile = documents_resolve_tax_profile_for_quote($quote, $settings);
+    $breakdown = documents_calc_tax_breakdown_from_gross($gross, $profile);
+
+    $bucket5Basic = 0.0;
+    $bucket18Basic = 0.0;
+    $bucket5Gst = 0.0;
+    $bucket18Gst = 0.0;
+    $gstByRate = [];
+    foreach ((array) ($breakdown['slabs'] ?? []) as $slab) {
+        if (!is_array($slab)) {
+            continue;
+        }
+        $rateKey = number_format((float) ($slab['rate_pct'] ?? 0), 2, '.', '');
+        if (!isset($gstByRate[$rateKey])) {
+            $gstByRate[$rateKey] = ['rate_pct' => (float) $rateKey, 'base_total' => 0.0, 'gst_total' => 0.0];
+        }
+        $gstByRate[$rateKey]['base_total'] += (float) ($slab['base_amount'] ?? 0);
+        $gstByRate[$rateKey]['gst_total'] += (float) ($slab['gst_amount'] ?? 0);
+    }
+    foreach ($gstByRate as &$bucket) {
+        $bucket['base_total'] = documents_money_round((float) $bucket['base_total']);
+        $bucket['gst_total'] = documents_money_round((float) $bucket['gst_total']);
+    }
+    unset($bucket);
+
+    $bucket5Basic = (float) ($gstByRate['5.00']['base_total'] ?? 0);
+    $bucket18Basic = (float) ($gstByRate['18.00']['base_total'] ?? 0);
+    $bucket5Gst = (float) ($gstByRate['5.00']['gst_total'] ?? 0);
+    $bucket18Gst = (float) ($gstByRate['18.00']['gst_total'] ?? 0);
+
+    $transportationRs = max(0, $transportationRs);
+    $grossPayable = $gross + $transportationRs;
+    $subsidyExpectedRs = max(0, $subsidyExpectedRs);
+    $calc = [
+        'basic_total' => documents_money_round((float) ($breakdown['basic_total'] ?? 0)),
+        'bucket_5_basic' => documents_money_round($bucket5Basic),
+        'bucket_5_gst' => documents_money_round($bucket5Gst),
+        'bucket_18_basic' => documents_money_round($bucket18Basic),
+        'bucket_18_gst' => documents_money_round($bucket18Gst),
+        'tax_breakdown' => [
+            'profile_id' => (string) ($profile['id'] ?? ''),
+            'profile_name' => (string) ($profile['name'] ?? ''),
+            'mode' => (string) ($profile['mode'] ?? 'single'),
+            'slabs' => array_values((array) ($breakdown['slabs'] ?? [])),
+            'basic_total' => documents_money_round((float) ($breakdown['basic_total'] ?? 0)),
+            'gst_total' => documents_money_round((float) ($breakdown['gst_total'] ?? 0)),
+            'gross_incl_gst' => documents_money_round((float) ($breakdown['gross_incl_gst'] ?? 0)),
+            'gst_by_rate' => array_values($gstByRate),
+        ],
+        'gst_split' => [
+            'cgst_5' => 0.0,
+            'sgst_5' => 0.0,
+            'cgst_18' => 0.0,
+            'sgst_18' => 0.0,
+            'igst_5' => 0.0,
+            'igst_18' => 0.0,
+        ],
+        'grand_total' => documents_money_round($gross),
+        'final_price_incl_gst' => documents_money_round($gross),
+        'transportation_rs' => documents_money_round($transportationRs),
+        'gross_payable' => documents_money_round($grossPayable),
+        'subsidy_expected_rs' => documents_money_round($subsidyExpectedRs),
+        'net_after_subsidy' => documents_money_round($grossPayable - $subsidyExpectedRs),
+    ];
+
+    if ($taxType === 'IGST') {
+        $calc['gst_split']['igst_5'] = documents_money_round($bucket5Gst);
+        $calc['gst_split']['igst_18'] = documents_money_round($bucket18Gst);
+    } else {
+        $calc['gst_split']['cgst_5'] = documents_money_round($bucket5Gst / 2);
+        $calc['gst_split']['sgst_5'] = documents_money_round($bucket5Gst / 2);
+        $calc['gst_split']['cgst_18'] = documents_money_round($bucket18Gst / 2);
+        $calc['gst_split']['sgst_18'] = documents_money_round($bucket18Gst / 2);
     }
 
     return $calc;
@@ -2489,6 +2615,13 @@ function documents_quote_prepare(array $quote): array
     $quote['status'] = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
     $quote['workflow'] = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
     $quote['quote_items'] = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
+    $quote['tax_profile_id'] = safe_text((string) ($quote['tax_profile_id'] ?? ''));
+    $quote['gst_mode_snapshot'] = safe_text((string) ($quote['gst_mode_snapshot'] ?? ''));
+    $quote['gst_slabs_snapshot'] = is_array($quote['gst_slabs_snapshot'] ?? null) ? $quote['gst_slabs_snapshot'] : [];
+    $quote['tax_breakdown'] = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : [];
+    if ($quote['tax_breakdown'] === [] && is_array($quote['calc']['tax_breakdown'] ?? null)) {
+        $quote['tax_breakdown'] = (array) $quote['calc']['tax_breakdown'];
+    }
     $quote['accepted_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['accepted_by'] ?? null) ? $quote['accepted_by'] : []);
     $quote['archived_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['archived_by'] ?? null) ? $quote['archived_by'] : []);
     if (!array_key_exists('quote_series_id', $original) || safe_text((string) ($quote['quote_series_id'] ?? '')) === '') {
@@ -2757,6 +2890,8 @@ function documents_inventory_component_defaults(): array
         'category' => '',
         'hsn' => '',
         'default_unit' => 'pcs',
+        'tax_profile_id' => '',
+        'has_variants' => false,
         'is_cuttable' => false,
         'standard_length_ft' => 0,
         'min_issue_ft' => 1,
@@ -2774,10 +2909,202 @@ function documents_inventory_kit_defaults(): array
         'name' => '',
         'category' => '',
         'description' => '',
+        'tax_profile_id' => '',
         'items' => [],
         'archived_flag' => false,
         'created_at' => '',
         'updated_at' => '',
+    ];
+}
+
+function documents_tax_profile_defaults(): array
+{
+    return [
+        'id' => '',
+        'name' => '',
+        'mode' => 'single',
+        'slabs' => [
+            ['share_pct' => 100, 'rate_pct' => 5],
+        ],
+        'notes' => '',
+        'archived_flag' => false,
+        'created_at' => '',
+        'updated_at' => '',
+    ];
+}
+
+function documents_component_variant_defaults(): array
+{
+    return [
+        'id' => '',
+        'component_id' => '',
+        'display_name' => '',
+        'brand' => '',
+        'technology' => '',
+        'wattage_wp' => 0,
+        'model_no' => '',
+        'hsn_override' => '',
+        'tax_profile_id_override' => '',
+        'default_unit_override' => '',
+        'notes' => '',
+        'archived_flag' => false,
+        'created_at' => '',
+        'updated_at' => '',
+    ];
+}
+
+function documents_default_tax_profile(): array
+{
+    return [
+        'id' => 'legacy_solar_split_70_30',
+        'name' => 'Legacy Solar Split 70/30 (5%/18%)',
+        'mode' => 'split',
+        'slabs' => [
+            ['share_pct' => 70, 'rate_pct' => 5],
+            ['share_pct' => 30, 'rate_pct' => 18],
+        ],
+        'notes' => 'Compatibility fallback profile',
+    ];
+}
+
+function documents_flat5_tax_profile(): array
+{
+    return [
+        'id' => 'legacy_flat_5',
+        'name' => 'Legacy Flat GST @5%',
+        'mode' => 'single',
+        'slabs' => [
+            ['share_pct' => 100, 'rate_pct' => 5],
+        ],
+        'notes' => 'Compatibility fallback profile',
+    ];
+}
+
+function documents_validate_tax_profile(array $profile): array
+{
+    $name = safe_text((string) ($profile['name'] ?? ''));
+    if ($name === '') {
+        return ['ok' => false, 'error' => 'Tax profile name is required.'];
+    }
+    $mode = in_array((string) ($profile['mode'] ?? 'single'), ['single', 'split'], true) ? (string) $profile['mode'] : 'single';
+    $slabs = is_array($profile['slabs'] ?? null) ? $profile['slabs'] : [];
+    if ($mode === 'single') {
+        $slabs = [
+            [
+                'share_pct' => 100,
+                'rate_pct' => (float) (($slabs[0]['rate_pct'] ?? $profile['rate_pct'] ?? 0)),
+            ],
+        ];
+    }
+    if ($slabs === []) {
+        return ['ok' => false, 'error' => 'At least one tax slab is required.'];
+    }
+    $totalShare = 0.0;
+    $normalized = [];
+    foreach ($slabs as $idx => $slab) {
+        if (!is_array($slab)) {
+            continue;
+        }
+        $share = (float) ($slab['share_pct'] ?? 0);
+        $rate = (float) ($slab['rate_pct'] ?? 0);
+        if ($share < 0) {
+            return ['ok' => false, 'error' => 'Share percentage cannot be negative.'];
+        }
+        if ($rate < 0) {
+            return ['ok' => false, 'error' => 'Rate percentage cannot be negative.'];
+        }
+        if ($mode === 'single') {
+            $share = 100.0;
+        }
+        $totalShare += $share;
+        $normalized[] = ['share_pct' => round($share, 4), 'rate_pct' => round($rate, 4)];
+    }
+    if (abs($totalShare - 100.0) > 0.0001) {
+        return ['ok' => false, 'error' => 'Tax slab share total must be exactly 100%.'];
+    }
+
+    $profile['name'] = $name;
+    $profile['mode'] = $mode;
+    $profile['slabs'] = $normalized;
+    return ['ok' => true, 'profile' => $profile];
+}
+
+function documents_money_round(float $amount): float
+{
+    return round($amount, 2);
+}
+
+function documents_calc_tax_breakdown_from_gross(float $grossInclGst, array $taxProfile): array
+{
+    $grossInclGst = max(0, documents_money_round($grossInclGst));
+    $validated = documents_validate_tax_profile($taxProfile);
+    if (!($validated['ok'] ?? false)) {
+        $taxProfile = documents_default_tax_profile();
+        $validated = documents_validate_tax_profile($taxProfile);
+    }
+    $profile = (array) ($validated['profile'] ?? documents_default_tax_profile());
+    $slabs = is_array($profile['slabs'] ?? null) ? $profile['slabs'] : [];
+
+    $factor = 0.0;
+    foreach ($slabs as $slab) {
+        $share = ((float) ($slab['share_pct'] ?? 0)) / 100;
+        $rate = ((float) ($slab['rate_pct'] ?? 0)) / 100;
+        $factor += $share * (1 + $rate);
+    }
+    if ($factor <= 0) {
+        $factor = 1;
+    }
+
+    $baseTotal = documents_money_round($grossInclGst / $factor);
+    $computedSlabs = [];
+    $gstTotal = 0.0;
+    foreach ($slabs as $slab) {
+        $sharePct = (float) ($slab['share_pct'] ?? 0);
+        $ratePct = (float) ($slab['rate_pct'] ?? 0);
+        $baseAmount = documents_money_round($baseTotal * ($sharePct / 100));
+        $gstAmount = documents_money_round($baseAmount * ($ratePct / 100));
+        $gstTotal += $gstAmount;
+        $computedSlabs[] = [
+            'share_pct' => $sharePct,
+            'rate_pct' => $ratePct,
+            'base_amount' => $baseAmount,
+            'gst_amount' => $gstAmount,
+        ];
+    }
+
+    $expectedGst = documents_money_round($grossInclGst - $baseTotal);
+    $diff = documents_money_round($expectedGst - $gstTotal);
+    if ($computedSlabs !== [] && abs($diff) >= 0.01) {
+        $last = count($computedSlabs) - 1;
+        $computedSlabs[$last]['gst_amount'] = documents_money_round((float) $computedSlabs[$last]['gst_amount'] + $diff);
+        $gstTotal = documents_money_round($gstTotal + $diff);
+    } else {
+        $gstTotal = $expectedGst;
+    }
+
+    return [
+        'gross_incl_gst' => $grossInclGst,
+        'basic_total' => $baseTotal,
+        'slabs' => $computedSlabs,
+        'gst_total' => documents_money_round($gstTotal),
+    ];
+}
+
+function documents_calc_gross_from_base(float $baseTotal, array $taxProfile): array
+{
+    $baseTotal = max(0, documents_money_round($baseTotal));
+    $validated = documents_validate_tax_profile($taxProfile);
+    $profile = (array) (($validated['ok'] ?? false) ? ($validated['profile'] ?? []) : documents_default_tax_profile());
+    $slabs = is_array($profile['slabs'] ?? null) ? $profile['slabs'] : [];
+    $gstTotal = 0.0;
+    foreach ($slabs as $slab) {
+        $baseAmount = documents_money_round($baseTotal * (((float) ($slab['share_pct'] ?? 0)) / 100));
+        $gstTotal += documents_money_round($baseAmount * (((float) ($slab['rate_pct'] ?? 0)) / 100));
+    }
+    return [
+        'basic_total' => $baseTotal,
+        'gst_total' => documents_money_round($gstTotal),
+        'gross_incl_gst' => documents_money_round($baseTotal + $gstTotal),
     ];
 }
 
@@ -2832,8 +3159,89 @@ function documents_quote_structured_item_defaults(): array
         'name_snapshot' => '',
         'qty' => 0,
         'unit' => '',
+        'variant_id' => '',
+        'variant_snapshot' => [],
         'meta' => [],
     ];
+}
+
+function documents_inventory_tax_profiles(bool $includeArchived = true): array
+{
+    $rows = json_load(documents_inventory_tax_profiles_path(), []);
+    if (!is_array($rows)) {
+        return [];
+    }
+    $list = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $profile = array_merge(documents_tax_profile_defaults(), $row);
+        $validated = documents_validate_tax_profile($profile);
+        if (!($validated['ok'] ?? false)) {
+            continue;
+        }
+        $profile = (array) ($validated['profile'] ?? $profile);
+        if (!$includeArchived && !empty($profile['archived_flag'])) {
+            continue;
+        }
+        $list[] = $profile;
+    }
+    usort($list, static fn(array $a, array $b): int => strcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? '')));
+    return $list;
+}
+
+function documents_inventory_save_tax_profiles(array $rows): array
+{
+    return json_save(documents_inventory_tax_profiles_path(), array_values($rows));
+}
+
+function documents_inventory_get_tax_profile(string $id): ?array
+{
+    foreach (documents_inventory_tax_profiles(true) as $profile) {
+        if ((string) ($profile['id'] ?? '') === $id) {
+            return $profile;
+        }
+    }
+    return null;
+}
+
+function documents_inventory_component_variants(bool $includeArchived = true): array
+{
+    $rows = json_load(documents_inventory_component_variants_path(), []);
+    if (!is_array($rows)) {
+        return [];
+    }
+    $list = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $variant = array_merge(documents_component_variant_defaults(), $row);
+        $variant['wattage_wp'] = max(0, (float) ($variant['wattage_wp'] ?? 0));
+        $variant['variant_snapshot'] = is_array($variant['variant_snapshot'] ?? null) ? $variant['variant_snapshot'] : [];
+        if (!$includeArchived && !empty($variant['archived_flag'])) {
+            continue;
+        }
+        $list[] = $variant;
+    }
+    usort($list, static fn(array $a, array $b): int => strcasecmp((string) ($a['display_name'] ?? ''), (string) ($b['display_name'] ?? '')));
+    return $list;
+}
+
+function documents_inventory_save_component_variants(array $rows): array
+{
+    return json_save(documents_inventory_component_variants_path(), array_values($rows));
+}
+
+function documents_inventory_get_component_variant(string $id): ?array
+{
+    foreach (documents_inventory_component_variants(true) as $variant) {
+        if ((string) ($variant['id'] ?? '') === $id) {
+            return $variant;
+        }
+    }
+    return null;
 }
 
 function documents_inventory_components(bool $includeArchived = true): array
@@ -2849,6 +3257,7 @@ function documents_inventory_components(bool $includeArchived = true): array
         }
         $component = array_merge(documents_inventory_component_defaults(), $row);
         $component['is_cuttable'] = (bool) ($component['is_cuttable'] ?? false);
+        $component['has_variants'] = (bool) ($component['has_variants'] ?? false);
         $component['standard_length_ft'] = (float) ($component['standard_length_ft'] ?? 0);
         $component['min_issue_ft'] = max(0.01, (float) ($component['min_issue_ft'] ?? 1));
         if (!$includeArchived && !empty($component['archived_flag'])) {
@@ -3037,6 +3446,8 @@ function documents_normalize_quote_structured_items(array $rows): array
         $item = array_merge(documents_quote_structured_item_defaults(), $row);
         $item['type'] = in_array((string) ($item['type'] ?? 'component'), ['kit', 'component'], true) ? (string) $item['type'] : 'component';
         $item['qty'] = max(0, (float) ($item['qty'] ?? 0));
+        $item['variant_id'] = safe_text((string) ($item['variant_id'] ?? ''));
+        $item['variant_snapshot'] = is_array($item['variant_snapshot'] ?? null) ? $item['variant_snapshot'] : [];
         $item['meta'] = is_array($item['meta'] ?? null) ? $item['meta'] : [];
         if ($item['qty'] <= 0) {
             continue;
