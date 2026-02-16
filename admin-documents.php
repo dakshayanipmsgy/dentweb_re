@@ -798,21 +798,6 @@ $archiveTypeFilter = safe_text($_GET['archive_type'] ?? 'all');
 $archiveSearch = strtolower(trim(safe_text($_GET['archive_q'] ?? '')));
 
 $quotes = documents_list_quotes();
-$quotesBySeries = [];
-foreach ($quotes as $quoteRow) {
-    if (!is_array($quoteRow)) {
-        continue;
-    }
-    $seriesId = safe_text((string) ($quoteRow['quote_series_id'] ?? $quoteRow['id'] ?? ''));
-    if ($seriesId === '') {
-        continue;
-    }
-    $quotesBySeries[$seriesId][] = $quoteRow;
-}
-foreach ($quotesBySeries as &$seriesRows) {
-    usort($seriesRows, static fn(array $a, array $b): int => ((int) ($b['version_no'] ?? 1)) <=> ((int) ($a['version_no'] ?? 1)));
-}
-unset($seriesRows);
 $salesAgreements = documents_list_sales_documents('agreement');
 $salesReceipts = documents_list_sales_documents('receipt');
 $salesChallans = documents_list_sales_documents('delivery_challan');
@@ -840,11 +825,8 @@ foreach ($quotes as $quote) {
     if ($statusNormalized !== 'accepted') {
         continue;
     }
-    if (empty($quote['is_current_version'])) {
-        continue;
-    }
     $isArchived = $isArchivedRecord($quote);
-    if ($isArchived) {
+    if ($isArchived && !$includeArchivedAccepted) {
         continue;
     }
     $mobile = normalize_customer_mobile((string) ($quote['customer_mobile'] ?? ''));
@@ -1053,21 +1035,6 @@ usort($archivedRows, static function (array $a, array $b): int {
           ?>
           <p><a class="btn secondary" href="?tab=accepted_customers">&larr; Back to Accepted Customers</a></p>
           <h2 style="margin-top:0;">Document Pack: <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></h2>
-          <?php
-            $packSeriesId = safe_text((string) ($packQuote['quote_series_id'] ?? $packQuote['id'] ?? ''));
-            $seriesVersions = $quotesBySeries[$packSeriesId] ?? [$packQuote];
-            $currentVersionNo = (int) ($packQuote['version_no'] ?? 1);
-            $earlierVersions = array_values(array_filter($seriesVersions, static fn(array $row): bool => (int) ($row['version_no'] ?? 1) < $currentVersionNo));
-          ?>
-          <p class="muted" style="margin-top:-0.35rem;">Version v<?= (int) ($packQuote['version_no'] ?? 1) ?> (Current)</p>
-          <?php if ($earlierVersions !== []): ?>
-            <p class="muted" style="margin-top:-0.25rem;">Earlier versions:
-              <?php foreach ($earlierVersions as $idx => $oldVersion): ?>
-                <?php if ($idx > 0): ?> · <?php endif; ?>
-                <a href="quotation-view.php?id=<?= urlencode((string) ($oldVersion['id'] ?? '')) ?>" target="_blank" rel="noopener">v<?= (int) ($oldVersion['version_no'] ?? 1) ?></a>
-              <?php endforeach; ?>
-            </p>
-          <?php endif; ?>
           <form method="get" style="margin-bottom:1rem;">
             <input type="hidden" name="tab" value="accepted_customers" />
             <input type="hidden" name="view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
@@ -1213,7 +1180,7 @@ usort($archivedRows, static function (array $a, array $b): int {
           <form method="get" class="grid" style="margin-bottom:1rem;">
             <input type="hidden" name="tab" value="accepted_customers" />
             <div><label>Search (name/mobile)</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div>
-            
+            <div><label>&nbsp;</label><label><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived accepted customers</label></div>
             <div><label>&nbsp;</label><button class="btn" type="submit">Apply</button></div>
           </form>
           <table>

@@ -793,13 +793,6 @@ function documents_quote_defaults(): array
     return [
         'id' => '',
         'quote_no' => '',
-        'quote_series_id' => '',
-        'version_no' => 1,
-        'is_current_version' => true,
-        'revised_from_quote_id' => null,
-        'revision_reason' => null,
-        'locked_flag' => false,
-        'locked_at' => null,
         'revision' => 0,
         'status' => 'Draft',
         'archived_flag' => false,
@@ -1911,9 +1904,6 @@ function documents_generate_invoice_public_number(string $segment): array
 
 function documents_quote_can_edit(array $quote, string $viewerType, string $viewerId = ''): bool
 {
-    if (!empty($quote['locked_flag'])) {
-        return false;
-    }
     if (documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')) !== 'draft') {
         return false;
     }
@@ -1924,95 +1914,6 @@ function documents_quote_can_edit(array $quote, string $viewerType, string $view
         return ((string) ($quote['created_by_type'] ?? '') === 'employee') && ((string) ($quote['created_by_id'] ?? '') === $viewerId);
     }
     return false;
-}
-
-function documents_quote_mark_accepted(array $quote, string $acceptedByType, string $acceptedById, string $acceptedByName): array
-{
-    $quote = documents_quote_prepare($quote);
-    $acceptedAt = date('c');
-    $quote['status'] = 'accepted';
-    $quote['accepted_at'] = $acceptedAt;
-    $quote['accepted_by'] = ['type' => $acceptedByType, 'id' => $acceptedById, 'name' => $acceptedByName];
-    $quote['acceptance']['accepted_by_admin_id'] = $acceptedById;
-    $quote['acceptance']['accepted_by_admin_name'] = $acceptedByName;
-    $quote['acceptance']['accepted_at'] = $acceptedAt;
-    $quote['locked_flag'] = true;
-    $quote['locked_at'] = $acceptedAt;
-    $quote['is_current_version'] = true;
-    return $quote;
-}
-
-function documents_quote_create_revision(array $sourceQuote, string $createdByType, string $createdById, string $createdByName, string $reason = ''): array
-{
-    $sourceQuote = documents_quote_prepare($sourceQuote);
-    $status = documents_quote_normalize_status((string) ($sourceQuote['status'] ?? 'draft'));
-    if ($status !== 'accepted') {
-        return ['ok' => false, 'error' => 'Only accepted quotations can be revised.'];
-    }
-
-    $sourceId = safe_text((string) ($sourceQuote['id'] ?? ''));
-    if ($sourceId === '') {
-        return ['ok' => false, 'error' => 'Source quotation is missing an id.'];
-    }
-
-    $seriesId = safe_text((string) ($sourceQuote['quote_series_id'] ?? ''));
-    if ($seriesId === '') {
-        $seriesId = $sourceId;
-    }
-
-    $segment = safe_text((string) ($sourceQuote['segment'] ?? 'RES')) ?: 'RES';
-    $number = documents_generate_quote_number($segment);
-    if (!($number['ok'] ?? false)) {
-        return ['ok' => false, 'error' => (string) ($number['error'] ?? 'Unable to generate quote number.')];
-    }
-
-    $now = date('c');
-    $newQuote = $sourceQuote;
-    $newQuote['id'] = 'qtn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
-    $newQuote['quote_no'] = (string) ($number['quote_no'] ?? '');
-    $newQuote['quote_series_id'] = $seriesId;
-    $newQuote['version_no'] = max(1, (int) ($sourceQuote['version_no'] ?? 1)) + 1;
-    $newQuote['is_current_version'] = true;
-    $newQuote['revised_from_quote_id'] = $sourceId;
-    $newQuote['revision_reason'] = $reason !== '' ? $reason : null;
-    $newQuote['status'] = 'draft';
-    $newQuote['locked_flag'] = false;
-    $newQuote['locked_at'] = null;
-    $newQuote['accepted_at'] = '';
-    $newQuote['accepted_by'] = ['type' => '', 'id' => '', 'name' => ''];
-    $newQuote['acceptance'] = [
-        'accepted_by_admin_id' => '',
-        'accepted_by_admin_name' => '',
-        'accepted_at' => '',
-        'accepted_note' => '',
-    ];
-    $newQuote['approval'] = ['approved_by_id' => '', 'approved_by_name' => '', 'approved_at' => ''];
-    $newQuote['workflow'] = documents_quote_workflow_defaults();
-    $newQuote['links'] = ['customer_mobile' => '', 'agreement_id' => '', 'proforma_id' => '', 'invoice_id' => ''];
-    $newQuote['archived_flag'] = false;
-    $newQuote['archived_at'] = '';
-    $newQuote['archived_by'] = ['type' => '', 'id' => '', 'name' => ''];
-    $newQuote['created_at'] = $now;
-    $newQuote['updated_at'] = $now;
-    $newQuote['created_by_type'] = $createdByType;
-    $newQuote['created_by_id'] = $createdById;
-    $newQuote['created_by_name'] = $createdByName;
-
-    $oldQuote = $sourceQuote;
-    $oldQuote['is_current_version'] = false;
-    $oldQuote['updated_at'] = $now;
-
-    $savedOld = documents_save_quote($oldQuote);
-    if (!($savedOld['ok'] ?? false)) {
-        return ['ok' => false, 'error' => 'Unable to update prior quotation version.'];
-    }
-
-    $savedNew = documents_save_quote($newQuote);
-    if (!($savedNew['ok'] ?? false)) {
-        return ['ok' => false, 'error' => 'Unable to save revised quotation.'];
-    }
-
-    return ['ok' => true, 'error' => '', 'quote' => $newQuote, 'previous_quote' => $oldQuote];
 }
 
 function documents_quote_has_valid_acceptance_data(array $quote): array
@@ -2477,22 +2378,6 @@ function documents_quote_prepare(array $quote): array
 {
     $quote = array_merge(documents_quote_defaults(), $quote);
     $quote['status'] = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
-    $quote['quote_series_id'] = safe_text((string) ($quote['quote_series_id'] ?? ''));
-    if ($quote['quote_series_id'] === '') {
-        $quote['quote_series_id'] = safe_text((string) ($quote['id'] ?? ''));
-    }
-    $quote['version_no'] = max(1, (int) ($quote['version_no'] ?? 1));
-    $quote['is_current_version'] = (bool) ($quote['is_current_version'] ?? true);
-    $quote['revised_from_quote_id'] = safe_text((string) ($quote['revised_from_quote_id'] ?? '')) ?: null;
-    $revisionReason = trim((string) ($quote['revision_reason'] ?? ''));
-    $quote['revision_reason'] = $revisionReason !== '' ? $revisionReason : null;
-    $quote['locked_flag'] = (bool) ($quote['locked_flag'] ?? false);
-    $lockedAt = safe_text((string) ($quote['locked_at'] ?? ''));
-    $quote['locked_at'] = $lockedAt !== '' ? $lockedAt : null;
-    if ($quote['status'] === 'accepted' && !$quote['locked_flag']) {
-        $quote['locked_flag'] = true;
-        $quote['locked_at'] = $quote['locked_at'] ?? (safe_text((string) ($quote['accepted_at'] ?? '')) ?: date('c'));
-    }
     $quote['workflow'] = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
     $quote['accepted_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['accepted_by'] ?? null) ? $quote['accepted_by'] : []);
     $quote['archived_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['archived_by'] ?? null) ? $quote['archived_by'] : []);
