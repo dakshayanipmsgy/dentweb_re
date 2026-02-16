@@ -822,7 +822,7 @@ foreach ($quotes as $quote) {
         continue;
     }
     $statusNormalized = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
-    if ($statusNormalized !== 'accepted') {
+    if ($statusNormalized !== 'accepted' || !((bool) ($quote['is_current_version'] ?? false))) {
         continue;
     }
     $isArchived = $isArchivedRecord($quote);
@@ -859,8 +859,21 @@ foreach ($quotes as $quote) {
 }
 
 $packQuote = null;
+$packVersions = [];
+$packCurrentVersionNo = 1;
+$packIsOlderVersion = false;
 if ($packViewId !== '') {
     $packQuote = documents_get_quote($packViewId);
+    if ($packQuote !== null) {
+        $packVersions = documents_quote_versions((string) ($packQuote['quote_series_id'] ?? ''));
+        foreach ($packVersions as $versionRow) {
+            if ((bool) ($versionRow['is_current_version'] ?? false)) {
+                $packCurrentVersionNo = (int) ($versionRow['version_no'] ?? 1);
+                break;
+            }
+        }
+        $packIsOlderVersion = !((bool) ($packQuote['is_current_version'] ?? false));
+    }
 }
 
 $collectByQuote = static function (array $rows, string $quoteId, bool $includeArchived) use ($isArchivedRecord): array {
@@ -1035,6 +1048,8 @@ usort($archivedRows, static function (array $a, array $b): int {
           ?>
           <p><a class="btn secondary" href="?tab=accepted_customers">&larr; Back to Accepted Customers</a></p>
           <h2 style="margin-top:0;">Document Pack: <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></h2>
+          <div class="card" style="padding:10px;margin-bottom:10px"><strong>Current Version: v<?= (int) $packCurrentVersionNo ?></strong><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><?php foreach ($packVersions as $versionRow): $isCurrentVersionRow = (bool) ($versionRow['is_current_version'] ?? false); ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => (string) ($versionRow['id'] ?? ''), 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">v<?= (int) ($versionRow['version_no'] ?? 1) ?></a><?php if ($isCurrentVersionRow): ?><span class="pill" style="background:#dcfce7;color:#166534">CURRENT</span><?php endif; ?><?php endforeach; ?></div></div>
+          <?php if ($packIsOlderVersion): ?><div class="alert err">You are viewing an older version.</div><?php endif; ?>
           <form method="get" style="margin-bottom:1rem;">
             <input type="hidden" name="tab" value="accepted_customers" />
             <input type="hidden" name="view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
