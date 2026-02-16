@@ -3119,13 +3119,21 @@ function documents_inventory_transaction_defaults(): array
         'id' => '',
         'type' => 'IN',
         'component_id' => '',
+        'variant_id' => '',
         'qty' => 0,
+        'unit' => '',
         'length_ft' => 0,
         'lot_consumption' => [],
+        'lots_created' => [],
         'ref_type' => 'manual',
         'ref_id' => '',
+        'reason' => '',
+        'notes' => '',
         'created_at' => '',
-        'created_by' => '',
+        'created_by' => ['role' => '', 'id' => '', 'name' => ''],
+        'updated_at' => '',
+        'updated_by' => ['role' => '', 'id' => '', 'name' => ''],
+        'edit_history' => [],
     ];
 }
 
@@ -3347,13 +3355,58 @@ function documents_inventory_append_transaction(array $tx): array
     return json_save(documents_inventory_transactions_path(), $rows);
 }
 
-function documents_inventory_component_stock(array $stock, string $componentId): array
+function documents_inventory_save_transactions(array $transactions): array
 {
-    $entry = $stock['stock_by_component_id'][$componentId] ?? [];
+    return json_save(documents_inventory_transactions_path(), array_values($transactions));
+}
+
+function documents_inventory_actor(array $viewer): array
+{
+    return [
+        'role' => (string) ($viewer['role_name'] ?? 'admin'),
+        'id' => (string) ($viewer['id'] ?? ''),
+        'name' => (string) ($viewer['full_name'] ?? 'Unknown'),
+    ];
+}
+
+function documents_inventory_stock_bucket_key(string $variantId): string
+{
+    return $variantId === '' ? '__default' : $variantId;
+}
+
+function documents_inventory_component_stock(array $stock, string $componentId, string $variantId = ''): array
+{
+    $componentEntry = $stock['stock_by_component_id'][$componentId] ?? [];
+    if (!is_array($componentEntry)) {
+        $componentEntry = [];
+    }
+
+    if (isset($componentEntry['stock_by_variant_id']) && is_array($componentEntry['stock_by_variant_id'])) {
+        $bucketKey = documents_inventory_stock_bucket_key($variantId);
+        $entry = $componentEntry['stock_by_variant_id'][$bucketKey] ?? [];
+    } else {
+        $entry = $componentEntry;
+    }
+
     $entry = array_merge(documents_inventory_component_entry_defaults(), is_array($entry) ? $entry : []);
     $entry['on_hand_qty'] = (float) ($entry['on_hand_qty'] ?? 0);
     $entry['lots'] = is_array($entry['lots'] ?? null) ? $entry['lots'] : [];
     return $entry;
+}
+
+function documents_inventory_set_component_stock(array &$stock, string $componentId, string $variantId, array $entry): void
+{
+    if (!isset($stock['stock_by_component_id'][$componentId]) || !is_array($stock['stock_by_component_id'][$componentId])) {
+        $stock['stock_by_component_id'][$componentId] = ['stock_by_variant_id' => []];
+    }
+
+    if (!isset($stock['stock_by_component_id'][$componentId]['stock_by_variant_id']) || !is_array($stock['stock_by_component_id'][$componentId]['stock_by_variant_id'])) {
+        $existing = documents_inventory_component_stock($stock, $componentId);
+        $stock['stock_by_component_id'][$componentId] = ['stock_by_variant_id' => [documents_inventory_stock_bucket_key('') => $existing]];
+    }
+
+    $bucketKey = documents_inventory_stock_bucket_key($variantId);
+    $stock['stock_by_component_id'][$componentId]['stock_by_variant_id'][$bucketKey] = array_merge(documents_inventory_component_entry_defaults(), $entry);
 }
 
 function documents_inventory_total_remaining_ft(array $entry): float
