@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../includes/customer_admin.php';
+require_once __DIR__ . '/../../includes/leads.php';
 
 function documents_base_dir(): string
 {
@@ -1659,6 +1660,100 @@ function documents_find_customer_by_mobile(string $mobile): ?array
     }
 
     return documents_map_customer_record($record);
+}
+
+
+function documents_get_quote_prefill_from_lead(string $leadId): array
+{
+    $leadId = trim($leadId);
+    if ($leadId === '') {
+        return ['ok' => false, 'error' => 'Missing lead reference.', 'lead' => null, 'prefill' => []];
+    }
+
+    $lead = find_lead_by_id($leadId);
+    if ($lead === null) {
+        return ['ok' => false, 'error' => 'Lead not found for prefill.', 'lead' => null, 'prefill' => []];
+    }
+
+    if (!empty($lead['archived_flag'])) {
+        return ['ok' => false, 'error' => 'Archived lead cannot be used for new quotation.', 'lead' => $lead, 'prefill' => []];
+    }
+
+    $name = trim((string) ($lead['name'] ?? ''));
+    $mobile = normalize_customer_mobile((string) ($lead['mobile'] ?? ''));
+    if ($mobile === '') {
+        $mobile = normalize_customer_mobile((string) ($lead['alt_mobile'] ?? ''));
+    }
+    if ($name === '' || $mobile === '') {
+        return ['ok' => false, 'error' => 'Lead is missing required name/mobile fields.', 'lead' => $lead, 'prefill' => []];
+    }
+
+    $prefill = [
+        'customer_name' => $name,
+        'customer_mobile' => $mobile,
+        'city' => trim((string) ($lead['city'] ?? '')),
+        'district' => trim((string) ($lead['district'] ?? '')),
+        'state' => trim((string) ($lead['state'] ?? '')),
+        'locality' => trim((string) ($lead['area_or_locality'] ?? '')),
+        'notes' => trim((string) ($lead['notes'] ?? '')),
+        'source' => [
+            'type' => 'lead',
+            'lead_id' => (string) ($lead['id'] ?? ''),
+            'lead_mobile' => $mobile,
+        ],
+    ];
+
+    return ['ok' => true, 'error' => '', 'lead' => $lead, 'prefill' => $prefill];
+}
+
+function documents_archive_lead_from_quote_source(array $quote): bool
+{
+    $source = is_array($quote['source'] ?? null) ? $quote['source'] : [];
+    if ((string) ($source['type'] ?? '') !== 'lead') {
+        return false;
+    }
+
+    $leadId = trim((string) ($source['lead_id'] ?? ''));
+    if ($leadId === '') {
+        return false;
+    }
+
+    $lead = find_lead_by_id($leadId);
+    if ($lead === null) {
+        return false;
+    }
+
+    $result = update_lead($leadId, [
+        'archived_flag' => true,
+        'archived_at' => date('Y-m-d H:i:s'),
+        'converted_flag' => 'Yes',
+        'converted_date' => date('Y-m-d'),
+        'status' => 'Converted',
+    ]);
+
+    return $result !== null;
+}
+
+/**
+ * @return array{quote: array<string, mixed>, customer_upserted: bool, lead_archived: bool}
+ */
+function documents_sync_after_quote_accepted(array $quote): array
+{
+    $quote = documents_quote_prepare($quote);
+
+    $customerResult = documents_upsert_customer_from_quote($quote);
+    if (($customerResult['ok'] ?? false) && is_array($customerResult['customer'] ?? null)) {
+        $quote['links'] = array_merge(['customer_mobile' => '', 'agreement_id' => '', 'proforma_id' => '', 'invoice_id' => ''], is_array($quote['links'] ?? null) ? $quote['links'] : []);
+        $quote['links']['customer_mobile'] = normalize_customer_mobile((string) ($quote['customer_mobile'] ?? ''));
+    }
+
+    $leadArchived = documents_archive_lead_from_quote_source($quote);
+
+    return [
+        'quote' => $quote,
+        'customer_upserted' => (bool) ($customerResult['ok'] ?? false),
+        'lead_archived' => $leadArchived,
+    ];
 }
 
 function documents_list_quotes(): array

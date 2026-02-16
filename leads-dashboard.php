@@ -26,6 +26,7 @@ if ($loggedInEmployee && !$loggedInAdmin) {
 $employeeStore = new EmployeeFsStore();
 $employees = $employeeStore->listEmployees();
 $customerStore = new CustomerFsStore();
+$quotationCreatePath = $loggedInEmployee && !$loggedInAdmin ? '/employee-quotations.php' : '/admin-quotations.php';
 
 function leads_safe(string $value): string
 {
@@ -837,6 +838,12 @@ ksort($duplicateGroups);
                   $isArchived = !empty($lead['archived_flag']);
                   $customerCreated = !empty($lead['customer_created_flag']);
                   $hasMobile = trim((string) ($lead['mobile'] ?? '')) !== '' || trim((string) ($lead['alt_mobile'] ?? '')) !== '';
+                  $hasLeadName = trim((string) ($lead['name'] ?? '')) !== '';
+                  $leadMobileNormalized = normalize_customer_mobile((string) ($lead['mobile'] ?? ''));
+                  if ($leadMobileNormalized === '') {
+                      $leadMobileNormalized = normalize_customer_mobile((string) ($lead['alt_mobile'] ?? ''));
+                  }
+                  $canCreateQuotation = !$isArchived && $hasLeadName && $leadMobileNormalized !== '';
                   $rowClass = '';
 
                   if (!$isConverted && !$isNotInterested) {
@@ -891,6 +898,12 @@ ksort($duplicateGroups);
                         <input type="hidden" name="lead_id" value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" />
                         <button type="submit" class="btn" style="padding:0.35rem 0.6rem; background:#10b981;">Mark Contacted Now</button>
                       </form>
+                      <?php if ($canCreateQuotation): ?>
+                        <a class="btn" style="padding:0.35rem 0.6rem; background:#1d4ed8;" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
+                      <?php else: ?>
+                        <?php $quotationDisabledReason = $isArchived ? 'Archived lead' : 'Missing name/mobile'; ?>
+                        <button type="button" class="btn-secondary" style="padding:0.35rem 0.6rem; opacity:0.55; cursor:not-allowed;" disabled title="<?php echo leads_safe($quotationDisabledReason); ?>"><?php echo $isArchived ? 'Archived' : 'Create Quotation'; ?></button>
+                      <?php endif; ?>
                       <?php if (!$isArchived): ?>
                         <form method="post" action="/leads-dashboard.php" style="display:inline-block; margin:0;">
                           <input type="hidden" name="lead_action" value="archive_lead" />

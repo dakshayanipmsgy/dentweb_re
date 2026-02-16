@@ -55,6 +55,8 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     $quote['acceptance']['accepted_by_admin_name']=$viewerName;
     $quote['acceptance']['accepted_at']=$quote['accepted_at'];
     $quote['workflow']=array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
+    $syncResult = documents_sync_after_quote_accepted($quote);
+    $quote = $syncResult['quote'];
     $quote['updated_at']=date('c');
     documents_save_quote($quote);
     $redirect('success','Quotation marked accepted by customer.');
