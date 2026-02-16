@@ -36,6 +36,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $action = safe_text($_POST['action'] ?? '');
+    if ($action === 'save_catalog_item') {
+        $all = documents_list_catalog_items(true);
+        $all[] = documents_normalize_catalog_item([
+            'id' => 'item_' . date('YmdHis') . '_' . bin2hex(random_bytes(2)),
+            'name' => safe_text($_POST['item_name'] ?? ''),
+            'description' => safe_text($_POST['item_description'] ?? ''),
+            'hsn' => safe_text($_POST['item_hsn'] ?? ''),
+            'unit' => safe_text($_POST['item_unit'] ?? 'set'),
+            'default_gst_scheme_id' => safe_text($_POST['default_gst_scheme_id'] ?? ''),
+            'category' => safe_text($_POST['item_category'] ?? 'other'),
+            'archived_flag' => false,
+            'created_at' => date('c'),
+            'updated_at' => date('c'),
+        ]);
+        $saved = documents_save_catalog_items($all);
+        if (!($saved['ok'] ?? false)) { $redirectWith('error', 'Unable to save catalog item.'); }
+        header('Location: admin-quotations.php?tab=items&status=success&message=' . urlencode('Catalog item saved.'));
+        exit;
+    }
+    if ($action === 'archive_catalog_item') {
+        $id = safe_text($_POST['item_id'] ?? '');
+        $all = documents_list_catalog_items(true);
+        foreach ($all as &$row) {
+            if ((string) ($row['id'] ?? '') === $id) {
+                $row['archived_flag'] = true;
+                $row['updated_at'] = date('c');
+            }
+        }
+        unset($row);
+        $saved = documents_save_catalog_items($all);
+        if (!($saved['ok'] ?? false)) { $redirectWith('error', 'Unable to archive catalog item.'); }
+        header('Location: admin-quotations.php?tab=items&status=success&message=' . urlencode('Catalog item archived.'));
+        exit;
+    }
+    if ($action === 'save_gst_scheme') {
+        $mode = safe_text($_POST['scheme_mode'] ?? 'single');
+        $parts = [];
+        if ($mode === 'split') {
+            $raw = preg_split('/\r\n|\r|\n/', (string) ($_POST['scheme_parts'] ?? '')) ?: [];
+            foreach ($raw as $line) {
+                $line = trim((string) $line);
+                if ($line === '' || strpos($line, '@') === false) { continue; }
+                [$share, $rate] = array_map('trim', explode('@', $line, 2));
+                $parts[] = ['base_share_pct' => (float) $share, 'rate_pct' => (float) $rate];
+            }
+            $sum = 0.0; foreach ($parts as $p) { $sum += (float) ($p['base_share_pct'] ?? 0); }
+            if ($parts === [] || abs($sum - 100.0) > 0.01) {
+                $redirectWith('error', 'Split parts must total 100.');
+            }
+        }
+        $all = documents_list_gst_schemes(true);
+        $all[] = documents_normalize_gst_scheme([
+            'id' => 'gst_' . date('YmdHis') . '_' . bin2hex(random_bytes(2)),
+            'name' => safe_text($_POST['scheme_name'] ?? ''),
+            'mode' => $mode,
+            'rate_pct' => (float) ($_POST['scheme_rate_pct'] ?? 0),
+            'parts' => $parts,
+            'archived_flag' => false,
+            'created_at' => date('c'),
+            'updated_at' => date('c'),
+        ]);
+        $saved = documents_save_gst_schemes($all);
+        if (!($saved['ok'] ?? false)) { $redirectWith('error', 'Unable to save GST scheme.'); }
+        header('Location: admin-quotations.php?tab=gst_schemes&status=success&message=' . urlencode('GST scheme saved.'));
+        exit;
+    }
+    if ($action === 'archive_gst_scheme') {
+        $id = safe_text($_POST['scheme_id'] ?? '');
+        $all = documents_list_gst_schemes(true);
+        foreach ($all as &$row) {
+            if ((string) ($row['id'] ?? '') === $id) {
+                $row['archived_flag'] = true;
+                $row['updated_at'] = date('c');
+            }
+        }
+        unset($row);
+        $saved = documents_save_gst_schemes($all);
+        if (!($saved['ok'] ?? false)) { $redirectWith('error', 'Unable to archive GST scheme.'); }
+        header('Location: admin-quotations.php?tab=gst_schemes&status=success&message=' . urlencode('GST scheme archived.'));
+        exit;
+    }
     if ($action === 'save_settings') {
         $d = load_quote_defaults();
         foreach (['primary','accent','text','muted_text','page_bg','card_bg','border'] as $k) {
@@ -263,17 +344,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $itemHsns = is_array($_POST['item_hsn'] ?? null) ? $_POST['item_hsn'] : [];
         $itemQtys = is_array($_POST['item_qty'] ?? null) ? $_POST['item_qty'] : [];
         $itemUnits = is_array($_POST['item_unit'] ?? null) ? $_POST['item_unit'] : [];
+        $itemCatalogIds = is_array($_POST['item_catalog_id'] ?? null) ? $_POST['item_catalog_id'] : [];
+        $itemSchemeIds = is_array($_POST['item_gst_scheme_id'] ?? null) ? $_POST['item_gst_scheme_id'] : [];
+        $itemBasicAmounts = is_array($_POST['item_basic_amount'] ?? null) ? $_POST['item_basic_amount'] : [];
         $rawItems = [];
         $count = count($itemNames);
         for ($i=0; $i<$count; $i++) {
+            $catalogId = safe_text((string) ($itemCatalogIds[$i] ?? ''));
+            $catalogItem = $catalogId !== '' ? documents_get_catalog_item_by_id($catalogId) : null;
+            $name = safe_text((string) ($itemNames[$i] ?? ''));
+            $description = safe_text((string) ($itemDescs[$i] ?? ''));
+            $hsn = safe_text((string) ($itemHsns[$i] ?? ''));
+            $unit = safe_text((string) ($itemUnits[$i] ?? ''));
+            if ($catalogItem !== null) {
+                if ($name === '') { $name = (string) ($catalogItem['name'] ?? ''); }
+                if ($description === '') { $description = (string) ($catalogItem['description'] ?? ''); }
+                if ($hsn === '') { $hsn = (string) ($catalogItem['hsn'] ?? ''); }
+                if ($unit === '') { $unit = (string) ($catalogItem['unit'] ?? 'set'); }
+            }
+            $schemeId = safe_text((string) ($itemSchemeIds[$i] ?? ''));
+            if ($schemeId === '' && $catalogItem !== null) {
+                $schemeId = safe_text((string) ($catalogItem['default_gst_scheme_id'] ?? ''));
+            }
             $rawItems[] = [
-                'name' => safe_text((string) ($itemNames[$i] ?? '')),
-                'description' => safe_text((string) ($itemDescs[$i] ?? '')),
-                'hsn' => safe_text((string) ($itemHsns[$i] ?? '')),
+                'catalog_item_id' => $catalogId,
+                'snapshot_name' => $name,
+                'snapshot_description' => $description,
+                'snapshot_hsn' => $hsn,
+                'snapshot_unit' => $unit,
+                'selected_gst_scheme_id' => $schemeId,
+                'name' => $name,
+                'description' => $description,
+                'hsn' => $hsn,
                 'qty' => (float) ($itemQtys[$i] ?? 0),
-                'unit' => safe_text((string) ($itemUnits[$i] ?? '')),
+                'unit' => $unit,
                 'gst_slab' => '5',
-                'basic_amount' => 0,
+                'basic_amount' => (float) ($itemBasicAmounts[$i] ?? 0),
             ];
         }
         $defaultHsn = safe_text((string) ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
@@ -366,7 +472,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $allQuotes = documents_list_quotes();
 $statusFilter = safe_text($_GET['status_filter'] ?? '');
 $tab = safe_text($_GET['tab'] ?? 'quotations');
-if (!in_array($tab, ['quotations','archived','settings'], true)) { $tab = 'quotations'; }
+if (!in_array($tab, ['quotations','archived','settings','items','gst_schemes'], true)) { $tab = 'quotations'; }
 if ($tab === 'archived') {
     $allQuotes = array_values(array_filter($allQuotes, static function (array $q): bool {
         return documents_is_archived($q);
@@ -388,6 +494,10 @@ if ($statusFilter !== '') {
 $editingId = safe_text($_GET['edit'] ?? '');
 $editing = $editingId !== '' ? documents_get_quote($editingId) : null;
 $quoteDefaults = load_quote_defaults();
+$catalogItemsAll = documents_list_catalog_items(true);
+$catalogItemsActive = array_values(array_filter($catalogItemsAll, static fn(array $r): bool => empty($r['archived_flag'])));
+$gstSchemesAll = documents_list_gst_schemes(true);
+$gstSchemesActive = array_values(array_filter($gstSchemesAll, static fn(array $r): bool => empty($r['archived_flag'])));
 $resolveSegmentDefaults = static function (string $segmentCode) use ($quoteDefaults): array {
     $segments = is_array($quoteDefaults['segments'] ?? null) ? $quoteDefaults['segments'] : [];
     $segmentCode = strtoupper(trim($segmentCode));
@@ -475,7 +585,7 @@ if ($lookup !== null) {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Quotations</title>
 <style>body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px}.card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}label{font-size:12px;font-weight:700;display:block;margin-bottom:4px}input,select,textarea{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box}textarea{min-height:70px}.btn{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}.btn.secondary{background:#fff;color:#1f2937;border:1px solid #cbd5e1}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe1ea;padding:8px;text-align:left;font-size:13px}.muted{color:#64748b}.alert{padding:8px;border-radius:8px;margin-bottom:12px}.ok{background:#ecfdf5}.err{background:#fef2f2}</style></head>
 <body><main class="wrap">
-<div class="card"><h1>Quotations</h1><a class="btn secondary" href="admin-documents.php">Back to Documents</a> <a class="btn secondary" href="admin-quotations.php?tab=quotations">Quotations</a> <a class="btn secondary" href="admin-quotations.php?tab=archived">Archived</a> <a class="btn" href="admin-quotations.php?tab=settings">Settings</a> <a class="btn" href="admin-quotations.php?tab=quotations">Create New</a></div>
+<div class="card"><h1>Quotations</h1><a class="btn secondary" href="admin-documents.php">Back to Documents</a> <a class="btn secondary" href="admin-quotations.php?tab=quotations">Quotations</a> <a class="btn secondary" href="admin-quotations.php?tab=archived">Archived</a> <a class="btn secondary" href="admin-quotations.php?tab=items">Item Catalog</a> <a class="btn secondary" href="admin-quotations.php?tab=gst_schemes">GST Schemes</a> <a class="btn" href="admin-quotations.php?tab=settings">Settings</a> <a class="btn" href="admin-quotations.php?tab=quotations">Create New</a></div>
 <?php if ($message !== ''): ?><div class="alert <?= $status === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
 <?php if ($prefillMessage !== ''): ?><div class="alert ok"><?= htmlspecialchars($prefillMessage, ENT_QUOTES) ?></div><?php endif; ?>
 <div class="card">
@@ -518,7 +628,7 @@ if ($lookup !== null) {
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
-<div style="grid-column:1/-1"><h3>Items Table</h3><table id="itemsTable"><thead><tr><th>Sr No</th><th>Item Name</th><th>Description/Specs</th><th>HSN</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody><?php $qItems = is_array($editing['items'] ?? null) && $editing['items'] !== [] ? $editing['items'] : documents_normalize_quote_items([], (string)$editing['system_type'], (float)$editing['capacity_kwp'], (string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541')); foreach ($qItems as $ix => $item): ?><tr><td><?= $ix+1 ?></td><td><input name="item_name[]" value="<?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_description[]" value="<?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_hsn[]" value="<?= htmlspecialchars((string)($item['hsn'] ?? ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')), ENT_QUOTES) ?>"></td><td><input type="number" step="0.01" name="item_qty[]" value="<?= htmlspecialchars((string)($item['qty'] ?? 1), ENT_QUOTES) ?>"></td><td><input name="item_unit[]" value="<?= htmlspecialchars((string)($item['unit'] ?? 'set'), ENT_QUOTES) ?>"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addItemBtn">Add item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
+<div style="grid-column:1/-1"><h3>Items Table</h3><table id="itemsTable"><thead><tr><th>Sr No</th><th>Catalog</th><th>Item Name</th><th>Description/Specs</th><th>HSN</th><th>Qty</th><th>Unit</th><th>GST Scheme</th><th>Taxable Base ₹</th><th></th></tr></thead><tbody><?php $qItems = is_array($editing['items'] ?? null) && $editing['items'] !== [] ? $editing['items'] : documents_normalize_quote_items([], (string)$editing['system_type'], (float)$editing['capacity_kwp'], (string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541')); foreach ($qItems as $ix => $item): ?><tr><td><?= $ix+1 ?></td><td><select name="item_catalog_id[]" class="catalog-select"><option value="">Custom</option><?php foreach ($catalogItemsActive as $cat): ?><option value="<?= htmlspecialchars((string) $cat['id'], ENT_QUOTES) ?>" data-name="<?= htmlspecialchars((string) $cat['name'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars((string) $cat['description'], ENT_QUOTES) ?>" data-hsn="<?= htmlspecialchars((string) $cat['hsn'], ENT_QUOTES) ?>" data-unit="<?= htmlspecialchars((string) $cat['unit'], ENT_QUOTES) ?>" data-scheme="<?= htmlspecialchars((string) $cat['default_gst_scheme_id'], ENT_QUOTES) ?>" <?= ((string)($item['catalog_item_id'] ?? '') === (string)$cat['id'])?'selected':'' ?>><?= htmlspecialchars((string) $cat['name'], ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input name="item_name[]" value="<?= htmlspecialchars((string)($item['snapshot_name'] ?? $item['name'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_description[]" value="<?= htmlspecialchars((string)($item['snapshot_description'] ?? $item['description'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_hsn[]" value="<?= htmlspecialchars((string)($item['snapshot_hsn'] ?? $item['hsn'] ?? ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')), ENT_QUOTES) ?>"></td><td><input type="number" step="0.01" name="item_qty[]" value="<?= htmlspecialchars((string)($item['qty'] ?? 1), ENT_QUOTES) ?>"></td><td><input name="item_unit[]" value="<?= htmlspecialchars((string)($item['snapshot_unit'] ?? $item['unit'] ?? 'set'), ENT_QUOTES) ?>"></td><td><select name="item_gst_scheme_id[]"><option value="">-- None --</option><?php foreach ($gstSchemesActive as $sch): ?><option value="<?= htmlspecialchars((string) $sch['id'], ENT_QUOTES) ?>" <?= ((string)($item['selected_gst_scheme_id'] ?? '') === (string)$sch['id'])?'selected':'' ?>><?= htmlspecialchars((string) $sch['name'], ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="item_basic_amount[]" value="<?= htmlspecialchars((string)($item['basic_amount'] ?? 0), ENT_QUOTES) ?>"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addItemBtn">Add item</button></div></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
 <div><label>Monthly electricity bill (₹)</label><input type="number" step="0.01" name="monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted">Suggested bill based on generation & tariff. You can change it. <a href="#" id="resetMonthlySuggestion">Reset suggestion</a></div></div>
 <div><label>Unit rate (₹/kWh)</label><input type="number" step="0.01" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['finance_inputs']['unit_rate_rs_per_kwh'] ?: ($segmentDefaults['unit_rate_rs_per_kwh'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($editing['finance_inputs']['annual_generation_per_kw'] ?: ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? '')), ENT_QUOTES) ?>"></div>
@@ -551,6 +661,9 @@ if ($lookup !== null) {
 </tr><?php endforeach; if ($allQuotes===[]): ?><tr><td colspan="7">No quotations yet.</td></tr><?php endif; ?></tbody></table>
 </div>
 <?php if ($tab === "settings"): $d = $quoteDefaults; ?><div class="card"><h2>Quotation Settings</h2><form method="post" class="grid"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ""), ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_settings"><div><label>Primary color</label><div style="display:flex;gap:6px"><input type="color" name="ui_primary" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="ui_primary_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Accent color</label><div style="display:flex;gap:6px"><input type="color" name="ui_accent" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="ui_accent_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"><input name="ui_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"></div></div><div><label>Muted text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_muted_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"><input name="ui_muted_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"></div></div><div><label>Page background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_page_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"><input name="ui_page_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"></div></div><div><label>Card background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_card_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="ui_card_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Border color</label><div style="display:flex;gap:6px"><input type="color" name="ui_border" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"><input name="ui_border_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient A</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="header_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient B</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="header_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient A</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="footer_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient B</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="footer_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Header font color</label><div style="display:flex;gap:6px"><input type="color" name="header_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="header_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Footer font color</label><div style="display:flex;gap:6px"><input type="color" name="footer_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="footer_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient direction</label><select name="header_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="header_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['header']['enabled'])?'checked':'' ?>> Enable header gradient</label></div><div><label>Footer gradient direction</label><select name="footer_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="footer_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['footer']['enabled'])?'checked':'' ?>> Enable footer gradient</label></div><div><label>Default interest rate (%)</label><input type="number" step="0.01" name="res_interest_pct" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['interest_pct'] ?? 6), ENT_QUOTES) ?>"></div><div><label>Default loan tenure (years)</label><input type="number" name="res_tenure_years" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['tenure_years'] ?? 10), ENT_QUOTES) ?>"></div><div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450), ENT_QUOTES) ?>"></div><div><label>Emission factor (kg CO2/kWh)</label><input type="number" step="0.01" name="emission_factor_kg_per_kwh" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['emission_factor_kg_per_kwh'] ?? 0.82), ENT_QUOTES) ?>"></div><div><label>CO2 absorbed per tree per year (kg)</label><input type="number" step="0.01" name="tree_absorption_kg_per_tree_per_year" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'] ?? 20), ENT_QUOTES) ?>"></div><div><label><input type="checkbox" name="show_decimals" <?= !empty($d['global']['quotation_ui']['show_decimals'])?'checked':'' ?>> Show INR decimals in quotation</label></div><div><label>QR target</label><select name="qr_target"><option value="quotation" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="quotation")?'selected':'' ?>>This quotation link</option><option value="website" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="website")?'selected':'' ?>>Company website</option></select></div><div style="grid-column:1/-1"><label>Why Dakshayani points (one per line)</label><textarea name="why_dakshayani_points"><?= htmlspecialchars(implode("\n", (array)($d['global']['quotation_ui']['why_dakshayani_points'] ?? [])), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Footer disclaimer</label><textarea name="footer_disclaimer"><?= htmlspecialchars((string)($d['global']['quotation_ui']['footer_disclaimer'] ?? ''), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><button class="btn" type="submit">Save Settings</button></div></form></div><?php endif; ?>
+<?php if ($tab === 'items'): ?><div class="card"><h2>Item Catalog</h2><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_catalog_item"><div class="grid"><div><label>Name</label><input name="item_name" required></div><div><label>HSN</label><input name="item_hsn"></div><div><label>Unit</label><input name="item_unit" value="set"></div><div><label>Category</label><select name="item_category"><option value="solar_system">solar system</option><option value="accessories">accessories</option><option value="service">service</option><option value="other">other</option></select></div><div><label>Default GST Scheme</label><select name="default_gst_scheme_id"><option value="">-- None --</option><?php foreach ($gstSchemesActive as $sch): ?><option value="<?= htmlspecialchars((string) $sch['id'], ENT_QUOTES) ?>"><?= htmlspecialchars((string) $sch['name'], ENT_QUOTES) ?></option><?php endforeach; ?></select></div><div style="grid-column:1/-1"><label>Description</label><textarea name="item_description"></textarea></div><div><button class="btn" type="submit">Add Item</button></div></div></form><table><thead><tr><th>Name</th><th>HSN</th><th>Unit</th><th>Category</th><th>Default GST</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($catalogItemsAll as $it): ?><tr><td><?= htmlspecialchars((string) $it['name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) $it['hsn'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) $it['unit'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(str_replace('_',' ',(string) $it['category']), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($it['default_gst_scheme_id'] ?? '') ?: '-'), ENT_QUOTES) ?></td><td><?= !empty($it['archived_flag']) ? 'Archived' : 'Active' ?></td><td><?php if (empty($it['archived_flag'])): ?><form method="post" style="display:inline"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_catalog_item"><input type="hidden" name="item_id" value="<?= htmlspecialchars((string) $it['id'], ENT_QUOTES) ?>"><button class="btn secondary" type="submit">Archive</button></form><?php endif; ?></td></tr><?php endforeach; if ($catalogItemsAll === []): ?><tr><td colspan="7">No catalog items found.</td></tr><?php endif; ?></tbody></table></div><?php endif; ?>
+<?php if ($tab === 'gst_schemes'): ?><div class="card"><h2>GST Schemes</h2><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_gst_scheme"><div class="grid"><div><label>Name</label><input name="scheme_name" required></div><div><label>Mode</label><select name="scheme_mode" id="schemeMode"><option value="single">single</option><option value="split">split</option></select></div><div id="singleRateWrap"><label>Rate %</label><input type="number" step="0.01" name="scheme_rate_pct" value="5"></div><div style="grid-column:1/-1" id="splitWrap"><label>Split Parts (share%@rate%, one per line)</label><textarea name="scheme_parts" placeholder="70@5
+30@18"></textarea></div><div><button class="btn" type="submit">Add Scheme</button></div></div></form><table><thead><tr><th>Name</th><th>Mode</th><th>Configuration</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($gstSchemesAll as $sch): ?><tr><td><?= htmlspecialchars((string) $sch['name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) $sch['mode'], ENT_QUOTES) ?></td><td><?php if (($sch['mode'] ?? 'single') === 'split'): ?><?php $partsLabel = []; foreach ((array) ($sch['parts'] ?? []) as $part) { if (!is_array($part)) { continue; } $partsLabel[] = (float)($part['base_share_pct'] ?? 0) . '%@' . (float)($part['rate_pct'] ?? 0) . '%'; } echo htmlspecialchars(implode(', ', $partsLabel), ENT_QUOTES); ?><?php else: ?><?= htmlspecialchars((string) ((float) ($sch['rate_pct'] ?? 0) . '%'), ENT_QUOTES) ?><?php endif; ?></td><td><?= !empty($sch['archived_flag']) ? 'Archived' : 'Active' ?></td><td><?php if (empty($sch['archived_flag'])): ?><form method="post" style="display:inline"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_gst_scheme"><input type="hidden" name="scheme_id" value="<?= htmlspecialchars((string) $sch['id'], ENT_QUOTES) ?>"><button class="btn secondary" type="submit">Archive</button></form><?php endif; ?></td></tr><?php endforeach; if ($gstSchemesAll === []): ?><tr><td colspan="5">No GST schemes found.</td></tr><?php endif; ?></tbody></table></div><?php endif; ?>
 <div class="card"><h2>Bulk Modify Quotations</h2>
 <form method="post">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
@@ -567,7 +680,11 @@ document.addEventListener('click', function (e) {
         if (!tb) return;
         const tr = document.createElement('tr');
         const dH = '<?= htmlspecialchars((string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>';
-        tr.innerHTML = '<td></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="' + dH + '"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';
+        const catalogOptions = <?= json_encode(array_map(static fn($cat) => ['id'=>$cat['id'],'name'=>$cat['name'],'description'=>$cat['description'],'hsn'=>$cat['hsn'],'unit'=>$cat['unit'],'default_gst_scheme_id'=>$cat['default_gst_scheme_id']], $catalogItemsActive), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        const schemeOptions = <?= json_encode(array_map(static fn($sch) => ['id'=>$sch['id'],'name'=>$sch['name']], $gstSchemesActive), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        const catalogHtml = ['<option value="">Custom</option>'].concat(catalogOptions.map(c => '<option value="'+c.id+'" data-name="'+(c.name||'')+'" data-description="'+(c.description||'')+'" data-hsn="'+(c.hsn||'')+'" data-unit="'+(c.unit||'')+'" data-scheme="'+(c.default_gst_scheme_id||'')+'">'+(c.name||'')+'</option>')).join('');
+        const schemeHtml = ['<option value="">-- None --</option>'].concat(schemeOptions.map(s => '<option value="'+s.id+'">'+s.name+'</option>')).join('');
+        tr.innerHTML = '<td></td><td><select name="item_catalog_id[]" class="catalog-select">'+catalogHtml+'</select></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="' + dH + '"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><select name="item_gst_scheme_id[]">'+schemeHtml+'</select></td><td><input type="number" step="0.01" min="0" name="item_basic_amount[]" value="0"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';
         tb.appendChild(tr);
         renumberItems();
     }
@@ -576,6 +693,41 @@ document.addEventListener('click', function (e) {
         renumberItems();
     }
 });
+
+
+document.addEventListener('change', function (e) {
+    if (!(e.target instanceof HTMLSelectElement) || !e.target.classList.contains('catalog-select')) {
+        return;
+    }
+    const tr = e.target.closest('tr');
+    if (!tr) return;
+    const opt = e.target.selectedOptions[0];
+    if (!opt) return;
+    const name = tr.querySelector('input[name="item_name[]"]');
+    const desc = tr.querySelector('input[name="item_description[]"]');
+    const hsn = tr.querySelector('input[name="item_hsn[]"]');
+    const unit = tr.querySelector('input[name="item_unit[]"]');
+    const scheme = tr.querySelector('select[name="item_gst_scheme_id[]"]');
+    if (name && !name.value) name.value = opt.getAttribute('data-name') || '';
+    if (desc && !desc.value) desc.value = opt.getAttribute('data-description') || '';
+    if (hsn && !hsn.value) hsn.value = opt.getAttribute('data-hsn') || '';
+    if (unit && !unit.value) unit.value = opt.getAttribute('data-unit') || 'set';
+    if (scheme && !scheme.value) scheme.value = opt.getAttribute('data-scheme') || '';
+});
+
+(function(){
+    const mode = document.getElementById('schemeMode');
+    const split = document.getElementById('splitWrap');
+    const single = document.getElementById('singleRateWrap');
+    if (!mode || !split || !single) return;
+    const sync = () => {
+        const isSplit = mode.value === 'split';
+        split.style.display = isSplit ? '' : 'none';
+        single.style.display = isSplit ? 'none' : '';
+    };
+    mode.addEventListener('change', sync);
+    sync();
+})();
 
 function renumberItems() {
     document.querySelectorAll('#itemsTable tbody tr').forEach((tr, i) => {
