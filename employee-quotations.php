@@ -202,6 +202,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['finance_inputs']['monthly_bill_rs'] = safe_text($_POST['monthly_bill_rs'] ?? '');
         $quote['finance_inputs']['unit_rate_rs_per_kwh'] = safe_text($_POST['unit_rate_rs_per_kwh'] ?? '');
         $quote['finance_inputs']['annual_generation_per_kw'] = safe_text($_POST['annual_generation_per_kw'] ?? '');
+        $quote['finance_inputs']['loan']['enabled'] = isset($_POST['loan_enabled']);
+        $quote['finance_inputs']['loan']['interest_pct'] = safe_text($_POST['loan_interest_pct'] ?? '');
+        $quote['finance_inputs']['loan']['tenure_years'] = safe_text($_POST['loan_tenure_years'] ?? '');
+        $quote['finance_inputs']['loan']['margin_pct'] = safe_text($_POST['loan_margin_pct'] ?? '');
+        $quote['finance_inputs']['loan']['loan_amount'] = safe_text($_POST['loan_amount'] ?? '');
         $quote['finance_inputs']['funding_mode_show_both'] = !isset($_POST['funding_mode_show_both']) || $_POST['funding_mode_show_both'] === '1';
         $quote['finance_inputs']['customer_plans_bank_loan'] = isset($_POST['customer_plans_bank_loan']);
         $quote['finance_inputs']['subsidy_expected_rs'] = (string) $subsidyExpectedRs;
@@ -230,8 +235,42 @@ $quotes = array_values(array_filter(documents_list_quotes(), static function (ar
 }));
 $editingId = safe_text($_GET['edit'] ?? '');
 $editing = $editingId !== '' ? documents_get_quote($editingId) : null;
-$quoteDefaults = documents_get_quote_defaults_settings();
-$segmentDefaults = is_array($quoteDefaults['segments'][$editing['segment'] ?? ''] ?? null) ? $quoteDefaults['segments'][$editing['segment']] : [];
+$quoteDefaults = load_quote_defaults();
+$resolveSegmentDefaults = static function (string $segmentCode) use ($quoteDefaults): array {
+    $segments = is_array($quoteDefaults['segments'] ?? null) ? $quoteDefaults['segments'] : [];
+    $segmentCode = strtoupper(trim($segmentCode));
+    $segment = is_array($segments[$segmentCode] ?? null) ? $segments[$segmentCode] : [];
+    $fallbackRes = is_array($segments['RES'] ?? null) ? $segments['RES'] : [];
+
+    $loanSegment = is_array($segment['loan_bestcase'] ?? null) ? $segment['loan_bestcase'] : [];
+    $loanRes = is_array($fallbackRes['loan_bestcase'] ?? null) ? $fallbackRes['loan_bestcase'] : [];
+
+    return [
+        'unit_rate_rs_per_kwh' => (float) ($segment['unit_rate_rs_per_kwh'] ?? ($fallbackRes['unit_rate_rs_per_kwh'] ?? 0)),
+        'annual_generation_per_kw' => (float) ($segment['annual_generation_per_kw'] ?? ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450)),
+        'loan_bestcase' => [
+            'max_loan_rs' => (float) ($loanSegment['max_loan_rs'] ?? ($loanRes['max_loan_rs'] ?? 200000)),
+            'interest_pct' => (float) ($loanSegment['interest_pct'] ?? ($loanRes['interest_pct'] ?? 6.0)),
+            'tenure_years' => (int) ($loanSegment['tenure_years'] ?? ($loanRes['tenure_years'] ?? (($segment['loan_defaults']['tenure_years'] ?? ($fallbackRes['loan_defaults']['tenure_years'] ?? 10))))),
+            'min_margin_pct' => (float) ($loanSegment['min_margin_pct'] ?? ($loanRes['min_margin_pct'] ?? 10)),
+        ],
+    ];
+};
+$editingSegment = safe_text((string) ($editing['segment'] ?? ''));
+if ($editingSegment === '' && $editing['id'] === '') {
+    $selectedTemplateId = safe_text((string) ($editing['template_set_id'] ?? ''));
+    foreach ($templates as $tpl) {
+        if ((string) ($tpl['id'] ?? '') === $selectedTemplateId) {
+            $editingSegment = safe_text((string) ($tpl['segment'] ?? ''));
+            break;
+        }
+    }
+}
+$segmentDefaults = $resolveSegmentDefaults($editingSegment !== '' ? $editingSegment : 'RES');
+$autofillSegments = [];
+foreach (['RES', 'COM', 'IND', 'INST'] as $segCode) {
+    $autofillSegments[$segCode] = $resolveSegmentDefaults($segCode);
+}
 if ($editing !== null && ((string) ($editing['created_by_type'] ?? '') !== 'employee' || (string) ($editing['created_by_id'] ?? '') !== (string) ($employee['id'] ?? ''))) {
     $editing = null;
 }
@@ -257,6 +296,11 @@ if ($editing['id'] === '' && $fromLeadId !== '') {
         $editing['state'] = (string) ($prefill['state'] ?? '');
         $editing['billing_address'] = (string) ($prefill['locality'] ?? '');
         $editing['site_address'] = (string) ($prefill['locality'] ?? '');
+        $editing['area_or_locality'] = (string) ($prefill['locality'] ?? '');
+        $editing['customer_snapshot']['city'] = (string) ($prefill['city'] ?? '');
+        $editing['customer_snapshot']['district'] = (string) ($prefill['district'] ?? '');
+        $editing['customer_snapshot']['state'] = (string) ($prefill['state'] ?? '');
+        $editing['customer_snapshot']['address'] = (string) ($prefill['locality'] ?? '');
         if ($editing['cover_note_text'] === '' && (string) ($prefill['notes'] ?? '') !== '') {
             $editing['cover_note_text'] = (string) ($prefill['notes'] ?? '');
         }
@@ -290,7 +334,7 @@ if ($lookup !== null) {
 <input type="hidden" name="source_lead_id" value="<?= htmlspecialchars((string) ($editing['source']['lead_id'] ?? ''), ENT_QUOTES) ?>">
 <input type="hidden" name="source_lead_mobile" value="<?= htmlspecialchars((string) ($editing['source']['lead_mobile'] ?? ''), ENT_QUOTES) ?>">
 <div class="grid">
-<div><label>Template Set</label><select name="template_set_id" required><?php foreach ($templates as $tpl): ?><option value="<?= htmlspecialchars((string)$tpl['id'], ENT_QUOTES) ?>" <?= ((string)$editing['template_set_id']===(string)$tpl['id'])?'selected':'' ?>><?= htmlspecialchars((string)$tpl['name'], ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
+<div><label>Template Set</label><select name="template_set_id" required><?php foreach ($templates as $tpl): ?><option value="<?= htmlspecialchars((string)$tpl['id'], ENT_QUOTES) ?>" data-segment="<?= htmlspecialchars((string)($tpl['segment'] ?? 'RES'), ENT_QUOTES) ?>" <?= ((string)$editing['template_set_id']===(string)$tpl['id'])?'selected':'' ?>><?= htmlspecialchars((string)$tpl['name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)($tpl['segment'] ?? 'RES'), ENT_QUOTES) ?>)</option><?php endforeach; ?></select></div>
 <div><label>Party Type</label><select name="party_type"><option value="customer" <?= $editing['party_type']==='customer'?'selected':'' ?>>Customer</option><option value="lead" <?= $editing['party_type']!=='customer'?'selected':'' ?>>Lead</option></select></div>
 <div><label>Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string)($lookupMobile !== '' ? $lookupMobile : $editing['customer_mobile']), ENT_QUOTES) ?>"></div>
 <div><label>Name</label><input name="customer_name" required value="<?= htmlspecialchars((string)($quoteSnapshot['name'] ?? $editing['customer_name']), ENT_QUOTES) ?>"></div>
@@ -316,16 +360,22 @@ if ($lookup !== null) {
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
 <div style="grid-column:1/-1"><h3>Items Table</h3><table id="itemsTable"><thead><tr><th>Sr No</th><th>Item Name</th><th>Description/Specs</th><th>HSN</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody><?php $qItems = is_array($editing['items'] ?? null) && $editing['items'] !== [] ? $editing['items'] : documents_normalize_quote_items([], (string)$editing['system_type'], (float)$editing['capacity_kwp'], (string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541')); foreach ($qItems as $ix => $item): ?><tr><td><?= $ix+1 ?></td><td><input name="item_name[]" value="<?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_description[]" value="<?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="item_hsn[]" value="<?= htmlspecialchars((string)($item['hsn'] ?? ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')), ENT_QUOTES) ?>"></td><td><input type="number" step="0.01" name="item_qty[]" value="<?= htmlspecialchars((string)($item['qty'] ?? 1), ENT_QUOTES) ?>"></td><td><input name="item_unit[]" value="<?= htmlspecialchars((string)($item['unit'] ?? 'set'), ENT_QUOTES) ?>"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addItemBtn">Add item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3></div>
-<div><label>Monthly electricity bill (₹)</label><input type="number" step="0.01" name="monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Monthly electricity bill (₹)</label><input type="number" step="0.01" name="monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted">Suggested bill based on generation & tariff. You can change it. <a href="#" id="resetMonthlySuggestion">Reset suggestion</a></div></div>
 <div><label>Unit rate (₹/kWh)</label><input type="number" step="0.01" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['finance_inputs']['unit_rate_rs_per_kwh'] ?: ($segmentDefaults['unit_rate_rs_per_kwh'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($editing['finance_inputs']['annual_generation_per_kw'] ?: ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Funding Mode Display</label><select name="funding_mode_show_both"><option value="1" <?= !isset($editing['finance_inputs']['funding_mode_show_both']) || !empty($editing['finance_inputs']['funding_mode_show_both']) ? 'selected' : '' ?>>Show both self + bank comparison</option><option value="0" <?= isset($editing['finance_inputs']['funding_mode_show_both']) && empty($editing['finance_inputs']['funding_mode_show_both']) ? 'selected' : '' ?>>Hide narrative emphasis</option></select></div>
 <div><label><input type="checkbox" name="customer_plans_bank_loan" <?= !empty($editing['finance_inputs']['customer_plans_bank_loan']) ? 'checked' : '' ?>> Customer is planning bank loan</label></div>
 <div><label>Transportation ₹</label><input type="number" step="0.01" name="transportation_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['transportation_rs'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Subsidy ₹</label><input type="number" step="0.01" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['subsidy_expected_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Subsidy ₹</label><input type="number" step="0.01" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['subsidy_expected_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted"><a href="#" id="resetSubsidyDefault">Reset to scheme default</a></div></div>
+<div><label>Loan amount ₹</label><input type="number" step="0.01" name="loan_amount" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['loan_amount'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label><input type="checkbox" name="loan_enabled" <?= !empty($editing['finance_inputs']['loan']['enabled']) ? 'checked' : '' ?>> Loan enabled</label></div>
+<div><label>Loan interest %</label><input type="number" step="0.01" name="loan_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['interest_pct'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Loan tenure years</label><input type="number" step="1" name="loan_tenure_years" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Margin money ₹</label><input type="number" step="0.01" name="loan_margin_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['margin_pct'] ?? ''), ENT_QUOTES) ?>"><div class="muted"><a href="#" id="resetLoanDefaults">Reset to defaults</a></div></div>
 <div style="grid-column:1/-1"><label>Notes for customer</label><textarea name="notes_for_customer"><?= htmlspecialchars((string)($editing['finance_inputs']['notes_for_customer'] ?? ''), ENT_QUOTES) ?></textarea></div>
 <div style="grid-column:1/-1"><div class="muted">Annexures are based on template snapshot; edit below.</div></div><?php foreach (['cover_notes'=>'Cover Notes','system_inclusions'=>'System Inclusions','payment_terms'=>'Payment Terms','warranty'=>'Warranty','system_type_explainer'=>'System Type Explainer','transportation'=>'Transportation','terms_conditions'=>'Terms & Conditions','pm_subsidy_info'=>'PM Subsidy Info'] as $key=>$label): ?><div style="grid-column:1/-1"><label><?= $label ?></label><textarea name="ann_<?= $key ?>"><?= htmlspecialchars((string)($editing['annexures_overrides'][$key] ?? ''), ENT_QUOTES) ?></textarea></div><?php endforeach; ?>
 </div><br><button class="btn" type="submit">Save Quotation</button></form></div>
 <div class="card"><h2>My Quote List</h2><table><thead><tr><th>Quote No</th><th>Name</th><th>Status</th><th>Amount</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
 <?php foreach ($quotes as $q): ?><tr><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'employee'), ENT_QUOTES) ?></td><td>₹<?= number_format((float)$q['calc']['grand_total'],2) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td><td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <?php if (documents_quote_can_edit($q, 'employee', (string) ($employee['id'] ?? ''))): ?><a class="btn secondary" href="employee-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?></td></tr><?php endforeach; if ($quotes===[]): ?><tr><td colspan="6">No quotations yet.</td></tr><?php endif; ?></tbody></table></div>
-<script>document.addEventListener('click',function(e){if(e.target&&e.target.id==='addItemBtn'){const tb=document.querySelector('#itemsTable tbody');if(!tb)return;const tr=document.createElement('tr');const dH='<?= htmlspecialchars((string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>';tr.innerHTML='<td></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="'+dH+'"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';tb.appendChild(tr);ren();}if(e.target&&e.target.classList.contains('rm-item')){e.target.closest('tr')?.remove();ren();}});function ren(){document.querySelectorAll('#itemsTable tbody tr').forEach((tr,i)=>{const td=tr.querySelector('td');if(td)td.textContent=String(i+1);});}ren();</script></main></body></html>
+<script>document.addEventListener('click',function(e){if(e.target&&e.target.id==='addItemBtn'){const tb=document.querySelector('#itemsTable tbody');if(!tb)return;const tr=document.createElement('tr');const dH='<?= htmlspecialchars((string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>';tr.innerHTML='<td></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="'+dH+'"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';tb.appendChild(tr);ren();}if(e.target&&e.target.classList.contains('rm-item')){e.target.closest('tr')?.remove();ren();}});function ren(){document.querySelectorAll('#itemsTable tbody tr').forEach((tr,i)=>{const td=tr.querySelector('td');if(td)td.textContent=String(i+1);});}ren();</script>
+<script>window.quoteFormAutofillConfig={settingsBySegment:<?= json_encode($autofillSegments, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,defaultEnergy:<?= json_encode((float)($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450)) ?>};</script><script src="assets/js/quote-form-autofill.js"></script></main></body></html>
