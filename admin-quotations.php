@@ -166,6 +166,14 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         }
 
         $quote['template_set_id'] = $templateSetId;
+        $sourceType = safe_text($_POST['source_type'] ?? (string) ($quote['source']['type'] ?? ''));
+        if ($sourceType === 'lead') {
+            $quote['source'] = [
+                'type' => 'lead',
+                'lead_id' => safe_text($_POST['source_lead_id'] ?? (string) ($quote['source']['lead_id'] ?? '')),
+                'lead_mobile' => normalize_customer_mobile((string) ($_POST['source_lead_mobile'] ?? ($quote['source']['lead_mobile'] ?? ''))),
+            ];
+        }
         $quote['party_type'] = in_array($partyType, ['customer', 'lead'], true) ? $partyType : 'lead';
 
         $snapshot = documents_build_quote_snapshot_from_request($_POST, $quote['party_type'], $customerRecord);
@@ -309,6 +317,8 @@ $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
                 if ((string)($q['accepted_at'] ?? '') === '') {
                     $q['accepted_at'] = date('c');
                 }
+                $syncResult = documents_sync_after_quote_accepted($q);
+                $q = $syncResult['quote'];
             } else {
                 continue;
             }
@@ -356,6 +366,30 @@ if ($editing === null) {
     $editing['valid_until'] = date('Y-m-d', strtotime('+7 days'));
 }
 
+$prefillMessage = '';
+$fromLeadId = safe_text($_GET['from_lead_id'] ?? '');
+if ($editing['id'] === '' && $fromLeadId !== '') {
+    $leadPrefill = documents_get_quote_prefill_from_lead($fromLeadId);
+    if (($leadPrefill['ok'] ?? false) === true) {
+        $prefill = $leadPrefill['prefill'];
+        $editing['party_type'] = 'lead';
+        $editing['customer_name'] = (string) ($prefill['customer_name'] ?? '');
+        $editing['customer_mobile'] = (string) ($prefill['customer_mobile'] ?? '');
+        $editing['city'] = (string) ($prefill['city'] ?? '');
+        $editing['district'] = (string) ($prefill['district'] ?? '');
+        $editing['state'] = (string) ($prefill['state'] ?? '');
+        $editing['billing_address'] = (string) ($prefill['locality'] ?? '');
+        $editing['site_address'] = (string) ($prefill['locality'] ?? '');
+        if ($editing['cover_note_text'] === '' && (string) ($prefill['notes'] ?? '') !== '') {
+            $editing['cover_note_text'] = (string) ($prefill['notes'] ?? '');
+        }
+        $editing['source'] = is_array($prefill['source'] ?? null) ? $prefill['source'] : ['type' => '', 'lead_id' => '', 'lead_mobile' => ''];
+        $prefillMessage = 'Prefilled from Lead: ' . (string) ($prefill['customer_name'] ?? '');
+    } else {
+        $prefillMessage = (string) ($leadPrefill['error'] ?? 'Lead prefill was not possible.');
+    }
+}
+
 $status = safe_text($_GET['status'] ?? '');
 $message = safe_text($_GET['message'] ?? '');
 $lookupMobile = safe_text($_GET['lookup_mobile'] ?? '');
@@ -371,6 +405,7 @@ if ($lookup !== null) {
 <body><main class="wrap">
 <div class="card"><h1>Quotations</h1><a class="btn secondary" href="admin-documents.php">Back to Documents</a> <a class="btn secondary" href="admin-quotations.php?tab=quotations">Quotations</a> <a class="btn secondary" href="admin-quotations.php?tab=archived">Archived</a> <a class="btn" href="admin-quotations.php?tab=settings">Settings</a> <a class="btn" href="admin-quotations.php?tab=quotations">Create New</a></div>
 <?php if ($message !== ''): ?><div class="alert <?= $status === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
+<?php if ($prefillMessage !== ''): ?><div class="alert ok"><?= htmlspecialchars($prefillMessage, ENT_QUOTES) ?></div><?php endif; ?>
 <div class="card">
 <h2><?= $editing['id'] === '' ? 'Create Quotation' : 'Edit Quotation' ?></h2>
 <form method="get" style="margin-bottom:10px">
@@ -379,6 +414,9 @@ if ($lookup !== null) {
 <form method="post">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
 <input type="hidden" name="action" value="save_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string) $editing['id'], ENT_QUOTES) ?>">
+<input type="hidden" name="source_type" value="<?= htmlspecialchars((string) ($editing['source']['type'] ?? ''), ENT_QUOTES) ?>">
+<input type="hidden" name="source_lead_id" value="<?= htmlspecialchars((string) ($editing['source']['lead_id'] ?? ''), ENT_QUOTES) ?>">
+<input type="hidden" name="source_lead_mobile" value="<?= htmlspecialchars((string) ($editing['source']['lead_mobile'] ?? ''), ENT_QUOTES) ?>">
 <div class="grid">
 <div><label>Template Set</label><select name="template_set_id" required><?php foreach ($templates as $tpl): ?><option value="<?= htmlspecialchars((string)$tpl['id'], ENT_QUOTES) ?>" <?= ((string)$editing['template_set_id']===(string)$tpl['id'])?'selected':'' ?>><?= htmlspecialchars((string)$tpl['name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$tpl['segment'], ENT_QUOTES) ?>)</option><?php endforeach; ?></select></div>
 <div><label>Party Type</label><select name="party_type"><option value="customer" <?= $editing['party_type']==='customer'?'selected':'' ?>>Customer</option><option value="lead" <?= $editing['party_type']!=='customer'?'selected':'' ?>>Lead</option></select></div>
