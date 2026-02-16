@@ -9,6 +9,36 @@ function documents_base_dir(): string
     return dirname(__DIR__, 2) . '/data/documents';
 }
 
+function documents_inventory_dir(): string
+{
+    return dirname(__DIR__, 2) . '/data/inventory';
+}
+
+function documents_inventory_components_path(): string
+{
+    return documents_inventory_dir() . '/components.json';
+}
+
+function documents_inventory_kits_path(): string
+{
+    return documents_inventory_dir() . '/kits.json';
+}
+
+function documents_inventory_stock_path(): string
+{
+    return documents_inventory_dir() . '/stock.json';
+}
+
+function documents_inventory_transactions_path(): string
+{
+    return documents_inventory_dir() . '/transactions.json';
+}
+
+function documents_packing_lists_path(): string
+{
+    return documents_base_dir() . '/packing_lists.json';
+}
+
 function documents_settings_dir(): string
 {
     return documents_base_dir() . '/settings';
@@ -167,6 +197,7 @@ function documents_ensure_structure(): void
     documents_ensure_dir(documents_public_watermarks_dir());
     documents_ensure_dir(documents_public_diagrams_dir());
     documents_ensure_dir(documents_public_uploads_dir());
+    documents_ensure_dir(documents_inventory_dir());
 
     $companyPath = documents_company_profile_path();
     if (!is_file($companyPath)) {
@@ -215,10 +246,18 @@ function documents_ensure_structure(): void
         documents_sales_delivery_challans_store_path(),
         documents_sales_proforma_store_path(),
         documents_sales_invoice_store_path(),
+        documents_inventory_components_path(),
+        documents_inventory_kits_path(),
+        documents_inventory_transactions_path(),
+        documents_packing_lists_path(),
     ] as $storePath) {
         if (!is_file($storePath)) {
             json_save($storePath, []);
         }
+    }
+
+    if (!is_file(documents_inventory_stock_path())) {
+        json_save(documents_inventory_stock_path(), ['stock_by_component_id' => []]);
     }
 }
 
@@ -817,6 +856,7 @@ function documents_quote_defaults(): array
             'invoice_id' => '',
             'receipt_ids' => [],
             'delivery_challan_ids' => [],
+            'packing_list_id' => '',
         ],
         'links' => [
             'customer_mobile' => '',
@@ -884,6 +924,7 @@ function documents_quote_defaults(): array
         'special_requests_text' => '',
         'special_requests_inclusive' => '',
         'items' => [],
+        'quote_items' => [],
         'special_requests_override_note' => true,
         'annexures_overrides' => [
             'cover_notes' => '',
@@ -1104,6 +1145,7 @@ function documents_agreement_defaults(): array
         'total_cost' => '',
         'linked_quote_id' => '',
         'linked_quote_no' => '',
+        'packing_list_id' => '',
         'district' => '',
         'city' => '',
         'state' => '',
@@ -1219,6 +1261,9 @@ function documents_challan_item_defaults(): array
         'unit' => 'Nos',
         'qty' => 0,
         'remarks' => '',
+        'component_id' => '',
+        'dispatch_qty' => 0,
+        'dispatch_ft' => 0,
     ];
 }
 
@@ -1235,7 +1280,10 @@ function documents_normalize_challan_items(array $items): array
         $row['unit'] = safe_text((string) ($row['unit'] ?? 'Nos')) ?: 'Nos';
         $row['qty'] = max(0, (float) ($row['qty'] ?? 0));
         $row['remarks'] = safe_text((string) ($row['remarks'] ?? ''));
-        if ($row['name'] === '' && $row['description'] === '' && $row['qty'] <= 0) {
+        $row['component_id'] = safe_text((string) ($row['component_id'] ?? ''));
+        $row['dispatch_qty'] = max(0, (float) ($row['dispatch_qty'] ?? 0));
+        $row['dispatch_ft'] = max(0, (float) ($row['dispatch_ft'] ?? 0));
+        if ($row['name'] === '' && $row['description'] === '' && $row['qty'] <= 0 && $row['dispatch_qty'] <= 0 && $row['dispatch_ft'] <= 0) {
             continue;
         }
         $rows[] = $row;
@@ -1767,12 +1815,40 @@ function documents_sync_after_quote_accepted(array $quote): array
         $quote['links']['customer_mobile'] = normalize_customer_mobile((string) ($quote['customer_mobile'] ?? ''));
     }
 
+    $packingListCreated = false;
+    $packingWarning = '';
+    $existingPackingId = safe_text((string) ($quote['workflow']['packing_list_id'] ?? ''));
+    if ($existingPackingId !== '') {
+        $existing = documents_get_packing_list_for_quote((string) ($quote['id'] ?? ''), false);
+        if ($existing !== null) {
+            $packingListCreated = true;
+        }
+    }
+
+    if (!$packingListCreated) {
+        $existing = documents_get_packing_list_for_quote((string) ($quote['id'] ?? ''), false);
+        if ($existing !== null) {
+            $quote['workflow']['packing_list_id'] = (string) ($existing['id'] ?? '');
+            $packingListCreated = true;
+        } else {
+            $packResult = documents_create_packing_list_from_quote($quote);
+            if (($packResult['ok'] ?? false) && is_array($packResult['packing_list'] ?? null)) {
+                $quote['workflow']['packing_list_id'] = (string) (($packResult['packing_list']['id'] ?? ''));
+                $packingListCreated = true;
+            } else {
+                $packingWarning = (string) ($packResult['error'] ?? 'No structured items selected');
+            }
+        }
+    }
+
     $leadArchived = documents_archive_lead_from_quote_source($quote);
 
     return [
         'quote' => $quote,
         'customer_upserted' => (bool) ($customerResult['ok'] ?? false),
         'lead_archived' => $leadArchived,
+        'packing_list_created' => $packingListCreated,
+        'packing_warning' => $packingWarning,
     ];
 }
 
@@ -2402,6 +2478,7 @@ function documents_quote_workflow_defaults(): array
         'invoice_id' => '',
         'receipt_ids' => [],
         'delivery_challan_ids' => [],
+        'packing_list_id' => '',
     ];
 }
 
@@ -2411,6 +2488,7 @@ function documents_quote_prepare(array $quote): array
     $quote = array_merge(documents_quote_defaults(), $quote);
     $quote['status'] = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
     $quote['workflow'] = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
+    $quote['quote_items'] = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
     $quote['accepted_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['accepted_by'] ?? null) ? $quote['accepted_by'] : []);
     $quote['archived_by'] = array_merge(['type' => '', 'id' => '', 'name' => ''], is_array($quote['archived_by'] ?? null) ? $quote['archived_by'] : []);
     if (!array_key_exists('quote_series_id', $original) || safe_text((string) ($quote['quote_series_id'] ?? '')) === '') {
@@ -2669,4 +2747,516 @@ function documents_status_label(array $quote, string $viewerType = 'admin'): str
         'archived' => 'Archived',
     ];
     return $labels[$status] ?? ucfirst($status);
+}
+
+function documents_inventory_component_defaults(): array
+{
+    return [
+        'id' => '',
+        'name' => '',
+        'category' => '',
+        'hsn' => '',
+        'default_unit' => 'pcs',
+        'is_cuttable' => false,
+        'standard_length_ft' => 0,
+        'min_issue_ft' => 1,
+        'notes' => '',
+        'archived_flag' => false,
+        'created_at' => '',
+        'updated_at' => '',
+    ];
+}
+
+function documents_inventory_kit_defaults(): array
+{
+    return [
+        'id' => '',
+        'name' => '',
+        'category' => '',
+        'description' => '',
+        'items' => [],
+        'archived_flag' => false,
+        'created_at' => '',
+        'updated_at' => '',
+    ];
+}
+
+function documents_inventory_stock_defaults(): array
+{
+    return ['stock_by_component_id' => []];
+}
+
+function documents_inventory_transaction_defaults(): array
+{
+    return [
+        'id' => '',
+        'type' => 'IN',
+        'component_id' => '',
+        'qty' => 0,
+        'length_ft' => 0,
+        'lot_consumption' => [],
+        'ref_type' => 'manual',
+        'ref_id' => '',
+        'created_at' => '',
+        'created_by' => '',
+    ];
+}
+
+function documents_inventory_component_entry_defaults(): array
+{
+    return ['on_hand_qty' => 0, 'lots' => [], 'updated_at' => ''];
+}
+
+function documents_packing_list_defaults(): array
+{
+    return [
+        'id' => '',
+        'quotation_id' => '',
+        'customer_mobile' => '',
+        'customer_name' => '',
+        'created_at' => '',
+        'status' => 'active',
+        'required_items' => [],
+        'dispatch_log' => [],
+        'archived_flag' => false,
+        'updated_at' => '',
+    ];
+}
+
+function documents_quote_structured_item_defaults(): array
+{
+    return [
+        'type' => 'component',
+        'kit_id' => '',
+        'component_id' => '',
+        'name_snapshot' => '',
+        'qty' => 0,
+        'unit' => '',
+        'meta' => [],
+    ];
+}
+
+function documents_inventory_components(bool $includeArchived = true): array
+{
+    $rows = json_load(documents_inventory_components_path(), []);
+    if (!is_array($rows)) {
+        return [];
+    }
+    $list = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $component = array_merge(documents_inventory_component_defaults(), $row);
+        $component['is_cuttable'] = (bool) ($component['is_cuttable'] ?? false);
+        $component['standard_length_ft'] = (float) ($component['standard_length_ft'] ?? 0);
+        $component['min_issue_ft'] = max(0.01, (float) ($component['min_issue_ft'] ?? 1));
+        if (!$includeArchived && !empty($component['archived_flag'])) {
+            continue;
+        }
+        $list[] = $component;
+    }
+    usort($list, static fn(array $a, array $b): int => strcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? '')));
+    return $list;
+}
+
+function documents_inventory_kits(bool $includeArchived = true): array
+{
+    $rows = json_load(documents_inventory_kits_path(), []);
+    if (!is_array($rows)) {
+        return [];
+    }
+    $list = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $kit = array_merge(documents_inventory_kit_defaults(), $row);
+        $kit['items'] = is_array($kit['items'] ?? null) ? $kit['items'] : [];
+        if (!$includeArchived && !empty($kit['archived_flag'])) {
+            continue;
+        }
+        $list[] = $kit;
+    }
+    usort($list, static fn(array $a, array $b): int => strcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? '')));
+    return $list;
+}
+
+function documents_inventory_get_component(string $id): ?array
+{
+    foreach (documents_inventory_components(true) as $component) {
+        if ((string) ($component['id'] ?? '') === $id) {
+            return $component;
+        }
+    }
+    return null;
+}
+
+function documents_inventory_get_kit(string $id): ?array
+{
+    foreach (documents_inventory_kits(true) as $kit) {
+        if ((string) ($kit['id'] ?? '') === $id) {
+            return $kit;
+        }
+    }
+    return null;
+}
+
+function documents_inventory_save_components(array $components): array
+{
+    return json_save(documents_inventory_components_path(), array_values($components));
+}
+
+function documents_inventory_save_kits(array $kits): array
+{
+    return json_save(documents_inventory_kits_path(), array_values($kits));
+}
+
+function documents_inventory_load_stock(): array
+{
+    $stock = json_load(documents_inventory_stock_path(), documents_inventory_stock_defaults());
+    $stock = array_merge(documents_inventory_stock_defaults(), is_array($stock) ? $stock : []);
+    $stock['stock_by_component_id'] = is_array($stock['stock_by_component_id'] ?? null) ? $stock['stock_by_component_id'] : [];
+    return $stock;
+}
+
+function documents_inventory_save_stock(array $stock): array
+{
+    return json_save(documents_inventory_stock_path(), $stock);
+}
+
+function documents_inventory_load_transactions(): array
+{
+    $rows = json_load(documents_inventory_transactions_path(), []);
+    return is_array($rows) ? $rows : [];
+}
+
+function documents_inventory_append_transaction(array $tx): array
+{
+    $rows = documents_inventory_load_transactions();
+    $rows[] = array_merge(documents_inventory_transaction_defaults(), $tx);
+    return json_save(documents_inventory_transactions_path(), $rows);
+}
+
+function documents_inventory_component_stock(array $stock, string $componentId): array
+{
+    $entry = $stock['stock_by_component_id'][$componentId] ?? [];
+    $entry = array_merge(documents_inventory_component_entry_defaults(), is_array($entry) ? $entry : []);
+    $entry['on_hand_qty'] = (float) ($entry['on_hand_qty'] ?? 0);
+    $entry['lots'] = is_array($entry['lots'] ?? null) ? $entry['lots'] : [];
+    return $entry;
+}
+
+function documents_inventory_total_remaining_ft(array $entry): float
+{
+    $sum = 0.0;
+    foreach ((array) ($entry['lots'] ?? []) as $lot) {
+        if (!is_array($lot)) {
+            continue;
+        }
+        $sum += max(0, (float) ($lot['remaining_length_ft'] ?? 0));
+    }
+    return $sum;
+}
+
+function documents_inventory_has_sufficient(array $component, array $stock, float $required): bool
+{
+    $entry = documents_inventory_component_stock($stock, (string) ($component['id'] ?? ''));
+    if (!empty($component['is_cuttable'])) {
+        return documents_inventory_total_remaining_ft($entry) + 0.00001 >= $required;
+    }
+    return (float) ($entry['on_hand_qty'] ?? 0) + 0.00001 >= $required;
+}
+
+function documents_packing_lists(bool $includeArchived = true): array
+{
+    $rows = json_load(documents_packing_lists_path(), []);
+    if (!is_array($rows)) {
+        return [];
+    }
+    $list = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $pack = array_merge(documents_packing_list_defaults(), $row);
+        if (!$includeArchived && !empty($pack['archived_flag'])) {
+            continue;
+        }
+        $pack['required_items'] = is_array($pack['required_items'] ?? null) ? $pack['required_items'] : [];
+        $pack['dispatch_log'] = is_array($pack['dispatch_log'] ?? null) ? $pack['dispatch_log'] : [];
+        $list[] = $pack;
+    }
+    return $list;
+}
+
+function documents_save_packing_lists(array $rows): array
+{
+    return json_save(documents_packing_lists_path(), array_values($rows));
+}
+
+function documents_get_packing_list_for_quote(string $quotationId, bool $includeArchived = false): ?array
+{
+    foreach (documents_packing_lists(true) as $row) {
+        if ((string) ($row['quotation_id'] ?? '') !== $quotationId) {
+            continue;
+        }
+        if (!$includeArchived && !empty($row['archived_flag'])) {
+            continue;
+        }
+        return $row;
+    }
+    return null;
+}
+
+function documents_save_packing_list(array $packingList): array
+{
+    $rows = documents_packing_lists(true);
+    $id = (string) ($packingList['id'] ?? '');
+    $found = false;
+    foreach ($rows as $idx => $row) {
+        if ((string) ($row['id'] ?? '') === $id) {
+            $rows[$idx] = $packingList;
+            $found = true;
+            break;
+        }
+    }
+    if (!$found) {
+        $rows[] = $packingList;
+    }
+    return documents_save_packing_lists($rows);
+}
+
+function documents_normalize_quote_structured_items(array $rows): array
+{
+    $out = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $item = array_merge(documents_quote_structured_item_defaults(), $row);
+        $item['type'] = in_array((string) ($item['type'] ?? 'component'), ['kit', 'component'], true) ? (string) $item['type'] : 'component';
+        $item['qty'] = max(0, (float) ($item['qty'] ?? 0));
+        $item['meta'] = is_array($item['meta'] ?? null) ? $item['meta'] : [];
+        if ($item['qty'] <= 0) {
+            continue;
+        }
+        if ($item['type'] === 'kit' && (string) ($item['kit_id'] ?? '') === '') {
+            continue;
+        }
+        if ($item['type'] === 'component' && (string) ($item['component_id'] ?? '') === '') {
+            continue;
+        }
+        $out[] = $item;
+    }
+    return $out;
+}
+
+function documents_create_packing_list_from_quote(array $quote): array
+{
+    $quoteItems = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
+    if ($quoteItems === []) {
+        return ['ok' => false, 'error' => 'No structured items selected'];
+    }
+
+    $components = documents_inventory_components(true);
+    $componentMap = [];
+    foreach ($components as $component) {
+        $componentMap[(string) ($component['id'] ?? '')] = $component;
+    }
+
+    $totals = [];
+    foreach ($quoteItems as $item) {
+        if ((string) ($item['type'] ?? '') === 'kit') {
+            $kit = documents_inventory_get_kit((string) ($item['kit_id'] ?? ''));
+            if ($kit === null) {
+                continue;
+            }
+            foreach ((array) ($kit['items'] ?? []) as $bomLine) {
+                if (!is_array($bomLine)) {
+                    continue;
+                }
+                $componentId = (string) ($bomLine['component_id'] ?? '');
+                if ($componentId === '') {
+                    continue;
+                }
+                $qty = (float) ($bomLine['qty'] ?? 0) * (float) ($item['qty'] ?? 0);
+                if ($qty <= 0) {
+                    continue;
+                }
+                if (!isset($totals[$componentId])) {
+                    $totals[$componentId] = 0.0;
+                }
+                $totals[$componentId] += $qty;
+            }
+            continue;
+        }
+
+        $componentId = (string) ($item['component_id'] ?? '');
+        if ($componentId === '') {
+            continue;
+        }
+        if (!isset($totals[$componentId])) {
+            $totals[$componentId] = 0.0;
+        }
+        $totals[$componentId] += (float) ($item['qty'] ?? 0);
+    }
+
+    if ($totals === []) {
+        return ['ok' => false, 'error' => 'No structured items selected'];
+    }
+
+    $required = [];
+    foreach ($totals as $componentId => $qty) {
+        $component = $componentMap[$componentId] ?? null;
+        if (!is_array($component)) {
+            continue;
+        }
+        $isCuttable = !empty($component['is_cuttable']);
+        $line = [
+            'component_id' => $componentId,
+            'component_name_snapshot' => (string) ($component['name'] ?? 'Component'),
+            'unit' => $isCuttable ? 'ft' : (string) ($component['default_unit'] ?? 'pcs'),
+            'required_qty' => $isCuttable ? 0 : $qty,
+            'required_ft' => $isCuttable ? $qty : 0,
+            'dispatched_qty' => 0,
+            'dispatched_ft' => 0,
+            'pending_qty' => $isCuttable ? 0 : $qty,
+            'pending_ft' => $isCuttable ? $qty : 0,
+        ];
+        $required[] = $line;
+    }
+
+    if ($required === []) {
+        return ['ok' => false, 'error' => 'No structured items selected'];
+    }
+
+    $quote = documents_quote_prepare($quote);
+    $packingList = documents_packing_list_defaults();
+    $packingList['id'] = 'pl_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+    $packingList['quotation_id'] = (string) ($quote['id'] ?? '');
+    $packingList['customer_mobile'] = normalize_customer_mobile((string) ($quote['customer_mobile'] ?? ''));
+    $packingList['customer_name'] = (string) ($quote['customer_name'] ?? '');
+    $packingList['status'] = 'active';
+    $packingList['required_items'] = $required;
+    $packingList['created_at'] = date('c');
+    $packingList['updated_at'] = date('c');
+
+    $saved = documents_save_packing_list($packingList);
+    if (!($saved['ok'] ?? false)) {
+        return ['ok' => false, 'error' => 'Unable to save packing list'];
+    }
+
+    $quote['workflow'] = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
+    $quote['workflow']['packing_list_id'] = (string) $packingList['id'];
+    $quote['updated_at'] = date('c');
+    $savedQuote = documents_save_quote($quote);
+    if (!($savedQuote['ok'] ?? false)) {
+        return ['ok' => false, 'error' => 'Packing list created but quote update failed'];
+    }
+
+    return ['ok' => true, 'packing_list' => $packingList, 'error' => ''];
+}
+
+function documents_apply_dispatch_to_packing_list(array $packingList, string $challanId, array $dispatchRows): array
+{
+    $required = is_array($packingList['required_items'] ?? null) ? $packingList['required_items'] : [];
+    $byId = [];
+    foreach ($required as $idx => $line) {
+        if (!is_array($line)) {
+            continue;
+        }
+        $byId[(string) ($line['component_id'] ?? '')] = $idx;
+    }
+
+    $dispatchLogItems = [];
+    foreach ($dispatchRows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $componentId = (string) ($row['component_id'] ?? '');
+        if ($componentId === '' || !isset($byId[$componentId])) {
+            continue;
+        }
+        $idx = $byId[$componentId];
+        $line = array_merge([
+            'required_qty' => 0,
+            'required_ft' => 0,
+            'dispatched_qty' => 0,
+            'dispatched_ft' => 0,
+            'pending_qty' => 0,
+            'pending_ft' => 0,
+            'unit' => 'pcs',
+        ], $required[$idx]);
+
+        $dispatchQty = max(0, (float) ($row['dispatch_qty'] ?? 0));
+        $dispatchFt = max(0, (float) ($row['dispatch_ft'] ?? 0));
+        $isCuttable = strtolower((string) ($line['unit'] ?? '')) === 'ft';
+
+        if ($isCuttable) {
+            $line['dispatched_ft'] = (float) ($line['dispatched_ft'] ?? 0) + $dispatchFt;
+            $line['pending_ft'] = max(0, (float) ($line['required_ft'] ?? 0) - (float) ($line['dispatched_ft'] ?? 0));
+        } else {
+            $line['dispatched_qty'] = (float) ($line['dispatched_qty'] ?? 0) + $dispatchQty;
+            $line['pending_qty'] = max(0, (float) ($line['required_qty'] ?? 0) - (float) ($line['dispatched_qty'] ?? 0));
+        }
+
+        $required[$idx] = $line;
+        $dispatchLogItems[] = [
+            'component_id' => $componentId,
+            'qty' => $dispatchQty,
+            'ft' => $dispatchFt,
+        ];
+    }
+
+    $packingList['required_items'] = $required;
+    $packingList['dispatch_log'][] = [
+        'delivery_challan_id' => $challanId,
+        'at' => date('c'),
+        'items' => $dispatchLogItems,
+    ];
+
+    $allPendingDone = true;
+    foreach ($required as $line) {
+        if (!is_array($line)) {
+            continue;
+        }
+        if ((float) ($line['pending_qty'] ?? 0) > 0 || (float) ($line['pending_ft'] ?? 0) > 0) {
+            $allPendingDone = false;
+            break;
+        }
+    }
+    $packingList['status'] = $allPendingDone ? 'complete' : 'active';
+    $packingList['updated_at'] = date('c');
+
+    return $packingList;
+}
+
+function documents_inventory_consume_fifo_lots(array $lots, float $requiredFt): array
+{
+    $remaining = $requiredFt;
+    $consumed = [];
+    foreach ($lots as $idx => $lot) {
+        if (!is_array($lot)) {
+            continue;
+        }
+        if ($remaining <= 0) {
+            break;
+        }
+        $lotRemaining = max(0, (float) ($lot['remaining_length_ft'] ?? 0));
+        if ($lotRemaining <= 0) {
+            continue;
+        }
+        $used = min($lotRemaining, $remaining);
+        $lots[$idx]['remaining_length_ft'] = round($lotRemaining - $used, 4);
+        $consumed[] = ['lot_id' => (string) ($lot['lot_id'] ?? ''), 'used_ft' => $used];
+        $remaining -= $used;
+    }
+
+    return [
+        'ok' => $remaining <= 0.00001,
+        'lots' => $lots,
+        'lot_consumption' => $consumed,
+        'remaining_ft' => max(0, $remaining),
+    ];
 }
