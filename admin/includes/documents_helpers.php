@@ -369,6 +369,28 @@ function load_company_profile(): array
 {
     $profile = json_load(documents_company_profile_path(), []);
     $merged = array_merge(documents_company_profile_defaults(), is_array($profile) ? $profile : []);
+    $bankFromProfile = is_array($merged['bank'] ?? null) ? $merged['bank'] : [];
+    $merged['bank'] = array_merge(
+        documents_company_profile_bank_defaults(),
+        $bankFromProfile,
+        [
+            'account_holder' => (string) ($bankFromProfile['account_holder'] ?? $merged['bank_account_name'] ?? ''),
+            'bank_name' => (string) ($bankFromProfile['bank_name'] ?? $merged['bank_name'] ?? ''),
+            'account_number' => (string) ($bankFromProfile['account_number'] ?? $merged['bank_account_no'] ?? ''),
+            'ifsc' => (string) ($bankFromProfile['ifsc'] ?? $merged['bank_ifsc'] ?? ''),
+            'branch' => (string) ($bankFromProfile['branch'] ?? $merged['bank_branch'] ?? ''),
+            'upi_id' => (string) ($bankFromProfile['upi_id'] ?? $merged['upi_id'] ?? ''),
+            'qr_image' => (string) ($bankFromProfile['qr_image'] ?? ''),
+        ]
+    );
+
+    $merged['bank_name'] = (string) ($merged['bank']['bank_name'] ?? '');
+    $merged['bank_account_name'] = (string) ($merged['bank']['account_holder'] ?? '');
+    $merged['bank_account_no'] = (string) ($merged['bank']['account_number'] ?? '');
+    $merged['bank_ifsc'] = (string) ($merged['bank']['ifsc'] ?? '');
+    $merged['bank_branch'] = (string) ($merged['bank']['branch'] ?? '');
+    $merged['upi_id'] = (string) ($merged['bank']['upi_id'] ?? '');
+
     $merged['logo_path'] = documents_normalize_public_asset_path($merged['logo_path'] ?? '');
     return $merged;
 }
@@ -376,8 +398,43 @@ function load_company_profile(): array
 function save_company_profile(array $profile): array
 {
     $merged = array_merge(documents_company_profile_defaults(), $profile);
+    $bankFromProfile = is_array($merged['bank'] ?? null) ? $merged['bank'] : [];
+    $merged['bank'] = array_merge(
+        documents_company_profile_bank_defaults(),
+        $bankFromProfile,
+        [
+            'account_holder' => trim((string) ($bankFromProfile['account_holder'] ?? $merged['bank_account_name'] ?? '')),
+            'bank_name' => trim((string) ($bankFromProfile['bank_name'] ?? $merged['bank_name'] ?? '')),
+            'account_number' => trim((string) ($bankFromProfile['account_number'] ?? $merged['bank_account_no'] ?? '')),
+            'ifsc' => strtoupper(trim((string) ($bankFromProfile['ifsc'] ?? $merged['bank_ifsc'] ?? ''))),
+            'branch' => trim((string) ($bankFromProfile['branch'] ?? $merged['bank_branch'] ?? '')),
+            'upi_id' => trim((string) ($bankFromProfile['upi_id'] ?? $merged['upi_id'] ?? '')),
+            'qr_image' => trim((string) ($bankFromProfile['qr_image'] ?? '')),
+        ]
+    );
+
+    $merged['bank_name'] = (string) ($merged['bank']['bank_name'] ?? '');
+    $merged['bank_account_name'] = (string) ($merged['bank']['account_holder'] ?? '');
+    $merged['bank_account_no'] = (string) ($merged['bank']['account_number'] ?? '');
+    $merged['bank_ifsc'] = (string) ($merged['bank']['ifsc'] ?? '');
+    $merged['bank_branch'] = (string) ($merged['bank']['branch'] ?? '');
+    $merged['upi_id'] = (string) ($merged['bank']['upi_id'] ?? '');
+
     $merged['updated_at'] = date('c');
     return json_save(documents_company_profile_path(), $merged);
+}
+
+function documents_company_profile_bank_defaults(): array
+{
+    return [
+        'account_holder' => '',
+        'bank_name' => '',
+        'account_number' => '',
+        'ifsc' => '',
+        'branch' => '',
+        'upi_id' => '',
+        'qr_image' => '',
+    ];
 }
 
 function documents_normalize_public_asset_path($rawPath): string
@@ -647,6 +704,15 @@ function documents_company_profile_defaults(): array
         'pan' => '',
         'jreda_license' => '',
         'dwsd_license' => '',
+        'bank' => [
+            'account_holder' => '',
+            'bank_name' => '',
+            'account_number' => '',
+            'ifsc' => '',
+            'branch' => '',
+            'upi_id' => '',
+            'qr_image' => '',
+        ],
         'bank_name' => '',
         'bank_account_name' => '',
         'bank_account_no' => '',
