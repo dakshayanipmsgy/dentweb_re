@@ -491,7 +491,7 @@ if ($lookup !== null) {
 <div><label>Unit rate (₹/kWh)</label><input type="number" step="0.01" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['finance_inputs']['unit_rate_rs_per_kwh'] ?: ($segmentDefaults['unit_rate_rs_per_kwh'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($editing['finance_inputs']['annual_generation_per_kw'] ?: ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Transportation ₹</label><input type="number" step="0.01" name="transportation_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['transportation_rs'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Subsidy ₹</label><input type="number" step="0.01" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['subsidy_expected_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Subsidy ₹</label><input type="number" step="0.01" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['subsidy_expected_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted"><a href="#" id="resetSubsidyDefault">Reset to scheme default</a></div></div>
 <div><label>Loan amount ₹</label><input type="number" step="0.01" name="loan_amount" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['loan_amount'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label><input type="checkbox" name="loan_enabled" <?= !empty($editing['finance_inputs']['loan']['enabled']) ? 'checked' : '' ?>> Loan enabled</label></div>
 <div><label>Loan interest %</label><input type="number" step="0.01" name="loan_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['interest_pct'] ?? ''), ENT_QUOTES) ?>"></div>
@@ -605,6 +605,10 @@ renumberItems();
     const transportInput = field('transportation_rs');
     const subsidyInput = field('subsidy_expected_rs');
     const capacityInput = field('capacity_kwp');
+    const schemeTypeInput = field('scheme_type');
+    const customerTypeInput = field('customer_type');
+    const pmSuryagharInput = field('is_pm_suryaghar');
+    const quoteIdInput = field('quote_id');
     const unitRateInput = field('unit_rate_rs_per_kwh');
     const annualGenerationInput = field('annual_generation_per_kw');
     const monthlyBillInput = field('monthly_bill_rs');
@@ -615,8 +619,9 @@ renumberItems();
 
     const resetLoanBtn = document.getElementById('resetLoanDefaults');
     const resetMonthlyBtn = document.getElementById('resetMonthlySuggestion');
+    const resetSubsidyBtn = document.getElementById('resetSubsidyDefault');
 
-    const managedFields = [monthlyBillInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].filter(Boolean);
+    const managedFields = [monthlyBillInput, subsidyInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].filter(Boolean);
     managedFields.forEach((input) => {
         if (!input) return;
         input.addEventListener('input', () => { input.dataset.touched = '1'; });
@@ -647,6 +652,39 @@ renumberItems();
             annual_generation_per_kw: defaultEnergy,
             loan_bestcase: { max_loan_rs: 200000, interest_pct: 6, tenure_years: 10, min_margin_pct: 10 }
         };
+    };
+
+    const isPmSuryaGharContext = () => {
+        if (schemeTypeInput) {
+            return String(schemeTypeInput.value || '').trim().toLowerCase() === 'pm surya ghar';
+        }
+        if (customerTypeInput) {
+            return String(customerTypeInput.value || '').trim().toLowerCase() === 'pm surya ghar';
+        }
+        if (pmSuryagharInput) {
+            if (pmSuryagharInput.type === 'checkbox') return !!pmSuryagharInput.checked;
+            return ['1', 'true', 'yes', 'pm surya ghar'].includes(String(pmSuryagharInput.value || '').trim().toLowerCase());
+        }
+        return currentSegmentCode() === 'RES';
+    };
+
+    const subsidyByCapacity = (capacity) => {
+        if (Math.abs(capacity - 2.0) < 0.01) return 60000;
+        if (capacity >= 3.0 - 0.001) return 78000;
+        return 0;
+    };
+
+    const applySubsidyDefault = (force = false) => {
+        if (!subsidyInput || !capacityInput) return;
+        const isNewQuote = !quoteIdInput || String(quoteIdInput.value || '').trim() === '';
+        const isEmpty = fieldEmpty(subsidyInput);
+        if (!force) {
+            if (!isPmSuryaGharContext()) return;
+            if (subsidyInput.dataset.touched === '1' && !isEmpty) return;
+            if (!isEmpty && !isNewQuote) return;
+        }
+        const capacity = parseNum(capacityInput.value);
+        subsidyInput.value = String(subsidyByCapacity(capacity));
     };
 
     const computeGrossPayable = () => parseNum(totalInput?.value) + parseNum(transportInput?.value);
@@ -688,7 +726,10 @@ renumberItems();
     bindRecalc(totalInput, () => applyLoanDefaults(false));
     bindRecalc(transportInput, () => applyLoanDefaults(false));
     bindRecalc(subsidyInput, () => applyLoanDefaults(false));
-    bindRecalc(capacityInput, () => applyMonthlySuggestion(false));
+    bindRecalc(capacityInput, () => {
+        applyMonthlySuggestion(false);
+        applySubsidyDefault(false);
+    });
     bindRecalc(unitRateInput, () => applyMonthlySuggestion(false));
     bindRecalc(annualGenerationInput, () => applyMonthlySuggestion(false));
 
@@ -701,7 +742,17 @@ renumberItems();
         templateSet.addEventListener('change', () => {
             applyLoanDefaults(false);
             applyMonthlySuggestion(false);
+            applySubsidyDefault(false);
         });
+    }
+    if (schemeTypeInput) {
+        schemeTypeInput.addEventListener('change', () => applySubsidyDefault(false));
+    }
+    if (customerTypeInput) {
+        customerTypeInput.addEventListener('change', () => applySubsidyDefault(false));
+    }
+    if (pmSuryagharInput) {
+        pmSuryagharInput.addEventListener('change', () => applySubsidyDefault(false));
     }
 
     resetLoanBtn?.addEventListener('click', (e) => {
@@ -718,7 +769,15 @@ renumberItems();
         applyMonthlySuggestion(true);
     });
 
+    resetSubsidyBtn?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (subsidyInput) subsidyInput.dataset.touched = '';
+        applySubsidyDefault(true);
+        applyLoanDefaults(false);
+    });
+
     applyLoanDefaults(false);
     applyMonthlySuggestion(false);
+    applySubsidyDefault(false);
 })();
 </script></main></body></html>
