@@ -835,7 +835,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
 
-    if (in_array($action, ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive','save_location','save_location_edit','toggle_location_archive','create_inventory_tx','edit_inventory_tx','edit_inventory_stock'], true)) {
+    if (in_array($action, ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive','save_location','save_location_edit','toggle_location_archive','create_inventory_tx','edit_inventory_tx'], true)) {
         $masterActions = ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive','save_location','save_location_edit','toggle_location_archive'];
         if (in_array($action, $masterActions, true) && !$isAdmin) {
             $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'components']);
@@ -1294,183 +1294,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? 'Kit archive state updated.' : 'Failed to update kit.', ['items_subtab' => 'kits']);
         }
 
-
-        if ($action === 'edit_inventory_stock') {
-            if (!$isAdmin) {
-                $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
-            }
-            $componentId = safe_text((string) ($_POST['component_id'] ?? ''));
-            $variantId = safe_text((string) ($_POST['variant_id'] ?? ''));
-            $editKind = safe_text((string) ($_POST['edit_kind'] ?? 'batch'));
-            $targetId = safe_text((string) ($_POST['target_id'] ?? ''));
-            $newLocationId = safe_text((string) ($_POST['location_id'] ?? ''));
-            if ($newLocationId !== '' && documents_inventory_get_location($newLocationId) === null) {
-                $redirectDocuments('items', 'error', 'Invalid location selected.', ['items_subtab' => 'inventory']);
-            }
-            $component = documents_inventory_get_component($componentId);
-            if ($component === null) {
-                $redirectDocuments('items', 'error', 'Component not found.', ['items_subtab' => 'inventory']);
-            }
-            if (empty($component['has_variants'])) {
-                $variantId = '';
-            }
-
-            $stock = documents_inventory_load_stock();
-            $transactions = documents_inventory_load_transactions();
-            $transactions = array_map(static fn($tx): array => array_merge(documents_inventory_transaction_defaults(), is_array($tx) ? $tx : []), $transactions);
-            $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
-            $actor = documents_inventory_actor($user ?? []);
-
-            $outForBucket = array_values(array_filter($transactions, static function (array $tx) use ($componentId, $variantId): bool {
-                return (string) ($tx['type'] ?? '') === 'OUT' && (string) ($tx['component_id'] ?? '') === $componentId && (string) ($tx['variant_id'] ?? '') === $variantId;
-            }));
-
-            $isBatchEditable = static function (array $batch) use ($transactions, $outForBucket, $componentId, $variantId): bool {
-                if (!empty($batch['legacy_batch'])) {
-                    return $outForBucket === [];
-                }
-                $sourceTxnId = (string) ($batch['source_txn_id'] ?? '');
-                if ($sourceTxnId === '') {
-                    return false;
-                }
-                $sourceTx = null;
-                foreach ($transactions as $tx) {
-                    if ((string) ($tx['id'] ?? '') === $sourceTxnId && (string) ($tx['type'] ?? '') === 'IN' && (string) ($tx['component_id'] ?? '') === $componentId && (string) ($tx['variant_id'] ?? '') === $variantId) {
-                        $sourceTx = $tx;
-                        break;
-                    }
-                }
-                if (!is_array($sourceTx)) {
-                    return false;
-                }
-                $sourceAt = strtotime((string) ($sourceTx['created_at'] ?? '')) ?: 0;
-                if ($sourceAt <= 0) {
-                    return false;
-                }
-                foreach ($outForBucket as $outTx) {
-                    $outAt = strtotime((string) ($outTx['created_at'] ?? '')) ?: 0;
-                    if ($outAt >= $sourceAt) {
-                        return false;
-                    }
-                }
-                return true;
-            };
-
-            $now = date('c');
-            if ($editKind === 'batch') {
-                $newQty = max(0, (float) ($_POST['qty'] ?? 0));
-                if ($newQty <= 0) {
-                    $redirectDocuments('items', 'error', 'Quantity must be greater than zero.', ['items_subtab' => 'inventory']);
-                }
-                $batches = is_array($entry['qty_batches'] ?? null) ? $entry['qty_batches'] : [];
-                $found = false;
-                foreach ($batches as &$batch) {
-                    if ((string) ($batch['batch_id'] ?? '') !== $targetId) {
-                        continue;
-                    }
-                    $found = true;
-                    if (!$isBatchEditable($batch)) {
-                        $redirectDocuments('items', 'error', 'Batch already used/moved out; edit locked.', ['items_subtab' => 'inventory']);
-                    }
-                    $oldQty = (float) ($batch['qty_remaining'] ?? 0);
-                    $oldLocation = (string) ($batch['location_id'] ?? '');
-                    $batch['qty_remaining'] = $newQty;
-                    $batch['qty_original'] = max($newQty, (float) ($batch['qty_original'] ?? 0));
-                    $batch['location_id'] = $newLocationId;
-
-                    $entry['qty_batches'] = $batches;
-                    $entry['location_breakdown'] = documents_inventory_batches_to_location_breakdown($entry['qty_batches']);
-                    $entry['on_hand_qty'] = documents_inventory_location_breakdown_total($entry['location_breakdown']);
-                    $entry['updated_at'] = $now;
-                    documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
-                    $saveStock = documents_inventory_save_stock($stock);
-                    if (!($saveStock['ok'] ?? false)) {
-                        $redirectDocuments('items', 'error', 'Failed to save stock.', ['items_subtab' => 'inventory']);
-                    }
-                    $adjustTx = array_merge(documents_inventory_transaction_defaults(), [
-                        'id' => 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)),
-                        'type' => 'ADJUST',
-                        'component_id' => $componentId,
-                        'variant_id' => $variantId,
-                        'qty' => $newQty,
-                        'unit' => (string) ($component['default_unit'] ?? 'qty'),
-                        'location_id' => $newLocationId,
-                        'ref_type' => 'manual_edit',
-                        'reason' => 'Admin stock edit (unused batch)',
-                        'notes' => 'batch_id=' . $targetId . ';old_qty=' . $oldQty . ';new_qty=' . $newQty . ';old_location=' . $oldLocation . ';new_location=' . $newLocationId,
-                        'created_at' => $now,
-                        'created_by' => $actor,
-                    ]);
-                    documents_inventory_append_transaction($adjustTx);
-                    $redirectDocuments('items', 'success', 'Unused batch updated.', ['items_subtab' => 'inventory']);
-                }
-                unset($batch);
-                if (!$found) {
-                    $redirectDocuments('items', 'error', 'Batch not found.', ['items_subtab' => 'inventory']);
-                }
-            }
-
-            if ($editKind === 'lot') {
-                $newLength = max(0, (float) ($_POST['length_ft'] ?? 0));
-                if ($newLength <= 0) {
-                    $redirectDocuments('items', 'error', 'Length must be greater than zero.', ['items_subtab' => 'inventory']);
-                }
-                $lots = is_array($entry['lots'] ?? null) ? $entry['lots'] : [];
-                $found = false;
-                foreach ($lots as &$lot) {
-                    if ((string) ($lot['lot_id'] ?? '') !== $targetId) {
-                        continue;
-                    }
-                    $found = true;
-                    $oldRemaining = (float) ($lot['remaining_length_ft'] ?? 0);
-                    $oldOriginal = (float) ($lot['original_length_ft'] ?? 0);
-                    if ($oldRemaining + 0.00001 < $oldOriginal) {
-                        $redirectDocuments('items', 'error', 'Lot already consumed; edit locked.', ['items_subtab' => 'inventory']);
-                    }
-                    foreach ($outForBucket as $outTx) {
-                        foreach ((array) ($outTx['lot_consumption'] ?? []) as $consumeRow) {
-                            if ((string) ($consumeRow['lot_id'] ?? '') === $targetId) {
-                                $redirectDocuments('items', 'error', 'Lot already consumed; edit locked.', ['items_subtab' => 'inventory']);
-                            }
-                        }
-                    }
-                    $oldLocation = (string) ($lot['location_id'] ?? '');
-                    $lot['remaining_length_ft'] = $newLength;
-                    $lot['original_length_ft'] = $newLength;
-                    $lot['location_id'] = $newLocationId;
-                    $entry['lots'] = $lots;
-                    $entry['updated_at'] = $now;
-                    documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
-                    $saveStock = documents_inventory_save_stock($stock);
-                    if (!($saveStock['ok'] ?? false)) {
-                        $redirectDocuments('items', 'error', 'Failed to save stock.', ['items_subtab' => 'inventory']);
-                    }
-                    $adjustTx = array_merge(documents_inventory_transaction_defaults(), [
-                        'id' => 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)),
-                        'type' => 'ADJUST',
-                        'component_id' => $componentId,
-                        'variant_id' => $variantId,
-                        'length_ft' => $newLength,
-                        'unit' => 'ft',
-                        'location_id' => $newLocationId,
-                        'ref_type' => 'manual_edit',
-                        'reason' => 'Admin stock edit (unused lot)',
-                        'notes' => 'lot_id=' . $targetId . ';old_length=' . $oldOriginal . ';new_length=' . $newLength . ';old_location=' . $oldLocation . ';new_location=' . $newLocationId,
-                        'created_at' => $now,
-                        'created_by' => $actor,
-                    ]);
-                    documents_inventory_append_transaction($adjustTx);
-                    $redirectDocuments('items', 'success', 'Unused lot updated.', ['items_subtab' => 'inventory']);
-                }
-                unset($lot);
-                if (!$found) {
-                    $redirectDocuments('items', 'error', 'Lot not found.', ['items_subtab' => 'inventory']);
-                }
-            }
-
-            $redirectDocuments('items', 'error', 'Invalid edit request.', ['items_subtab' => 'inventory']);
-        }
-
         if (in_array($action, ['create_inventory_tx', 'edit_inventory_tx'], true)) {
             $transactionId = safe_text((string) ($_POST['transaction_id'] ?? ''));
             $txType = strtoupper(safe_text((string) ($_POST['tx_type'] ?? 'IN')));
@@ -1573,8 +1396,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'remaining_length_ft' => $pieceLength,
                                 'location_id' => $txLocationId,
                                 'notes' => (string) ($txRow['notes'] ?? ''),
-                                'source_txn_id' => (string) ($txRow['tx_id'] ?? ''),
-                                'legacy_lot' => false,
                             ];
                             $entry['lots'][] = $lot;
                             $createdLots[] = $lot;
@@ -1588,7 +1409,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($qty <= 0) {
                         return ['ok' => false, 'error' => 'Quantity must be greater than zero.'];
                     }
-                    $entry = documents_inventory_add_qty_batch($entry, $qty, $txLocationId, (string) ($txRow['tx_id'] ?? ''), date('c'));
+                    $entry = documents_inventory_add_to_location_breakdown($entry, $qty, $txLocationId);
                     $entry['updated_at'] = date('c');
                     documents_inventory_set_component_stock($stockState, (string) ($componentRow['id'] ?? ''), $variant, $entry);
                     return ['ok' => true, 'stock' => $stockState, 'tx' => ['qty' => $qty, 'unit' => (string) ($componentRow['default_unit'] ?? 'qty'), 'length_ft' => 0, 'lots_created' => [], 'lot_consumption' => [], 'location_consumption' => [], 'location_id' => $txLocationId, 'consume_location_id' => '']];
@@ -1617,7 +1438,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($qty <= 0) {
                         return ['ok' => false, 'error' => 'Quantity must be greater than zero.'];
                     }
-                    $consumed = documents_inventory_consume_from_qty_batches($entry, $qty, $txConsumeLocationId);
+                    $consumed = documents_inventory_consume_from_location_breakdown($entry, $qty, $txConsumeLocationId);
                     if (!($consumed['ok'] ?? false)) {
                         return ['ok' => false, 'error' => (string) ($consumed['error'] ?? 'Insufficient stock.')];
                     }
@@ -1651,7 +1472,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'notes' => (string) ($rebuiltTx['notes'] ?? ''),
                         'location_id' => (string) ($rebuiltTx['location_id'] ?? ''),
                         'consume_location_id' => (string) ($rebuiltTx['consume_location_id'] ?? ''),
-                        'tx_id' => (string) ($rebuiltTx['id'] ?? ''),
                     ]);
                     if (!($applied['ok'] ?? false)) {
                         $redirectDocuments('items', 'error', 'Unable to rebuild stock for edit.', ['items_subtab' => 'transactions']);
@@ -1668,9 +1488,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pieceLengthFt = max(0, (float) ($component['standard_length_ft'] ?? 0));
             }
 
-                        $newTxId = $action === 'edit_inventory_tx' ? (string) ($transactionId !== '' ? $transactionId : ('txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)))) : ('txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)));
-
-$txPayloadInput = [
+            $txPayloadInput = [
                 'type' => $txType,
                 'qty' => max(0, (float) ($_POST['qty'] ?? 0)),
                 'length_ft' => max(0, (float) ($_POST['length_ft'] ?? 0)),
@@ -1680,7 +1498,6 @@ $txPayloadInput = [
                 'notes' => $notes,
                 'location_id' => $locationId,
                 'consume_location_id' => $consumeLocationId,
-                'tx_id' => $newTxId,
             ];
             $applyResult = $applyTx($stock, $component, $variantId, $txPayloadInput);
             if (!($applyResult['ok'] ?? false)) {
@@ -1720,7 +1537,7 @@ $txPayloadInput = [
             }
 
             $tx = array_merge(documents_inventory_transaction_defaults(), $txGenerated, [
-                'id' => $newTxId,
+                'id' => 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)),
                 'type' => $txType,
                 'component_id' => $componentId,
                 'variant_id' => $variantId,
@@ -2592,17 +2409,7 @@ usort($archivedRows, static function (array $a, array $b): int {
           <?php endif; ?>
           <table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Notes</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($inventoryLocations as $location): ?><tr><td><?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($location['type'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($location['notes'] ?? ''), ENT_QUOTES) ?></td><td><?= !empty($location['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td><td class="row-actions"><?php if ($isAdmin): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'locations', 'edit' => (string) ($location['id'] ?? '')]), ENT_QUOTES) ?>">Edit</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_location_archive" /><input type="hidden" name="location_id" value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($location['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($location['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php else: ?><span class="muted">View only</span><?php endif; ?></td></tr><?php endforeach; ?></tbody></table>
         <?php elseif ($itemsSubtab === 'inventory'): ?>
-
           <h3>Inventory Transactions</h3>
-          <?php if ($isAdmin): ?>
-            <h4>Admin: Edit Unused Qty Batches</h4>
-            <table><thead><tr><th>Component</th><th>Variant</th><th>Batch</th><th>Qty</th><th>Location</th><th>Received</th><th>Action</th></tr></thead><tbody>
-              <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag']) || !empty($component['is_cuttable'])) { continue; } $componentId=(string) ($component['id'] ?? ''); $variantTargets = !empty($component['has_variants']) ? (array) ($variantsByComponent[$componentId] ?? []) : [['id' => '', 'display_name' => '-']]; foreach ($variantTargets as $vt): $variantId=(string) ($vt['id'] ?? ''); $entryEdit = documents_inventory_component_stock($inventoryStock, $componentId, $variantId); $batches = (array) ($entryEdit['qty_batches'] ?? []); foreach ($batches as $batch): if (!is_array($batch) || (float) ($batch['qty_remaining'] ?? 0) <= 0) { continue; } $editable=true; if (!empty($batch['legacy_batch'])) { foreach ($inventoryTransactions as $txCheck) { if ((string) ($txCheck['type'] ?? '') === 'OUT' && (string) ($txCheck['component_id'] ?? '') === $componentId && (string) ($txCheck['variant_id'] ?? '') === $variantId) { $editable=false; break; } } } else { $src=(string) ($batch['source_txn_id'] ?? ''); $srcAt=0; foreach ($inventoryTransactions as $txCheck) { if ((string) ($txCheck['id'] ?? '') === $src) { $srcAt = strtotime((string) ($txCheck['created_at'] ?? '')) ?: 0; break; } } if ($srcAt <= 0) { $editable=false; } else { foreach ($inventoryTransactions as $txCheck) { if ((string) ($txCheck['type'] ?? '') !== 'OUT' || (string) ($txCheck['component_id'] ?? '') !== $componentId || (string) ($txCheck['variant_id'] ?? '') !== $variantId) { continue; } $outAt = strtotime((string) ($txCheck['created_at'] ?? '')) ?: 0; if ($outAt >= $srcAt) { $editable=false; break; } } } } ?>
-                <tr><td><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($vt['display_name'] ?? '-'), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($batch['batch_id'] ?? ''), ENT_QUOTES) ?><?= !empty($batch['legacy_batch']) ? ' <span class="muted">(legacy)</span>' : '' ?></td><td><?= htmlspecialchars((string) ((float) ($batch['qty_remaining'] ?? 0)), ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_inventory_resolve_location_name((string) ($batch['location_id'] ?? '')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($batch['received_at'] ?? ''), ENT_QUOTES) ?></td><td><?php if ($editable): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="edit_inventory_stock" /><input type="hidden" name="edit_kind" value="batch" /><input type="hidden" name="component_id" value="<?= htmlspecialchars($componentId, ENT_QUOTES) ?>" /><input type="hidden" name="variant_id" value="<?= htmlspecialchars($variantId, ENT_QUOTES) ?>" /><input type="hidden" name="target_id" value="<?= htmlspecialchars((string) ($batch['batch_id'] ?? ''), ENT_QUOTES) ?>" /><input type="number" step="0.01" min="0.01" name="qty" value="<?= htmlspecialchars((string) ((float) ($batch['qty_remaining'] ?? 0)), ENT_QUOTES) ?>" style="width:80px;" /><select name="location_id"><option value="">Unassigned</option><?php foreach ($activeInventoryLocations as $locOpt): ?><option value="<?= htmlspecialchars((string) ($locOpt['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($locOpt['id'] ?? '') === (string) ($batch['location_id'] ?? '')) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($locOpt['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select><button class="btn secondary" type="submit">Edit</button></form><?php else: ?><span class="muted">🔒 Used/locked</span><?php endif; ?></td></tr>
-              <?php endforeach; endforeach; endforeach; ?>
-            </tbody></table>
-          <?php endif; ?>
-
           <div class="grid" style="margin-bottom:1rem;">
             <form method="post">
               <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
@@ -2655,7 +2462,7 @@ usort($archivedRows, static function (array $a, array $b): int {
             <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag'])) { continue; } $componentId=(string) ($component['id'] ?? ''); $isCuttable=!empty($component['is_cuttable']); $hasVariants=!empty($component['has_variants']); $componentEntry = documents_inventory_component_stock($inventoryStock, $componentId, ''); $lots = is_array($componentEntry['lots'] ?? null) ? $componentEntry['lots'] : []; usort($lots, static function ($a, $b): int { return strcmp((string) (($a['received_at'] ?? '')), (string) (($b['received_at'] ?? ''))); }); $totalFt = documents_inventory_total_remaining_ft($componentEntry); $variantRows = (array) ($variantsByComponent[$componentId] ?? []); $variantTotalQty = 0.0; foreach ($variantRows as $variantRow) { $variantEntry = documents_inventory_component_stock($inventoryStock, $componentId, (string) ($variantRow['id'] ?? '')); $variantTotalQty += (float) ($variantEntry['on_hand_qty'] ?? 0); } $summaryText = $isCuttable ? (rtrim(rtrim((string) $totalFt, '0'), '.') . ' ft') : ($hasVariants ? (rtrim(rtrim((string) $variantTotalQty, '0'), '.') . ' qty total') : (rtrim(rtrim((string) ((float) ($componentEntry['on_hand_qty'] ?? 0)), '0'), '.') . ' ' . (string) ($component['default_unit'] ?? 'qty'))); $searchHaystack = strtolower(trim((string) ($component['name'] ?? '') . ' ' . implode(' ', array_map(static function ($vr): string { return (string) ($vr['display_name'] ?? ''); }, $variantRows)))); $locationBreakdownText = array_map(static function (array $row) use ($component): string { return documents_inventory_resolve_location_name((string) ($row['location_id'] ?? '')) . ': ' . rtrim(rtrim((string) ((float) ($row['qty'] ?? 0)), '0'), '.') . ' ' . (string) ($component['default_unit'] ?? 'qty'); }, (array) ($componentEntry['location_breakdown'] ?? [])); ?>
               <tr class="inventory-summary-group" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>"><td><strong><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></strong></td><td><?php if ($isCuttable): ?><span class="pill">Cuttable (ft)</span><?php endif; ?><?php if ($hasVariants): ?><span class="pill">Variants</span><?php endif; ?><?php if (!$isCuttable && !$hasVariants): ?><span class="muted">Plain</span><?php endif; ?></td><td><?= htmlspecialchars($summaryText, ENT_QUOTES) ?><?php if (!$isCuttable && !$hasVariants): ?><br><span class="muted"><?= htmlspecialchars(implode(' | ', $locationBreakdownText !== [] ? $locationBreakdownText : ['Unassigned: 0']), ENT_QUOTES) ?></span><?php endif; ?></td></tr>
               <?php if ($isCuttable): ?>
-                <tr class="inventory-summary-detail" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>"><td colspan="3"><details open><summary><strong>Lots</strong> — Total <?= htmlspecialchars((string) $summaryText, ENT_QUOTES) ?>, Pieces <?= count($lots) ?></summary><table><thead><tr><th>Lot / Piece No</th><th>Remaining (ft)</th><th>Original (ft)</th><th>Location</th><th>Received</th><th>Action</th></tr></thead><tbody><?php foreach ($lots as $ix => $lot): ?><tr><td><?= htmlspecialchars((string) (($lot['lot_id'] ?? '') !== '' ? (string) ($lot['lot_id'] ?? '') : ('Piece #' . ($ix + 1))), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (float) ($lot['remaining_length_ft'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (float) ($lot['original_length_ft'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_inventory_resolve_location_name((string) ($lot['location_id'] ?? '')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($lot['received_at'] ?? ''), ENT_QUOTES) ?></td><td><?php $lotId=(string) ($lot['lot_id'] ?? ''); $lotUnused=((float) ($lot['remaining_length_ft'] ?? 0) + 0.00001 >= (float) ($lot['original_length_ft'] ?? 0)); foreach ($inventoryTransactions as $txCheck) { if ((string) ($txCheck['type'] ?? '') !== 'OUT' || (string) ($txCheck['component_id'] ?? '') !== $componentId) { continue; } foreach ((array) ($txCheck['lot_consumption'] ?? []) as $lc) { if ((string) ($lc['lot_id'] ?? '') === $lotId && $lotId !== '') { $lotUnused = false; break 2; } } } ?><?php if ($isAdmin && $lotUnused && $lotId !== ''): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="edit_inventory_stock" /><input type="hidden" name="edit_kind" value="lot" /><input type="hidden" name="component_id" value="<?= htmlspecialchars($componentId, ENT_QUOTES) ?>" /><input type="hidden" name="variant_id" value="" /><input type="hidden" name="target_id" value="<?= htmlspecialchars($lotId, ENT_QUOTES) ?>" /><input type="number" step="0.01" min="0.01" name="length_ft" value="<?= htmlspecialchars((string) ((float) ($lot['remaining_length_ft'] ?? 0)), ENT_QUOTES) ?>" style="width:90px;" /><select name="location_id"><?php foreach ($activeInventoryLocations as $locOpt): ?><option value="<?= htmlspecialchars((string) ($locOpt['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($locOpt['id'] ?? '') === (string) ($lot['location_id'] ?? '')) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($locOpt['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?><option value="" <?= ((string) ($lot['location_id'] ?? '') === '') ? 'selected' : '' ?>>Unassigned</option></select><button class="btn secondary" type="submit">Edit</button></form><?php else: ?><span class="muted">🔒 Used/locked</span><?php endif; ?></td></tr><?php endforeach; ?><?php if ($lots === []): ?><tr><td colspan="5" class="muted">No lots available.</td></tr><?php endif; ?></tbody></table></details></td></tr>
+                <tr class="inventory-summary-detail" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>"><td colspan="3"><details open><summary><strong>Lots</strong> — Total <?= htmlspecialchars((string) $summaryText, ENT_QUOTES) ?>, Pieces <?= count($lots) ?></summary><table><thead><tr><th>Lot / Piece No</th><th>Remaining (ft)</th><th>Original (ft)</th><th>Location</th><th>Received</th></tr></thead><tbody><?php foreach ($lots as $ix => $lot): ?><tr><td><?= htmlspecialchars((string) (($lot['lot_id'] ?? '') !== '' ? (string) ($lot['lot_id'] ?? '') : ('Piece #' . ($ix + 1))), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (float) ($lot['remaining_length_ft'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (float) ($lot['original_length_ft'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_inventory_resolve_location_name((string) ($lot['location_id'] ?? '')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($lot['received_at'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; ?><?php if ($lots === []): ?><tr><td colspan="5" class="muted">No lots available.</td></tr><?php endif; ?></tbody></table></details></td></tr>
               <?php elseif ($hasVariants): ?>
                 <tr class="inventory-summary-detail" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>"><td colspan="3"><details open><summary><strong>Variants</strong> — Total <?= htmlspecialchars(rtrim(rtrim((string) $variantTotalQty, '0'), '.'), ENT_QUOTES) ?> qty</summary><table><thead><tr><th>Variant Display Name</th><th>Brand</th><th>Wattage (Wp)</th><th>On-hand Qty</th><th>By Location</th></tr></thead><tbody><?php foreach ($variantRows as $variantRow): $variantEntry = documents_inventory_component_stock($inventoryStock, $componentId, (string) ($variantRow['id'] ?? '')); $variantLocationText = array_map(static function (array $row): string { return documents_inventory_resolve_location_name((string) ($row['location_id'] ?? '')) . ': ' . rtrim(rtrim((string) ((float) ($row['qty'] ?? 0)), '0'), '.'); }, (array) ($variantEntry['location_breakdown'] ?? [])); ?><tr><td><?= htmlspecialchars((string) ($variantRow['display_name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($variantRow['brand'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ((float) ($variantRow['wattage_wp'] ?? 0)), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ((float) ($variantEntry['on_hand_qty'] ?? 0)), ENT_QUOTES) ?></td><td><?= htmlspecialchars(implode(' | ', $variantLocationText !== [] ? $variantLocationText : ['Unassigned: 0']), ENT_QUOTES) ?></td></tr><?php endforeach; ?><?php if ($variantRows === []): ?><tr><td colspan="5" class="muted">No active variants found.</td></tr><?php endif; ?></tbody></table></details></td></tr>
               <?php endif; ?>
