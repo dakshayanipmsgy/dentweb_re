@@ -3325,6 +3325,7 @@ function documents_inventory_transaction_defaults(): array
         'type' => 'IN',
         'component_id' => '',
         'variant_id' => '',
+        'variant_name_snapshot' => '',
         'qty' => 0,
         'unit' => '',
         'length_ft' => 0,

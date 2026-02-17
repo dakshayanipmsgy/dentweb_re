@@ -1232,13 +1232,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $variantId = safe_text((string) ($_POST['variant_id'] ?? ''));
+            $variantNameSnapshot = '';
             if (!empty($component['has_variants'])) {
                 if ($variantId === '') {
                     $redirectDocuments('items', 'error', 'Variant is required for this component.', ['items_subtab' => 'inventory']);
                 }
                 $variant = documents_inventory_get_component_variant($variantId);
-                if ($variant === null || (string) ($variant['component_id'] ?? '') !== $componentId) {
+                if ($variant === null || (string) ($variant['component_id'] ?? '') !== $componentId || !empty($variant['archived_flag'])) {
                     $redirectDocuments('items', 'error', 'Invalid variant selected.', ['items_subtab' => 'inventory']);
+                }
+                $variantNameSnapshot = trim((string) ($variant['display_name'] ?? ''));
+                $variantWattage = max(0, (float) ($variant['wattage_wp'] ?? 0));
+                if ($variantWattage > 0) {
+                    $variantNameSnapshot .= ' (' . rtrim(rtrim((string) $variantWattage, '0'), '.') . 'Wp)';
                 }
             } else {
                 $variantId = '';
@@ -1416,6 +1422,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'type' => $txType,
                     'component_id' => $componentId,
                     'variant_id' => $variantId,
+                    'variant_name_snapshot' => $variantNameSnapshot,
                     'ref_type' => $refType === '' ? 'manual' : $refType,
                     'ref_id' => $refId,
                     'reason' => $reason,
@@ -1439,6 +1446,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'type' => $txType,
                 'component_id' => $componentId,
                 'variant_id' => $variantId,
+                'variant_name_snapshot' => $variantNameSnapshot,
                 'ref_type' => $refType === '' ? 'manual' : $refType,
                 'ref_id' => $refId,
                 'reason' => $reason,
@@ -1498,6 +1506,30 @@ $inventoryKits = documents_inventory_kits(true);
 $inventoryTaxProfiles = documents_inventory_tax_profiles(true);
 $activeTaxProfiles = documents_inventory_tax_profiles(false);
 $inventoryVariants = documents_inventory_component_variants(true);
+$activeInventoryVariants = documents_inventory_component_variants(false);
+$variantMap = [];
+$variantsByComponent = [];
+foreach ($activeInventoryVariants as $variantRow) {
+    if (!is_array($variantRow)) {
+        continue;
+    }
+    $variantKey = (string) ($variantRow['id'] ?? '');
+    $componentKey = (string) ($variantRow['component_id'] ?? '');
+    if ($variantKey === '' || $componentKey === '') {
+        continue;
+    }
+    $variantMap[$variantKey] = $variantRow;
+    if (!isset($variantsByComponent[$componentKey]) || !is_array($variantsByComponent[$componentKey])) {
+        $variantsByComponent[$componentKey] = [];
+    }
+    $variantsByComponent[$componentKey][] = [
+        'id' => $variantKey,
+        'display_name' => (string) ($variantRow['display_name'] ?? ''),
+        'brand' => (string) ($variantRow['brand'] ?? ''),
+        'technology' => (string) ($variantRow['technology'] ?? ''),
+        'wattage_wp' => max(0, (float) ($variantRow['wattage_wp'] ?? 0)),
+    ];
+}
 $inventoryStock = documents_inventory_load_stock();
 $inventoryTransactions = documents_inventory_load_transactions();
 $inventoryTransactions = array_map(static function ($tx): array {
@@ -1517,6 +1549,13 @@ foreach ($inventoryComponents as $cmpRow) {
     if (is_array($cmpRow)) {
         $componentMap[(string) ($cmpRow['id'] ?? '')] = $cmpRow;
     }
+}
+$inventoryComponentJsMap = [];
+foreach ($componentMap as $cmpId => $cmpRow) {
+    $inventoryComponentJsMap[$cmpId] = [
+        'id' => (string) ($cmpRow['id'] ?? ''),
+        'has_variants' => !empty($cmpRow['has_variants']),
+    ];
 }
 
 $editingComponent = null;
@@ -2157,7 +2196,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <input type="hidden" name="tx_type" value="IN" />
               <h4>Add Stock (IN)</h4>
               <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-              <div><label>Variant ID (if applicable)</label><input name="variant_id" /></div>
+              <div data-variant-wrap="1" style="display:none;"><label>Variant</label><select name="variant_id" data-variant-select="1"><option value="">-- select variant --</option></select><small class="muted" data-variant-help="1">Select the variant you are adding/issuing.</small><small class="muted" data-variant-empty="1" style="display:none;">No variants found. Create variants first.</small></div>
               <div><label>Qty</label><input type="number" step="0.01" min="0" name="qty" /></div>
               <div><label>Length (ft for OUT; optional here)</label><input type="number" step="0.01" min="0" name="length_ft" /></div>
               <div><label>Piece Count (cuttable)</label><input type="number" min="0" name="piece_count" /></div>
@@ -2171,7 +2210,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <input type="hidden" name="tx_type" value="OUT" />
               <h4>Issue Stock (OUT)</h4>
               <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-              <div><label>Variant ID (if applicable)</label><input name="variant_id" /></div>
+              <div data-variant-wrap="1" style="display:none;"><label>Variant</label><select name="variant_id" data-variant-select="1"><option value="">-- select variant --</option></select><small class="muted" data-variant-help="1">Select the variant you are adding/issuing.</small><small class="muted" data-variant-empty="1" style="display:none;">No variants found. Create variants first.</small></div>
               <div><label>Qty</label><input type="number" step="0.01" min="0" name="qty" /></div>
               <div><label>Length ft (cuttable)</label><input type="number" step="0.01" min="0" name="length_ft" /></div>
               <div><label>Notes</label><input name="notes" /></div>
@@ -2184,7 +2223,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <input type="hidden" name="tx_type" value="ADJUST" />
               <h4>Adjust (Admin)</h4>
               <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-              <div><label>Variant ID (if applicable)</label><input name="variant_id" /></div>
+              <div data-variant-wrap="1" style="display:none;"><label>Variant</label><select name="variant_id" data-variant-select="1"><option value="">-- select variant --</option></select><small class="muted" data-variant-help="1">Select the variant you are adding/issuing.</small><small class="muted" data-variant-empty="1" style="display:none;">No variants found. Create variants first.</small></div>
               <div><label>Qty (+/-)</label><input type="number" step="0.01" name="qty" /></div>
               <div><label>Length ft (+/- cuttable)</label><input type="number" step="0.01" name="length_ft" /></div>
               <div><label>Reason</label><input name="reason" required /></div>
@@ -2196,8 +2235,8 @@ usort($archivedRows, static function (array $a, array $b): int {
         <?php else: ?>
           <h3>Transactions</h3>
           <table><thead><tr><th>ID</th><th>Type</th><th>Component</th><th>Variant</th><th>Qty/FT</th><th>Ref</th><th>Audit</th><th>Edit</th></tr></thead><tbody>
-            <?php foreach ($inventoryTransactions as $tx): $componentName = (string) (($componentMap[(string) ($tx['component_id'] ?? '')]['name'] ?? ($tx['component_id'] ?? ''))); $creator = is_array($tx['created_by'] ?? null) ? $tx['created_by'] : ['name' => (string) ($tx['created_by'] ?? ''), 'role' => '', 'id' => '']; ?>
-              <tr><td><?= htmlspecialchars((string) ($tx['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($tx['type'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars($componentName, ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($tx['variant_id'] ?? '-'), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['qty'] ?? 0) > 0 ? ($tx['qty'] . ' ' . ($tx['unit'] ?? 'qty')) : (($tx['length_ft'] ?? 0) . ' ft')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['ref_type'] ?? 'manual') . ':' . ($tx['ref_id'] ?? '')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($creator['name'] ?? '') . ' [' . ($creator['role'] ?? '') . '] @ ' . ($tx['created_at'] ?? '')), ENT_QUOTES) ?><?php if (!empty($tx['updated_at'])): ?><br><span class="muted">Updated: <?= htmlspecialchars((string) ($tx['updated_at'] ?? ''), ENT_QUOTES) ?></span><?php endif; ?></td><td><?php $canEdit = $isAdmin || (((string) (($creator['id'] ?? '')) === (string) ($user['id'] ?? '')) && ((string) ($tx['ref_type'] ?? 'manual') === 'manual') && ((string) ($tx['ref_id'] ?? '') === '') && ((time() - (strtotime((string) ($tx['created_at'] ?? '')) ?: 0)) <= 600)); ?><?php if ($canEdit): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="edit_inventory_tx" /><input type="hidden" name="transaction_id" value="<?= htmlspecialchars((string) ($tx['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="tx_type" value="<?= htmlspecialchars((string) ($tx['type'] ?? 'IN'), ENT_QUOTES) ?>" /><input type="hidden" name="component_id" value="<?= htmlspecialchars((string) ($tx['component_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="variant_id" value="<?= htmlspecialchars((string) ($tx['variant_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="qty" value="<?= htmlspecialchars((string) ($tx['qty'] ?? 0), ENT_QUOTES) ?>" /><input type="hidden" name="length_ft" value="<?= htmlspecialchars((string) ($tx['length_ft'] ?? 0), ENT_QUOTES) ?>" /><input type="hidden" name="ref_type" value="<?= htmlspecialchars((string) ($tx['ref_type'] ?? 'manual'), ENT_QUOTES) ?>" /><input type="hidden" name="ref_id" value="<?= htmlspecialchars((string) ($tx['ref_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="notes" value="<?= htmlspecialchars((string) ($tx['notes'] ?? ''), ENT_QUOTES) ?>" /><button class="btn secondary" type="submit">Reapply Edit</button></form><?php else: ?><span class="muted">Locked</span><?php endif; ?></td></tr>
+            <?php foreach ($inventoryTransactions as $tx): $componentName = (string) (($componentMap[(string) ($tx['component_id'] ?? '')]['name'] ?? ($tx['component_id'] ?? ''))); $creator = is_array($tx['created_by'] ?? null) ? $tx['created_by'] : ['name' => (string) ($tx['created_by'] ?? ''), 'role' => '', 'id' => '']; $variantLabel = '-'; $txVariantId = (string) ($tx['variant_id'] ?? ''); if ($txVariantId !== '') { $variantLabel = (string) (($variantMap[$txVariantId]['display_name'] ?? '') ?: ($tx['variant_name_snapshot'] ?? '(Unknown variant)')); } ?>
+              <tr><td><?= htmlspecialchars((string) ($tx['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($tx['type'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars($componentName, ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) $variantLabel, ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['qty'] ?? 0) > 0 ? ($tx['qty'] . ' ' . ($tx['unit'] ?? 'qty')) : (($tx['length_ft'] ?? 0) . ' ft')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['ref_type'] ?? 'manual') . ':' . ($tx['ref_id'] ?? '')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($creator['name'] ?? '') . ' [' . ($creator['role'] ?? '') . '] @ ' . ($tx['created_at'] ?? '')), ENT_QUOTES) ?><?php if (!empty($tx['updated_at'])): ?><br><span class="muted">Updated: <?= htmlspecialchars((string) ($tx['updated_at'] ?? ''), ENT_QUOTES) ?></span><?php endif; ?></td><td><?php $canEdit = $isAdmin || (((string) (($creator['id'] ?? '')) === (string) ($user['id'] ?? '')) && ((string) ($tx['ref_type'] ?? 'manual') === 'manual') && ((string) ($tx['ref_id'] ?? '') === '') && ((time() - (strtotime((string) ($tx['created_at'] ?? '')) ?: 0)) <= 600)); ?><?php if ($canEdit): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="edit_inventory_tx" /><input type="hidden" name="transaction_id" value="<?= htmlspecialchars((string) ($tx['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="tx_type" value="<?= htmlspecialchars((string) ($tx['type'] ?? 'IN'), ENT_QUOTES) ?>" /><input type="hidden" name="component_id" value="<?= htmlspecialchars((string) ($tx['component_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="variant_id" value="<?= htmlspecialchars((string) ($tx['variant_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="qty" value="<?= htmlspecialchars((string) ($tx['qty'] ?? 0), ENT_QUOTES) ?>" /><input type="hidden" name="length_ft" value="<?= htmlspecialchars((string) ($tx['length_ft'] ?? 0), ENT_QUOTES) ?>" /><input type="hidden" name="ref_type" value="<?= htmlspecialchars((string) ($tx['ref_type'] ?? 'manual'), ENT_QUOTES) ?>" /><input type="hidden" name="ref_id" value="<?= htmlspecialchars((string) ($tx['ref_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="notes" value="<?= htmlspecialchars((string) ($tx['notes'] ?? ''), ENT_QUOTES) ?>" /><button class="btn secondary" type="submit">Reapply Edit</button></form><?php else: ?><span class="muted">Locked</span><?php endif; ?></td></tr>
             <?php endforeach; ?>
           </tbody></table>
         <?php endif; ?>
@@ -2488,6 +2527,76 @@ document.addEventListener('input', function (e) {
     row.style.display = q === '' || hay.indexOf(q) !== -1 ? '' : 'none';
   });
 });
+
+const INVENTORY_COMPONENTS = <?= json_encode($inventoryComponentJsMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+window.VARIANTS_BY_COMPONENT = <?= json_encode($variantsByComponent, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+
+function formatVariantOptionLabel(variant) {
+  if (!variant || typeof variant !== 'object') return '';
+  const name = (variant.display_name || '').trim();
+  const watt = Number(variant.wattage_wp || 0);
+  if (watt > 0) {
+    return name + ' (' + String(watt).replace(/\.0+$/, '') + 'Wp)';
+  }
+  return name;
+}
+
+function syncInventoryVariantField(form) {
+  if (!form) return;
+  const componentSelect = form.querySelector('select[name="component_id"]');
+  const variantWrap = form.querySelector('[data-variant-wrap="1"]');
+  const variantSelect = form.querySelector('select[name="variant_id"]');
+  const emptyMsg = form.querySelector('[data-variant-empty="1"]');
+  const submitBtn = form.querySelector('button[type="submit"]');
+  if (!componentSelect || !variantWrap || !variantSelect) return;
+
+  const componentId = componentSelect.value || '';
+  const component = INVENTORY_COMPONENTS[componentId] || null;
+  const needsVariants = !!(component && component.has_variants);
+
+  if (!needsVariants) {
+    variantWrap.style.display = 'none';
+    variantSelect.required = false;
+    variantSelect.value = '';
+    if (submitBtn) submitBtn.disabled = false;
+    return;
+  }
+
+  variantWrap.style.display = '';
+  const variants = window.VARIANTS_BY_COMPONENT[componentId] || [];
+  const selectedBefore = variantSelect.value || '';
+  variantSelect.innerHTML = '<option value="">-- select variant --</option>';
+  variants.forEach(function (variant) {
+    const option = document.createElement('option');
+    option.value = variant.id || '';
+    option.textContent = formatVariantOptionLabel(variant);
+    variantSelect.appendChild(option);
+  });
+
+  if (selectedBefore !== '' && variants.some(function (variant) { return (variant.id || '') === selectedBefore; })) {
+    variantSelect.value = selectedBefore;
+  } else {
+    variantSelect.value = '';
+  }
+
+  const hasVariants = variants.length > 0;
+  variantSelect.required = true;
+  variantSelect.disabled = !hasVariants;
+  if (emptyMsg) emptyMsg.style.display = hasVariants ? 'none' : '';
+  if (submitBtn) submitBtn.disabled = !hasVariants;
+}
+
+document.querySelectorAll('form').forEach(function (form) {
+  if (!form.querySelector('[data-variant-wrap="1"]')) return;
+  syncInventoryVariantField(form);
+  const componentSelect = form.querySelector('select[name="component_id"]');
+  if (componentSelect) {
+    componentSelect.addEventListener('change', function () {
+      syncInventoryVariantField(form);
+    });
+  }
+});
+
 </script>
 </body>
 </html>
