@@ -46,6 +46,19 @@ $redirectDocuments = static function (string $tab, string $type, string $msg, ar
     exit;
 };
 
+
+$redirectCsvImport = static function (string $type, string $message, array $report = []): void {
+    $_SESSION['items_csv_import_report'] = $report;
+    $query = http_build_query([
+        'tab' => 'items',
+        'items_subtab' => 'csv_import',
+        'status' => $type,
+        'message' => $message,
+    ]);
+    header('Location: admin-documents.php?' . $query);
+    exit;
+};
+
 $generateInventoryEntityId = static function (string $prefix, array $rows): string {
     $existingIds = [];
     foreach ($rows as $row) {
@@ -67,6 +80,77 @@ $generateInventoryEntityId = static function (string $prefix, array $rows): stri
 
 $isArchivedRecord = static function (array $row): bool {
     return documents_is_archived($row);
+};
+
+
+$csvBoolean = static function (string $raw): ?bool {
+    $value = strtolower(trim($raw));
+    if ($value === '') {
+        return null;
+    }
+    if (in_array($value, ['1', 'yes', 'y', 'true'], true)) {
+        return true;
+    }
+    if (in_array($value, ['0', 'no', 'n', 'false'], true)) {
+        return false;
+    }
+    return null;
+};
+
+$csvToTempRows = static function (array $file): array {
+    $tmp = (string) ($file['tmp_name'] ?? '');
+    if ($tmp === '' || !is_uploaded_file($tmp)) {
+        return ['ok' => false, 'error' => 'Upload a valid CSV file.', 'rows' => []];
+    }
+    $handle = @fopen($tmp, 'rb');
+    if (!$handle) {
+        return ['ok' => false, 'error' => 'Unable to read uploaded CSV file.', 'rows' => []];
+    }
+
+    $rows = [];
+    $rowNo = 0;
+    while (($row = fgetcsv($handle)) !== false) {
+        $rowNo++;
+        if (!is_array($row)) {
+            continue;
+        }
+        $rows[] = ['row_no' => $rowNo, 'cells' => array_map(static fn($v): string => trim((string) $v), $row)];
+    }
+    fclose($handle);
+    return ['ok' => true, 'rows' => $rows, 'error' => ''];
+};
+
+$csvParseAssoc = static function (array $file, array $requiredHeaders): array {
+    $parsed = $csvToTempRows($file);
+    if (!($parsed['ok'] ?? false)) {
+        return ['ok' => false, 'error' => (string) ($parsed['error'] ?? 'CSV read failed.'), 'rows' => []];
+    }
+
+    $rows = (array) ($parsed['rows'] ?? []);
+    if ($rows === []) {
+        return ['ok' => false, 'error' => 'CSV file is empty.', 'rows' => []];
+    }
+
+    $headerRow = (array) ($rows[0]['cells'] ?? []);
+    $headers = array_map(static fn($h): string => trim((string) $h), $headerRow);
+    if ($headers !== $requiredHeaders) {
+        return ['ok' => false, 'error' => 'CSV header mismatch. Required: ' . implode(', ', $requiredHeaders), 'rows' => []];
+    }
+
+    $assocRows = [];
+    foreach (array_slice($rows, 1) as $rowData) {
+        $cells = (array) ($rowData['cells'] ?? []);
+        if ($cells === [] || count(array_filter($cells, static fn($v): bool => trim((string) $v) !== '')) === 0) {
+            continue;
+        }
+        $assoc = [];
+        foreach ($headers as $ix => $header) {
+            $assoc[$header] = trim((string) ($cells[$ix] ?? ''));
+        }
+        $assocRows[] = ['row_no' => (int) ($rowData['row_no'] ?? 0), 'data' => $assoc];
+    }
+
+    return ['ok' => true, 'rows' => $assocRows, 'error' => ''];
 };
 
 $inr = static function (float $amount): string {
@@ -168,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = safe_text($_POST['action'] ?? '');
 
-    $employeeAllowedActions = ['create_inventory_tx', 'edit_inventory_tx', 'save_inventory_edits'];
+    $employeeAllowedActions = ['create_inventory_tx', 'edit_inventory_tx', 'save_inventory_edits', 'import_inventory_stock_in_csv'];
     if (!$isAdmin && !in_array($action, $employeeAllowedActions, true)) {
         $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
     }
@@ -835,10 +919,360 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
 
-    if (in_array($action, ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive','save_location','save_location_edit','toggle_location_archive','create_inventory_tx','edit_inventory_tx','save_inventory_edits'], true)) {
+    if (in_array($action, ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive','save_location','save_location_edit','toggle_location_archive','create_inventory_tx','edit_inventory_tx','save_inventory_edits','import_components_csv','import_variants_csv','import_locations_csv','import_kits_csv','import_inventory_stock_in_csv'], true)) {
         $masterActions = ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive','save_location','save_location_edit','toggle_location_archive'];
         if (in_array($action, $masterActions, true) && !$isAdmin) {
             $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'components']);
+        }
+
+
+        if (in_array($action, ['import_components_csv','import_variants_csv','import_locations_csv','import_kits_csv','import_inventory_stock_in_csv'], true)) {
+            $adminOnly = ['import_components_csv','import_variants_csv','import_locations_csv','import_kits_csv'];
+            if (in_array($action, $adminOnly, true) && !$isAdmin) {
+                $redirectCsvImport('error', 'Access denied for this import type.');
+            }
+            if (!isset($_FILES['csv_file']) && $action !== 'import_kits_csv') {
+                $redirectCsvImport('error', 'Please upload a CSV file.');
+            }
+
+            $componentsAll = documents_inventory_components(true);
+            $componentsActive = documents_inventory_components(false);
+            $variantsAll = documents_inventory_component_variants(true);
+            $locationsAll = documents_inventory_locations(true);
+            $kitsAll = documents_inventory_kits(true);
+            $taxProfiles = documents_inventory_tax_profiles(false);
+            $taxByName = [];
+            foreach ($taxProfiles as $tp) {
+                if (!is_array($tp)) { continue; }
+                $taxByName[strtolower(trim((string) ($tp['name'] ?? '')))] = (string) ($tp['id'] ?? '');
+            }
+            $componentByName = [];
+            foreach ($componentsActive as $cmp) {
+                if (!is_array($cmp)) { continue; }
+                $componentByName[strtolower(trim((string) ($cmp['name'] ?? '')))] = $cmp;
+            }
+            $locationByName = [];
+            foreach (documents_inventory_locations(false) as $loc) {
+                if (!is_array($loc)) { continue; }
+                $locationByName[strtolower(trim((string) ($loc['name'] ?? '')))] = $loc;
+            }
+
+            $report = ['type' => $action, 'rows_read' => 0, 'rows_succeeded' => 0, 'rows_failed' => 0, 'errors' => []];
+
+            if ($action === 'import_components_csv') {
+                $parsed = $csvParseAssoc($_FILES['csv_file'], ['name','category','hsn','default_unit','is_cuttable','standard_length_ft','has_variants','tax_profile_name']);
+                if (!($parsed['ok'] ?? false)) { $redirectCsvImport('error', (string) ($parsed['error'] ?? 'Invalid CSV.'), $report); }
+                $rows = (array) ($parsed['rows'] ?? []);
+                $report['rows_read'] = count($rows);
+                foreach ($rows as $rowWrap) {
+                    $rowNo = (int) ($rowWrap['row_no'] ?? 0);
+                    $row = (array) ($rowWrap['data'] ?? []);
+                    $name = safe_text((string) ($row['name'] ?? ''));
+                    $defaultUnit = strtolower(safe_text((string) ($row['default_unit'] ?? '')));
+                    $isCuttableParsed = $csvBoolean((string) ($row['is_cuttable'] ?? ''));
+                    $hasVariantsParsed = $csvBoolean((string) ($row['has_variants'] ?? ''));
+                    $errors = [];
+                    if ($name === '') { $errors[] = 'name is required'; }
+                    if ($defaultUnit === '') { $errors[] = 'default_unit is required'; }
+                    if ($isCuttableParsed === null) { $errors[] = 'is_cuttable must be yes/no or 1/0'; }
+                    if ($hasVariantsParsed === null) { $errors[] = 'has_variants must be yes/no or 1/0'; }
+                    if ($isCuttableParsed === true && $defaultUnit !== 'ft') { $errors[] = 'cuttable component default_unit must be ft'; }
+                    $taxProfileId = '';
+                    $taxName = strtolower(trim((string) ($row['tax_profile_name'] ?? '')));
+                    if ($taxName !== '') {
+                        $taxProfileId = (string) ($taxByName[$taxName] ?? '');
+                        if ($taxProfileId === '') { $errors[] = 'tax_profile_name not found'; }
+                    }
+                    if ($errors !== []) {
+                        $report['rows_failed']++;
+                        $report['errors'][] = ['row' => $rowNo, 'message' => implode('; ', $errors)];
+                        continue;
+                    }
+                    $new = documents_inventory_component_defaults();
+                    $new['id'] = $generateInventoryEntityId('CMP', $componentsAll);
+                    $new['name'] = $name;
+                    $new['category'] = safe_text((string) ($row['category'] ?? ''));
+                    $new['hsn'] = safe_text((string) ($row['hsn'] ?? ''));
+                    $new['default_unit'] = $defaultUnit;
+                    $new['is_cuttable'] = (bool) $isCuttableParsed;
+                    $new['standard_length_ft'] = max(0, (float) ($row['standard_length_ft'] ?? 0));
+                    $new['has_variants'] = (bool) $hasVariantsParsed;
+                    $new['tax_profile_id'] = $taxProfileId;
+                    $new['created_at'] = date('c');
+                    $new['updated_at'] = date('c');
+                    $componentsAll[] = $new;
+                    $report['rows_succeeded']++;
+                }
+                $saved = documents_inventory_save_components($componentsAll);
+                if (!($saved['ok'] ?? false)) { $redirectCsvImport('error', 'Failed to save imported components.', $report); }
+                $redirectCsvImport($report['rows_failed'] === 0 ? 'success' : 'error', 'Components CSV import completed.', $report);
+            }
+
+            if ($action === 'import_variants_csv') {
+                $parsed = $csvParseAssoc($_FILES['csv_file'], ['component_name','display_name','brand','technology','wattage_wp','model_no','hsn_override','tax_profile_name_override']);
+                if (!($parsed['ok'] ?? false)) { $redirectCsvImport('error', (string) ($parsed['error'] ?? 'Invalid CSV.'), $report); }
+                $rows = (array) ($parsed['rows'] ?? []);
+                $report['rows_read'] = count($rows);
+                foreach ($rows as $rowWrap) {
+                    $rowNo = (int) ($rowWrap['row_no'] ?? 0);
+                    $row = (array) ($rowWrap['data'] ?? []);
+                    $cmpName = strtolower(trim((string) ($row['component_name'] ?? '')));
+                    $cmp = is_array($componentByName[$cmpName] ?? null) ? $componentByName[$cmpName] : null;
+                    $errors = [];
+                    if ($cmpName === '' || $cmp === null) { $errors[] = 'component_name not found'; }
+                    if (safe_text((string) ($row['display_name'] ?? '')) === '') { $errors[] = 'display_name is required'; }
+                    $taxId = '';
+                    $taxName = strtolower(trim((string) ($row['tax_profile_name_override'] ?? '')));
+                    if ($taxName !== '') {
+                        $taxId = (string) ($taxByName[$taxName] ?? '');
+                        if ($taxId === '') { $errors[] = 'tax_profile_name_override not found'; }
+                    }
+                    if ($errors !== []) {
+                        $report['rows_failed']++;
+                        $report['errors'][] = ['row' => $rowNo, 'message' => implode('; ', $errors)];
+                        continue;
+                    }
+                    $new = documents_component_variant_defaults();
+                    $new['id'] = $generateInventoryEntityId('VAR', $variantsAll);
+                    $new['component_id'] = (string) ($cmp['id'] ?? '');
+                    $new['display_name'] = safe_text((string) ($row['display_name'] ?? ''));
+                    $new['brand'] = safe_text((string) ($row['brand'] ?? ''));
+                    $new['technology'] = safe_text((string) ($row['technology'] ?? ''));
+                    $new['wattage_wp'] = max(0, (float) ($row['wattage_wp'] ?? 0));
+                    $new['model_no'] = safe_text((string) ($row['model_no'] ?? ''));
+                    $new['hsn_override'] = safe_text((string) ($row['hsn_override'] ?? ''));
+                    $new['tax_profile_id_override'] = $taxId;
+                    $new['created_at'] = date('c');
+                    $new['updated_at'] = date('c');
+                    $variantsAll[] = $new;
+                    $report['rows_succeeded']++;
+                }
+                $saved = documents_inventory_save_component_variants($variantsAll);
+                if (!($saved['ok'] ?? false)) { $redirectCsvImport('error', 'Failed to save imported variants.', $report); }
+                $redirectCsvImport($report['rows_failed'] === 0 ? 'success' : 'error', 'Variants CSV import completed.', $report);
+            }
+
+            if ($action === 'import_locations_csv') {
+                $parsed = $csvParseAssoc($_FILES['csv_file'], ['name','type','notes']);
+                if (!($parsed['ok'] ?? false)) { $redirectCsvImport('error', (string) ($parsed['error'] ?? 'Invalid CSV.'), $report); }
+                $rows = (array) ($parsed['rows'] ?? []);
+                $report['rows_read'] = count($rows);
+                $existingNames = [];
+                foreach ($locationsAll as $loc) { if (is_array($loc)) { $existingNames[strtolower(trim((string) ($loc['name'] ?? '')))] = true; } }
+                foreach ($rows as $rowWrap) {
+                    $rowNo = (int) ($rowWrap['row_no'] ?? 0);
+                    $row = (array) ($rowWrap['data'] ?? []);
+                    $name = safe_text((string) ($row['name'] ?? ''));
+                    $errs = [];
+                    if ($name === '') { $errs[] = 'name is required'; }
+                    if ($name !== '' && isset($existingNames[strtolower($name)])) { $errs[] = 'duplicate location name'; }
+                    if ($errs !== []) {
+                        $report['rows_failed']++;
+                        $report['errors'][] = ['row' => $rowNo, 'message' => implode('; ', $errs)];
+                        continue;
+                    }
+                    $new = documents_inventory_location_defaults();
+                    $new['id'] = $generateInventoryEntityId('LOC', $locationsAll);
+                    $new['name'] = $name;
+                    $new['type'] = safe_text((string) ($row['type'] ?? ''));
+                    $new['notes'] = safe_text((string) ($row['notes'] ?? ''));
+                    $new['created_at'] = date('c');
+                    $new['updated_at'] = date('c');
+                    $locationsAll[] = $new;
+                    $existingNames[strtolower($name)] = true;
+                    $report['rows_succeeded']++;
+                }
+
+                $saved = documents_inventory_save_locations($locationsAll);
+                if (!($saved['ok'] ?? false)) { $redirectCsvImport('error', 'Failed to save imported locations.', $report); }
+                $redirectCsvImport($report['rows_failed'] === 0 ? 'success' : 'error', 'Locations CSV import completed.', $report);
+            }
+
+            if ($action === 'import_kits_csv') {
+                if (!isset($_FILES['kits_csv']) || !isset($_FILES['kit_items_csv'])) {
+                    $redirectCsvImport('error', 'Upload both kits.csv and kit_items.csv files.', $report);
+                }
+                $kitsParsed = $csvParseAssoc($_FILES['kits_csv'], ['kit_name','category','description','tax_profile_name']);
+                $itemsParsed = $csvParseAssoc($_FILES['kit_items_csv'], ['kit_name','component_name','mode','unit','fixed_qty','capacity_type','capacity_expr','slab_json','rule_type','target_expr','allow_overbuild_pct','manual_note','remarks']);
+                if (!($kitsParsed['ok'] ?? false)) { $redirectCsvImport('error', (string) ($kitsParsed['error'] ?? 'Invalid kits CSV.'), $report); }
+                if (!($itemsParsed['ok'] ?? false)) { $redirectCsvImport('error', (string) ($itemsParsed['error'] ?? 'Invalid kit items CSV.'), $report); }
+                $kitRows = (array) ($kitsParsed['rows'] ?? []);
+                $itemRows = (array) ($itemsParsed['rows'] ?? []);
+                $report['rows_read'] = count($kitRows) + count($itemRows);
+                $kitMap = [];
+                foreach ($kitRows as $rowWrap) {
+                    $rowNo = (int) ($rowWrap['row_no'] ?? 0);
+                    $row = (array) ($rowWrap['data'] ?? []);
+                    $name = safe_text((string) ($row['kit_name'] ?? ''));
+                    $errs = [];
+                    if ($name === '') { $errs[] = 'kit_name is required'; }
+                    $taxName = strtolower(trim((string) ($row['tax_profile_name'] ?? '')));
+                    $taxId = '';
+                    if ($taxName !== '') { $taxId = (string) ($taxByName[$taxName] ?? ''); if ($taxId === '') { $errs[] = 'tax_profile_name not found'; } }
+                    if ($errs !== []) {
+                        $report['rows_failed']++;
+                        $report['errors'][] = ['row' => $rowNo, 'message' => implode('; ', $errs)];
+                        continue;
+                    }
+                    $kit = documents_inventory_kit_defaults();
+                    $kit['id'] = $generateInventoryEntityId('KIT', $kitsAll);
+                    $kit['name'] = $name;
+                    $kit['category'] = safe_text((string) ($row['category'] ?? ''));
+                    $kit['description'] = safe_text((string) ($row['description'] ?? ''));
+                    $kit['tax_profile_id'] = $taxId;
+                    $kit['created_at'] = date('c');
+                    $kit['updated_at'] = date('c');
+                    $kitsAll[] = $kit;
+                    $kitMap[strtolower($name)] = $kit;
+                    $report['rows_succeeded']++;
+                }
+                foreach ($itemRows as $rowWrap) {
+                    $rowNo = (int) ($rowWrap['row_no'] ?? 0);
+                    $row = (array) ($rowWrap['data'] ?? []);
+                    $kitName = strtolower(trim((string) ($row['kit_name'] ?? '')));
+                    $componentName = strtolower(trim((string) ($row['component_name'] ?? '')));
+                    $mode = safe_text((string) ($row['mode'] ?? 'fixed_qty'));
+                    $errs = [];
+                    $kit = is_array($kitMap[$kitName] ?? null) ? $kitMap[$kitName] : null;
+                    $cmp = is_array($componentByName[$componentName] ?? null) ? $componentByName[$componentName] : null;
+                    if ($kit === null) { $errs[] = 'kit_name not found in kits.csv'; }
+                    if ($cmp === null) { $errs[] = 'component_name not found'; }
+                    if (!in_array($mode, ['fixed_qty','capacity_qty','rule_fulfillment','unfixed_manual'], true)) { $errs[] = 'invalid mode'; }
+                    if ($mode === 'fixed_qty' && (float) ($row['fixed_qty'] ?? 0) <= 0) { $errs[] = 'fixed_qty required for fixed_qty mode'; }
+                    if ($mode === 'capacity_qty' && safe_text((string) ($row['capacity_expr'] ?? '')) === '' && safe_text((string) ($row['slab_json'] ?? '')) === '') { $errs[] = 'capacity_expr or slab_json required'; }
+                    if ($mode === 'rule_fulfillment' && safe_text((string) ($row['target_expr'] ?? '')) === '') { $errs[] = 'target_expr required'; }
+                    $slabs = [];
+                    $slabJson = trim((string) ($row['slab_json'] ?? ''));
+                    if ($slabJson !== '') {
+                        $decoded = json_decode($slabJson, true);
+                        if (!is_array($decoded)) { $errs[] = 'slab_json must be a valid JSON array'; }
+                        else { $slabs = $decoded; }
+                    }
+                    if ($errs !== []) {
+                        $report['rows_failed']++;
+                        $report['errors'][] = ['row' => $rowNo, 'message' => implode('; ', $errs)];
+                        continue;
+                    }
+                    $line = documents_inventory_kit_bom_line_defaults();
+                    $line['line_id'] = 'kline_' . bin2hex(random_bytes(4));
+                    $line['component_id'] = (string) ($cmp['id'] ?? '');
+                    $line['mode'] = $mode;
+                    $line['unit'] = safe_text((string) ($row['unit'] ?? ''));
+                    $line['fixed_qty'] = max(0, (float) ($row['fixed_qty'] ?? 0));
+                    $line['capacity_rule'] = ['type' => safe_text((string) ($row['capacity_type'] ?? 'formula')) ?: 'formula', 'expr' => safe_text((string) ($row['capacity_expr'] ?? '')), 'slabs' => $slabs];
+                    $line['rule'] = ['rule_type' => safe_text((string) ($row['rule_type'] ?? 'min_total_wp')) ?: 'min_total_wp', 'target_expr' => safe_text((string) ($row['target_expr'] ?? '')), 'allow_overbuild_pct' => max(0, (float) ($row['allow_overbuild_pct'] ?? 0)), 'requires_variants' => true];
+                    $line['manual_note'] = safe_text((string) ($row['manual_note'] ?? ''));
+                    $line['remarks'] = safe_text((string) ($row['remarks'] ?? ''));
+                    $kitIdx = null;
+                    foreach ($kitsAll as $ix => $k) { if ((string) ($k['id'] ?? '') === (string) ($kit['id'] ?? '')) { $kitIdx = $ix; break; } }
+                    if ($kitIdx !== null) {
+                        $currentItems = is_array($kitsAll[$kitIdx]['items'] ?? null) ? $kitsAll[$kitIdx]['items'] : [];
+                        $currentItems[] = documents_normalize_kit_bom_line($line, $cmp);
+                        $kitsAll[$kitIdx]['items'] = $currentItems;
+                        $kitsAll[$kitIdx]['updated_at'] = date('c');
+                    }
+                    $report['rows_succeeded']++;
+                }
+                $saved = documents_inventory_save_kits($kitsAll);
+                if (!($saved['ok'] ?? false)) { $redirectCsvImport('error', 'Failed to save imported kits.', $report); }
+                $redirectCsvImport($report['rows_failed'] === 0 ? 'success' : 'error', 'Kits CSV import completed.', $report);
+            }
+
+            if ($action === 'import_inventory_stock_in_csv') {
+                $parsed = $csvParseAssoc($_FILES['csv_file'], ['component_name','variant_display_name','qty','piece_count','piece_length_ft','location_name','notes']);
+                if (!($parsed['ok'] ?? false)) { $redirectCsvImport('error', (string) ($parsed['error'] ?? 'Invalid CSV.'), $report); }
+                $rows = (array) ($parsed['rows'] ?? []);
+                $report['rows_read'] = count($rows);
+                $stockState = documents_inventory_load_stock();
+                foreach ($rows as $rowWrap) {
+                    $rowNo = (int) ($rowWrap['row_no'] ?? 0);
+                    $row = (array) ($rowWrap['data'] ?? []);
+                    $errs = [];
+                    $cmpName = strtolower(trim((string) ($row['component_name'] ?? '')));
+                    $cmp = is_array($componentByName[$cmpName] ?? null) ? $componentByName[$cmpName] : null;
+                    if ($cmp === null) { $errs[] = 'component_name not found'; }
+                    $variantId = '';
+                    if (is_array($cmp) && !empty($cmp['has_variants'])) {
+                        $needleVar = strtolower(trim((string) ($row['variant_display_name'] ?? '')));
+                        if ($needleVar === '') { $errs[] = 'variant_display_name is required for variant components'; }
+                        else {
+                            foreach ($variantsAll as $v) {
+                                if (!is_array($v) || !empty($v['archived_flag'])) { continue; }
+                                if ((string) ($v['component_id'] ?? '') === (string) ($cmp['id'] ?? '') && strtolower(trim((string) ($v['display_name'] ?? ''))) === $needleVar) {
+                                    $variantId = (string) ($v['id'] ?? '');
+                                    break;
+                                }
+                            }
+                            if ($variantId === '') { $errs[] = 'variant_display_name not found under selected component'; }
+                        }
+                    }
+                    $locationName = strtolower(trim((string) ($row['location_name'] ?? '')));
+                    $locationId = '';
+                    if ($locationName !== '') {
+                        $loc = is_array($locationByName[$locationName] ?? null) ? $locationByName[$locationName] : null;
+                        if ($loc === null) { $errs[] = 'location_name not found'; } else { $locationId = (string) ($loc['id'] ?? ''); }
+                    }
+                    if (is_array($cmp) && !empty($cmp['is_cuttable'])) {
+                        if (trim((string) ($row['piece_count'] ?? '')) === '' || trim((string) ($row['piece_length_ft'] ?? '')) === '') { $errs[] = 'piece_count and piece_length_ft are required for cuttable components'; }
+                    } else {
+                        if (max(0, (float) ($row['qty'] ?? 0)) <= 0) { $errs[] = 'qty is required for non-cuttable components'; }
+                    }
+                    if ($errs !== []) {
+                        $report['rows_failed']++;
+                        $report['errors'][] = ['row' => $rowNo, 'message' => implode('; ', $errs)];
+                        continue;
+                    }
+                    $componentId = (string) ($cmp['id'] ?? '');
+                    $entry = documents_inventory_component_stock($stockState, $componentId, $variantId);
+                    if (!empty($cmp['is_cuttable'])) {
+                        $pieceCount = (int) ($row['piece_count'] ?? 0);
+                        $pieceLength = round(max(0, (float) ($row['piece_length_ft'] ?? 0)), 2);
+                        for ($i = 0; $i < $pieceCount; $i++) {
+                            $entry['lots'][] = [
+                                'lot_id' => 'LOT-' . date('YmdHis') . '-' . bin2hex(random_bytes(2)),
+                                'received_at' => date('c'),
+                                'source_ref' => 'csv_import_in',
+                                'original_length_ft' => $pieceLength,
+                                'remaining_length_ft' => $pieceLength,
+                                'location_id' => $locationId,
+                                'notes' => safe_text((string) ($row['notes'] ?? '')),
+                                'created_at' => date('c'),
+                                'created_by' => documents_inventory_actor($user ?? []),
+                            ];
+                        }
+                    } else {
+                        $qty = max(0, (float) ($row['qty'] ?? 0));
+                        $batch = documents_inventory_create_batch($locationId, $qty, documents_inventory_actor($user ?? []), '');
+                        $batches = is_array($entry['batches'] ?? null) ? $entry['batches'] : [];
+                        $batches[] = $batch;
+                        $entry['batches'] = $batches;
+                        $entry['location_breakdown'] = documents_inventory_normalize_location_breakdown(array_merge((array) ($entry['location_breakdown'] ?? []), [['location_id' => $locationId, 'qty' => $qty]]));
+                        $entry['on_hand_qty'] = documents_inventory_location_breakdown_total($entry['location_breakdown']);
+                    }
+                    $entry['updated_at'] = date('c');
+                    documents_inventory_set_component_stock($stockState, $componentId, $variantId, $entry);
+                    $tx = array_merge(documents_inventory_transaction_defaults(), [
+                        'id' => 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)),
+                        'type' => 'IN',
+                        'component_id' => $componentId,
+                        'variant_id' => $variantId,
+                        'qty' => max(0, (float) ($row['qty'] ?? 0)),
+                        'unit' => !empty($cmp['is_cuttable']) ? 'ft' : (string) ($cmp['default_unit'] ?? 'qty'),
+                        'length_ft' => !empty($cmp['is_cuttable']) ? ((int) ($row['piece_count'] ?? 0) * (float) ($row['piece_length_ft'] ?? 0)) : 0,
+                        'location_id' => $locationId,
+                        'notes' => safe_text((string) ($row['notes'] ?? '')),
+                        'ref_type' => 'csv_import_in',
+                        'ref_id' => '',
+                        'created_at' => date('c'),
+                        'created_by' => documents_inventory_actor($user ?? []),
+                    ]);
+                    documents_inventory_append_transaction($tx);
+                    $report['rows_succeeded']++;
+                }
+                $saved = documents_inventory_save_stock($stockState);
+                if (!($saved['ok'] ?? false)) { $redirectCsvImport('error', 'Failed to save stock import.', $report); }
+                $redirectCsvImport($report['rows_failed'] === 0 ? 'success' : 'error', 'Stock IN CSV import completed.', $report);
+            }
         }
 
         if (in_array($action, ['save_component', 'save_component_edit'], true)) {
@@ -1956,6 +2390,11 @@ if (!in_array($activeTab, ['company', 'numbering', 'templates', 'accepted_custom
 
 $status = safe_text($_GET['status'] ?? '');
 $message = safe_text($_GET['message'] ?? '');
+$csvImportReport = null;
+if (isset($_SESSION['items_csv_import_report']) && is_array($_SESSION['items_csv_import_report'])) {
+    $csvImportReport = $_SESSION['items_csv_import_report'];
+}
+unset($_SESSION['items_csv_import_report']);
 
 $company = load_company_profile();
 
@@ -1973,15 +2412,48 @@ $includeArchivedPack = isset($_GET['include_archived_pack']) && $_GET['include_a
 $archiveTypeFilter = safe_text($_GET['archive_type'] ?? 'all');
 $archiveSearch = strtolower(trim(safe_text($_GET['archive_q'] ?? '')));
 $itemsSubtab = safe_text($_GET['items_subtab'] ?? ($_GET['sub'] ?? 'components'));
-if (!in_array($itemsSubtab, ['components', 'kits', 'tax_profiles', 'variants', 'locations', 'inventory', 'transactions'], true)) {
+if (!in_array($itemsSubtab, ['components', 'kits', 'tax_profiles', 'variants', 'locations', 'inventory', 'transactions', 'csv_import'], true)) {
     $itemsSubtab = 'components';
 }
 
-if ($isEmployee && $activeTab === 'items' && !in_array($itemsSubtab, ['inventory', 'transactions'], true)) {
+if ($isEmployee && $activeTab === 'items' && !in_array($itemsSubtab, ['inventory', 'transactions', 'csv_import'], true)) {
     $itemsSubtab = 'inventory';
     if ($status === '' && $message === '') {
         $status = 'error';
-        $message = 'Access denied. Your role can access Inventory and Transactions only.';
+        $message = 'Access denied. Your role can access Inventory, Transactions, and CSV Import only.';
+    }
+}
+
+
+if ($activeTab === 'items' && $itemsSubtab === 'csv_import') {
+    $sampleType = safe_text((string) ($_GET['download_sample'] ?? ''));
+    if ($sampleType !== '') {
+        $sampleHeaders = [
+            'components' => ['name','category','hsn','default_unit','is_cuttable','standard_length_ft','has_variants','tax_profile_name'],
+            'variants' => ['component_name','display_name','brand','technology','wattage_wp','model_no','hsn_override','tax_profile_name_override'],
+            'locations' => ['name','type','notes'],
+            'kits' => ['kit_name','category','description','tax_profile_name'],
+            'kit_items' => ['kit_name','component_name','mode','unit','fixed_qty','capacity_type','capacity_expr','slab_json','rule_type','target_expr','allow_overbuild_pct','manual_note','remarks'],
+            'stock_in' => ['component_name','variant_display_name','qty','piece_count','piece_length_ft','location_name','notes'],
+        ];
+        if (!isset($sampleHeaders[$sampleType])) {
+            http_response_code(404);
+            echo 'Sample type not found.';
+            exit;
+        }
+        if ($sampleType !== 'stock_in' && !$isAdmin) {
+            http_response_code(403);
+            echo 'Access denied.';
+            exit;
+        }
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="inventory-sample-' . $sampleType . '.csv"');
+        $out = fopen('php://output', 'wb');
+        if ($out !== false) {
+            fputcsv($out, $sampleHeaders[$sampleType]);
+            fclose($out);
+        }
+        exit;
     }
 }
 
@@ -2160,6 +2632,9 @@ foreach ($componentMap as $cmpId => $cmpRow) {
     $inventoryComponentJsMap[$cmpId] = [
         'id' => (string) ($cmpRow['id'] ?? ''),
         'has_variants' => !empty($cmpRow['has_variants']),
+        'is_cuttable' => !empty($cmpRow['is_cuttable']),
+        'default_unit' => (string) ($cmpRow['default_unit'] ?? 'qty'),
+        'standard_length_ft' => (float) ($cmpRow['standard_length_ft'] ?? 0),
     ];
 }
 
@@ -2661,6 +3136,7 @@ usort($archivedRows, static function (array $a, array $b): int {
           <a class="tab <?= $itemsSubtab === 'locations' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'locations']), ENT_QUOTES) ?>">Locations</a>
           <a class="tab <?= $itemsSubtab === 'inventory' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'inventory']), ENT_QUOTES) ?>">Inventory</a>
           <a class="tab <?= $itemsSubtab === 'transactions' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'transactions']), ENT_QUOTES) ?>">Transactions</a>
+          <a class="tab <?= $itemsSubtab === 'csv_import' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'csv_import']), ENT_QUOTES) ?>">CSV Import</a>
         </nav>
 
         <?php if ($itemsSubtab === 'components'): ?>
@@ -2812,47 +3288,111 @@ usort($archivedRows, static function (array $a, array $b): int {
             </form>
           <?php endif; ?>
           <table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Notes</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($inventoryLocations as $location): ?><tr><td><?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($location['type'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($location['notes'] ?? ''), ENT_QUOTES) ?></td><td><?= !empty($location['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td><td class="row-actions"><?php if ($isAdmin): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'locations', 'edit' => (string) ($location['id'] ?? '')]), ENT_QUOTES) ?>">Edit</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_location_archive" /><input type="hidden" name="location_id" value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($location['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($location['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php else: ?><span class="muted">View only</span><?php endif; ?></td></tr><?php endforeach; ?></tbody></table>
+
+        <?php elseif ($itemsSubtab === 'csv_import'): ?>
+          <h3>CSV Imports</h3>
+          <p class="muted">Import masters using CSV (admin-only) and Stock IN transactions (admin + employee).</p>
+          <?php if (is_array($csvImportReport)): ?>
+            <div class="pill <?= ((int) ($csvImportReport['rows_failed'] ?? 0)) > 0 ? 'warn' : '' ?>" style="display:block;padding:0.5rem 0.75rem;margin-bottom:0.75rem;">
+              Rows read: <?= (int) ($csvImportReport['rows_read'] ?? 0) ?>,
+              succeeded: <?= (int) ($csvImportReport['rows_succeeded'] ?? 0) ?>,
+              failed: <?= (int) ($csvImportReport['rows_failed'] ?? 0) ?>
+            </div>
+            <?php if (!empty($csvImportReport['errors']) && is_array($csvImportReport['errors'])): ?>
+              <table style="margin-bottom:1rem;"><thead><tr><th>Row</th><th>Error</th></tr></thead><tbody>
+                <?php foreach ($csvImportReport['errors'] as $err): if (!is_array($err)) { continue; } ?>
+                  <tr><td><?= (int) ($err['row'] ?? 0) ?></td><td><?= htmlspecialchars((string) ($err['message'] ?? ''), ENT_QUOTES) ?></td></tr>
+                <?php endforeach; ?>
+              </tbody></table>
+            <?php endif; ?>
+          <?php endif; ?>
+
+          <div class="grid" style="margin-bottom:1rem;">
+            <?php if ($isAdmin): ?>
+              <form method="post" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                <input type="hidden" name="action" value="import_components_csv" />
+                <h4>Import Components</h4>
+                <input type="file" name="csv_file" accept=".csv,text/csv" required />
+                <div style="margin-top:0.5rem;"><button class="btn" type="submit">Import</button> <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'csv_import', 'download_sample' => 'components']), ENT_QUOTES) ?>">Download Sample CSV</a></div>
+              </form>
+
+              <form method="post" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                <input type="hidden" name="action" value="import_variants_csv" />
+                <h4>Import Variants</h4>
+                <input type="file" name="csv_file" accept=".csv,text/csv" required />
+                <div style="margin-top:0.5rem;"><button class="btn" type="submit">Import</button> <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'csv_import', 'download_sample' => 'variants']), ENT_QUOTES) ?>">Download Sample CSV</a></div>
+              </form>
+
+              <form method="post" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                <input type="hidden" name="action" value="import_locations_csv" />
+                <h4>Import Locations</h4>
+                <input type="file" name="csv_file" accept=".csv,text/csv" required />
+                <div style="margin-top:0.5rem;"><button class="btn" type="submit">Import</button> <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'csv_import', 'download_sample' => 'locations']), ENT_QUOTES) ?>">Download Sample CSV</a></div>
+              </form>
+
+              <form method="post" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                <input type="hidden" name="action" value="import_kits_csv" />
+                <h4>Import Kits (2 files)</h4>
+                <label>Kits CSV</label><input type="file" name="kits_csv" accept=".csv,text/csv" required />
+                <label>Kit Items CSV</label><input type="file" name="kit_items_csv" accept=".csv,text/csv" required />
+                <div style="margin-top:0.5rem;"><button class="btn" type="submit">Import</button> <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'csv_import', 'download_sample' => 'kits']), ENT_QUOTES) ?>">Sample kits.csv</a> <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'csv_import', 'download_sample' => 'kit_items']), ENT_QUOTES) ?>">Sample kit_items.csv</a></div>
+              </form>
+            <?php endif; ?>
+
+            <form method="post" enctype="multipart/form-data">
+              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+              <input type="hidden" name="action" value="import_inventory_stock_in_csv" />
+              <h4>Import Stock IN Transactions</h4>
+              <input type="file" name="csv_file" accept=".csv,text/csv" required />
+              <div style="margin-top:0.5rem;"><button class="btn" type="submit">Import</button> <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'csv_import', 'download_sample' => 'stock_in']), ENT_QUOTES) ?>">Download Sample CSV</a></div>
+            </form>
+          </div>
+
         <?php elseif ($itemsSubtab === 'inventory'): ?>
           <h3>Inventory Transactions</h3>
           <div class="grid" style="margin-bottom:1rem;">
-            <form method="post">
+            <form method="post" data-inventory-form="1" data-tx-type="IN">
               <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
               <input type="hidden" name="action" value="create_inventory_tx" />
               <input type="hidden" name="tx_type" value="IN" />
               <h4>Add Stock (IN)</h4>
               <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): if (!empty($component['archived_flag'])) { continue; } ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-              <div><label>Variant (optional)</label><select name="variant_id"><option value="">-- none --</option><?php foreach ($activeInventoryVariants as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-              <div><label>Qty (non-cuttable)</label><input type="number" step="0.01" min="0" name="qty" /></div>
-              <div><label>Piece Count (cuttable)</label><input type="number" step="1" min="1" name="cut_piece_count" /></div>
-              <div><label>Piece Length (ft each, cuttable)</label><input type="number" step="0.01" min="0.01" name="cut_piece_length_ft" /></div>
+              <div data-variant-wrap="1"><label>Variant</label><select name="variant_id"><option value="">-- select variant --</option></select><small class="muted" data-variant-empty="1" style="display:none;">No variants found for selected component.</small></div>
+              <div data-non-cuttable-wrap="1"><label>Qty (non-cuttable)</label><input type="number" step="0.01" min="0" name="qty" /></div>
+              <div data-cuttable-wrap="1"><label>Piece Count (cuttable)</label><input type="number" step="1" min="1" name="cut_piece_count" /></div>
+              <div data-cuttable-wrap="1"><label>Piece Length (ft each, cuttable)</label><input type="number" step="0.01" min="0.01" name="cut_piece_length_ft" /></div>
               <div><label>Location</label><select name="location_id"><option value="">Unassigned</option><?php foreach ($activeInventoryLocations as $location): ?><option value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div><label>Notes</label><input name="notes" /></div>
               <button class="btn" type="submit">Create IN</button>
             </form>
-            <form method="post">
+            <form method="post" data-inventory-form="1" data-tx-type="OUT">
               <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
               <input type="hidden" name="action" value="create_inventory_tx" />
               <input type="hidden" name="tx_type" value="OUT" />
               <h4>Issue Stock (OUT)</h4>
               <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): if (!empty($component['archived_flag'])) { continue; } ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-              <div><label>Variant (optional)</label><select name="variant_id"><option value="">-- none --</option><?php foreach ($activeInventoryVariants as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-              <div><label>Qty</label><input type="number" step="0.01" min="0" name="qty" /></div>
-              <div><label>Length (ft for cuttable)</label><input type="number" step="0.01" min="0" name="length_ft" /></div>
+              <div data-variant-wrap="1"><label>Variant</label><select name="variant_id"><option value="">-- select variant --</option></select><small class="muted" data-variant-empty="1" style="display:none;">No variants found for selected component.</small></div>
+              <div data-non-cuttable-wrap="1"><label>Qty</label><input type="number" step="0.01" min="0" name="qty" /></div>
+              <div data-cuttable-wrap="1"><label>Length (ft for cuttable)</label><input type="number" step="0.01" min="0" name="length_ft" /></div>
               <div><label>Consume from location (optional)</label><select name="consume_location_id"><option value="">Auto</option><?php foreach ($activeInventoryLocations as $location): ?><option value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div><label>Notes</label><input name="notes" /></div>
               <button class="btn secondary" type="submit">Create OUT</button>
             </form>
 
-            <form method="post">
+            <form method="post" data-inventory-form="1" data-tx-type="MOVE">
               <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
               <input type="hidden" name="action" value="create_inventory_tx" />
               <input type="hidden" name="tx_type" value="MOVE" />
               <h4>Move Stock (MOVE)</h4>
               <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): if (!empty($component['archived_flag'])) { continue; } ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-              <div><label>Variant (optional)</label><select name="variant_id"><option value="">-- none --</option><?php foreach ($activeInventoryVariants as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-              <div><label>Batch ID (for qty stock)</label><input name="move_batch_id" placeholder="Optional" /></div>
-              <div><label>Lot ID (for cuttable)</label><input name="move_lot_id" placeholder="Optional" /></div>
-              <div><label>Qty to move (non-cuttable)</label><input type="number" step="0.01" min="0" name="qty" /></div>
+              <div data-variant-wrap="1"><label>Variant</label><select name="variant_id"><option value="">-- select variant --</option></select><small class="muted" data-variant-empty="1" style="display:none;">No variants found for selected component.</small></div>
+              <div data-non-cuttable-wrap="1"><label>Batch ID (for qty stock)</label><input name="move_batch_id" placeholder="Optional" /></div>
+              <div data-cuttable-wrap="1"><label>Lot ID (for cuttable)</label><input name="move_lot_id" placeholder="Optional" /></div>
+              <div data-non-cuttable-wrap="1"><label>Qty to move (non-cuttable)</label><input type="number" step="0.01" min="0" name="qty" /></div>
               <div><label>From location (optional)</label><select name="from_location_id"><option value="">Any</option><?php foreach ($activeInventoryLocations as $location): ?><option value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div><label>To location</label><select name="to_location_id" required><option value="">-- select --</option><?php foreach ($activeInventoryLocations as $location): ?><option value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div><label>Notes</label><input name="notes" /></div>
@@ -2860,15 +3400,15 @@ usort($archivedRows, static function (array $a, array $b): int {
             </form>
 
             <?php if ($isAdmin): ?>
-            <form method="post">
+            <form method="post" data-inventory-form="1" data-tx-type="ADJUST">
               <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
               <input type="hidden" name="action" value="create_inventory_tx" />
               <input type="hidden" name="tx_type" value="ADJUST" />
               <h4>Adjust Stock (ADJUST)</h4>
               <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): if (!empty($component['archived_flag'])) { continue; } ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-              <div><label>Variant (optional)</label><select name="variant_id"><option value="">-- none --</option><?php foreach ($activeInventoryVariants as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-              <div><label>Qty</label><input type="number" step="0.01" min="0" name="qty" /></div>
-              <div><label>Length (ft)</label><input type="number" step="0.01" min="0" name="length_ft" /></div>
+              <div data-variant-wrap="1"><label>Variant</label><select name="variant_id"><option value="">-- select variant --</option></select><small class="muted" data-variant-empty="1" style="display:none;">No variants found for selected component.</small></div>
+              <div data-non-cuttable-wrap="1"><label>Qty</label><input type="number" step="0.01" min="0" name="qty" /></div>
+              <div data-cuttable-wrap="1"><label>Length (ft)</label><input type="number" step="0.01" min="0" name="length_ft" /></div>
               <div><label>Notes</label><input name="notes" /></div>
               <button class="btn warn" type="submit">Create ADJUST</button>
             </form>
@@ -3257,6 +3797,8 @@ function syncInventoryVariantField(form) {
     variantWrap.style.display = 'none';
     variantSelect.required = false;
     variantSelect.value = '';
+    variantSelect.innerHTML = '<option value="">-- select variant --</option>';
+    if (emptyMsg) emptyMsg.style.display = 'none';
     if (submitBtn) submitBtn.disabled = false;
     return;
   }
@@ -3280,18 +3822,39 @@ function syncInventoryVariantField(form) {
 
   const hasVariants = variants.length > 0;
   variantSelect.required = true;
-  variantSelect.disabled = !hasVariants;
   if (emptyMsg) emptyMsg.style.display = hasVariants ? 'none' : '';
   if (submitBtn) submitBtn.disabled = !hasVariants;
 }
 
-document.querySelectorAll('form').forEach(function (form) {
-  if (!form.querySelector('[data-variant-wrap="1"]')) return;
+function syncInventoryCuttableField(form) {
+  if (!form) return;
+  const componentSelect = form.querySelector('select[name="component_id"]');
+  if (!componentSelect) return;
+  const component = INVENTORY_COMPONENTS[componentSelect.value || ''] || null;
+  const isCuttable = !!(component && component.is_cuttable);
+
+  form.querySelectorAll('[data-cuttable-wrap="1"]').forEach(function (el) {
+    el.style.display = isCuttable ? '' : 'none';
+    if (!isCuttable) {
+      el.querySelectorAll('input').forEach(function (input) { input.value = ''; });
+    }
+  });
+  form.querySelectorAll('[data-non-cuttable-wrap="1"]').forEach(function (el) {
+    el.style.display = isCuttable ? 'none' : '';
+    if (isCuttable) {
+      el.querySelectorAll('input').forEach(function (input) { input.value = ''; });
+    }
+  });
+}
+
+document.querySelectorAll('form[data-inventory-form="1"]').forEach(function (form) {
   syncInventoryVariantField(form);
+  syncInventoryCuttableField(form);
   const componentSelect = form.querySelector('select[name="component_id"]');
   if (componentSelect) {
     componentSelect.addEventListener('change', function () {
       syncInventoryVariantField(form);
+      syncInventoryCuttableField(form);
     });
   }
 });
