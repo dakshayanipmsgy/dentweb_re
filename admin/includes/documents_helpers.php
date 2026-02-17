@@ -49,6 +49,11 @@ function documents_inventory_locations_path(): string
     return documents_inventory_dir() . '/locations.json';
 }
 
+function documents_inventory_edits_log_path(): string
+{
+    return documents_inventory_dir() . '/inventory_edits_log.json';
+}
+
 function documents_packing_lists_path(): string
 {
     return documents_base_dir() . '/packing_lists.json';
@@ -267,6 +272,7 @@ function documents_ensure_structure(): void
         documents_inventory_component_variants_path(),
         documents_inventory_locations_path(),
         documents_inventory_transactions_path(),
+        documents_inventory_edits_log_path(),
         documents_packing_lists_path(),
     ] as $storePath) {
         if (!is_file($storePath)) {
@@ -3646,6 +3652,64 @@ function documents_inventory_append_transaction(array $tx): array
 function documents_inventory_save_transactions(array $transactions): array
 {
     return json_save(documents_inventory_transactions_path(), array_values($transactions));
+}
+
+function documents_inventory_load_edits_log(): array
+{
+    $rows = json_load(documents_inventory_edits_log_path(), []);
+    return is_array($rows) ? $rows : [];
+}
+
+function documents_inventory_append_edits_log(array $entry): array
+{
+    $rows = documents_inventory_load_edits_log();
+    $rows[] = $entry;
+    return json_save(documents_inventory_edits_log_path(), array_values($rows));
+}
+
+function documents_inventory_build_usage_index(array $transactions): array
+{
+    $componentBlocked = [];
+    $variantBlocked = [];
+    $lotBlocked = [];
+
+    foreach ($transactions as $tx) {
+        if (!is_array($tx)) {
+            continue;
+        }
+        $row = array_merge(documents_inventory_transaction_defaults(), $tx);
+        $type = strtoupper((string) ($row['type'] ?? ''));
+        if (!in_array($type, ['OUT', 'ADJUST'], true)) {
+            continue;
+        }
+
+        $componentId = (string) ($row['component_id'] ?? '');
+        $variantId = (string) ($row['variant_id'] ?? '');
+        if ($componentId !== '') {
+            if ($variantId === '') {
+                $componentBlocked[$componentId] = 'Used in ' . $type . ' transaction.';
+            } else {
+                $variantBlocked[$variantId] = 'Used in ' . $type . ' transaction.';
+            }
+        }
+
+        foreach ((array) ($row['lot_consumption'] ?? []) as $consumed) {
+            if (!is_array($consumed)) {
+                continue;
+            }
+            $lotId = (string) ($consumed['lot_id'] ?? '');
+            if ($lotId === '') {
+                continue;
+            }
+            $lotBlocked[$lotId] = 'Lot consumed in transaction.';
+        }
+    }
+
+    return [
+        'component_blocked' => $componentBlocked,
+        'variant_blocked' => $variantBlocked,
+        'lot_blocked' => $lotBlocked,
+    ];
 }
 
 function documents_inventory_actor(array $viewer): array
