@@ -906,6 +906,7 @@ function documents_quote_defaults(): array
         'customer_snapshot' => documents_customer_snapshot_defaults(),
         'system_type' => 'Ongrid',
         'capacity_kwp' => '',
+        'system_capacity_kwp' => 0,
         'project_summary_line' => '',
         'valid_until' => '',
         'pricing_mode' => 'solar_split_70_30',
@@ -1284,6 +1285,13 @@ function documents_challan_item_defaults(): array
         'qty' => 0,
         'remarks' => '',
         'component_id' => '',
+        'line_id' => '',
+        'mode' => 'fixed_qty',
+        'variant_id' => '',
+        'variant_name_snapshot' => '',
+        'wattage_wp' => 0,
+        'dispatch_wp' => 0,
+        'manual_note' => '',
         'dispatch_qty' => 0,
         'dispatch_ft' => 0,
     ];
@@ -1303,6 +1311,13 @@ function documents_normalize_challan_items(array $items): array
         $row['qty'] = max(0, (float) ($row['qty'] ?? 0));
         $row['remarks'] = safe_text((string) ($row['remarks'] ?? ''));
         $row['component_id'] = safe_text((string) ($row['component_id'] ?? ''));
+        $row['line_id'] = safe_text((string) ($row['line_id'] ?? ''));
+        $row['mode'] = safe_text((string) ($row['mode'] ?? 'fixed_qty'));
+        $row['variant_id'] = safe_text((string) ($row['variant_id'] ?? ''));
+        $row['variant_name_snapshot'] = safe_text((string) ($row['variant_name_snapshot'] ?? ''));
+        $row['wattage_wp'] = max(0, (float) ($row['wattage_wp'] ?? 0));
+        $row['dispatch_wp'] = max(0, (float) ($row['dispatch_wp'] ?? 0));
+        $row['manual_note'] = safe_text((string) ($row['manual_note'] ?? ''));
         $row['dispatch_qty'] = max(0, (float) ($row['dispatch_qty'] ?? 0));
         $row['dispatch_ft'] = max(0, (float) ($row['dispatch_ft'] ?? 0));
         if ($row['name'] === '' && $row['description'] === '' && $row['qty'] <= 0 && $row['dispatch_qty'] <= 0 && $row['dispatch_ft'] <= 0) {
@@ -2614,6 +2629,8 @@ function documents_quote_prepare(array $quote): array
     $quote = array_merge(documents_quote_defaults(), $quote);
     $quote['status'] = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
     $quote['workflow'] = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
+    $quote['capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? ''));
+    $quote['system_capacity_kwp'] = max(0, (float) ($quote['system_capacity_kwp'] ?? $quote['capacity_kwp'] ?? 0));
     $quote['quote_items'] = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
     $quote['tax_profile_id'] = safe_text((string) ($quote['tax_profile_id'] ?? ''));
     $quote['gst_mode_snapshot'] = safe_text((string) ($quote['gst_mode_snapshot'] ?? ''));
@@ -2917,6 +2934,194 @@ function documents_inventory_kit_defaults(): array
     ];
 }
 
+function documents_inventory_kit_bom_line_defaults(): array
+{
+    return [
+        'line_id' => '',
+        'component_id' => '',
+        'mode' => 'fixed_qty',
+        'unit' => '',
+        'fixed_qty' => 0,
+        'capacity_rule' => [
+            'type' => 'formula',
+            'expr' => 'kwp * 1',
+            'slabs' => [],
+        ],
+        'rule' => [
+            'rule_type' => 'min_total_wp',
+            'target_expr' => 'kwp * 1000',
+            'allow_overbuild_pct' => 0,
+            'requires_variants' => true,
+        ],
+        'manual_note' => '',
+        'remarks' => '',
+    ];
+}
+
+function documents_normalize_kit_bom_line(array $line, ?array $component = null): array
+{
+    $legacyQty = (float) ($line['qty'] ?? 0);
+    $defaults = documents_inventory_kit_bom_line_defaults();
+    $normalized = array_merge($defaults, $line);
+    $normalized['component_id'] = safe_text((string) ($normalized['component_id'] ?? ''));
+    if ($normalized['line_id'] === '') {
+        $normalized['line_id'] = 'kline_' . bin2hex(random_bytes(4));
+    }
+
+    $mode = safe_text((string) ($normalized['mode'] ?? ''));
+    if ($mode === '') {
+        $mode = $legacyQty > 0 ? 'fixed_qty' : 'fixed_qty';
+    }
+    if (!in_array($mode, ['fixed_qty', 'capacity_qty', 'rule_fulfillment', 'unfixed_manual'], true)) {
+        $mode = 'fixed_qty';
+    }
+    $normalized['mode'] = $mode;
+
+    $componentUnit = is_array($component)
+        ? (!empty($component['is_cuttable']) ? 'ft' : ((string) ($component['default_unit'] ?? 'pcs')))
+        : 'pcs';
+    $unit = safe_text((string) ($normalized['unit'] ?? ''));
+    if ($unit === '') {
+        $unit = safe_text((string) ($line['unit'] ?? '')) ?: $componentUnit;
+    }
+    if (is_array($component) && !empty($component['is_cuttable'])) {
+        $unit = 'ft';
+    }
+    $normalized['unit'] = $unit;
+
+    $normalized['fixed_qty'] = max(0, (float) (($normalized['fixed_qty'] ?? 0) ?: $legacyQty));
+
+    $capacityRule = is_array($normalized['capacity_rule'] ?? null) ? $normalized['capacity_rule'] : [];
+    $capacityRule = array_merge($defaults['capacity_rule'], $capacityRule);
+    $capacityType = safe_text((string) ($capacityRule['type'] ?? 'formula'));
+    if (!in_array($capacityType, ['formula', 'slab'], true)) {
+        $capacityType = 'formula';
+    }
+    $capacityRule['type'] = $capacityType;
+    $capacityRule['expr'] = safe_text((string) ($capacityRule['expr'] ?? 'kwp * 1'));
+    $slabs = [];
+    foreach ((array) ($capacityRule['slabs'] ?? []) as $slab) {
+        if (!is_array($slab)) {
+            continue;
+        }
+        $slabs[] = [
+            'kwp_min' => (float) ($slab['kwp_min'] ?? 0),
+            'kwp_max' => (float) ($slab['kwp_max'] ?? 0),
+            'qty' => max(0, (float) ($slab['qty'] ?? 0)),
+        ];
+    }
+    $capacityRule['slabs'] = $slabs;
+    $normalized['capacity_rule'] = $capacityRule;
+
+    $rule = is_array($normalized['rule'] ?? null) ? $normalized['rule'] : [];
+    $rule = array_merge($defaults['rule'], $rule);
+    $rule['rule_type'] = safe_text((string) ($rule['rule_type'] ?? 'min_total_wp'));
+    if ($rule['rule_type'] === '') {
+        $rule['rule_type'] = 'min_total_wp';
+    }
+    $rule['target_expr'] = safe_text((string) ($rule['target_expr'] ?? 'kwp * 1000'));
+    $rule['allow_overbuild_pct'] = max(0, (float) ($rule['allow_overbuild_pct'] ?? 0));
+    $rule['requires_variants'] = (bool) ($rule['requires_variants'] ?? true);
+    $normalized['rule'] = $rule;
+
+    $normalized['manual_note'] = safe_text((string) ($normalized['manual_note'] ?? ''));
+    $normalized['remarks'] = safe_text((string) ($normalized['remarks'] ?? ($line['remarks'] ?? '')));
+    return $normalized;
+}
+
+function documents_evaluate_safe_expression(string $expr, float $kwp): array
+{
+    $cleanExpr = strtolower(trim($expr));
+    if ($cleanExpr === '') {
+        return ['ok' => false, 'error' => 'Expression is required', 'value' => 0.0];
+    }
+    if (!preg_match('/^[0-9\s\.\+\-\*\/\(\)kwp]+$/', $cleanExpr)) {
+        return ['ok' => false, 'error' => 'Expression contains invalid characters', 'value' => 0.0];
+    }
+
+    preg_match_all('/kwp|\d*\.?\d+|[\+\-\*\/\(\)]/', $cleanExpr, $matches);
+    $tokens = $matches[0] ?? [];
+    if ($tokens === []) {
+        return ['ok' => false, 'error' => 'Expression is empty', 'value' => 0.0];
+    }
+
+    $output = [];
+    $ops = [];
+    $prec = ['+' => 1, '-' => 1, '*' => 2, '/' => 2];
+    $prevToken = '';
+    foreach ($tokens as $token) {
+        if ($token === 'kwp' || preg_match('/^\d*\.?\d+$/', $token)) {
+            $output[] = $token === 'kwp' ? (string) $kwp : $token;
+        } elseif (isset($prec[$token])) {
+            if (($prevToken === '' || isset($prec[$prevToken]) || $prevToken === '(') && $token === '-') {
+                $output[] = '0';
+            }
+            while ($ops !== []) {
+                $top = end($ops);
+                if ($top === '(' || !isset($prec[$top]) || $prec[$top] < $prec[$token]) {
+                    break;
+                }
+                $output[] = array_pop($ops);
+            }
+            $ops[] = $token;
+        } elseif ($token === '(') {
+            $ops[] = $token;
+        } elseif ($token === ')') {
+            $matched = false;
+            while ($ops !== []) {
+                $top = array_pop($ops);
+                if ($top === '(') {
+                    $matched = true;
+                    break;
+                }
+                $output[] = $top;
+            }
+            if (!$matched) {
+                return ['ok' => false, 'error' => 'Mismatched parentheses', 'value' => 0.0];
+            }
+        }
+        $prevToken = $token;
+    }
+    while ($ops !== []) {
+        $op = array_pop($ops);
+        if ($op === '(' || $op === ')') {
+            return ['ok' => false, 'error' => 'Mismatched parentheses', 'value' => 0.0];
+        }
+        $output[] = $op;
+    }
+
+    $stack = [];
+    foreach ($output as $token) {
+        if (isset($prec[$token])) {
+            if (count($stack) < 2) {
+                return ['ok' => false, 'error' => 'Invalid expression', 'value' => 0.0];
+            }
+            $b = (float) array_pop($stack);
+            $a = (float) array_pop($stack);
+            if ($token === '/' && abs($b) < 0.0000001) {
+                return ['ok' => false, 'error' => 'Division by zero', 'value' => 0.0];
+            }
+            if ($token === '+') {
+                $stack[] = $a + $b;
+            } elseif ($token === '-') {
+                $stack[] = $a - $b;
+            } elseif ($token === '*') {
+                $stack[] = $a * $b;
+            } else {
+                $stack[] = $a / $b;
+            }
+        } else {
+            $stack[] = (float) $token;
+        }
+    }
+
+    if (count($stack) !== 1) {
+        return ['ok' => false, 'error' => 'Invalid expression', 'value' => 0.0];
+    }
+
+    return ['ok' => true, 'error' => '', 'value' => (float) $stack[0]];
+}
+
 function documents_tax_profile_defaults(): array
 {
     return [
@@ -3158,6 +3363,41 @@ function documents_packing_list_defaults(): array
     ];
 }
 
+function documents_packing_required_line_defaults(): array
+{
+    return [
+        'line_id' => '',
+        'component_id' => '',
+        'component_name_snapshot' => '',
+        'unit' => 'pcs',
+        'mode' => 'fixed_qty',
+        'required_qty' => 0,
+        'required_ft' => 0,
+        'dispatched_qty' => 0,
+        'dispatched_ft' => 0,
+        'pending_qty' => 0,
+        'pending_ft' => 0,
+        'rule_type' => '',
+        'target_wp' => 0,
+        'dispatched_wp' => 0,
+        'fulfilled_flag' => false,
+        'allow_overbuild_pct' => 0,
+        'dispatch_variant_breakdown' => [],
+        'planned_note' => '',
+        'dispatched_summary' => '',
+        'remarks' => '',
+    ];
+}
+
+function documents_quote_system_capacity_kwp(array $quote): float
+{
+    $primary = (float) ($quote['system_capacity_kwp'] ?? 0);
+    if ($primary > 0) {
+        return $primary;
+    }
+    return max(0, (float) ($quote['capacity_kwp'] ?? 0));
+}
+
 function documents_quote_structured_item_defaults(): array
 {
     return [
@@ -3290,6 +3530,15 @@ function documents_inventory_kits(bool $includeArchived = true): array
         }
         $kit = array_merge(documents_inventory_kit_defaults(), $row);
         $kit['items'] = is_array($kit['items'] ?? null) ? $kit['items'] : [];
+        $normalizedItems = [];
+        foreach ($kit['items'] as $line) {
+            if (!is_array($line)) {
+                continue;
+            }
+            $component = documents_inventory_get_component((string) ($line['component_id'] ?? ''));
+            $normalizedItems[] = documents_normalize_kit_bom_line($line, $component);
+        }
+        $kit['items'] = $normalizedItems;
         if (!$includeArchived && !empty($kit['archived_flag'])) {
             continue;
         }
@@ -3518,6 +3767,7 @@ function documents_normalize_quote_structured_items(array $rows): array
 
 function documents_create_packing_list_from_quote(array $quote): array
 {
+    $quote = documents_quote_prepare($quote);
     $quoteItems = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
     if ($quoteItems === []) {
         return ['ok' => false, 'error' => 'No structured items selected'];
@@ -3529,29 +3779,97 @@ function documents_create_packing_list_from_quote(array $quote): array
         $componentMap[(string) ($component['id'] ?? '')] = $component;
     }
 
-    $totals = [];
+    $required = [];
+    $kwp = documents_quote_system_capacity_kwp($quote);
+
     foreach ($quoteItems as $item) {
+        $multiplier = max(0, (float) ($item['qty'] ?? 0));
+        if ($multiplier <= 0) {
+            continue;
+        }
+
         if ((string) ($item['type'] ?? '') === 'kit') {
             $kit = documents_inventory_get_kit((string) ($item['kit_id'] ?? ''));
             if ($kit === null) {
                 continue;
             }
-            foreach ((array) ($kit['items'] ?? []) as $bomLine) {
-                if (!is_array($bomLine)) {
+            foreach ((array) ($kit['items'] ?? []) as $bomLineRaw) {
+                if (!is_array($bomLineRaw)) {
                     continue;
                 }
-                $componentId = (string) ($bomLine['component_id'] ?? '');
+                $componentId = (string) ($bomLineRaw['component_id'] ?? '');
                 if ($componentId === '') {
                     continue;
                 }
-                $qty = (float) ($bomLine['qty'] ?? 0) * (float) ($item['qty'] ?? 0);
-                if ($qty <= 0) {
+                $component = $componentMap[$componentId] ?? null;
+                if (!is_array($component)) {
                     continue;
                 }
-                if (!isset($totals[$componentId])) {
-                    $totals[$componentId] = 0.0;
+                $bomLine = documents_normalize_kit_bom_line($bomLineRaw, $component);
+                $line = array_merge(documents_packing_required_line_defaults(), [
+                    'line_id' => (string) ($bomLine['line_id'] ?? ('line_' . bin2hex(random_bytes(4)))),
+                    'component_id' => $componentId,
+                    'component_name_snapshot' => (string) ($component['name'] ?? 'Component'),
+                    'unit' => (string) ($bomLine['unit'] ?? ($component['default_unit'] ?? 'pcs')),
+                    'mode' => (string) ($bomLine['mode'] ?? 'fixed_qty'),
+                    'remarks' => (string) ($bomLine['remarks'] ?? ''),
+                ]);
+
+                if ($line['mode'] === 'fixed_qty') {
+                    $baseQty = max(0, (float) ($bomLine['fixed_qty'] ?? 0));
+                    $needQty = $baseQty * $multiplier;
+                    if ($line['unit'] === 'ft') {
+                        $line['required_ft'] = $needQty;
+                        $line['pending_ft'] = $needQty;
+                    } else {
+                        $line['required_qty'] = $needQty;
+                        $line['pending_qty'] = $needQty;
+                    }
+                } elseif ($line['mode'] === 'capacity_qty') {
+                    $computed = 0.0;
+                    $capRule = is_array($bomLine['capacity_rule'] ?? null) ? $bomLine['capacity_rule'] : [];
+                    if ((string) ($capRule['type'] ?? 'formula') === 'slab') {
+                        foreach ((array) ($capRule['slabs'] ?? []) as $slab) {
+                            if (!is_array($slab)) {
+                                continue;
+                            }
+                            $min = (float) ($slab['kwp_min'] ?? 0);
+                            $max = (float) ($slab['kwp_max'] ?? 0);
+                            if ($kwp >= $min && ($kwp <= $max || $max <= 0)) {
+                                $computed = max(0, (float) ($slab['qty'] ?? 0));
+                                break;
+                            }
+                        }
+                    } else {
+                        $eval = documents_evaluate_safe_expression((string) ($capRule['expr'] ?? 'kwp * 1'), $kwp);
+                        if (!($eval['ok'] ?? false)) {
+                            return ['ok' => false, 'error' => 'Invalid capacity formula in kit BOM for ' . ((string) ($component['name'] ?? $componentId))];
+                        }
+                        $computed = max(0, (float) ($eval['value'] ?? 0));
+                    }
+                    $needQty = $computed * $multiplier;
+                    if ($line['unit'] === 'ft') {
+                        $line['required_ft'] = $needQty;
+                        $line['pending_ft'] = $needQty;
+                    } else {
+                        $line['required_qty'] = $needQty;
+                        $line['pending_qty'] = $needQty;
+                    }
+                } elseif ($line['mode'] === 'rule_fulfillment') {
+                    $rule = is_array($bomLine['rule'] ?? null) ? $bomLine['rule'] : [];
+                    $eval = documents_evaluate_safe_expression((string) ($rule['target_expr'] ?? 'kwp * 1000'), $kwp);
+                    if (!($eval['ok'] ?? false)) {
+                        return ['ok' => false, 'error' => 'Invalid rule target formula in kit BOM for ' . ((string) ($component['name'] ?? $componentId))];
+                    }
+                    $line['rule_type'] = (string) ($rule['rule_type'] ?? 'min_total_wp');
+                    $line['target_wp'] = max(0, (float) ($eval['value'] ?? 0)) * $multiplier;
+                    $line['allow_overbuild_pct'] = max(0, (float) ($rule['allow_overbuild_pct'] ?? 0));
+                    $line['dispatch_variant_breakdown'] = [];
+                } else {
+                    $line['planned_note'] = safe_text((string) ($bomLine['manual_note'] ?? 'planned at dispatch'));
                 }
-                $totals[$componentId] += $qty;
+
+                $required[] = $line;
             }
             continue;
         }
@@ -3560,34 +3878,25 @@ function documents_create_packing_list_from_quote(array $quote): array
         if ($componentId === '') {
             continue;
         }
-        if (!isset($totals[$componentId])) {
-            $totals[$componentId] = 0.0;
-        }
-        $totals[$componentId] += (float) ($item['qty'] ?? 0);
-    }
-
-    if ($totals === []) {
-        return ['ok' => false, 'error' => 'No structured items selected'];
-    }
-
-    $required = [];
-    foreach ($totals as $componentId => $qty) {
         $component = $componentMap[$componentId] ?? null;
         if (!is_array($component)) {
             continue;
         }
         $isCuttable = !empty($component['is_cuttable']);
-        $line = [
+        $line = array_merge(documents_packing_required_line_defaults(), [
+            'line_id' => 'line_' . bin2hex(random_bytes(4)),
             'component_id' => $componentId,
             'component_name_snapshot' => (string) ($component['name'] ?? 'Component'),
-            'unit' => $isCuttable ? 'ft' : (string) ($component['default_unit'] ?? 'pcs'),
-            'required_qty' => $isCuttable ? 0 : $qty,
-            'required_ft' => $isCuttable ? $qty : 0,
-            'dispatched_qty' => 0,
-            'dispatched_ft' => 0,
-            'pending_qty' => $isCuttable ? 0 : $qty,
-            'pending_ft' => $isCuttable ? $qty : 0,
-        ];
+            'unit' => $isCuttable ? 'ft' : (string) ($item['unit'] ?: ($component['default_unit'] ?? 'pcs')),
+            'mode' => 'fixed_qty',
+        ]);
+        if ($isCuttable) {
+            $line['required_ft'] = $multiplier;
+            $line['pending_ft'] = $multiplier;
+        } else {
+            $line['required_qty'] = $multiplier;
+            $line['pending_qty'] = $multiplier;
+        }
         $required[] = $line;
     }
 
@@ -3595,7 +3904,6 @@ function documents_create_packing_list_from_quote(array $quote): array
         return ['ok' => false, 'error' => 'No structured items selected'];
     }
 
-    $quote = documents_quote_prepare($quote);
     $packingList = documents_packing_list_defaults();
     $packingList['id'] = 'pl_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
     $packingList['quotation_id'] = (string) ($quote['id'] ?? '');
@@ -3625,12 +3933,20 @@ function documents_create_packing_list_from_quote(array $quote): array
 function documents_apply_dispatch_to_packing_list(array $packingList, string $challanId, array $dispatchRows): array
 {
     $required = is_array($packingList['required_items'] ?? null) ? $packingList['required_items'] : [];
-    $byId = [];
+    $byLineId = [];
+    $byComponent = [];
     foreach ($required as $idx => $line) {
         if (!is_array($line)) {
             continue;
         }
-        $byId[(string) ($line['component_id'] ?? '')] = $idx;
+        $lineId = (string) ($line['line_id'] ?? '');
+        if ($lineId !== '') {
+            $byLineId[$lineId] = $idx;
+        }
+        $componentId = (string) ($line['component_id'] ?? '');
+        if ($componentId !== '' && !isset($byComponent[$componentId])) {
+            $byComponent[$componentId] = $idx;
+        }
     }
 
     $dispatchLogItems = [];
@@ -3638,38 +3954,80 @@ function documents_apply_dispatch_to_packing_list(array $packingList, string $ch
         if (!is_array($row)) {
             continue;
         }
+        $lineId = (string) ($row['line_id'] ?? '');
         $componentId = (string) ($row['component_id'] ?? '');
-        if ($componentId === '' || !isset($byId[$componentId])) {
+        $idx = null;
+        if ($lineId !== '' && isset($byLineId[$lineId])) {
+            $idx = $byLineId[$lineId];
+        } elseif ($componentId !== '' && isset($byComponent[$componentId])) {
+            $idx = $byComponent[$componentId];
+        }
+        if ($idx === null) {
             continue;
         }
-        $idx = $byId[$componentId];
-        $line = array_merge([
-            'required_qty' => 0,
-            'required_ft' => 0,
-            'dispatched_qty' => 0,
-            'dispatched_ft' => 0,
-            'pending_qty' => 0,
-            'pending_ft' => 0,
-            'unit' => 'pcs',
-        ], $required[$idx]);
 
+        $line = array_merge(documents_packing_required_line_defaults(), $required[$idx]);
         $dispatchQty = max(0, (float) ($row['dispatch_qty'] ?? 0));
         $dispatchFt = max(0, (float) ($row['dispatch_ft'] ?? 0));
-        $isCuttable = strtolower((string) ($line['unit'] ?? '')) === 'ft';
+        $dispatchWp = max(0, (float) ($row['dispatch_wp'] ?? 0));
+        $mode = (string) ($line['mode'] ?? 'fixed_qty');
 
-        if ($isCuttable) {
-            $line['dispatched_ft'] = (float) ($line['dispatched_ft'] ?? 0) + $dispatchFt;
-            $line['pending_ft'] = max(0, (float) ($line['required_ft'] ?? 0) - (float) ($line['dispatched_ft'] ?? 0));
-        } else {
-            $line['dispatched_qty'] = (float) ($line['dispatched_qty'] ?? 0) + $dispatchQty;
-            $line['pending_qty'] = max(0, (float) ($line['required_qty'] ?? 0) - (float) ($line['dispatched_qty'] ?? 0));
+        if (in_array($mode, ['fixed_qty', 'capacity_qty'], true)) {
+            $isCuttable = strtolower((string) ($line['unit'] ?? '')) === 'ft';
+            if ($isCuttable) {
+                $line['dispatched_ft'] = (float) ($line['dispatched_ft'] ?? 0) + $dispatchFt;
+                $line['pending_ft'] = max(0, (float) ($line['required_ft'] ?? 0) - (float) ($line['dispatched_ft'] ?? 0));
+            } else {
+                $line['dispatched_qty'] = (float) ($line['dispatched_qty'] ?? 0) + $dispatchQty;
+                $line['pending_qty'] = max(0, (float) ($line['required_qty'] ?? 0) - (float) ($line['dispatched_qty'] ?? 0));
+            }
+        } elseif ($mode === 'rule_fulfillment') {
+            $line['dispatched_wp'] = (float) ($line['dispatched_wp'] ?? 0) + $dispatchWp;
+            $line['fulfilled_flag'] = (float) ($line['dispatched_wp'] ?? 0) >= (float) ($line['target_wp'] ?? 0);
+            $breakdown = is_array($line['dispatch_variant_breakdown'] ?? null) ? $line['dispatch_variant_breakdown'] : [];
+            $variantId = (string) ($row['variant_id'] ?? '');
+            if ($variantId !== '') {
+                $found = false;
+                foreach ($breakdown as &$bucket) {
+                    if ((string) ($bucket['variant_id'] ?? '') !== $variantId) {
+                        continue;
+                    }
+                    $bucket['dispatched_qty'] = (float) ($bucket['dispatched_qty'] ?? 0) + $dispatchQty;
+                    $bucket['dispatched_wp'] = (float) ($bucket['dispatched_wp'] ?? 0) + $dispatchWp;
+                    $found = true;
+                    break;
+                }
+                unset($bucket);
+                if (!$found) {
+                    $breakdown[] = [
+                        'variant_id' => $variantId,
+                        'variant_name_snapshot' => (string) ($row['variant_name_snapshot'] ?? ''),
+                        'wattage_wp' => (float) ($row['wattage_wp'] ?? 0),
+                        'dispatched_qty' => $dispatchQty,
+                        'dispatched_wp' => $dispatchWp,
+                    ];
+                }
+                $line['dispatch_variant_breakdown'] = array_values($breakdown);
+            }
+        } elseif ($mode === 'unfixed_manual') {
+            if (strtolower((string) ($line['unit'] ?? '')) === 'ft') {
+                $line['dispatched_ft'] = (float) ($line['dispatched_ft'] ?? 0) + $dispatchFt;
+            } else {
+                $line['dispatched_qty'] = (float) ($line['dispatched_qty'] ?? 0) + $dispatchQty;
+            }
+            $line['dispatched_summary'] = safe_text((string) ($row['manual_note'] ?? ($line['dispatched_summary'] ?? '')));
         }
 
         $required[$idx] = $line;
         $dispatchLogItems[] = [
-            'component_id' => $componentId,
+            'line_id' => (string) ($line['line_id'] ?? ''),
+            'component_id' => (string) ($line['component_id'] ?? ''),
+            'mode' => $mode,
             'qty' => $dispatchQty,
             'ft' => $dispatchFt,
+            'dispatch_wp' => $dispatchWp,
+            'variant_id' => (string) ($row['variant_id'] ?? ''),
+            'variant_name_snapshot' => (string) ($row['variant_name_snapshot'] ?? ''),
         ];
     }
 
@@ -3685,9 +4043,17 @@ function documents_apply_dispatch_to_packing_list(array $packingList, string $ch
         if (!is_array($line)) {
             continue;
         }
-        if ((float) ($line['pending_qty'] ?? 0) > 0 || (float) ($line['pending_ft'] ?? 0) > 0) {
-            $allPendingDone = false;
-            break;
+        $mode = (string) ($line['mode'] ?? 'fixed_qty');
+        if (in_array($mode, ['fixed_qty', 'capacity_qty'], true)) {
+            if ((float) ($line['pending_qty'] ?? 0) > 0 || (float) ($line['pending_ft'] ?? 0) > 0) {
+                $allPendingDone = false;
+                break;
+            }
+        } elseif ($mode === 'rule_fulfillment') {
+            if (empty($line['fulfilled_flag'])) {
+                $allPendingDone = false;
+                break;
+            }
         }
     }
     $packingList['status'] = $allPendingDone ? 'complete' : 'active';

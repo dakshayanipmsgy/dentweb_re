@@ -346,18 +346,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!is_array($line)) {
                         continue;
                     }
+                    $mode = (string) ($line['mode'] ?? 'fixed_qty');
                     $pendingQty = max(0, (float) ($line['pending_qty'] ?? 0));
                     $pendingFt = max(0, (float) ($line['pending_ft'] ?? 0));
-                    if ($pendingQty <= 0 && $pendingFt <= 0) {
+                    if (in_array($mode, ['fixed_qty', 'capacity_qty'], true) && $pendingQty <= 0 && $pendingFt <= 0) {
                         continue;
                     }
                     $prefillItems[] = [
                         'name' => (string) ($line['component_name_snapshot'] ?? ''),
                         'description' => 'From packing list',
                         'unit' => (string) ($line['unit'] ?? (($pendingFt > 0) ? 'ft' : 'Nos')),
-                        'qty' => $pendingFt > 0 ? $pendingFt : $pendingQty,
+                        'qty' => in_array($mode, ['fixed_qty', 'capacity_qty'], true) ? ($pendingFt > 0 ? $pendingFt : $pendingQty) : 0,
                         'remarks' => '',
                         'component_id' => (string) ($line['component_id'] ?? ''),
+                        'line_id' => (string) ($line['line_id'] ?? ''),
+                        'mode' => $mode,
                         'dispatch_qty' => 0,
                         'dispatch_ft' => 0,
                     ];
@@ -925,6 +928,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $bomQty = is_array($_POST['bom_qty'] ?? null) ? $_POST['bom_qty'] : [];
             $bomUnit = is_array($_POST['bom_unit'] ?? null) ? $_POST['bom_unit'] : [];
             $bomRemarks = is_array($_POST['bom_remarks'] ?? null) ? $_POST['bom_remarks'] : [];
+            $bomMode = is_array($_POST['bom_mode'] ?? null) ? $_POST['bom_mode'] : [];
+            $bomCapacityType = is_array($_POST['bom_capacity_type'] ?? null) ? $_POST['bom_capacity_type'] : [];
+            $bomCapacityExpr = is_array($_POST['bom_capacity_expr'] ?? null) ? $_POST['bom_capacity_expr'] : [];
+            $bomRuleType = is_array($_POST['bom_rule_type'] ?? null) ? $_POST['bom_rule_type'] : [];
+            $bomRuleTargetExpr = is_array($_POST['bom_rule_target_expr'] ?? null) ? $_POST['bom_rule_target_expr'] : [];
+            $bomRuleOverbuild = is_array($_POST['bom_rule_overbuild'] ?? null) ? $_POST['bom_rule_overbuild'] : [];
+            $bomManualNote = is_array($_POST['bom_manual_note'] ?? null) ? $_POST['bom_manual_note'] : [];
+            $bomLineId = is_array($_POST['bom_line_id'] ?? null) ? $_POST['bom_line_id'] : [];
+            $bomSlabMin = is_array($_POST['bom_capacity_slab_min'] ?? null) ? $_POST['bom_capacity_slab_min'] : [];
+            $bomSlabMax = is_array($_POST['bom_capacity_slab_max'] ?? null) ? $_POST['bom_capacity_slab_max'] : [];
+            $bomSlabQty = is_array($_POST['bom_capacity_slab_qty'] ?? null) ? $_POST['bom_capacity_slab_qty'] : [];
             $items = [];
             foreach ($selectedComponentIds as $compIdRaw) {
                 $compId = safe_text((string) $compIdRaw);
@@ -935,22 +949,88 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!is_array($component) || !empty($component['archived_flag'])) {
                     continue;
                 }
+                $mode = safe_text((string) ($bomMode[$compId] ?? 'fixed_qty'));
+                if (!in_array($mode, ['fixed_qty', 'capacity_qty', 'rule_fulfillment', 'unfixed_manual'], true)) {
+                    $mode = 'fixed_qty';
+                }
                 $qty = (float) ($bomQty[$compId] ?? 0);
                 $unitInput = safe_text((string) ($bomUnit[$compId] ?? ''));
                 $remarks = safe_text((string) ($bomRemarks[$compId] ?? ''));
                 $unit = !empty($component['is_cuttable']) ? 'ft' : ($unitInput !== '' ? $unitInput : (string) ($component['default_unit'] ?? ''));
-                if ($qty <= 0) {
-                    $redirectDocuments('items', 'error', 'Each selected component must have quantity greater than 0.', ['items_subtab' => 'kits', 'edit' => $editing ? $kitId : '']);
-                }
                 if ($unit === '') {
                     $redirectDocuments('items', 'error', 'Unit is required for all selected components.', ['items_subtab' => 'kits', 'edit' => $editing ? $kitId : '']);
                 }
-                $items[] = [
+
+                $line = documents_normalize_kit_bom_line([
+                    'line_id' => safe_text((string) ($bomLineId[$compId] ?? '')),
                     'component_id' => $compId,
-                    'qty' => $qty,
+                    'mode' => $mode,
                     'unit' => $unit,
+                    'fixed_qty' => $qty,
                     'remarks' => $remarks,
-                ];
+                    'capacity_rule' => [
+                        'type' => safe_text((string) ($bomCapacityType[$compId] ?? 'formula')),
+                        'expr' => safe_text((string) ($bomCapacityExpr[$compId] ?? '')),
+                        'slabs' => [],
+                    ],
+                    'rule' => [
+                        'rule_type' => safe_text((string) ($bomRuleType[$compId] ?? 'min_total_wp')),
+                        'target_expr' => safe_text((string) ($bomRuleTargetExpr[$compId] ?? 'kwp * 1000')),
+                        'allow_overbuild_pct' => (float) ($bomRuleOverbuild[$compId] ?? 0),
+                        'requires_variants' => true,
+                    ],
+                    'manual_note' => safe_text((string) ($bomManualNote[$compId] ?? '')),
+                ], $component);
+
+                if ($line['mode'] === 'fixed_qty' && (float) ($line['fixed_qty'] ?? 0) <= 0) {
+                    $redirectDocuments('items', 'error', 'Fixed quantity must be greater than 0.', ['items_subtab' => 'kits', 'edit' => $editing ? $kitId : '']);
+                }
+                if ($line['mode'] === 'capacity_qty') {
+                    $capType = (string) (($line['capacity_rule']['type'] ?? 'formula'));
+                    if ($capType === 'formula') {
+                        $expr = (string) ($line['capacity_rule']['expr'] ?? '');
+                        if ($expr === '') {
+                            $redirectDocuments('items', 'error', 'Capacity formula is required.', ['items_subtab' => 'kits', 'edit' => $editing ? $kitId : '']);
+                        }
+                        $exprCheck = documents_evaluate_safe_expression($expr, 1.0);
+                        if (!($exprCheck['ok'] ?? false)) {
+                            $redirectDocuments('items', 'error', 'Capacity formula is invalid.', ['items_subtab' => 'kits', 'edit' => $editing ? $kitId : '']);
+                        }
+                    } else {
+                        $mins = is_array($bomSlabMin[$compId] ?? null) ? $bomSlabMin[$compId] : [];
+                        $maxs = is_array($bomSlabMax[$compId] ?? null) ? $bomSlabMax[$compId] : [];
+                        $qtys = is_array($bomSlabQty[$compId] ?? null) ? $bomSlabQty[$compId] : [];
+                        $slabs = [];
+                        $count = max(count($mins), count($maxs), count($qtys));
+                        for ($si = 0; $si < $count; $si++) {
+                            $sq = (float) ($qtys[$si] ?? 0);
+                            if ($sq <= 0) {
+                                continue;
+                            }
+                            $slabs[] = [
+                                'kwp_min' => (float) ($mins[$si] ?? 0),
+                                'kwp_max' => (float) ($maxs[$si] ?? 0),
+                                'qty' => $sq,
+                            ];
+                        }
+                        if ($slabs === []) {
+                            $redirectDocuments('items', 'error', 'At least one slab is required for slab capacity mode.', ['items_subtab' => 'kits', 'edit' => $editing ? $kitId : '']);
+                        }
+                        $line['capacity_rule']['slabs'] = $slabs;
+                    }
+                }
+                if ($line['mode'] === 'rule_fulfillment') {
+                    $targetExpr = (string) ($line['rule']['target_expr'] ?? '');
+                    if ($targetExpr === '') {
+                        $redirectDocuments('items', 'error', 'Rule target expression is required.', ['items_subtab' => 'kits', 'edit' => $editing ? $kitId : '']);
+                    }
+                    $exprCheck = documents_evaluate_safe_expression($targetExpr, 1.0);
+                    if (!($exprCheck['ok'] ?? false)) {
+                        $redirectDocuments('items', 'error', 'Rule target expression is invalid.', ['items_subtab' => 'kits', 'edit' => $editing ? $kitId : '']);
+                    }
+                }
+
+                $items[] = $line;
             }
             $row['items'] = $items;
             $savedRows = [];
@@ -1712,16 +1792,31 @@ usort($archivedRows, static function (array $a, array $b): int {
           <?php $packPackingList = documents_get_packing_list_for_quote($packQuoteId, $includeArchivedPack); ?>
           <h3>Packing &amp; Dispatch Status</h3>
           <?php if ($packPackingList !== null): ?>
-            <table><thead><tr><th>Component</th><th>Required</th><th>Dispatched</th><th>Pending</th></tr></thead><tbody>
+            <table><thead><tr><th>Component</th><th>Mode</th><th>Required/Target</th><th>Dispatched</th><th>Status</th></tr></thead><tbody>
               <?php foreach ((array) ($packPackingList['required_items'] ?? []) as $line): ?>
+                <?php $mode = (string) ($line['mode'] ?? 'fixed_qty'); ?>
                 <tr>
                   <td><?= htmlspecialchars((string) ($line['component_name_snapshot'] ?? ''), ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ($line['required_ft'] . ' ft') : ($line['required_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ($line['dispatched_ft'] . ' ft') : ($line['dispatched_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ($line['pending_ft'] . ' ft') : ($line['pending_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars($mode, ENT_QUOTES) ?></td>
+                  <?php if ($mode === 'rule_fulfillment'): ?>
+                    <td>Target <?= htmlspecialchars((string) ((float) ($line['target_wp'] ?? 0)), ENT_QUOTES) ?> Wp</td>
+                    <td><?= htmlspecialchars((string) ((float) ($line['dispatched_wp'] ?? 0)), ENT_QUOTES) ?> Wp</td>
+                    <td><?= !empty($line['fulfilled_flag']) ? '<span class="pill" style="background:#dcfce7;color:#166534">Fulfilled</span>' : ('Remaining ' . htmlspecialchars((string) max(0, (float) ($line['target_wp'] ?? 0) - (float) ($line['dispatched_wp'] ?? 0)), ENT_QUOTES) . ' Wp') ?></td>
+                  <?php elseif ($mode === 'unfixed_manual'): ?>
+                    <td><?= htmlspecialchars((string) (($line['planned_note'] ?? '') ?: 'planned at dispatch'), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) (((float) ($line['dispatched_ft'] ?? 0) > 0) ? (($line['dispatched_ft'] ?? 0) . ' ft') : (($line['dispatched_qty'] ?? 0) . ' ' . ($line['unit'] ?? ''))), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) ($line['dispatched_summary'] ?? ''), ENT_QUOTES) ?></td>
+                  <?php else: ?>
+                    <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ($line['required_ft'] . ' ft') : ($line['required_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ($line['dispatched_ft'] . ' ft') : ($line['dispatched_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ('Pending ' . $line['pending_ft'] . ' ft') : ('Pending ' . $line['pending_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
+                  <?php endif; ?>
                 </tr>
+                <?php if ($mode === 'rule_fulfillment' && (array) ($line['dispatch_variant_breakdown'] ?? []) !== []): ?>
+                  <tr><td colspan="5"><table><thead><tr><th>Variant</th><th>Wattage</th><th>Qty</th><th>Total Wp</th></tr></thead><tbody><?php foreach ((array) ($line['dispatch_variant_breakdown'] ?? []) as $b): ?><tr><td><?= htmlspecialchars((string) ($b['variant_name_snapshot'] ?? $b['variant_id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($b['wattage_wp'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($b['dispatched_qty'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($b['dispatched_wp'] ?? 0), ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table></td></tr>
+                <?php endif; ?>
               <?php endforeach; ?>
-              <?php if ((array) ($packPackingList['required_items'] ?? []) === []): ?><tr><td colspan="4" class="muted">No structured items in packing list.</td></tr><?php endif; ?>
+              <?php if ((array) ($packPackingList['required_items'] ?? []) === []): ?><tr><td colspan="5" class="muted">No structured items in packing list.</td></tr><?php endif; ?>
             </tbody></table>
             <h4>Dispatch Log</h4>
             <table><thead><tr><th>Delivery Challan</th><th>Date</th><th>Items Count</th></tr></thead><tbody>
@@ -1984,11 +2079,18 @@ usort($archivedRows, static function (array $a, array $b): int {
               <?php endforeach; ?>
               </tbody></table>
               <h4>Selected Components</h4>
-              <table id="kitSelectedBomTable"><thead><tr><th>Component</th><th>Qty</th><th>Unit</th><th>Remarks</th><th>Remove</th></tr></thead><tbody>
-              <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag'])) { continue; } $cid=(string)($component['id']??''); $selected = isset($kitItemsByComponent[$cid]); $item=$selected ? (array)$kitItemsByComponent[$cid] : []; $unitDefault = !empty($component['is_cuttable']) ? 'ft' : (string)($component['default_unit']??''); ?>
+              <p class="muted">Formula supports: digits, kwp, + - * / and parentheses. Example: <code>kwp * 25</code></p>
+              <table id="kitSelectedBomTable"><thead><tr><th>Component</th><th>Mode</th><th>Config</th><th>Unit</th><th>Remarks</th><th>Remove</th></tr></thead><tbody>
+              <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag'])) { continue; } $cid=(string)($component['id']??''); $selected = isset($kitItemsByComponent[$cid]); $item=$selected ? (array)$kitItemsByComponent[$cid] : []; $unitDefault = !empty($component['is_cuttable']) ? 'ft' : (string)($component['default_unit']??'pcs'); $lineMode = (string)($item['mode'] ?? (($item['qty'] ?? 0) > 0 ? 'fixed_qty' : 'fixed_qty')); $lineFixedQty = (float)($item['fixed_qty'] ?? ($item['qty'] ?? 0)); $capacityRule = is_array($item['capacity_rule'] ?? null) ? $item['capacity_rule'] : []; $capType = (string)($capacityRule['type'] ?? 'formula'); $capExpr = (string)($capacityRule['expr'] ?? 'kwp * 1'); $slabs = is_array($capacityRule['slabs'] ?? null) ? $capacityRule['slabs'] : []; if ($slabs === []) { $slabs = [['kwp_min' => 0, 'kwp_max' => 0, 'qty' => 0]]; } $ruleCfg = is_array($item['rule'] ?? null) ? $item['rule'] : []; $ruleType = (string)($ruleCfg['rule_type'] ?? 'min_total_wp'); $ruleTarget = (string)($ruleCfg['target_expr'] ?? 'kwp * 1000'); $ruleOverbuild = (float)($ruleCfg['allow_overbuild_pct'] ?? 0); ?>
                 <tr class="kit-bom-row" data-component-id="<?= htmlspecialchars($cid, ENT_QUOTES) ?>" style="<?= $selected ? '' : 'display:none;' ?>">
-                  <td><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?><input type="hidden" class="kit-selected-component-id" name="selected_component_ids[]" value="<?= $selected ? htmlspecialchars($cid, ENT_QUOTES) : '' ?>" /></td>
-                  <td><input type="number" step="0.01" min="0" name="bom_qty[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]" value="<?= $selected ? htmlspecialchars((string) ($item['qty'] ?? ''), ENT_QUOTES) : '' ?>" /></td>
+                  <td><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?><input type="hidden" class="kit-selected-component-id" name="selected_component_ids[]" value="<?= $selected ? htmlspecialchars($cid, ENT_QUOTES) : '' ?>" /><input type="hidden" name="bom_line_id[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]" value="<?= htmlspecialchars((string)($item['line_id'] ?? ''), ENT_QUOTES) ?>" /></td>
+                  <td><select class="kit-bom-mode" name="bom_mode[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]"><option value="fixed_qty" <?= $lineMode==='fixed_qty'?'selected':'' ?>>Fixed</option><option value="capacity_qty" <?= $lineMode==='capacity_qty'?'selected':'' ?>>Capacity-based</option><option value="rule_fulfillment" <?= $lineMode==='rule_fulfillment'?'selected':'' ?>>Rule-fulfillment</option><option value="unfixed_manual" <?= $lineMode==='unfixed_manual'?'selected':'' ?>>Manual</option></select></td>
+                  <td>
+                    <div class="bom-mode-panel" data-mode="fixed_qty" style="<?= $lineMode==='fixed_qty'?'':'display:none;' ?>"><label>Fixed Qty</label><input type="number" step="0.01" min="0" name="bom_qty[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]" value="<?= $selected ? htmlspecialchars((string)$lineFixedQty, ENT_QUOTES) : '' ?>" /></div>
+                    <div class="bom-mode-panel" data-mode="capacity_qty" style="<?= $lineMode==='capacity_qty'?'':'display:none;' ?>"><label>Capacity Rule Type</label><select name="bom_capacity_type[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]" class="kit-capacity-type"><option value="formula" <?= $capType==='formula'?'selected':'' ?>>Formula</option><option value="slab" <?= $capType==='slab'?'selected':'' ?>>Slab</option></select><div class="kit-capacity-formula" style="<?= $capType==='formula'?'':'display:none;' ?>"><label>Formula</label><input name="bom_capacity_expr[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]" value="<?= htmlspecialchars($capExpr, ENT_QUOTES) ?>" placeholder="kwp * 25" /></div><div class="kit-capacity-slabs" style="<?= $capType==='slab'?'':'display:none;' ?>"><?php foreach ($slabs as $slab): ?><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:4px;"><input type="number" step="0.01" name="bom_capacity_slab_min[<?= htmlspecialchars($cid, ENT_QUOTES) ?>][]" placeholder="kWp min" value="<?= htmlspecialchars((string)($slab['kwp_min'] ?? 0), ENT_QUOTES) ?>" /><input type="number" step="0.01" name="bom_capacity_slab_max[<?= htmlspecialchars($cid, ENT_QUOTES) ?>][]" placeholder="kWp max" value="<?= htmlspecialchars((string)($slab['kwp_max'] ?? 0), ENT_QUOTES) ?>" /><input type="number" step="0.01" min="0" name="bom_capacity_slab_qty[<?= htmlspecialchars($cid, ENT_QUOTES) ?>][]" placeholder="Qty" value="<?= htmlspecialchars((string)($slab['qty'] ?? 0), ENT_QUOTES) ?>" /></div><?php endforeach; ?></div></div>
+                    <div class="bom-mode-panel" data-mode="rule_fulfillment" style="<?= $lineMode==='rule_fulfillment'?'':'display:none;' ?>"><label>Rule</label><select name="bom_rule_type[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]"><option value="min_total_wp" <?= $ruleType==='min_total_wp'?'selected':'' ?>>Panels by Wp</option></select><label>Target Expr</label><input name="bom_rule_target_expr[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]" value="<?= htmlspecialchars($ruleTarget, ENT_QUOTES) ?>" placeholder="kwp * 1000" /><label>Allow overbuild %</label><input type="number" step="0.01" min="0" name="bom_rule_overbuild[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]" value="<?= htmlspecialchars((string)$ruleOverbuild, ENT_QUOTES) ?>" /></div>
+                    <div class="bom-mode-panel" data-mode="unfixed_manual" style="<?= $lineMode==='unfixed_manual'?'':'display:none;' ?>"><label>Manual note</label><textarea name="bom_manual_note[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]"><?= htmlspecialchars((string)($item['manual_note'] ?? ''), ENT_QUOTES) ?></textarea></div>
+                  </td>
                   <td><input name="bom_unit[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]" value="<?= $selected ? htmlspecialchars((string) ($item['unit'] ?? $unitDefault), ENT_QUOTES) : htmlspecialchars($unitDefault, ENT_QUOTES) ?>" <?= !empty($component['is_cuttable']) ? 'readonly' : '' ?> /></td>
                   <td><input name="bom_remarks[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]" value="<?= $selected ? htmlspecialchars((string) ($item['remarks'] ?? ''), ENT_QUOTES) : '' ?>" /></td>
                   <td><button type="button" class="btn secondary kit-remove-component" data-component-id="<?= htmlspecialchars($cid, ENT_QUOTES) ?>">Remove</button></td>
@@ -2321,26 +2423,60 @@ document.addEventListener('click', function (e) {
   }
 });
 
+function applyKitModePanels(row) {
+  if (!row) return;
+  const modeSel = row.querySelector('.kit-bom-mode');
+  const mode = modeSel ? (modeSel.value || 'fixed_qty') : 'fixed_qty';
+  row.querySelectorAll('.bom-mode-panel').forEach(function (panel) {
+    panel.style.display = panel.getAttribute('data-mode') === mode ? '' : 'none';
+  });
+}
+
+function applyCapacityTypePanels(row) {
+  if (!row) return;
+  const typeSel = row.querySelector('.kit-capacity-type');
+  if (!typeSel) return;
+  const wrap = typeSel.closest('.bom-mode-panel');
+  if (!wrap) return;
+  const formula = wrap.querySelector('.kit-capacity-formula');
+  const slabs = wrap.querySelector('.kit-capacity-slabs');
+  if (formula) formula.style.display = typeSel.value === 'formula' ? '' : 'none';
+  if (slabs) slabs.style.display = typeSel.value === 'slab' ? '' : 'none';
+}
+
 document.addEventListener('change', function (e) {
-  if (!(e.target && e.target.classList && e.target.classList.contains('kit-component-checkbox'))) {
+  if (e.target && e.target.classList && e.target.classList.contains('kit-component-checkbox')) {
+    const componentId = e.target.getAttribute('data-component-id') || '';
+    if (componentId === '') return;
+    const row = document.querySelector('.kit-bom-row[data-component-id="' + componentId.replace(/"/g, '\"') + '"]');
+    if (!row) return;
+    const hidden = row.querySelector('.kit-selected-component-id');
+    const qtyInput = row.querySelector('input[name="bom_qty[' + componentId.replace(/"/g, '\"') + ']"]');
+    if (e.target.checked) {
+      row.style.display = '';
+      if (hidden) hidden.value = componentId;
+      if (qtyInput && qtyInput.value === '0') qtyInput.value = '';
+      applyKitModePanels(row);
+      applyCapacityTypePanels(row);
+    } else {
+      row.style.display = 'none';
+      if (hidden) hidden.value = '';
+      if (qtyInput) qtyInput.value = '';
+    }
     return;
   }
-  const componentId = e.target.getAttribute('data-component-id') || '';
-  if (componentId === '') return;
-  const row = document.querySelector('.kit-bom-row[data-component-id="' + componentId.replace(/"/g, '\"') + '"]');
-  if (!row) return;
-  const hidden = row.querySelector('.kit-selected-component-id');
-  const qtyInput = row.querySelector('input[name="bom_qty[' + componentId.replace(/"/g, '\"') + ']"]');
-  if (e.target.checked) {
-    row.style.display = '';
-    if (hidden) hidden.value = componentId;
-    if (qtyInput && qtyInput.value === '0') qtyInput.value = '';
-  } else {
-    row.style.display = 'none';
-    if (hidden) hidden.value = '';
-    if (qtyInput) qtyInput.value = '';
+
+  if (e.target && e.target.classList && e.target.classList.contains('kit-bom-mode')) {
+    applyKitModePanels(e.target.closest('.kit-bom-row'));
+    return;
+  }
+
+  if (e.target && e.target.classList && e.target.classList.contains('kit-capacity-type')) {
+    applyCapacityTypePanels(e.target.closest('.kit-bom-row'));
   }
 });
+
+document.querySelectorAll('.kit-bom-row').forEach(function (row) { applyKitModePanels(row); applyCapacityTypePanels(row); });
 
 document.addEventListener('input', function (e) {
   if (!(e.target && e.target.id === 'kitComponentSearch')) {
