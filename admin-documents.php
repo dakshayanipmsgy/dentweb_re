@@ -2231,7 +2231,20 @@ usort($archivedRows, static function (array $a, array $b): int {
             </form>
             <?php endif; ?>
           </div>
-          <table><thead><tr><th>Component</th><th>On Hand</th><th>Remaining Ft</th></tr></thead><tbody><?php foreach ($inventoryComponents as $component): $entry = documents_inventory_component_stock($inventoryStock, (string) ($component['id'] ?? ''), ''); ?><tr><td><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($entry['on_hand_qty'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) documents_inventory_total_remaining_ft($entry), ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table>
+          <div class="inventory-summary-filter" style="margin:0.75rem 0;">
+            <label for="inventorySummarySearch">Search Summary</label>
+            <input type="text" id="inventorySummarySearch" placeholder="Component or variant name" />
+          </div>
+          <table id="inventorySummaryTable"><thead><tr><th>Component</th><th>Type</th><th>Summary</th></tr></thead><tbody>
+            <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag'])) { continue; } $componentId=(string) ($component['id'] ?? ''); $isCuttable=!empty($component['is_cuttable']); $hasVariants=!empty($component['has_variants']); $componentEntry = documents_inventory_component_stock($inventoryStock, $componentId, ''); $lots = is_array($componentEntry['lots'] ?? null) ? $componentEntry['lots'] : []; usort($lots, static function ($a, $b): int { return strcmp((string) (($a['received_at'] ?? '')), (string) (($b['received_at'] ?? ''))); }); $totalFt = documents_inventory_total_remaining_ft($componentEntry); $variantRows = (array) ($variantsByComponent[$componentId] ?? []); $variantTotalQty = 0.0; foreach ($variantRows as $variantRow) { $variantEntry = documents_inventory_component_stock($inventoryStock, $componentId, (string) ($variantRow['id'] ?? '')); $variantTotalQty += (float) ($variantEntry['on_hand_qty'] ?? 0); } $summaryText = $isCuttable ? (rtrim(rtrim((string) $totalFt, '0'), '.') . ' ft') : ($hasVariants ? (rtrim(rtrim((string) $variantTotalQty, '0'), '.') . ' qty total') : (rtrim(rtrim((string) ((float) ($componentEntry['on_hand_qty'] ?? 0)), '0'), '.') . ' ' . (string) ($component['default_unit'] ?? 'qty'))); $searchHaystack = strtolower(trim((string) ($component['name'] ?? '') . ' ' . implode(' ', array_map(static function ($vr): string { return (string) ($vr['display_name'] ?? ''); }, $variantRows)))); ?>
+              <tr class="inventory-summary-group" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>"><td><strong><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></strong></td><td><?php if ($isCuttable): ?><span class="pill">Cuttable (ft)</span><?php endif; ?><?php if ($hasVariants): ?><span class="pill">Variants</span><?php endif; ?><?php if (!$isCuttable && !$hasVariants): ?><span class="muted">Plain</span><?php endif; ?></td><td><?= htmlspecialchars($summaryText, ENT_QUOTES) ?></td></tr>
+              <?php if ($isCuttable): ?>
+                <tr class="inventory-summary-detail" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>"><td colspan="3"><details open><summary><strong>Lots</strong> — Total <?= htmlspecialchars((string) $summaryText, ENT_QUOTES) ?>, Pieces <?= count($lots) ?></summary><table><thead><tr><th>Lot / Piece No</th><th>Remaining (ft)</th><th>Original (ft)</th><th>Received</th></tr></thead><tbody><?php foreach ($lots as $ix => $lot): ?><tr><td><?= htmlspecialchars((string) (($lot['lot_id'] ?? '') !== '' ? (string) ($lot['lot_id'] ?? '') : ('Piece #' . ($ix + 1))), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (float) ($lot['remaining_length_ft'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (float) ($lot['original_length_ft'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($lot['received_at'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; ?><?php if ($lots === []): ?><tr><td colspan="4" class="muted">No lots available.</td></tr><?php endif; ?></tbody></table></details></td></tr>
+              <?php elseif ($hasVariants): ?>
+                <tr class="inventory-summary-detail" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>"><td colspan="3"><details open><summary><strong>Variants</strong> — Total <?= htmlspecialchars(rtrim(rtrim((string) $variantTotalQty, '0'), '.'), ENT_QUOTES) ?> qty</summary><table><thead><tr><th>Variant Display Name</th><th>Brand</th><th>Wattage (Wp)</th><th>On-hand Qty</th></tr></thead><tbody><?php foreach ($variantRows as $variantRow): $variantEntry = documents_inventory_component_stock($inventoryStock, $componentId, (string) ($variantRow['id'] ?? '')); ?><tr><td><?= htmlspecialchars((string) ($variantRow['display_name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($variantRow['brand'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ((float) ($variantRow['wattage_wp'] ?? 0)), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ((float) ($variantEntry['on_hand_qty'] ?? 0)), ENT_QUOTES) ?></td></tr><?php endforeach; ?><?php if ($variantRows === []): ?><tr><td colspan="4" class="muted">No active variants found.</td></tr><?php endif; ?></tbody></table></details></td></tr>
+              <?php endif; ?>
+            <?php endforeach; ?>
+          </tbody></table>
         <?php else: ?>
           <h3>Transactions</h3>
           <table><thead><tr><th>ID</th><th>Type</th><th>Component</th><th>Variant</th><th>Qty/FT</th><th>Ref</th><th>Audit</th><th>Edit</th></tr></thead><tbody>
@@ -2524,6 +2537,17 @@ document.addEventListener('input', function (e) {
   const q = (e.target.value || '').toLowerCase().trim();
   document.querySelectorAll('#kitComponentSelector tbody tr[data-kit-component-row="1"]').forEach(function (row) {
     const hay = (row.textContent || '').toLowerCase();
+    row.style.display = q === '' || hay.indexOf(q) !== -1 ? '' : 'none';
+  });
+});
+
+document.addEventListener('input', function (e) {
+  if (!(e.target && e.target.id === 'inventorySummarySearch')) {
+    return;
+  }
+  const q = (e.target.value || '').toLowerCase().trim();
+  document.querySelectorAll('#inventorySummaryTable tbody tr[data-inventory-group="1"]').forEach(function (row) {
+    const hay = (row.getAttribute('data-search') || '').toLowerCase();
     row.style.display = q === '' || hay.indexOf(q) !== -1 ? '' : 'none';
   });
 });
