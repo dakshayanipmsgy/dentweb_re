@@ -44,6 +44,11 @@ function documents_inventory_transactions_path(): string
     return documents_inventory_dir() . '/transactions.json';
 }
 
+function documents_inventory_locations_path(): string
+{
+    return documents_inventory_dir() . '/locations.json';
+}
+
 function documents_packing_lists_path(): string
 {
     return documents_base_dir() . '/packing_lists.json';
@@ -260,6 +265,7 @@ function documents_ensure_structure(): void
         documents_inventory_kits_path(),
         documents_inventory_tax_profiles_path(),
         documents_inventory_component_variants_path(),
+        documents_inventory_locations_path(),
         documents_inventory_transactions_path(),
         documents_packing_lists_path(),
     ] as $storePath) {
@@ -3330,7 +3336,10 @@ function documents_inventory_transaction_defaults(): array
         'unit' => '',
         'length_ft' => 0,
         'lot_consumption' => [],
+        'location_consumption' => [],
         'lots_created' => [],
+        'location_id' => '',
+        'consume_location_id' => '',
         'ref_type' => 'manual',
         'ref_id' => '',
         'reason' => '',
@@ -3345,7 +3354,20 @@ function documents_inventory_transaction_defaults(): array
 
 function documents_inventory_component_entry_defaults(): array
 {
-    return ['on_hand_qty' => 0, 'lots' => [], 'updated_at' => ''];
+    return ['on_hand_qty' => 0, 'location_breakdown' => [], 'lots' => [], 'updated_at' => ''];
+}
+
+function documents_inventory_location_defaults(): array
+{
+    return [
+        'id' => '',
+        'name' => '',
+        'type' => '',
+        'notes' => '',
+        'archived_flag' => false,
+        'created_at' => '',
+        'updated_at' => '',
+    ];
 }
 
 function documents_packing_list_defaults(): array
@@ -3655,8 +3677,22 @@ function documents_inventory_component_stock(array $stock, string $componentId, 
     }
 
     $entry = array_merge(documents_inventory_component_entry_defaults(), is_array($entry) ? $entry : []);
-    $entry['on_hand_qty'] = (float) ($entry['on_hand_qty'] ?? 0);
+    $entry['on_hand_qty'] = max(0, (float) ($entry['on_hand_qty'] ?? 0));
+    $entry['location_breakdown'] = documents_inventory_normalize_location_breakdown((array) ($entry['location_breakdown'] ?? []));
+    $breakdownTotal = documents_inventory_location_breakdown_total($entry['location_breakdown']);
+    if ($breakdownTotal <= 0 && $entry['on_hand_qty'] > 0) {
+        $entry['location_breakdown'] = [['location_id' => '', 'qty' => $entry['on_hand_qty']]];
+        $breakdownTotal = $entry['on_hand_qty'];
+    }
+    $entry['on_hand_qty'] = $breakdownTotal > 0 ? $breakdownTotal : $entry['on_hand_qty'];
     $entry['lots'] = is_array($entry['lots'] ?? null) ? $entry['lots'] : [];
+    foreach ($entry['lots'] as $idx => $lot) {
+        if (!is_array($lot)) {
+            $lot = [];
+        }
+        $lot['location_id'] = (string) ($lot['location_id'] ?? '');
+        $entry['lots'][$idx] = $lot;
+    }
     return $entry;
 }
 
@@ -3685,6 +3721,259 @@ function documents_inventory_total_remaining_ft(array $entry): float
         $sum += max(0, (float) ($lot['remaining_length_ft'] ?? 0));
     }
     return $sum;
+}
+
+function documents_inventory_normalize_location_breakdown(array $rows): array
+{
+    $byLocation = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $locationId = trim((string) ($row['location_id'] ?? ''));
+        $qty = max(0, (float) ($row['qty'] ?? 0));
+        if ($qty <= 0) {
+            continue;
+        }
+        if (!isset($byLocation[$locationId])) {
+            $byLocation[$locationId] = 0.0;
+        }
+        $byLocation[$locationId] += $qty;
+    }
+
+    $normalized = [];
+    ksort($byLocation);
+    foreach ($byLocation as $locationId => $qty) {
+        $normalized[] = ['location_id' => $locationId, 'qty' => $qty];
+    }
+    return $normalized;
+}
+
+function documents_inventory_location_breakdown_total(array $rows): float
+{
+    $sum = 0.0;
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $sum += max(0, (float) ($row['qty'] ?? 0));
+    }
+    return $sum;
+}
+
+function documents_inventory_add_to_location_breakdown(array $entry, float $qty, string $locationId): array
+{
+    $qty = max(0, $qty);
+    if ($qty <= 0) {
+        return $entry;
+    }
+    $locationId = trim($locationId);
+    $rows = documents_inventory_normalize_location_breakdown((array) ($entry['location_breakdown'] ?? []));
+    $found = false;
+    foreach ($rows as &$row) {
+        if ((string) ($row['location_id'] ?? '') === $locationId) {
+            $row['qty'] = (float) ($row['qty'] ?? 0) + $qty;
+            $found = true;
+            break;
+        }
+    }
+    unset($row);
+    if (!$found) {
+        $rows[] = ['location_id' => $locationId, 'qty' => $qty];
+    }
+    $rows = documents_inventory_normalize_location_breakdown($rows);
+    $entry['location_breakdown'] = $rows;
+    $entry['on_hand_qty'] = documents_inventory_location_breakdown_total($rows);
+    return $entry;
+}
+
+function documents_inventory_consume_from_location_breakdown(array $entry, float $qty, string $preferredLocationId = ''): array
+{
+    $qty = max(0, $qty);
+    if ($qty <= 0) {
+        return ['ok' => false, 'error' => 'Quantity must be greater than zero.'];
+    }
+
+    $rows = documents_inventory_normalize_location_breakdown((array) ($entry['location_breakdown'] ?? []));
+    if ($rows === []) {
+        $legacyQty = max(0, (float) ($entry['on_hand_qty'] ?? 0));
+        if ($legacyQty > 0) {
+            $rows = [['location_id' => '', 'qty' => $legacyQty]];
+        }
+    }
+
+    $available = documents_inventory_location_breakdown_total($rows);
+    if ($available + 0.00001 < $qty) {
+        return ['ok' => false, 'error' => 'Insufficient stock.'];
+    }
+
+    $preferredLocationId = trim($preferredLocationId);
+    if ($preferredLocationId !== '') {
+        foreach ($rows as $row) {
+            if ((string) ($row['location_id'] ?? '') === $preferredLocationId) {
+                if ((float) ($row['qty'] ?? 0) + 0.00001 < $qty) {
+                    return ['ok' => false, 'error' => 'Insufficient stock at selected location.'];
+                }
+                break;
+            }
+        }
+    }
+
+    usort($rows, static function (array $a, array $b): int {
+        $qtyCompare = (float) ($b['qty'] ?? 0) <=> (float) ($a['qty'] ?? 0);
+        if ($qtyCompare !== 0) {
+            return $qtyCompare;
+        }
+        return strcmp((string) ($a['location_id'] ?? ''), (string) ($b['location_id'] ?? ''));
+    });
+
+    if ($preferredLocationId !== '') {
+        usort($rows, static function (array $a, array $b) use ($preferredLocationId): int {
+            $aIsPreferred = ((string) ($a['location_id'] ?? '') === $preferredLocationId) ? 0 : 1;
+            $bIsPreferred = ((string) ($b['location_id'] ?? '') === $preferredLocationId) ? 0 : 1;
+            if ($aIsPreferred !== $bIsPreferred) {
+                return $aIsPreferred <=> $bIsPreferred;
+            }
+            $qtyCompare = (float) ($b['qty'] ?? 0) <=> (float) ($a['qty'] ?? 0);
+            if ($qtyCompare !== 0) {
+                return $qtyCompare;
+            }
+            return strcmp((string) ($a['location_id'] ?? ''), (string) ($b['location_id'] ?? ''));
+        });
+    }
+
+    $remaining = $qty;
+    $consumption = [];
+    foreach ($rows as &$row) {
+        if ($remaining <= 0) {
+            break;
+        }
+        $rowQty = max(0, (float) ($row['qty'] ?? 0));
+        if ($rowQty <= 0) {
+            continue;
+        }
+        if ($preferredLocationId !== '' && (string) ($row['location_id'] ?? '') !== $preferredLocationId) {
+            continue;
+        }
+        $take = min($rowQty, $remaining);
+        if ($take <= 0) {
+            continue;
+        }
+        $row['qty'] = $rowQty - $take;
+        $remaining -= $take;
+        $consumption[] = ['location_id' => (string) ($row['location_id'] ?? ''), 'qty' => $take];
+    }
+    unset($row);
+
+    if ($remaining > 0.00001 && $preferredLocationId === '') {
+        foreach ($rows as &$row) {
+            if ($remaining <= 0) {
+                break;
+            }
+            $rowQty = max(0, (float) ($row['qty'] ?? 0));
+            if ($rowQty <= 0) {
+                continue;
+            }
+            $take = min($rowQty, $remaining);
+            $row['qty'] = $rowQty - $take;
+            $remaining -= $take;
+            $consumption[] = ['location_id' => (string) ($row['location_id'] ?? ''), 'qty' => $take];
+        }
+        unset($row);
+    }
+
+    if ($remaining > 0.00001) {
+        return ['ok' => false, 'error' => 'Insufficient stock.'];
+    }
+
+    $normalizedConsumption = documents_inventory_normalize_location_breakdown($consumption);
+    $entry['location_breakdown'] = documents_inventory_normalize_location_breakdown($rows);
+    $entry['on_hand_qty'] = documents_inventory_location_breakdown_total($entry['location_breakdown']);
+
+    $consumedLocationId = '';
+    if (count($normalizedConsumption) === 1) {
+        $consumedLocationId = (string) ($normalizedConsumption[0]['location_id'] ?? '');
+    } elseif (count($normalizedConsumption) > 1) {
+        $consumedLocationId = 'mixed';
+    }
+
+    return [
+        'ok' => true,
+        'entry' => $entry,
+        'location_consumption' => $normalizedConsumption,
+        'location_id' => $consumedLocationId,
+    ];
+}
+
+function documents_inventory_locations(bool $includeArchived = true): array
+{
+    $rows = json_load(documents_inventory_locations_path(), []);
+    if (!is_array($rows)) {
+        return [];
+    }
+    $list = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $location = array_merge(documents_inventory_location_defaults(), $row);
+        if (!$includeArchived && !empty($location['archived_flag'])) {
+            continue;
+        }
+        $list[] = $location;
+    }
+    usort($list, static fn(array $a, array $b): int => strcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? '')));
+    return $list;
+}
+
+function load_locations(bool $includeArchived = true): array
+{
+    return documents_inventory_locations($includeArchived);
+}
+
+function documents_inventory_save_locations(array $rows): array
+{
+    return json_save(documents_inventory_locations_path(), array_values($rows));
+}
+
+function documents_inventory_get_location(string $id): ?array
+{
+    foreach (documents_inventory_locations(true) as $location) {
+        if ((string) ($location['id'] ?? '') === $id) {
+            return $location;
+        }
+    }
+    return null;
+}
+
+function documents_inventory_resolve_location_name(string $locationId, ?array $locationsMap = null): string
+{
+    $locationId = trim($locationId);
+    if ($locationId === '') {
+        return 'Unassigned';
+    }
+    if ($locationId === 'mixed') {
+        return 'Mixed';
+    }
+
+    static $cache = null;
+    if (is_array($locationsMap)) {
+        $cache = $locationsMap;
+    }
+    if (!is_array($cache)) {
+        $cache = [];
+        foreach (documents_inventory_locations(true) as $row) {
+            $cache[(string) ($row['id'] ?? '')] = (string) ($row['name'] ?? '');
+        }
+    }
+
+    $name = trim((string) ($cache[$locationId] ?? ''));
+    return $name !== '' ? $name : 'Unassigned';
+}
+
+function resolve_location_name(string $locationId, ?array $locationsMap = null): string
+{
+    return documents_inventory_resolve_location_name($locationId, $locationsMap);
 }
 
 function documents_inventory_has_sufficient(array $component, array $stock, float $required): bool
