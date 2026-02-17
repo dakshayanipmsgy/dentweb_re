@@ -49,11 +49,6 @@ function documents_inventory_locations_path(): string
     return documents_inventory_dir() . '/locations.json';
 }
 
-function documents_inventory_stock_entries_path(): string
-{
-    return documents_inventory_dir() . '/stock_entries.json';
-}
-
 function documents_packing_lists_path(): string
 {
     return documents_base_dir() . '/packing_lists.json';
@@ -272,7 +267,6 @@ function documents_ensure_structure(): void
         documents_inventory_component_variants_path(),
         documents_inventory_locations_path(),
         documents_inventory_transactions_path(),
-        documents_inventory_stock_entries_path(),
         documents_packing_lists_path(),
     ] as $storePath) {
         if (!is_file($storePath)) {
@@ -3343,7 +3337,6 @@ function documents_inventory_transaction_defaults(): array
         'length_ft' => 0,
         'lot_consumption' => [],
         'location_consumption' => [],
-        'entry_consumption' => [],
         'lots_created' => [],
         'location_id' => '',
         'consume_location_id' => '',
@@ -3356,28 +3349,6 @@ function documents_inventory_transaction_defaults(): array
         'updated_at' => '',
         'updated_by' => ['role' => '', 'id' => '', 'name' => ''],
         'edit_history' => [],
-    ];
-}
-
-function documents_inventory_stock_entry_defaults(): array
-{
-    return [
-        'entry_id' => '',
-        'component_id' => '',
-        'variant_id' => '',
-        'is_cuttable' => false,
-        'qty_in' => 0,
-        'qty_remaining' => 0,
-        'unit' => 'qty',
-        'location_id' => '',
-        'lot_id' => '',
-        'source_type' => 'manual',
-        'ref_transaction_id' => null,
-        'created_at' => '',
-        'created_by' => ['role' => '', 'id' => '', 'name' => ''],
-        'notes' => '',
-        'legacy_generated_flag' => false,
-        'archived_flag' => false,
     ];
 }
 
@@ -3663,194 +3634,6 @@ function documents_inventory_load_transactions(): array
 {
     $rows = json_load(documents_inventory_transactions_path(), []);
     return is_array($rows) ? $rows : [];
-}
-
-function documents_inventory_load_stock_entries(): array
-{
-    $rows = json_load(documents_inventory_stock_entries_path(), []);
-    if (!is_array($rows)) {
-        return [];
-    }
-    $entries = [];
-    foreach ($rows as $row) {
-        if (!is_array($row)) {
-            continue;
-        }
-        $entry = array_merge(documents_inventory_stock_entry_defaults(), $row);
-        $entry['entry_id'] = trim((string) ($entry['entry_id'] ?? ''));
-        if ($entry['entry_id'] === '') {
-            continue;
-        }
-        $entry['qty_in'] = max(0, (float) ($entry['qty_in'] ?? 0));
-        $entry['qty_remaining'] = max(0, (float) ($entry['qty_remaining'] ?? 0));
-        $entry['component_id'] = (string) ($entry['component_id'] ?? '');
-        $entry['variant_id'] = (string) ($entry['variant_id'] ?? '');
-        $entry['location_id'] = (string) ($entry['location_id'] ?? '');
-        $entries[] = $entry;
-    }
-
-    usort($entries, static function (array $a, array $b): int {
-        $timeCmp = strcmp((string) ($a['created_at'] ?? ''), (string) ($b['created_at'] ?? ''));
-        if ($timeCmp !== 0) {
-            return $timeCmp;
-        }
-        return strcmp((string) ($a['entry_id'] ?? ''), (string) ($b['entry_id'] ?? ''));
-    });
-
-    return $entries;
-}
-
-function documents_inventory_save_stock_entries(array $entries): array
-{
-    return json_save(documents_inventory_stock_entries_path(), array_values($entries));
-}
-
-function documents_inventory_create_stock_entry(array $input): array
-{
-    return array_merge(documents_inventory_stock_entry_defaults(), $input, [
-        'entry_id' => (string) ($input['entry_id'] ?? ('ste_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)))),
-        'created_at' => (string) ($input['created_at'] ?? date('c')),
-    ]);
-}
-
-function documents_inventory_consume_entries_fifo(array $entries, string $componentId, string $variantId, float $qty): array
-{
-    $qty = max(0, $qty);
-    if ($qty <= 0) {
-        return ['ok' => false, 'error' => 'Quantity must be greater than zero.'];
-    }
-
-    $matchingIndexes = [];
-    $available = 0.0;
-    foreach ($entries as $idx => $entry) {
-        if (!is_array($entry)) {
-            continue;
-        }
-        if (!empty($entry['is_cuttable']) || !empty($entry['archived_flag'])) {
-            continue;
-        }
-        if ((string) ($entry['component_id'] ?? '') !== $componentId || (string) ($entry['variant_id'] ?? '') !== $variantId) {
-            continue;
-        }
-        $remaining = max(0, (float) ($entry['qty_remaining'] ?? 0));
-        if ($remaining <= 0) {
-            continue;
-        }
-        $matchingIndexes[] = $idx;
-        $available += $remaining;
-    }
-
-    if ($available + 0.00001 < $qty) {
-        return ['ok' => false, 'error' => 'Insufficient stock entries available.'];
-    }
-
-    $need = $qty;
-    $entryConsumption = [];
-    foreach ($matchingIndexes as $idx) {
-        if ($need <= 0) {
-            break;
-        }
-        $remaining = max(0, (float) ($entries[$idx]['qty_remaining'] ?? 0));
-        if ($remaining <= 0) {
-            continue;
-        }
-        $take = min($remaining, $need);
-        $entries[$idx]['qty_remaining'] = max(0, $remaining - $take);
-        $entryConsumption[] = [
-            'entry_id' => (string) ($entries[$idx]['entry_id'] ?? ''),
-            'qty_used' => $take,
-        ];
-        $need -= $take;
-    }
-
-    return ['ok' => true, 'entries' => $entries, 'entry_consumption' => $entryConsumption];
-}
-
-function documents_inventory_entry_is_editable(array $entry, array $transactions): bool
-{
-    if (!is_array($entry) || !empty($entry['is_cuttable']) || !empty($entry['archived_flag'])) {
-        return false;
-    }
-    $qtyIn = max(0, (float) ($entry['qty_in'] ?? 0));
-    $qtyRemaining = max(0, (float) ($entry['qty_remaining'] ?? 0));
-    if (abs($qtyIn - $qtyRemaining) > 0.00001) {
-        return false;
-    }
-    $entryId = (string) ($entry['entry_id'] ?? '');
-    if ($entryId === '') {
-        return false;
-    }
-    foreach ($transactions as $tx) {
-        $row = array_merge(documents_inventory_transaction_defaults(), is_array($tx) ? $tx : []);
-        foreach ((array) ($row['entry_consumption'] ?? []) as $consumed) {
-            if ((string) ($consumed['entry_id'] ?? '') === $entryId && (float) ($consumed['qty_used'] ?? 0) > 0) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
-function documents_inventory_lot_is_editable(array $lot): bool
-{
-    $remaining = max(0, (float) ($lot['remaining_length_ft'] ?? 0));
-    $original = max(0, (float) ($lot['original_length_ft'] ?? 0));
-    return abs($remaining - $original) <= 0.00001;
-}
-
-function documents_inventory_generate_legacy_entries(array $stock, array $existingEntries, array $actor): array
-{
-    $created = 0;
-    $entries = $existingEntries;
-    $hasEntryForBucket = [];
-    foreach ($entries as $entry) {
-        if (!is_array($entry) || !empty($entry['is_cuttable']) || !empty($entry['archived_flag'])) {
-            continue;
-        }
-        $key = (string) ($entry['component_id'] ?? '') . '|' . (string) ($entry['variant_id'] ?? '');
-        $hasEntryForBucket[$key] = true;
-    }
-
-    foreach ((array) ($stock['stock_by_component_id'] ?? []) as $componentId => $componentEntry) {
-        if (!is_array($componentEntry)) {
-            continue;
-        }
-        $variantBuckets = (array) ($componentEntry['stock_by_variant_id'] ?? []);
-        foreach ($variantBuckets as $bucketKey => $bucketEntry) {
-            $variantId = $bucketKey === documents_inventory_stock_bucket_key('') ? '' : (string) $bucketKey;
-            $key = (string) $componentId . '|' . $variantId;
-            if (!empty($hasEntryForBucket[$key])) {
-                continue;
-            }
-            $entry = documents_inventory_component_stock($stock, (string) $componentId, $variantId);
-            $qty = max(0, (float) ($entry['on_hand_qty'] ?? 0));
-            if ($qty <= 0) {
-                continue;
-            }
-            $loc = '';
-            $breakdown = (array) ($entry['location_breakdown'] ?? []);
-            if ($breakdown !== []) {
-                $loc = (string) ($breakdown[0]['location_id'] ?? '');
-            }
-            $entries[] = documents_inventory_create_stock_entry([
-                'component_id' => (string) $componentId,
-                'variant_id' => $variantId,
-                'qty_in' => $qty,
-                'qty_remaining' => $qty,
-                'unit' => 'qty',
-                'location_id' => $loc,
-                'source_type' => 'legacy_import',
-                'ref_transaction_id' => null,
-                'created_by' => $actor,
-                'legacy_generated_flag' => true,
-                'notes' => 'Generated from current stock summary.',
-            ]);
-            $created++;
-            $hasEntryForBucket[$key] = true;
-        }
-    }
-
-    return ['entries' => $entries, 'created_count' => $created];
 }
 
 function documents_inventory_append_transaction(array $tx): array

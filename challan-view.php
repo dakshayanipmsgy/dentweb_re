@@ -253,7 +253,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $stock = documents_inventory_load_stock();
-                $stockEntries = documents_inventory_load_stock_entries();
                 foreach ($dispatchRows as $dispatch) {
                     $lineId = (string) ($dispatch['line_id'] ?? '');
                     $requiredLine = $requiredMap[$lineId] ?? null;
@@ -329,7 +328,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'qty' => 0,
                         'length_ft' => 0,
                         'lot_consumption' => [],
-                        'entry_consumption' => [],
                         'ref_type' => 'delivery_challan',
                         'ref_id' => (string) ($challan['id'] ?? ''),
                         'created_at' => date('c'),
@@ -352,13 +350,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $redirectWith('error', (string) ($consumed['error'] ?? 'Insufficient stock quantity.'));
                         }
                         $entry = (array) ($consumed['entry'] ?? $entry);
-                        $entryConsume = documents_inventory_consume_entries_fifo($stockEntries, $componentId, $variantId, $needQty);
-                        if (!($entryConsume['ok'] ?? false)) {
-                            $redirectWith('error', (string) ($entryConsume['error'] ?? 'Insufficient stock entries.'));
-                        }
-                        $stockEntries = (array) ($entryConsume['entries'] ?? $stockEntries);
                         $tx['qty'] = $needQty;
-                        $tx['entry_consumption'] = (array) ($entryConsume['entry_consumption'] ?? []);
                         $tx['location_consumption'] = (array) ($consumed['location_consumption'] ?? []);
                         $tx['location_id'] = (string) ($consumed['location_id'] ?? 'mixed');
                     }
@@ -368,7 +360,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 documents_inventory_save_stock($stock);
-                documents_inventory_save_stock_entries($stockEntries);
                 $packingList = documents_apply_dispatch_to_packing_list($packingList, (string) ($challan['id'] ?? ''), $dispatchRows);
                 documents_save_packing_list($packingList);
             }
