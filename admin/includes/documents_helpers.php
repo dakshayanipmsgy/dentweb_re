@@ -3354,7 +3354,7 @@ function documents_inventory_transaction_defaults(): array
 
 function documents_inventory_component_entry_defaults(): array
 {
-    return ['on_hand_qty' => 0, 'location_breakdown' => [], 'lots' => [], 'updated_at' => ''];
+    return ['on_hand_qty' => 0, 'location_breakdown' => [], 'qty_batches' => [], 'lots' => [], 'updated_at' => ''];
 }
 
 function documents_inventory_location_defaults(): array
@@ -3685,15 +3685,179 @@ function documents_inventory_component_stock(array $stock, string $componentId, 
         $breakdownTotal = $entry['on_hand_qty'];
     }
     $entry['on_hand_qty'] = $breakdownTotal > 0 ? $breakdownTotal : $entry['on_hand_qty'];
+    $entry['qty_batches'] = documents_inventory_normalize_qty_batches((array) ($entry['qty_batches'] ?? []), $entry['location_breakdown'], (string) $componentId, (string) $variantId);
+    $entry['location_breakdown'] = documents_inventory_batches_to_location_breakdown($entry['qty_batches']);
+    $entry['on_hand_qty'] = documents_inventory_location_breakdown_total($entry['location_breakdown']);
     $entry['lots'] = is_array($entry['lots'] ?? null) ? $entry['lots'] : [];
     foreach ($entry['lots'] as $idx => $lot) {
         if (!is_array($lot)) {
             $lot = [];
         }
+        $lot['lot_id'] = (string) ($lot['lot_id'] ?? '');
         $lot['location_id'] = (string) ($lot['location_id'] ?? '');
+        $lot['source_txn_id'] = (string) ($lot['source_txn_id'] ?? '');
+        $lot['legacy_lot'] = !empty($lot['legacy_lot']);
         $entry['lots'][$idx] = $lot;
     }
     return $entry;
+}
+
+function documents_inventory_batches_to_location_breakdown(array $batches): array
+{
+    $rows = [];
+    foreach ($batches as $batch) {
+        if (!is_array($batch)) {
+            continue;
+        }
+        $qty = max(0, (float) ($batch['qty_remaining'] ?? 0));
+        if ($qty <= 0) {
+            continue;
+        }
+        $rows[] = ['location_id' => trim((string) ($batch['location_id'] ?? '')), 'qty' => $qty];
+    }
+    return documents_inventory_normalize_location_breakdown($rows);
+}
+
+function documents_inventory_normalize_qty_batches(array $rows, array $locationBreakdown, string $componentId = '', string $variantId = ''): array
+{
+    $normalized = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $qtyRemaining = max(0, (float) ($row['qty_remaining'] ?? 0));
+        $qtyOriginal = max($qtyRemaining, (float) ($row['qty_original'] ?? 0));
+        if ($qtyRemaining <= 0 && $qtyOriginal <= 0) {
+            continue;
+        }
+        $batchId = trim((string) ($row['batch_id'] ?? ''));
+        if ($batchId === '') {
+            $batchId = 'BAT-' . date('YmdHis') . '-' . bin2hex(random_bytes(2));
+        }
+        $normalized[] = [
+            'batch_id' => $batchId,
+            'source_txn_id' => trim((string) ($row['source_txn_id'] ?? '')),
+            'location_id' => trim((string) ($row['location_id'] ?? '')),
+            'qty_remaining' => $qtyRemaining,
+            'qty_original' => $qtyOriginal,
+            'received_at' => trim((string) ($row['received_at'] ?? '')),
+            'legacy_batch' => !empty($row['legacy_batch']),
+            'component_id' => $componentId,
+            'variant_id' => $variantId,
+        ];
+    }
+
+    if ($normalized === []) {
+        $legacyRows = documents_inventory_normalize_location_breakdown($locationBreakdown);
+        if ($legacyRows === []) {
+            return [];
+        }
+        foreach ($legacyRows as $legacyRow) {
+            $qty = max(0, (float) ($legacyRow['qty'] ?? 0));
+            if ($qty <= 0) {
+                continue;
+            }
+            $normalized[] = [
+                'batch_id' => 'BAT-LEG-' . date('YmdHis') . '-' . bin2hex(random_bytes(2)),
+                'source_txn_id' => '',
+                'location_id' => trim((string) ($legacyRow['location_id'] ?? '')),
+                'qty_remaining' => $qty,
+                'qty_original' => $qty,
+                'received_at' => '',
+                'legacy_batch' => true,
+                'component_id' => $componentId,
+                'variant_id' => $variantId,
+            ];
+        }
+    }
+
+    usort($normalized, static function (array $a, array $b): int {
+        return strcmp((string) ($a['batch_id'] ?? ''), (string) ($b['batch_id'] ?? ''));
+    });
+    return $normalized;
+}
+
+function documents_inventory_add_qty_batch(array $entry, float $qty, string $locationId, string $sourceTxnId = '', string $receivedAt = ''): array
+{
+    $qty = max(0, $qty);
+    if ($qty <= 0) {
+        return $entry;
+    }
+    $batches = documents_inventory_normalize_qty_batches((array) ($entry['qty_batches'] ?? []), (array) ($entry['location_breakdown'] ?? []));
+    $batches[] = [
+        'batch_id' => 'BAT-' . date('YmdHis') . '-' . bin2hex(random_bytes(2)),
+        'source_txn_id' => trim($sourceTxnId),
+        'location_id' => trim($locationId),
+        'qty_remaining' => $qty,
+        'qty_original' => $qty,
+        'received_at' => trim($receivedAt),
+        'legacy_batch' => false,
+    ];
+    $entry['qty_batches'] = documents_inventory_normalize_qty_batches($batches, (array) ($entry['location_breakdown'] ?? []));
+    $entry['location_breakdown'] = documents_inventory_batches_to_location_breakdown($entry['qty_batches']);
+    $entry['on_hand_qty'] = documents_inventory_location_breakdown_total($entry['location_breakdown']);
+    return $entry;
+}
+
+function documents_inventory_consume_from_qty_batches(array $entry, float $qty, string $preferredLocationId = ''): array
+{
+    $qty = max(0, $qty);
+    if ($qty <= 0) {
+        return ['ok' => false, 'error' => 'Quantity must be greater than zero.'];
+    }
+    $batches = documents_inventory_normalize_qty_batches((array) ($entry['qty_batches'] ?? []), (array) ($entry['location_breakdown'] ?? []));
+    $available = 0.0;
+    foreach ($batches as $batch) {
+        $available += max(0, (float) ($batch['qty_remaining'] ?? 0));
+    }
+    if ($available + 0.00001 < $qty) {
+        return ['ok' => false, 'error' => 'Insufficient stock.'];
+    }
+    $preferredLocationId = trim($preferredLocationId);
+    usort($batches, static fn(array $a, array $b): int => strcmp((string) ($a['batch_id'] ?? ''), (string) ($b['batch_id'] ?? '')));
+    if ($preferredLocationId !== '') {
+        usort($batches, static function (array $a, array $b) use ($preferredLocationId): int {
+            $aScore = ((string) ($a['location_id'] ?? '') === $preferredLocationId) ? 0 : 1;
+            $bScore = ((string) ($b['location_id'] ?? '') === $preferredLocationId) ? 0 : 1;
+            if ($aScore !== $bScore) {
+                return $aScore <=> $bScore;
+            }
+            return strcmp((string) ($a['batch_id'] ?? ''), (string) ($b['batch_id'] ?? ''));
+        });
+    }
+    $remaining = $qty;
+    $consumption = [];
+    foreach ($batches as &$batch) {
+        if ($remaining <= 0) {
+            break;
+        }
+        $batchQty = max(0, (float) ($batch['qty_remaining'] ?? 0));
+        if ($batchQty <= 0) {
+            continue;
+        }
+        if ($preferredLocationId !== '' && (string) ($batch['location_id'] ?? '') !== $preferredLocationId) {
+            continue;
+        }
+        $take = min($batchQty, $remaining);
+        $batch['qty_remaining'] = $batchQty - $take;
+        $remaining -= $take;
+        $consumption[] = ['location_id' => (string) ($batch['location_id'] ?? ''), 'qty' => $take];
+    }
+    unset($batch);
+    if ($remaining > 0.00001) {
+        return ['ok' => false, 'error' => 'Insufficient stock.'];
+    }
+    $entry['qty_batches'] = documents_inventory_normalize_qty_batches($batches, []);
+    $entry['location_breakdown'] = documents_inventory_batches_to_location_breakdown($entry['qty_batches']);
+    $entry['on_hand_qty'] = documents_inventory_location_breakdown_total($entry['location_breakdown']);
+    $normalizedConsumption = documents_inventory_normalize_location_breakdown($consumption);
+    $consumedLocationId = '';
+    if (count($normalizedConsumption) === 1) {
+        $consumedLocationId = (string) ($normalizedConsumption[0]['location_id'] ?? '');
+    } elseif (count($normalizedConsumption) > 1) {
+        $consumedLocationId = 'mixed';
+    }
+    return ['ok' => true, 'entry' => $entry, 'location_consumption' => $normalizedConsumption, 'location_id' => $consumedLocationId];
 }
 
 function documents_inventory_set_component_stock(array &$stock, string $componentId, string $variantId, array $entry): void
