@@ -14,6 +14,9 @@ function employee_portal_logout(): void
     employee_portal_session();
     $_SESSION['employee_logged_in'] = false;
     unset($_SESSION['employee_id'], $_SESSION['employee_login_id'], $_SESSION['employee_name']);
+    if (isset($_SESSION['user']) && is_array($_SESSION['user']) && (($_SESSION['user']['role_name'] ?? '') === 'employee')) {
+        unset($_SESSION['user']);
+    }
     session_regenerate_id(true);
 }
 
@@ -54,6 +57,14 @@ function employee_portal_attempt_login(EmployeeFsStore $store, string $loginId, 
     $_SESSION['employee_id'] = $employee['id'] ?? '';
     $_SESSION['employee_login_id'] = $employee['login_id'] ?? $loginInput;
     $_SESSION['employee_name'] = $employee['name'] ?? '';
+    $_SESSION['user'] = [
+        'id' => (string) ($employee['id'] ?? ''),
+        'full_name' => (string) ($employee['name'] ?? ''),
+        'email' => '',
+        'username' => (string) ($employee['login_id'] ?? $loginInput),
+        'role_name' => 'employee',
+        'offline_mode' => false,
+    ];
     session_regenerate_id(true);
 
     return ['success' => true, 'employee' => $employee];
