@@ -919,7 +919,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
 
-    if (in_array($action, ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive','save_location','save_location_edit','toggle_location_archive','create_inventory_tx','edit_inventory_tx','save_inventory_edits','import_components_csv','import_variants_csv','import_locations_csv','import_kits_csv','import_inventory_stock_in_csv'], true)) {
+    if (in_array($action, ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive','save_location','save_location_edit','toggle_location_archive','create_inventory_tx','edit_inventory_tx','save_inventory_edits','inventory_verification_update','inventory_verification_bulk_update','import_components_csv','import_variants_csv','import_locations_csv','import_kits_csv','import_inventory_stock_in_csv'], true)) {
         $masterActions = ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive','save_location','save_location_edit','toggle_location_archive'];
         if (in_array($action, $masterActions, true) && !$isAdmin) {
             $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'components']);
@@ -1729,6 +1729,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
 
+
+        if (in_array($action, ['inventory_verification_update', 'inventory_verification_bulk_update'], true)) {
+            if (!$isAdmin) {
+                $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory_verification']);
+            }
+
+            $transactions = documents_inventory_load_transactions();
+            $sync = documents_inventory_sync_verification_log($transactions, true);
+            $verificationRows = (array) ($sync['rows'] ?? []);
+            $verificationByTxn = [];
+            foreach ($verificationRows as $ix => $row) {
+                $txnId = (string) ($row['txn_id'] ?? '');
+                if ($txnId !== '') {
+                    $verificationByTxn[$txnId] = $ix;
+                }
+            }
+            $adminActor = documents_inventory_actor($user ?? []);
+            $now = date('c');
+
+            $applyStatus = static function (array &$record, string $status, string $note, array $actor, string $at): void {
+                $record['status'] = $status;
+                $record['admin_note'] = $note;
+                if ($status === 'not_verified') {
+                    $record['verified_by'] = null;
+                    $record['verified_at'] = null;
+                    return;
+                }
+                $record['verified_by'] = [
+                    'role' => (string) ($actor['role'] ?? 'admin'),
+                    'id' => (string) ($actor['id'] ?? ''),
+                    'name' => (string) ($actor['name'] ?? 'Admin'),
+                ];
+                $record['verified_at'] = $at;
+            };
+
+            if ($action === 'inventory_verification_update') {
+                $txnId = safe_text((string) ($_POST['txn_id'] ?? ''));
+                $status = safe_text((string) ($_POST['verification_status'] ?? 'not_verified'));
+                $adminNote = safe_text((string) ($_POST['admin_note'] ?? ''));
+                if (!in_array($status, ['not_verified', 'verified', 'needs_clarification'], true)) {
+                    $redirectDocuments('items', 'error', 'Invalid verification status.', ['items_subtab' => 'inventory_verification']);
+                }
+                if ($status === 'needs_clarification' && $adminNote === '') {
+                    $redirectDocuments('items', 'error', 'Admin note is required for needs clarification.', ['items_subtab' => 'inventory_verification', 'transaction_id' => $txnId]);
+                }
+                if (!isset($verificationByTxn[$txnId])) {
+                    $redirectDocuments('items', 'error', 'Verification record not found.', ['items_subtab' => 'inventory_verification']);
+                }
+                $idx = (int) $verificationByTxn[$txnId];
+                $record = array_merge(documents_inventory_verification_defaults(), (array) ($verificationRows[$idx] ?? []));
+                $applyStatus($record, $status, $adminNote, $adminActor, $now);
+                $verificationRows[$idx] = $record;
+                $saved = documents_inventory_save_verification_log($verificationRows);
+                $redirectDocuments('items', ($saved['ok'] ?? false) ? 'success' : 'error', ($saved['ok'] ?? false) ? 'Verification status updated.' : 'Failed to save verification status.', ['items_subtab' => 'inventory_verification', 'transaction_id' => $txnId]);
+            }
+
+            $txnIds = isset($_POST['txn_ids']) && is_array($_POST['txn_ids']) ? array_values(array_unique(array_map(static fn($id): string => safe_text((string) $id), $_POST['txn_ids']))) : [];
+            $txnIds = array_values(array_filter($txnIds, static fn(string $id): bool => $id !== ''));
+            $status = safe_text((string) ($_POST['verification_status'] ?? 'verified'));
+            $adminNote = safe_text((string) ($_POST['admin_note'] ?? ''));
+            if ($txnIds === []) {
+                $redirectDocuments('items', 'error', 'Select at least one transaction.', ['items_subtab' => 'inventory_verification']);
+            }
+            if (!in_array($status, ['not_verified', 'verified', 'needs_clarification'], true)) {
+                $redirectDocuments('items', 'error', 'Invalid bulk status.', ['items_subtab' => 'inventory_verification']);
+            }
+            if ($status === 'needs_clarification' && $adminNote === '') {
+                $redirectDocuments('items', 'error', 'Admin note is required for needs clarification.', ['items_subtab' => 'inventory_verification']);
+            }
+
+            $updated = 0;
+            foreach ($txnIds as $txnId) {
+                if (!isset($verificationByTxn[$txnId])) {
+                    continue;
+                }
+                $idx = (int) $verificationByTxn[$txnId];
+                $record = array_merge(documents_inventory_verification_defaults(), (array) ($verificationRows[$idx] ?? []));
+                $applyStatus($record, $status, $adminNote, $adminActor, $now);
+                $verificationRows[$idx] = $record;
+                $updated++;
+            }
+            if ($updated <= 0) {
+                $redirectDocuments('items', 'error', 'No employee verification records were updated.', ['items_subtab' => 'inventory_verification']);
+            }
+            $saved = documents_inventory_save_verification_log($verificationRows);
+            $redirectDocuments('items', ($saved['ok'] ?? false) ? 'success' : 'error', ($saved['ok'] ?? false) ? ('Updated verification for ' . $updated . ' transaction(s).') : 'Failed to save bulk verification update.', ['items_subtab' => 'inventory_verification']);
+        }
+
         if ($action === 'save_inventory_edits') {
             if (!$isAdmin && !$isEmployee) {
                 $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
@@ -2356,6 +2444,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!($savedTx['ok'] ?? false)) {
                     $redirectDocuments('items', 'error', 'Failed to save transaction changes.', ['items_subtab' => 'transactions']);
                 }
+                if (documents_inventory_is_employee_actor((array) ($editedTx['created_by'] ?? []))) {
+                    $sync = documents_inventory_sync_verification_log([$editedTx], true);
+                    $verificationRows = (array) ($sync['rows'] ?? []);
+                    foreach ($verificationRows as $idx => $verificationRow) {
+                        if ((string) ($verificationRow['txn_id'] ?? '') !== (string) ($editedTx['id'] ?? '')) {
+                            continue;
+                        }
+                        $verificationRows[$idx]['status'] = 'not_verified';
+                        $verificationRows[$idx]['admin_note'] = '';
+                        $verificationRows[$idx]['verified_by'] = null;
+                        $verificationRows[$idx]['verified_at'] = null;
+                        break;
+                    }
+                    documents_inventory_save_verification_log($verificationRows);
+                }
                 $redirectDocuments('items', 'success', 'Transaction updated.', ['items_subtab' => 'transactions']);
             }
 
@@ -2375,6 +2478,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $saveTx = documents_inventory_append_transaction($tx);
             if (!($saveTx['ok'] ?? false)) {
                 $redirectDocuments('items', 'error', 'Failed to save transaction.', ['items_subtab' => 'inventory']);
+            }
+            if (documents_inventory_is_employee_actor($actor)) {
+                $verificationSync = documents_inventory_sync_verification_log([$tx], false);
+                $verificationRows = (array) ($verificationSync['rows'] ?? []);
+                if ($verificationRows !== []) {
+                    $saveVerification = documents_inventory_save_verification_log($verificationRows);
+                    if (!($saveVerification['ok'] ?? false)) {
+                        $redirectDocuments('items', 'error', 'Transaction saved but verification log update failed.', ['items_subtab' => 'transactions']);
+                    }
+                }
             }
             $redirectDocuments('items', 'success', 'Transaction created and stock updated.', ['items_subtab' => 'transactions']);
         }
@@ -2412,7 +2525,7 @@ $includeArchivedPack = isset($_GET['include_archived_pack']) && $_GET['include_a
 $archiveTypeFilter = safe_text($_GET['archive_type'] ?? 'all');
 $archiveSearch = strtolower(trim(safe_text($_GET['archive_q'] ?? '')));
 $itemsSubtab = safe_text($_GET['items_subtab'] ?? ($_GET['sub'] ?? 'components'));
-if (!in_array($itemsSubtab, ['components', 'kits', 'tax_profiles', 'variants', 'locations', 'inventory', 'transactions', 'csv_import'], true)) {
+if (!in_array($itemsSubtab, ['components', 'kits', 'tax_profiles', 'variants', 'locations', 'inventory', 'inventory_verification', 'transactions', 'csv_import'], true)) {
     $itemsSubtab = 'components';
 }
 
@@ -2616,6 +2729,49 @@ $inventoryTransactions = array_map(static function ($tx): array {
     return $row;
 }, $inventoryTransactions);
 usort($inventoryTransactions, static fn(array $a, array $b): int => strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? '')));
+$verificationSync = documents_inventory_sync_verification_log($inventoryTransactions, true);
+$inventoryVerificationLog = (array) ($verificationSync['rows'] ?? []);
+$inventoryVerificationByTxnId = [];
+foreach ($inventoryVerificationLog as $verificationRow) {
+    if (!is_array($verificationRow)) {
+        continue;
+    }
+    $verificationTxnId = (string) ($verificationRow['txn_id'] ?? '');
+    if ($verificationTxnId === '' || isset($inventoryVerificationByTxnId[$verificationTxnId])) {
+        continue;
+    }
+    $inventoryVerificationByTxnId[$verificationTxnId] = array_merge(documents_inventory_verification_defaults(), $verificationRow);
+}
+$inventoryVerificationQueueRows = [];
+$inventoryVerificationCounts = ['not_verified' => 0, 'verified' => 0, 'needs_clarification' => 0];
+foreach ($inventoryTransactions as $txRow) {
+    $tx = array_merge(documents_inventory_transaction_defaults(), is_array($txRow) ? $txRow : []);
+    $creator = is_array($tx['created_by'] ?? null) ? $tx['created_by'] : ['role' => '', 'id' => '', 'name' => ''];
+    if (!documents_inventory_is_employee_actor($creator)) {
+        continue;
+    }
+    $txId = (string) ($tx['id'] ?? '');
+    if ($txId === '') {
+        continue;
+    }
+    $verification = array_merge(documents_inventory_verification_defaults(), (array) ($inventoryVerificationByTxnId[$txId] ?? [
+        'txn_id' => $txId,
+        'txn_type' => (string) ($tx['type'] ?? 'IN'),
+        'created_by' => $creator,
+        'created_at' => (string) ($tx['created_at'] ?? ''),
+        'status' => 'not_verified',
+    ]));
+    $statusKey = (string) ($verification['status'] ?? 'not_verified');
+    if (!isset($inventoryVerificationCounts[$statusKey])) {
+        $statusKey = 'not_verified';
+    }
+    $inventoryVerificationCounts[$statusKey]++;
+    $inventoryVerificationQueueRows[] = ['tx' => $tx, 'verification' => $verification];
+}
+$inventoryVerificationPendingRows = array_values(array_filter($inventoryVerificationQueueRows, static function (array $row): bool {
+    $status = (string) (($row['verification']['status'] ?? 'not_verified'));
+    return $status !== 'verified';
+}));
 $inventoryUsageIndex = documents_inventory_build_usage_index($inventoryTransactions);
 $inventoryComponentBlocked = (array) ($inventoryUsageIndex['component_blocked'] ?? []);
 $inventoryVariantBlocked = (array) ($inventoryUsageIndex['variant_blocked'] ?? []);
@@ -3135,6 +3291,7 @@ usort($archivedRows, static function (array $a, array $b): int {
           <a class="tab <?= $itemsSubtab === 'variants' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'variants']), ENT_QUOTES) ?>">Variants</a>
           <a class="tab <?= $itemsSubtab === 'locations' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'locations']), ENT_QUOTES) ?>">Locations</a>
           <a class="tab <?= $itemsSubtab === 'inventory' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'inventory']), ENT_QUOTES) ?>">Inventory</a>
+          <?php if ($isAdmin): ?><a class="tab <?= $itemsSubtab === 'inventory_verification' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'inventory_verification']), ENT_QUOTES) ?>">Inventory Verification</a><?php endif; ?>
           <a class="tab <?= $itemsSubtab === 'transactions' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'transactions']), ENT_QUOTES) ?>">Transactions</a>
           <a class="tab <?= $itemsSubtab === 'csv_import' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'csv_import']), ENT_QUOTES) ?>">CSV Import</a>
         </nav>
@@ -3462,11 +3619,77 @@ usort($archivedRows, static function (array $a, array $b): int {
           <?php endif; ?>
         <?php else: ?>
           <h3>Transactions</h3>
-          <table><thead><tr><th>ID</th><th>Type</th><th>Component</th><th>Variant</th><th>Qty/FT</th><th>Ref</th><th>Audit</th><th>Edit</th></tr></thead><tbody>
+          <table><thead><tr><th>ID</th><th>Type</th><th>Component</th><th>Variant</th><th>Qty/FT</th><th>Ref</th><th>Verification</th><th>Audit</th><th>Edit</th></tr></thead><tbody>
             <?php foreach ($inventoryTransactions as $tx): $componentName = (string) (($componentMap[(string) ($tx['component_id'] ?? '')]['name'] ?? ($tx['component_id'] ?? ''))); $creator = is_array($tx['created_by'] ?? null) ? $tx['created_by'] : ['name' => (string) ($tx['created_by'] ?? ''), 'role' => '', 'id' => '']; $variantLabel = '-'; $txVariantId = (string) ($tx['variant_id'] ?? ''); if ($txVariantId !== '') { $variantLabel = (string) (($variantMap[$txVariantId]['display_name'] ?? '') ?: ($tx['variant_name_snapshot'] ?? '(Unknown variant)')); } ?>
-              <tr><td><?= htmlspecialchars((string) ($tx['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($tx['type'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars($componentName, ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) $variantLabel, ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['qty'] ?? 0) > 0 ? ($tx['qty'] . ' ' . ($tx['unit'] ?? 'qty')) : (($tx['length_ft'] ?? 0) . ' ft')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['ref_type'] ?? 'manual') . ':' . ($tx['ref_id'] ?? '')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($creator['name'] ?? '') . ' [' . ($creator['role'] ?? '') . '] @ ' . ($tx['created_at'] ?? '')), ENT_QUOTES) ?><?php if (!empty($tx['updated_at'])): ?><br><span class="muted">Updated: <?= htmlspecialchars((string) ($tx['updated_at'] ?? ''), ENT_QUOTES) ?></span><?php endif; ?></td><td><?php $canEdit = $isAdmin || (((string) (($creator['id'] ?? '')) === (string) ($user['id'] ?? '')) && ((string) ($tx['ref_type'] ?? 'manual') === 'manual') && ((string) ($tx['ref_id'] ?? '') === '') && ((time() - (strtotime((string) ($tx['created_at'] ?? '')) ?: 0)) <= 600)); ?><?php if ($canEdit): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="edit_inventory_tx" /><input type="hidden" name="transaction_id" value="<?= htmlspecialchars((string) ($tx['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="tx_type" value="<?= htmlspecialchars((string) ($tx['type'] ?? 'IN'), ENT_QUOTES) ?>" /><input type="hidden" name="component_id" value="<?= htmlspecialchars((string) ($tx['component_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="variant_id" value="<?= htmlspecialchars((string) ($tx['variant_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="qty" value="<?= htmlspecialchars((string) ($tx['qty'] ?? 0), ENT_QUOTES) ?>" /><input type="hidden" name="length_ft" value="<?= htmlspecialchars((string) ($tx['length_ft'] ?? 0), ENT_QUOTES) ?>" /><input type="hidden" name="ref_type" value="<?= htmlspecialchars((string) ($tx['ref_type'] ?? 'manual'), ENT_QUOTES) ?>" /><input type="hidden" name="ref_id" value="<?= htmlspecialchars((string) ($tx['ref_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="location_id" value="<?= htmlspecialchars((string) ($tx['location_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="consume_location_id" value="<?= htmlspecialchars((string) ($tx['consume_location_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="notes" value="<?= htmlspecialchars((string) ($tx['notes'] ?? ''), ENT_QUOTES) ?>" /><button class="btn secondary" type="submit">Reapply Edit</button></form><?php else: ?><span class="muted">Locked</span><?php endif; ?></td></tr>
+              <tr><td><?= htmlspecialchars((string) ($tx['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($tx['type'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars($componentName, ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) $variantLabel, ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['qty'] ?? 0) > 0 ? ($tx['qty'] . ' ' . ($tx['unit'] ?? 'qty')) : (($tx['length_ft'] ?? 0) . ' ft')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['ref_type'] ?? 'manual') . ':' . ($tx['ref_id'] ?? '')), ENT_QUOTES) ?></td><td><?php if (documents_inventory_is_employee_actor($creator)): $txVerification = array_merge(documents_inventory_verification_defaults(), (array) ($inventoryVerificationByTxnId[(string) ($tx['id'] ?? '')] ?? ['status' => 'not_verified'])); $verificationStatus = (string) ($txVerification['status'] ?? 'not_verified'); ?><span class="pill <?= $verificationStatus === 'verified' ? '' : 'secondary' ?>"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $verificationStatus)), ENT_QUOTES) ?></span><?php if ($isAdmin): ?><br><a class="muted" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'inventory_verification', 'transaction_id' => (string) ($tx['id'] ?? '')]), ENT_QUOTES) ?>">View</a><?php endif; ?><?php else: ?><span class="muted">—</span><?php endif; ?></td><td><?= htmlspecialchars((string) (($creator['name'] ?? '') . ' [' . ($creator['role'] ?? '') . '] @ ' . ($tx['created_at'] ?? '')), ENT_QUOTES) ?><?php if (!empty($tx['updated_at'])): ?><br><span class="muted">Updated: <?= htmlspecialchars((string) ($tx['updated_at'] ?? ''), ENT_QUOTES) ?></span><?php endif; ?></td><td><?php $canEdit = $isAdmin || (((string) (($creator['id'] ?? '')) === (string) ($user['id'] ?? '')) && ((string) ($tx['ref_type'] ?? 'manual') === 'manual') && ((string) ($tx['ref_id'] ?? '') === '') && ((time() - (strtotime((string) ($tx['created_at'] ?? '')) ?: 0)) <= 600)); ?><?php if ($canEdit): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="edit_inventory_tx" /><input type="hidden" name="transaction_id" value="<?= htmlspecialchars((string) ($tx['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="tx_type" value="<?= htmlspecialchars((string) ($tx['type'] ?? 'IN'), ENT_QUOTES) ?>" /><input type="hidden" name="component_id" value="<?= htmlspecialchars((string) ($tx['component_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="variant_id" value="<?= htmlspecialchars((string) ($tx['variant_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="qty" value="<?= htmlspecialchars((string) ($tx['qty'] ?? 0), ENT_QUOTES) ?>" /><input type="hidden" name="length_ft" value="<?= htmlspecialchars((string) ($tx['length_ft'] ?? 0), ENT_QUOTES) ?>" /><input type="hidden" name="ref_type" value="<?= htmlspecialchars((string) ($tx['ref_type'] ?? 'manual'), ENT_QUOTES) ?>" /><input type="hidden" name="ref_id" value="<?= htmlspecialchars((string) ($tx['ref_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="location_id" value="<?= htmlspecialchars((string) ($tx['location_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="consume_location_id" value="<?= htmlspecialchars((string) ($tx['consume_location_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="notes" value="<?= htmlspecialchars((string) ($tx['notes'] ?? ''), ENT_QUOTES) ?>" /><button class="btn secondary" type="submit">Reapply Edit</button></form><?php else: ?><span class="muted">Locked</span><?php endif; ?></td></tr>
             <?php endforeach; ?>
           </tbody></table>
+        <?php endif; ?>
+      </section>
+    <?php endif; ?>
+
+
+    <?php if ($activeTab === 'items' && $itemsSubtab === 'inventory_verification'): ?>
+      <section class="panel">
+        <h3>Inventory Verification Queue</h3>
+        <?php if (!$isAdmin): ?>
+          <p class="muted">Access denied.</p>
+        <?php else: ?>
+          <div class="grid grid-3" style="margin-bottom:1rem;">
+            <div class="kpi-card"><h4>Not Verified</h4><p><?= (int) ($inventoryVerificationCounts['not_verified'] ?? 0) ?></p></div>
+            <div class="kpi-card"><h4>Needs Clarification</h4><p><?= (int) ($inventoryVerificationCounts['needs_clarification'] ?? 0) ?></p></div>
+            <div class="kpi-card"><h4>Verified</h4><p><?= (int) ($inventoryVerificationCounts['verified'] ?? 0) ?></p></div>
+          </div>
+          <?php $selectedVerificationTxnId = safe_text((string) ($_GET['transaction_id'] ?? '')); ?>
+          <form method="post" class="panel" style="margin-bottom:1rem;">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+            <input type="hidden" name="action" value="inventory_verification_bulk_update" />
+            <div style="display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap;">
+              <div><label>Bulk Action</label><select name="verification_status" required><option value="verified">Mark Verified</option><option value="needs_clarification">Mark Needs Clarification</option><option value="not_verified">Reset to Not Verified</option></select></div>
+              <div style="min-width:260px;"><label>Admin note (required for Needs Clarification)</label><input type="text" name="admin_note" /></div>
+              <div><button class="btn" type="submit">Apply to selected</button></div>
+            </div>
+            <table style="margin-top:1rem;"><thead><tr><th><input type="checkbox" data-check-all="verification" /></th><th>Date/Time</th><th>Employee</th><th>Type</th><th>Component</th><th>Variant</th><th>Qty / Feet</th><th>From → To</th><th>Reference</th><th>Status</th><th>View</th></tr></thead><tbody>
+              <?php foreach ($inventoryVerificationPendingRows as $queueRow): $tx = (array) ($queueRow['tx'] ?? []); $verification = array_merge(documents_inventory_verification_defaults(), (array) ($queueRow['verification'] ?? [])); $componentName = (string) (($componentMap[(string) ($tx['component_id'] ?? '')]['name'] ?? ($tx['component_id'] ?? ''))); $txVariantId = (string) ($tx['variant_id'] ?? ''); $variantLabel = $txVariantId !== '' ? (string) (($variantMap[$txVariantId]['display_name'] ?? '') ?: ($tx['variant_name_snapshot'] ?? '(Unknown variant)')) : '-'; $qtyText = (string) (($tx['qty'] ?? 0) > 0 ? ($tx['qty'] . ' ' . ($tx['unit'] ?? 'qty')) : (($tx['length_ft'] ?? 0) . ' ft')); $fromTo = trim((string) documents_inventory_resolve_location_name((string) ($tx['from_location_id'] ?? '')) . ' → ' . (string) documents_inventory_resolve_location_name((string) ($tx['to_location_id'] ?? ''))); ?>
+                <tr>
+                  <td><input type="checkbox" name="txn_ids[]" value="<?= htmlspecialchars((string) ($tx['id'] ?? ''), ENT_QUOTES) ?>" /></td>
+                  <td><?= htmlspecialchars((string) ($tx['created_at'] ?? ''), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) (($verification['created_by']['name'] ?? '') ?: ($tx['created_by']['name'] ?? '')), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) ($tx['type'] ?? ''), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars($componentName, ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) $variantLabel, ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars($qtyText, ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars($fromTo === '→' ? '-' : $fromTo, ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) (($tx['ref_type'] ?? 'manual') . ':' . ($tx['ref_id'] ?? '')), ENT_QUOTES) ?></td>
+                  <td><span class="pill secondary"><?= htmlspecialchars(ucwords(str_replace('_', ' ', (string) ($verification['status'] ?? 'not_verified'))), ENT_QUOTES) ?></span></td>
+                  <td><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'inventory_verification', 'transaction_id' => (string) ($tx['id'] ?? '')]), ENT_QUOTES) ?>">View</a></td>
+                </tr>
+              <?php endforeach; ?>
+              <?php if ($inventoryVerificationPendingRows === []): ?><tr><td colspan="11" class="muted">No pending employee transactions.</td></tr><?php endif; ?>
+            </tbody></table>
+          </form>
+
+          <?php if ($selectedVerificationTxnId !== '' && isset($inventoryVerificationByTxnId[$selectedVerificationTxnId])): $selectedTx = null; foreach ($inventoryTransactions as $txRow) { if ((string) ($txRow['id'] ?? '') === $selectedVerificationTxnId) { $selectedTx = $txRow; break; } } $selectedVerification = array_merge(documents_inventory_verification_defaults(), (array) $inventoryVerificationByTxnId[$selectedVerificationTxnId]); ?>
+            <?php if (is_array($selectedTx)): $selectedComponentName = (string) (($componentMap[(string) ($selectedTx['component_id'] ?? '')]['name'] ?? ($selectedTx['component_id'] ?? ''))); ?>
+              <div class="panel">
+                <h4>Transaction Detail: <?= htmlspecialchars((string) ($selectedTx['id'] ?? ''), ENT_QUOTES) ?></h4>
+                <p><strong>Employee:</strong> <?= htmlspecialchars((string) ($selectedVerification['created_by']['name'] ?? ''), ENT_QUOTES) ?> | <strong>Type:</strong> <?= htmlspecialchars((string) ($selectedTx['type'] ?? ''), ENT_QUOTES) ?> | <strong>When:</strong> <?= htmlspecialchars((string) ($selectedTx['created_at'] ?? ''), ENT_QUOTES) ?></p>
+                <p><strong>Component:</strong> <?= htmlspecialchars($selectedComponentName, ENT_QUOTES) ?> | <strong>Variant:</strong> <?= htmlspecialchars((string) (($variantMap[(string) ($selectedTx['variant_id'] ?? '')]['display_name'] ?? '') ?: ($selectedTx['variant_name_snapshot'] ?? '-')), ENT_QUOTES) ?></p>
+                <p><strong>Qty/FT:</strong> <?= htmlspecialchars((string) (($selectedTx['qty'] ?? 0) > 0 ? ($selectedTx['qty'] . ' ' . ($selectedTx['unit'] ?? 'qty')) : (($selectedTx['length_ft'] ?? 0) . ' ft')), ENT_QUOTES) ?></p>
+                <p><strong>Notes:</strong> <?= htmlspecialchars((string) ($selectedTx['notes'] ?? ''), ENT_QUOTES) ?></p>
+                <p><strong>Lot consumption:</strong> <?= htmlspecialchars(json_encode((array) ($selectedTx['lot_consumption'] ?? []), JSON_UNESCAPED_SLASHES), ENT_QUOTES) ?></p>
+                <p><strong>Batch consumption:</strong> <?= htmlspecialchars(json_encode((array) ($selectedTx['batch_consumption'] ?? []), JSON_UNESCAPED_SLASHES), ENT_QUOTES) ?></p>
+                <form method="post" style="display:grid;gap:0.75rem;max-width:760px;">
+                  <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                  <input type="hidden" name="action" value="inventory_verification_update" />
+                  <input type="hidden" name="txn_id" value="<?= htmlspecialchars((string) ($selectedTx['id'] ?? ''), ENT_QUOTES) ?>" />
+                  <div><label>Status</label><select name="verification_status" required><option value="verified" <?= (string) ($selectedVerification['status'] ?? '') === 'verified' ? 'selected' : '' ?>>Verified</option><option value="needs_clarification" <?= (string) ($selectedVerification['status'] ?? '') === 'needs_clarification' ? 'selected' : '' ?>>Needs Clarification</option><option value="not_verified" <?= (string) ($selectedVerification['status'] ?? '') === 'not_verified' ? 'selected' : '' ?>>Not Verified</option></select></div>
+                  <div><label>Admin note</label><textarea name="admin_note"><?= htmlspecialchars((string) ($selectedVerification['admin_note'] ?? ''), ENT_QUOTES) ?></textarea></div>
+                  <div><button class="btn" type="submit">Save Verification</button></div>
+                </form>
+              </div>
+            <?php endif; ?>
+          <?php endif; ?>
         <?php endif; ?>
       </section>
     <?php endif; ?>
@@ -3768,6 +3991,8 @@ document.addEventListener('input', function (e) {
 });
 
 const INVENTORY_COMPONENTS = <?= json_encode($inventoryComponentJsMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const verificationCheckAll = document.querySelector('[data-check-all="verification"]');
+if (verificationCheckAll) { verificationCheckAll.addEventListener('change', function () { document.querySelectorAll('input[name="txn_ids[]"]').forEach(function (box) { box.checked = verificationCheckAll.checked; }); }); }
 window.VARIANTS_BY_COMPONENT = <?= json_encode($variantsByComponent, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
 function formatVariantOptionLabel(variant) {
