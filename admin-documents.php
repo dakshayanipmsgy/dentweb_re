@@ -1296,42 +1296,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (in_array($action, ['create_inventory_tx', 'edit_inventory_tx'], true)) {
             $transactionId = safe_text((string) ($_POST['transaction_id'] ?? ''));
-            $allTransactions = documents_inventory_load_transactions();
-            $editingIndex = -1;
-            $existingTx = null;
-            $editWindowSeconds = 15 * 60;
-
-            if ($action === 'edit_inventory_tx') {
-                foreach ($allTransactions as $idx => $row) {
-                    if ((string) ($row['id'] ?? '') === $transactionId) {
-                        $editingIndex = $idx;
-                        $existingTx = array_merge(documents_inventory_transaction_defaults(), is_array($row) ? $row : []);
-                        break;
-                    }
-                }
-                if ($editingIndex < 0 || !is_array($existingTx)) {
-                    $redirectDocuments('items', 'error', 'Transaction not found.', ['items_subtab' => 'transactions']);
-                }
-
-                $existingRefType = (string) ($existingTx['ref_type'] ?? 'manual');
-                if ($existingRefType !== 'manual') {
-                    $redirectDocuments('items', 'error', 'Linked transactions cannot be edited. Create an adjustment instead.', ['items_subtab' => 'transactions']);
-                }
-
-                if (!$isAdmin) {
-                    $ownerId = (string) (($existingTx['created_by']['id'] ?? ''));
-                    $isOwner = $ownerId !== '' && $ownerId === (string) ($user['id'] ?? '');
-                    $txTypeExisting = strtoupper((string) ($existingTx['type'] ?? ''));
-                    $editableType = in_array($txTypeExisting, ['IN', 'OUT'], true);
-                    $createdAt = strtotime((string) ($existingTx['created_at'] ?? '')) ?: 0;
-                    $withinWindow = $createdAt > 0 && (time() - $createdAt) <= $editWindowSeconds;
-                    if (!$isOwner || !$editableType || !$withinWindow) {
-                        $redirectDocuments('items', 'error', 'You can edit only your own manual IN/OUT transactions within 15 minutes.', ['items_subtab' => 'transactions']);
-                    }
-                }
-            }
-
-            $txType = strtoupper(safe_text((string) ($_POST['tx_type'] ?? (($existingTx['type'] ?? 'IN')))));
+            $txType = strtoupper(safe_text((string) ($_POST['tx_type'] ?? 'IN')));
             if (!in_array($txType, ['IN', 'OUT', 'ADJUST'], true)) {
                 $redirectDocuments('items', 'error', 'Invalid transaction type.', ['items_subtab' => 'inventory']);
             }
@@ -1339,13 +1304,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
             }
 
-            $componentId = safe_text((string) ($_POST['component_id'] ?? (($existingTx['component_id'] ?? ''))));
+            $componentId = safe_text((string) ($_POST['component_id'] ?? ''));
             $component = documents_inventory_get_component($componentId);
             if ($component === null) {
                 $redirectDocuments('items', 'error', 'Component not found.', ['items_subtab' => 'inventory']);
             }
 
-            $variantId = safe_text((string) ($_POST['variant_id'] ?? (($existingTx['variant_id'] ?? ''))));
+            $variantId = safe_text((string) ($_POST['variant_id'] ?? ''));
             $variantNameSnapshot = '';
             if (!empty($component['has_variants'])) {
                 if ($variantId === '') {
@@ -1364,16 +1329,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $variantId = '';
             }
 
+            $allTransactions = documents_inventory_load_transactions();
+            $editingIndex = -1;
+            $existingTx = null;
+            if ($action === 'edit_inventory_tx') {
+                foreach ($allTransactions as $idx => $row) {
+                    if ((string) ($row['id'] ?? '') === $transactionId) {
+                        $editingIndex = $idx;
+                        $existingTx = array_merge(documents_inventory_transaction_defaults(), is_array($row) ? $row : []);
+                        break;
+                    }
+                }
+                if ($editingIndex < 0 || !is_array($existingTx)) {
+                    $redirectDocuments('items', 'error', 'Transaction not found.', ['items_subtab' => 'transactions']);
+                }
+                if (!$isAdmin) {
+                    $isOwner = ((string) (($existingTx['created_by']['id'] ?? '')) === (string) ($user['id'] ?? ''));
+                    $isManual = ((string) ($existingTx['ref_type'] ?? 'manual')) === 'manual' && (string) ($existingTx['ref_id'] ?? '') === '';
+                    $createdAt = strtotime((string) ($existingTx['created_at'] ?? '')) ?: 0;
+                    $withinWindow = $createdAt > 0 && (time() - $createdAt) <= 600;
+                    if (!$isOwner || !$isManual || !$withinWindow) {
+                        $redirectDocuments('items', 'error', 'You can edit only your own manual transactions within 10 minutes.', ['items_subtab' => 'transactions']);
+                    }
+                    if ((string) ($existingTx['type'] ?? '') === 'ADJUST' || $txType === 'ADJUST') {
+                        $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'transactions']);
+                    }
+                }
+            }
+
+            $stock = documents_inventory_load_stock();
             $actor = documents_inventory_actor($user ?? []);
+            $unit = !empty($component['is_cuttable']) ? 'ft' : (string) ($component['default_unit'] ?? 'qty');
             $notes = safe_text((string) ($_POST['notes'] ?? ''));
             $reason = safe_text((string) ($_POST['reason'] ?? ''));
-            if ($action === 'edit_inventory_tx' && $reason === '') {
-                $redirectDocuments('items', 'error', 'Reason for edit is required.', ['items_subtab' => 'transactions', 'edit_tx' => $transactionId]);
-            }
-            $refType = safe_text((string) ($_POST['ref_type'] ?? (($existingTx['ref_type'] ?? 'manual'))));
-            $refId = safe_text((string) ($_POST['ref_id'] ?? (($existingTx['ref_id'] ?? ''))));
-            $locationId = safe_text((string) ($_POST['location_id'] ?? (($existingTx['location_id'] ?? ''))));
-            $consumeLocationId = safe_text((string) ($_POST['consume_location_id'] ?? (($existingTx['consume_location_id'] ?? ''))));
+            $refType = safe_text((string) ($_POST['ref_type'] ?? 'manual'));
+            $refId = safe_text((string) ($_POST['ref_id'] ?? ''));
+            $locationId = safe_text((string) ($_POST['location_id'] ?? ''));
+            $consumeLocationId = safe_text((string) ($_POST['consume_location_id'] ?? ''));
             if ($locationId !== '' && documents_inventory_get_location($locationId) === null) {
                 $redirectDocuments('items', 'error', 'Invalid location selected.', ['items_subtab' => 'inventory']);
             }
@@ -1381,141 +1373,187 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $redirectDocuments('items', 'error', 'Invalid consume location selected.', ['items_subtab' => 'inventory']);
             }
 
-            $pieceCount = max(0, (int) ($_POST['piece_count'] ?? ($existingTx['piece_count'] ?? 0)));
-            $pieceLengthFt = max(0, (float) ($_POST['piece_length_ft'] ?? ($existingTx['piece_length_ft'] ?? 0)));
+            $applyTx = static function (array $stockState, array $componentRow, string $variant, array $txRow): array {
+                $entry = documents_inventory_component_stock($stockState, (string) ($componentRow['id'] ?? ''), $variant);
+                $isCuttable = !empty($componentRow['is_cuttable']);
+                $txLocationId = trim((string) ($txRow['location_id'] ?? ''));
+                $txConsumeLocationId = trim((string) ($txRow['consume_location_id'] ?? ''));
+
+                if ((string) ($txRow['type'] ?? '') === 'IN') {
+                    if ($isCuttable) {
+                        $pieceCount = max(0, (int) ($txRow['piece_count'] ?? 0));
+                        $pieceLength = max(0, (float) ($txRow['piece_length_ft'] ?? 0));
+                        if ($pieceCount <= 0 || $pieceLength <= 0) {
+                            return ['ok' => false, 'error' => 'Piece count and piece length are required.'];
+                        }
+                        $createdLots = [];
+                        for ($i = 0; $i < $pieceCount; $i++) {
+                            $lot = [
+                                'lot_id' => 'LOT-' . date('YmdHis') . '-' . bin2hex(random_bytes(2)),
+                                'received_at' => date('c'),
+                                'source_ref' => (string) ($txRow['ref_id'] ?? ''),
+                                'original_length_ft' => $pieceLength,
+                                'remaining_length_ft' => $pieceLength,
+                                'location_id' => $txLocationId,
+                                'notes' => (string) ($txRow['notes'] ?? ''),
+                            ];
+                            $entry['lots'][] = $lot;
+                            $createdLots[] = $lot;
+                        }
+                        $entry['updated_at'] = date('c');
+                        documents_inventory_set_component_stock($stockState, (string) ($componentRow['id'] ?? ''), $variant, $entry);
+                        return ['ok' => true, 'stock' => $stockState, 'tx' => ['length_ft' => $pieceCount * $pieceLength, 'lots_created' => $createdLots, 'lot_consumption' => [], 'location_consumption' => [], 'location_id' => $txLocationId, 'consume_location_id' => '', 'qty' => 0, 'unit' => 'ft']];
+                    }
+
+                    $qty = max(0, (float) ($txRow['qty'] ?? 0));
+                    if ($qty <= 0) {
+                        return ['ok' => false, 'error' => 'Quantity must be greater than zero.'];
+                    }
+                    $entry = documents_inventory_add_to_location_breakdown($entry, $qty, $txLocationId);
+                    $entry['updated_at'] = date('c');
+                    documents_inventory_set_component_stock($stockState, (string) ($componentRow['id'] ?? ''), $variant, $entry);
+                    return ['ok' => true, 'stock' => $stockState, 'tx' => ['qty' => $qty, 'unit' => (string) ($componentRow['default_unit'] ?? 'qty'), 'length_ft' => 0, 'lots_created' => [], 'lot_consumption' => [], 'location_consumption' => [], 'location_id' => $txLocationId, 'consume_location_id' => '']];
+                }
+
+                if ((string) ($txRow['type'] ?? '') === 'OUT') {
+                    if ($isCuttable) {
+                        $requiredFt = max(0, (float) ($txRow['length_ft'] ?? 0));
+                        if ($requiredFt <= 0) {
+                            return ['ok' => false, 'error' => 'Length is required.'];
+                        }
+                        if (!documents_inventory_has_sufficient(array_merge($componentRow, ['id' => (string) ($componentRow['id'] ?? '')]), ['stock_by_component_id' => [(string) ($componentRow['id'] ?? '') => ['stock_by_variant_id' => [documents_inventory_stock_bucket_key($variant) => $entry]]]], $requiredFt)) {
+                            return ['ok' => false, 'error' => 'Insufficient stock.'];
+                        }
+                        $consumed = documents_inventory_consume_fifo_lots((array) ($entry['lots'] ?? []), $requiredFt);
+                        if (!($consumed['ok'] ?? false)) {
+                            return ['ok' => false, 'error' => 'Insufficient lot stock.'];
+                        }
+                        $entry['lots'] = (array) ($consumed['lots'] ?? []);
+                        $entry['updated_at'] = date('c');
+                        documents_inventory_set_component_stock($stockState, (string) ($componentRow['id'] ?? ''), $variant, $entry);
+                        return ['ok' => true, 'stock' => $stockState, 'tx' => ['length_ft' => $requiredFt, 'lot_consumption' => (array) ($consumed['lot_consumption'] ?? []), 'lots_created' => [], 'location_consumption' => [], 'location_id' => (string) ($txConsumeLocationId !== '' ? $txConsumeLocationId : 'mixed'), 'consume_location_id' => $txConsumeLocationId, 'qty' => 0, 'unit' => 'ft']];
+                    }
+
+                    $qty = max(0, (float) ($txRow['qty'] ?? 0));
+                    if ($qty <= 0) {
+                        return ['ok' => false, 'error' => 'Quantity must be greater than zero.'];
+                    }
+                    $consumed = documents_inventory_consume_from_location_breakdown($entry, $qty, $txConsumeLocationId);
+                    if (!($consumed['ok'] ?? false)) {
+                        return ['ok' => false, 'error' => (string) ($consumed['error'] ?? 'Insufficient stock.')];
+                    }
+                    $entry = (array) ($consumed['entry'] ?? $entry);
+                    $entry['updated_at'] = date('c');
+                    documents_inventory_set_component_stock($stockState, (string) ($componentRow['id'] ?? ''), $variant, $entry);
+                    return ['ok' => true, 'stock' => $stockState, 'tx' => ['qty' => $qty, 'unit' => (string) ($componentRow['default_unit'] ?? 'qty'), 'length_ft' => 0, 'lots_created' => [], 'lot_consumption' => [], 'location_consumption' => (array) ($consumed['location_consumption'] ?? []), 'location_id' => (string) ($consumed['location_id'] ?? ''), 'consume_location_id' => $txConsumeLocationId]];
+                }
+
+                return ['ok' => false, 'error' => 'Unsupported transaction type.'];
+            };
+
+            if ($action === 'edit_inventory_tx') {
+                $rebuiltTransactions = $allTransactions;
+                unset($rebuiltTransactions[$editingIndex]);
+                $rebuiltTransactions = array_values($rebuiltTransactions);
+                $rebuiltStock = documents_inventory_stock_defaults();
+                foreach ($rebuiltTransactions as $rebuiltTx) {
+                    $rebuiltTx = array_merge(documents_inventory_transaction_defaults(), is_array($rebuiltTx) ? $rebuiltTx : []);
+                    $rebuiltComponent = documents_inventory_get_component((string) ($rebuiltTx['component_id'] ?? ''));
+                    if ($rebuiltComponent === null) {
+                        continue;
+                    }
+                    $applied = $applyTx($rebuiltStock, $rebuiltComponent, (string) ($rebuiltTx['variant_id'] ?? ''), [
+                        'type' => (string) ($rebuiltTx['type'] ?? 'IN'),
+                        'qty' => (float) ($rebuiltTx['qty'] ?? 0),
+                        'length_ft' => (float) ($rebuiltTx['length_ft'] ?? 0),
+                        'piece_count' => (int) round((float) (($rebuiltTx['length_ft'] ?? 0) > 0 && !empty($rebuiltComponent['is_cuttable']) ? ($rebuiltTx['length_ft'] / max(0.0001, (float) ($rebuiltComponent['standard_length_ft'] ?? 0))) : 0)),
+                        'piece_length_ft' => (float) ($rebuiltComponent['standard_length_ft'] ?? 0),
+                        'ref_id' => (string) ($rebuiltTx['ref_id'] ?? ''),
+                        'notes' => (string) ($rebuiltTx['notes'] ?? ''),
+                        'location_id' => (string) ($rebuiltTx['location_id'] ?? ''),
+                        'consume_location_id' => (string) ($rebuiltTx['consume_location_id'] ?? ''),
+                    ]);
+                    if (!($applied['ok'] ?? false)) {
+                        $redirectDocuments('items', 'error', 'Unable to rebuild stock for edit.', ['items_subtab' => 'transactions']);
+                    }
+                    $rebuiltStock = (array) ($applied['stock'] ?? $rebuiltStock);
+                }
+                $stock = $rebuiltStock;
+                $allTransactions = $rebuiltTransactions;
+            }
+
+            $pieceCount = max(0, (int) ($_POST['piece_count'] ?? 0));
+            $pieceLengthFt = max(0, (float) ($_POST['piece_length_ft'] ?? 0));
             if ($pieceLengthFt <= 0) {
                 $pieceLengthFt = max(0, (float) ($component['standard_length_ft'] ?? 0));
             }
 
+            $txPayloadInput = [
+                'type' => $txType,
+                'qty' => max(0, (float) ($_POST['qty'] ?? 0)),
+                'length_ft' => max(0, (float) ($_POST['length_ft'] ?? 0)),
+                'piece_count' => $pieceCount,
+                'piece_length_ft' => $pieceLengthFt,
+                'ref_id' => $refId,
+                'notes' => $notes,
+                'location_id' => $locationId,
+                'consume_location_id' => $consumeLocationId,
+            ];
+            $applyResult = $applyTx($stock, $component, $variantId, $txPayloadInput);
+            if (!($applyResult['ok'] ?? false)) {
+                $redirectDocuments('items', 'error', (string) ($applyResult['error'] ?? 'Invalid transaction.'), ['items_subtab' => 'inventory']);
+            }
+            $stock = (array) ($applyResult['stock'] ?? $stock);
+
+            $saveStock = documents_inventory_save_stock($stock);
+            if (!($saveStock['ok'] ?? false)) {
+                $redirectDocuments('items', 'error', 'Failed to save stock.', ['items_subtab' => 'inventory']);
+            }
+
+            $txGenerated = (array) ($applyResult['tx'] ?? []);
             $now = date('c');
             if ($action === 'edit_inventory_tx' && is_array($existingTx)) {
-                $beforeSnapshot = [
-                    'type' => (string) ($existingTx['type'] ?? ''),
-                    'component_id' => (string) ($existingTx['component_id'] ?? ''),
-                    'variant_id' => (string) ($existingTx['variant_id'] ?? ''),
-                    'qty' => (float) ($existingTx['qty'] ?? 0),
-                    'length_ft' => (float) ($existingTx['length_ft'] ?? 0),
-                    'location_id' => (string) ($existingTx['location_id'] ?? ''),
-                    'consume_location_id' => (string) ($existingTx['consume_location_id'] ?? ''),
-                    'notes' => (string) ($existingTx['notes'] ?? ''),
-                ];
-
-                $editedTx = array_merge($existingTx, [
+                $editedTx = array_merge($existingTx, $txGenerated, [
                     'type' => $txType,
                     'component_id' => $componentId,
                     'variant_id' => $variantId,
                     'variant_name_snapshot' => $variantNameSnapshot,
-                    'qty' => max(0, (float) ($_POST['qty'] ?? ($existingTx['qty'] ?? 0))),
-                    'length_ft' => max(0, (float) ($_POST['length_ft'] ?? ($existingTx['length_ft'] ?? 0))),
-                    'piece_count' => $pieceCount,
-                    'piece_length_ft' => $pieceLengthFt,
                     'ref_type' => $refType === '' ? 'manual' : $refType,
                     'ref_id' => $refId,
                     'reason' => $reason,
                     'notes' => $notes,
-                    'location_id' => $locationId,
-                    'consume_location_id' => $consumeLocationId,
                     'updated_at' => $now,
                     'updated_by' => $actor,
                 ]);
-
-                $afterSnapshot = [
-                    'type' => (string) ($editedTx['type'] ?? ''),
-                    'component_id' => (string) ($editedTx['component_id'] ?? ''),
-                    'variant_id' => (string) ($editedTx['variant_id'] ?? ''),
-                    'qty' => (float) ($editedTx['qty'] ?? 0),
-                    'length_ft' => (float) ($editedTx['length_ft'] ?? 0),
-                    'location_id' => (string) ($editedTx['location_id'] ?? ''),
-                    'consume_location_id' => (string) ($editedTx['consume_location_id'] ?? ''),
-                    'notes' => (string) ($editedTx['notes'] ?? ''),
-                ];
-
                 $history = is_array($editedTx['edit_history'] ?? null) ? $editedTx['edit_history'] : [];
-                $history[] = [
-                    'at' => $now,
-                    'by' => $actor,
-                    'reason' => $reason,
-                    'before' => $beforeSnapshot,
-                    'after' => $afterSnapshot,
-                ];
+                $history[] = ['at' => $now, 'by' => $actor, 'changes_summary' => 'Transaction edited'];
                 $editedTx['edit_history'] = $history;
-
-                $candidateTransactions = $allTransactions;
-                $candidateTransactions[$editingIndex] = $editedTx;
-
-                $rebuilt = rebuild_stock_from_transactions($candidateTransactions);
-                if (!($rebuilt['ok'] ?? false)) {
-                    $errorTxId = (string) ($rebuilt['tx_id'] ?? '');
-                    $redirectDocuments('items', 'error', 'Edit would result in negative stock at transaction ' . ($errorTxId !== '' ? $errorTxId : 'unknown') . '. Fix by adjusting earlier IN or use ADJUST.', ['items_subtab' => 'transactions', 'edit_tx' => $transactionId]);
-                }
-
-                $computed = (array) ($rebuilt['computed_by_tx_id'] ?? []);
-                foreach ($candidateTransactions as $idx => $txRow) {
-                    $txId = (string) ($txRow['id'] ?? '');
-                    if ($txId === '' || !isset($computed[$txId]) || !is_array($computed[$txId])) {
-                        continue;
-                    }
-                    $candidateTransactions[$idx] = array_merge($txRow, (array) $computed[$txId]);
-                }
-
-                $savedTx = documents_inventory_save_transactions($candidateTransactions);
+                $allTransactions[] = $editedTx;
+                $savedTx = documents_inventory_save_transactions($allTransactions);
                 if (!($savedTx['ok'] ?? false)) {
                     $redirectDocuments('items', 'error', 'Failed to save transaction changes.', ['items_subtab' => 'transactions']);
                 }
-                $saveStock = documents_inventory_save_stock((array) ($rebuilt['stock'] ?? documents_inventory_stock_defaults()));
-                if (!($saveStock['ok'] ?? false)) {
-                    $redirectDocuments('items', 'error', 'Failed to save stock.', ['items_subtab' => 'transactions']);
-                }
-
-                $redirectDocuments('items', 'success', 'Transaction updated. Lot consumption is recalculated FIFO on stock rebuild.', ['items_subtab' => 'transactions']);
+                $redirectDocuments('items', 'success', 'Transaction updated.', ['items_subtab' => 'transactions']);
             }
 
-            $tx = array_merge(documents_inventory_transaction_defaults(), [
+            $tx = array_merge(documents_inventory_transaction_defaults(), $txGenerated, [
                 'id' => 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)),
                 'type' => $txType,
                 'component_id' => $componentId,
                 'variant_id' => $variantId,
                 'variant_name_snapshot' => $variantNameSnapshot,
-                'qty' => max(0, (float) ($_POST['qty'] ?? 0)),
-                'length_ft' => max(0, (float) ($_POST['length_ft'] ?? 0)),
-                'piece_count' => $pieceCount,
-                'piece_length_ft' => $pieceLengthFt,
                 'ref_type' => $refType === '' ? 'manual' : $refType,
                 'ref_id' => $refId,
                 'reason' => $reason,
                 'notes' => $notes,
-                'location_id' => $locationId,
-                'consume_location_id' => $consumeLocationId,
                 'created_at' => $now,
                 'created_by' => $actor,
             ]);
-
-            $candidateTransactions = $allTransactions;
-            $candidateTransactions[] = $tx;
-            $rebuilt = rebuild_stock_from_transactions($candidateTransactions);
-            if (!($rebuilt['ok'] ?? false)) {
-                $errorTxId = (string) ($rebuilt['tx_id'] ?? '');
-                $redirectDocuments('items', 'error', 'Transaction would result in negative stock at transaction ' . ($errorTxId !== '' ? $errorTxId : 'unknown') . '.', ['items_subtab' => 'inventory']);
-            }
-
-            $computed = (array) ($rebuilt['computed_by_tx_id'] ?? []);
-            foreach ($candidateTransactions as $idx => $txRow) {
-                $txId = (string) ($txRow['id'] ?? '');
-                if ($txId === '' || !isset($computed[$txId]) || !is_array($computed[$txId])) {
-                    continue;
-                }
-                $candidateTransactions[$idx] = array_merge($txRow, (array) $computed[$txId]);
-            }
-
-            $savedTx = documents_inventory_save_transactions($candidateTransactions);
-            if (!($savedTx['ok'] ?? false)) {
+            $saveTx = documents_inventory_append_transaction($tx);
+            if (!($saveTx['ok'] ?? false)) {
                 $redirectDocuments('items', 'error', 'Failed to save transaction.', ['items_subtab' => 'inventory']);
             }
-            $saveStock = documents_inventory_save_stock((array) ($rebuilt['stock'] ?? documents_inventory_stock_defaults()));
-            if (!($saveStock['ok'] ?? false)) {
-                $redirectDocuments('items', 'error', 'Failed to save stock.', ['items_subtab' => 'inventory']);
-            }
-            $redirectDocuments('items', 'success', 'Transaction created and stock rebuilt.', ['items_subtab' => 'transactions']);
+            $redirectDocuments('items', 'success', 'Transaction created and stock updated.', ['items_subtab' => 'transactions']);
         }
 
     }
@@ -1550,8 +1588,6 @@ if (!in_array($itemsSubtab, ['components', 'kits', 'tax_profiles', 'variants', '
     $itemsSubtab = 'components';
 }
 $itemsEditId = safe_text((string) ($_GET['edit'] ?? ''));
-$editTransactionId = safe_text((string) ($_GET['edit_tx'] ?? ''));
-$inventoryEditWindowSeconds = 15 * 60;
 $componentFilter = safe_text((string) ($_GET['component_filter'] ?? ''));
 $cloneId = safe_text((string) ($_GET['clone'] ?? ''));
 
@@ -1708,40 +1744,6 @@ $inventoryTransactions = array_map(static function ($tx): array {
     $row['edit_history'] = is_array($row['edit_history'] ?? null) ? $row['edit_history'] : [];
     return $row;
 }, $inventoryTransactions);
-
-$inventoryTransactionEditRow = null;
-$inventoryEditAllowed = false;
-$inventoryEditBlockedReason = '';
-if ($editTransactionId !== '') {
-    foreach ($inventoryTransactions as $txRow) {
-        if ((string) ($txRow['id'] ?? '') !== $editTransactionId) {
-            continue;
-        }
-        $inventoryTransactionEditRow = $txRow;
-        break;
-    }
-    if (is_array($inventoryTransactionEditRow)) {
-        $creator = is_array($inventoryTransactionEditRow['created_by'] ?? null) ? $inventoryTransactionEditRow['created_by'] : ['id' => '', 'role' => '', 'name' => ''];
-        $isManual = ((string) ($inventoryTransactionEditRow['ref_type'] ?? 'manual')) === 'manual' && (string) ($inventoryTransactionEditRow['ref_id'] ?? '') === '';
-        $createdAt = strtotime((string) ($inventoryTransactionEditRow['created_at'] ?? '')) ?: 0;
-        $withinWindow = $createdAt > 0 && (time() - $createdAt) <= $inventoryEditWindowSeconds;
-        $txType = strtoupper((string) ($inventoryTransactionEditRow['type'] ?? ''));
-        $isInOut = in_array($txType, ['IN', 'OUT'], true);
-
-        if ($isAdmin) {
-            $inventoryEditAllowed = true;
-        } elseif ($isEmployee) {
-            $inventoryEditAllowed = ((string) ($creator['id'] ?? '') === (string) ($user['id'] ?? '')) && $isManual && $withinWindow && $isInOut;
-        }
-
-        if (!$inventoryEditAllowed) {
-            $inventoryEditBlockedReason = 'Editing is not allowed for this transaction.';
-        } elseif (!$isManual) {
-            $inventoryEditBlockedReason = 'Linked transactions cannot be edited. Create an adjustment instead.';
-            $inventoryEditAllowed = false;
-        }
-    }
-}
 usort($inventoryTransactions, static fn(array $a, array $b): int => strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? '')));
 $componentMap = [];
 foreach ($inventoryComponents as $cmpRow) {
@@ -2468,42 +2470,9 @@ usort($archivedRows, static function (array $a, array $b): int {
           </tbody></table>
         <?php else: ?>
           <h3>Transactions</h3>
-          <?php if (is_array($inventoryTransactionEditRow)): ?>
-            <?php $editComponentId = (string) ($inventoryTransactionEditRow['component_id'] ?? ''); $editComponent = $componentMap[$editComponentId] ?? documents_inventory_get_component($editComponentId); $editHasVariants = !empty($editComponent['has_variants']); $editIsCuttable = !empty($editComponent['is_cuttable']); ?>
-            <div class="panel" style="margin-bottom:1rem;">
-              <h4 style="margin-top:0;">Edit Transaction: <?= htmlspecialchars((string) ($inventoryTransactionEditRow['id'] ?? ''), ENT_QUOTES) ?></h4>
-              <?php if (!$inventoryEditAllowed): ?>
-                <p class="muted" style="margin:0;"><?= htmlspecialchars($inventoryEditBlockedReason !== '' ? $inventoryEditBlockedReason : 'Linked transactions cannot be edited. Create an adjustment instead.', ENT_QUOTES) ?></p>
-              <?php elseif (((string) ($inventoryTransactionEditRow['ref_type'] ?? 'manual')) !== 'manual'): ?>
-                <p class="muted" style="margin:0;">Linked transactions cannot be edited. Create an adjustment instead.</p>
-              <?php else: ?>
-                <p class="muted" style="margin-top:0;">Lot consumption is recalculated FIFO on stock rebuild.</p>
-                <form method="post" class="grid">
-                  <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
-                  <input type="hidden" name="action" value="edit_inventory_tx" />
-                  <input type="hidden" name="transaction_id" value="<?= htmlspecialchars((string) ($inventoryTransactionEditRow['id'] ?? ''), ENT_QUOTES) ?>" />
-                  <input type="hidden" name="tx_type" value="<?= htmlspecialchars((string) ($inventoryTransactionEditRow['type'] ?? 'IN'), ENT_QUOTES) ?>" />
-                  <input type="hidden" name="component_id" value="<?= htmlspecialchars($editComponentId, ENT_QUOTES) ?>" />
-                  <input type="hidden" name="ref_type" value="<?= htmlspecialchars((string) ($inventoryTransactionEditRow['ref_type'] ?? 'manual'), ENT_QUOTES) ?>" />
-                  <input type="hidden" name="ref_id" value="<?= htmlspecialchars((string) ($inventoryTransactionEditRow['ref_id'] ?? ''), ENT_QUOTES) ?>" />
-                  <div><label>Type</label><input readonly value="<?= htmlspecialchars((string) ($inventoryTransactionEditRow['type'] ?? ''), ENT_QUOTES) ?>" /></div>
-                  <div><label>Component</label><input readonly value="<?= htmlspecialchars((string) (($editComponent['name'] ?? $editComponentId)), ENT_QUOTES) ?>" /></div>
-                  <?php if ($editHasVariants): ?><div><label>Variant</label><select name="variant_id" required><option value="">-- select variant --</option><?php foreach ((array) ($variantsByComponent[$editComponentId] ?? []) as $v): ?><option value="<?= htmlspecialchars((string) ($v['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($inventoryTransactionEditRow['variant_id'] ?? '') === (string) ($v['id'] ?? '')) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($v['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div><?php else: ?><input type="hidden" name="variant_id" value="" /><?php endif; ?>
-                  <div><label>Location</label><select name="location_id"><option value="">Unassigned</option><?php foreach ($activeInventoryLocations as $location): ?><option value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($inventoryTransactionEditRow['location_id'] ?? '') === (string) ($location['id'] ?? '')) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-                  <?php if ($editIsCuttable): ?><div><label>Length (ft)</label><input type="number" step="0.01" min="0" name="length_ft" value="<?= htmlspecialchars((string) ($inventoryTransactionEditRow['length_ft'] ?? 0), ENT_QUOTES) ?>" /></div><?php else: ?><div><label>Qty</label><input type="number" step="0.01" min="0" name="qty" value="<?= htmlspecialchars((string) ($inventoryTransactionEditRow['qty'] ?? 0), ENT_QUOTES) ?>" /></div><?php endif; ?>
-                  <div><label>Consume from location (optional)</label><select name="consume_location_id"><option value="">Auto</option><?php foreach ($activeInventoryLocations as $location): ?><option value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($inventoryTransactionEditRow['consume_location_id'] ?? '') === (string) ($location['id'] ?? '')) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-                  <div style="grid-column:1/-1"><label>Notes</label><input name="notes" value="<?= htmlspecialchars((string) ($inventoryTransactionEditRow['notes'] ?? ''), ENT_QUOTES) ?>" /></div>
-                  <div style="grid-column:1/-1"><label>Reason for edit (required)</label><input name="reason" required /></div>
-                  <div class="row-actions"><button class="btn" type="submit">Save</button><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'transactions', 'sub' => 'transactions']), ENT_QUOTES) ?>">Cancel</a></div>
-                </form>
-              <?php endif; ?>
-            </div>
-          <?php elseif ($editTransactionId !== ''): ?>
-            <p class="muted">Selected transaction was not found.</p>
-          <?php endif; ?>
           <table><thead><tr><th>ID</th><th>Type</th><th>Component</th><th>Variant</th><th>Qty/FT</th><th>Ref</th><th>Audit</th><th>Edit</th></tr></thead><tbody>
-            <?php foreach ($inventoryTransactions as $tx): $componentName = (string) (($componentMap[(string) ($tx['component_id'] ?? '')]['name'] ?? ($tx['component_id'] ?? ''))); $creator = is_array($tx['created_by'] ?? null) ? $tx['created_by'] : ['name' => (string) ($tx['created_by'] ?? ''), 'role' => '', 'id' => '']; $variantLabel = '-'; $txVariantId = (string) ($tx['variant_id'] ?? ''); if ($txVariantId !== '') { $variantLabel = (string) (($variantMap[$txVariantId]['display_name'] ?? '') ?: ($tx['variant_name_snapshot'] ?? '(Unknown variant)')); } $txTypeValue = strtoupper((string) ($tx['type'] ?? '')); $isManualTx = ((string) ($tx['ref_type'] ?? 'manual')) === 'manual' && (string) ($tx['ref_id'] ?? '') === ''; $withinWindow = ((time() - (strtotime((string) ($tx['created_at'] ?? '')) ?: 0)) <= $inventoryEditWindowSeconds); $employeeOwn = ((string) (($creator['id'] ?? '')) === (string) ($user['id'] ?? '')); $employeeAllowed = $employeeOwn && $isManualTx && $withinWindow && in_array($txTypeValue, ['IN', 'OUT'], true); $canEdit = $isAdmin || ($isEmployee && $employeeAllowed); ?>
-              <tr><td><?= htmlspecialchars((string) ($tx['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($tx['type'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars($componentName, ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) $variantLabel, ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['qty'] ?? 0) > 0 ? ($tx['qty'] . ' ' . ($tx['unit'] ?? 'qty')) : (($tx['length_ft'] ?? 0) . ' ft')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['ref_type'] ?? 'manual') . ':' . ($tx['ref_id'] ?? '')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($creator['name'] ?? '') . ' [' . ($creator['role'] ?? '') . '] @ ' . ($tx['created_at'] ?? '')), ENT_QUOTES) ?><?php if (!empty($tx['updated_at'])): ?><br><span class="muted">Updated: <?= htmlspecialchars((string) ($tx['updated_at'] ?? ''), ENT_QUOTES) ?></span><?php endif; ?></td><td><?php if ($canEdit): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'transactions', 'sub' => 'transactions', 'edit_tx' => (string) ($tx['id'] ?? '')]), ENT_QUOTES) ?>">Edit</a><?php else: ?><span class="muted">Locked</span><?php endif; ?></td></tr>
+            <?php foreach ($inventoryTransactions as $tx): $componentName = (string) (($componentMap[(string) ($tx['component_id'] ?? '')]['name'] ?? ($tx['component_id'] ?? ''))); $creator = is_array($tx['created_by'] ?? null) ? $tx['created_by'] : ['name' => (string) ($tx['created_by'] ?? ''), 'role' => '', 'id' => '']; $variantLabel = '-'; $txVariantId = (string) ($tx['variant_id'] ?? ''); if ($txVariantId !== '') { $variantLabel = (string) (($variantMap[$txVariantId]['display_name'] ?? '') ?: ($tx['variant_name_snapshot'] ?? '(Unknown variant)')); } ?>
+              <tr><td><?= htmlspecialchars((string) ($tx['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($tx['type'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars($componentName, ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) $variantLabel, ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['qty'] ?? 0) > 0 ? ($tx['qty'] . ' ' . ($tx['unit'] ?? 'qty')) : (($tx['length_ft'] ?? 0) . ' ft')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($tx['ref_type'] ?? 'manual') . ':' . ($tx['ref_id'] ?? '')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($creator['name'] ?? '') . ' [' . ($creator['role'] ?? '') . '] @ ' . ($tx['created_at'] ?? '')), ENT_QUOTES) ?><?php if (!empty($tx['updated_at'])): ?><br><span class="muted">Updated: <?= htmlspecialchars((string) ($tx['updated_at'] ?? ''), ENT_QUOTES) ?></span><?php endif; ?></td><td><?php $canEdit = $isAdmin || (((string) (($creator['id'] ?? '')) === (string) ($user['id'] ?? '')) && ((string) ($tx['ref_type'] ?? 'manual') === 'manual') && ((string) ($tx['ref_id'] ?? '') === '') && ((time() - (strtotime((string) ($tx['created_at'] ?? '')) ?: 0)) <= 600)); ?><?php if ($canEdit): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="edit_inventory_tx" /><input type="hidden" name="transaction_id" value="<?= htmlspecialchars((string) ($tx['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="tx_type" value="<?= htmlspecialchars((string) ($tx['type'] ?? 'IN'), ENT_QUOTES) ?>" /><input type="hidden" name="component_id" value="<?= htmlspecialchars((string) ($tx['component_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="variant_id" value="<?= htmlspecialchars((string) ($tx['variant_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="qty" value="<?= htmlspecialchars((string) ($tx['qty'] ?? 0), ENT_QUOTES) ?>" /><input type="hidden" name="length_ft" value="<?= htmlspecialchars((string) ($tx['length_ft'] ?? 0), ENT_QUOTES) ?>" /><input type="hidden" name="ref_type" value="<?= htmlspecialchars((string) ($tx['ref_type'] ?? 'manual'), ENT_QUOTES) ?>" /><input type="hidden" name="ref_id" value="<?= htmlspecialchars((string) ($tx['ref_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="location_id" value="<?= htmlspecialchars((string) ($tx['location_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="consume_location_id" value="<?= htmlspecialchars((string) ($tx['consume_location_id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="notes" value="<?= htmlspecialchars((string) ($tx['notes'] ?? ''), ENT_QUOTES) ?>" /><button class="btn secondary" type="submit">Reapply Edit</button></form><?php else: ?><span class="muted">Locked</span><?php endif; ?></td></tr>
             <?php endforeach; ?>
           </tbody></table>
         <?php endif; ?>
