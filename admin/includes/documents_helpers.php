@@ -3342,10 +3342,15 @@ function documents_inventory_transaction_defaults(): array
         'unit' => '',
         'length_ft' => 0,
         'lot_consumption' => [],
+        'batch_consumption' => [],
+        'batch_ids' => [],
         'location_consumption' => [],
         'lots_created' => [],
+        'batches_created' => [],
         'location_id' => '',
         'consume_location_id' => '',
+        'from_location_id' => '',
+        'to_location_id' => '',
         'ref_type' => 'manual',
         'ref_id' => '',
         'reason' => '',
@@ -3360,7 +3365,7 @@ function documents_inventory_transaction_defaults(): array
 
 function documents_inventory_component_entry_defaults(): array
 {
-    return ['on_hand_qty' => 0, 'location_breakdown' => [], 'lots' => [], 'updated_at' => ''];
+    return ['on_hand_qty' => 0, 'location_breakdown' => [], 'lots' => [], 'batches' => [], 'updated_at' => ''];
 }
 
 function documents_inventory_location_defaults(): array
@@ -3672,6 +3677,7 @@ function documents_inventory_build_usage_index(array $transactions): array
     $componentBlocked = [];
     $variantBlocked = [];
     $lotBlocked = [];
+    $batchBlocked = [];
 
     foreach ($transactions as $tx) {
         if (!is_array($tx)) {
@@ -3679,13 +3685,13 @@ function documents_inventory_build_usage_index(array $transactions): array
         }
         $row = array_merge(documents_inventory_transaction_defaults(), $tx);
         $type = strtoupper((string) ($row['type'] ?? ''));
-        if (!in_array($type, ['OUT', 'ADJUST'], true)) {
+        if (!in_array($type, ['OUT', 'ADJUST', 'MOVE'], true)) {
             continue;
         }
 
         $componentId = (string) ($row['component_id'] ?? '');
         $variantId = (string) ($row['variant_id'] ?? '');
-        if ($componentId !== '') {
+        if ($componentId !== '' && $type !== 'MOVE') {
             if ($variantId === '') {
                 $componentBlocked[$componentId] = 'Used in ' . $type . ' transaction.';
             } else {
@@ -3701,7 +3707,25 @@ function documents_inventory_build_usage_index(array $transactions): array
             if ($lotId === '') {
                 continue;
             }
-            $lotBlocked[$lotId] = 'Lot consumed in transaction.';
+            $lotBlocked[$lotId] = $type === 'MOVE' ? 'Lot moved in transaction.' : 'Lot consumed in transaction.';
+        }
+
+        foreach ((array) ($row['batch_consumption'] ?? []) as $consumed) {
+            if (!is_array($consumed)) {
+                continue;
+            }
+            $batchId = (string) ($consumed['batch_id'] ?? '');
+            if ($batchId === '') {
+                continue;
+            }
+            $batchBlocked[$batchId] = 'Batch moved/consumed in transaction.';
+        }
+        foreach ((array) ($row['batch_ids'] ?? []) as $batchId) {
+            $batchId = (string) $batchId;
+            if ($batchId === '') {
+                continue;
+            }
+            $batchBlocked[$batchId] = 'Batch moved/consumed in transaction.';
         }
     }
 
@@ -3709,6 +3733,7 @@ function documents_inventory_build_usage_index(array $transactions): array
         'component_blocked' => $componentBlocked,
         'variant_blocked' => $variantBlocked,
         'lot_blocked' => $lotBlocked,
+        'batch_blocked' => $batchBlocked,
     ];
 }
 
@@ -3755,7 +3780,51 @@ function documents_inventory_component_stock(array $stock, string $componentId, 
             $lot = [];
         }
         $lot['location_id'] = (string) ($lot['location_id'] ?? '');
+        $lot['created_at'] = (string) ($lot['created_at'] ?? ($lot['received_at'] ?? ''));
+        $lot['created_by'] = is_array($lot['created_by'] ?? null) ? $lot['created_by'] : ['role' => 'system', 'id' => '', 'name' => 'Legacy'];
         $entry['lots'][$idx] = $lot;
+    }
+
+    $entry['batches'] = is_array($entry['batches'] ?? null) ? $entry['batches'] : [];
+    if ($entry['batches'] === [] && $entry['location_breakdown'] !== [] && empty($entry['lots'])) {
+        foreach ($entry['location_breakdown'] as $legacyRow) {
+            if (!is_array($legacyRow)) {
+                continue;
+            }
+            $qty = max(0, (float) ($legacyRow['qty'] ?? 0));
+            if ($qty <= 0) {
+                continue;
+            }
+            $entry['batches'][] = [
+                'batch_id' => 'legacy-' . substr(sha1((string) $componentId . '|' . (string) $variantId . '|' . (string) ($legacyRow['location_id'] ?? '')), 0, 10),
+                'location_id' => (string) ($legacyRow['location_id'] ?? ''),
+                'qty_remaining' => $qty,
+                'created_by' => ['role' => 'system', 'id' => '', 'name' => 'Legacy'],
+                'created_at' => '',
+                'source_txn_id' => '',
+            ];
+        }
+    }
+    foreach ($entry['batches'] as $idx => $batch) {
+        if (!is_array($batch)) {
+            $batch = [];
+        }
+        $batch['batch_id'] = (string) ($batch['batch_id'] ?? ('batch-' . $idx));
+        $batch['location_id'] = (string) ($batch['location_id'] ?? '');
+        $batch['qty_remaining'] = max(0, (float) ($batch['qty_remaining'] ?? 0));
+        $batch['created_by'] = is_array($batch['created_by'] ?? null) ? $batch['created_by'] : ['role' => 'system', 'id' => '', 'name' => 'Legacy'];
+        $batch['created_at'] = (string) ($batch['created_at'] ?? '');
+        $batch['source_txn_id'] = (string) ($batch['source_txn_id'] ?? '');
+        $entry['batches'][$idx] = $batch;
+    }
+    $entry['batches'] = array_values(array_filter($entry['batches'], static fn(array $batch): bool => (float) ($batch['qty_remaining'] ?? 0) > 0));
+    if ($entry['batches'] !== []) {
+        $entry['location_breakdown'] = [];
+        foreach ($entry['batches'] as $batch) {
+            $entry['location_breakdown'][] = ['location_id' => (string) ($batch['location_id'] ?? ''), 'qty' => (float) ($batch['qty_remaining'] ?? 0)];
+        }
+        $entry['location_breakdown'] = documents_inventory_normalize_location_breakdown($entry['location_breakdown']);
+        $entry['on_hand_qty'] = documents_inventory_location_breakdown_total($entry['location_breakdown']);
     }
     return $entry;
 }
@@ -3849,6 +3918,83 @@ function documents_inventory_add_to_location_breakdown(array $entry, float $qty,
     $entry['location_breakdown'] = $rows;
     $entry['on_hand_qty'] = documents_inventory_location_breakdown_total($rows);
     return $entry;
+}
+
+
+function documents_inventory_create_batch(string $locationId, float $qty, array $actor, string $sourceTxnId = ''): array
+{
+    return [
+        'batch_id' => 'BATCH-' . date('YmdHis') . '-' . bin2hex(random_bytes(2)),
+        'location_id' => trim($locationId),
+        'qty_remaining' => max(0, $qty),
+        'created_by' => $actor,
+        'created_at' => date('c'),
+        'source_txn_id' => $sourceTxnId,
+    ];
+}
+
+function documents_inventory_consume_from_batches(array $entry, float $qty, string $preferredLocationId = ''): array
+{
+    $qty = max(0, $qty);
+    if ($qty <= 0) {
+        return ['ok' => false, 'error' => 'Quantity must be greater than zero.'];
+    }
+
+    $batches = is_array($entry['batches'] ?? null) ? $entry['batches'] : [];
+    $available = 0.0;
+    foreach ($batches as $batch) {
+        if (!is_array($batch)) {
+            continue;
+        }
+        $available += max(0, (float) ($batch['qty_remaining'] ?? 0));
+    }
+    if ($available + 0.00001 < $qty) {
+        return ['ok' => false, 'error' => 'Insufficient stock.'];
+    }
+
+    usort($batches, static fn(array $a, array $b): int => strcmp((string) ($a['created_at'] ?? ''), (string) ($b['created_at'] ?? '')));
+
+    $remaining = $qty;
+    $batchConsumption = [];
+    $locationConsumption = [];
+    foreach ($batches as &$batch) {
+        if ($remaining <= 0) {
+            break;
+        }
+        if ($preferredLocationId !== '' && (string) ($batch['location_id'] ?? '') !== $preferredLocationId) {
+            continue;
+        }
+        $batchQty = max(0, (float) ($batch['qty_remaining'] ?? 0));
+        if ($batchQty <= 0) {
+            continue;
+        }
+        $used = min($batchQty, $remaining);
+        $batch['qty_remaining'] = $batchQty - $used;
+        $remaining -= $used;
+        $batchConsumption[] = ['batch_id' => (string) ($batch['batch_id'] ?? ''), 'used_qty' => $used];
+        $locationConsumption[] = ['location_id' => (string) ($batch['location_id'] ?? ''), 'qty' => $used];
+    }
+    unset($batch);
+
+    if ($remaining > 0.00001) {
+        return ['ok' => false, 'error' => $preferredLocationId !== '' ? 'Insufficient stock at selected location.' : 'Insufficient stock.'];
+    }
+
+    $batches = array_values(array_filter($batches, static fn(array $batch): bool => (float) ($batch['qty_remaining'] ?? 0) > 0));
+    $entry['batches'] = $batches;
+    $entry['location_breakdown'] = [];
+    foreach ($batches as $batch) {
+        $entry['location_breakdown'][] = ['location_id' => (string) ($batch['location_id'] ?? ''), 'qty' => (float) ($batch['qty_remaining'] ?? 0)];
+    }
+    $entry['location_breakdown'] = documents_inventory_normalize_location_breakdown($entry['location_breakdown']);
+    $entry['on_hand_qty'] = documents_inventory_location_breakdown_total($entry['location_breakdown']);
+
+    return [
+        'ok' => true,
+        'entry' => $entry,
+        'batch_consumption' => $batchConsumption,
+        'location_consumption' => documents_inventory_normalize_location_breakdown($locationConsumption),
+    ];
 }
 
 function documents_inventory_consume_from_location_breakdown(array $entry, float $qty, string $preferredLocationId = ''): array
