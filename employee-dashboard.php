@@ -440,7 +440,6 @@ function employee_dashboard_safe(string $value): string
           <a class="primary-button" href="employee-tasks.php">My Tasks</a>
           <a class="primary-button" href="admin-users.php?tab=customers">+ Add Customer</a>
           <a class="primary-button" href="employee-documents.php">Quotations &amp; Challans</a>
-          <a class="primary-button" href="admin-documents.php?tab=items&amp;items_subtab=inventory">Inventory</a>
           <a class="logout-link" href="logout.php">Log out</a>
         </div>
       </div>
