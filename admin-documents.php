@@ -46,6 +46,25 @@ $redirectDocuments = static function (string $tab, string $type, string $msg, ar
     exit;
 };
 
+$generateInventoryEntityId = static function (string $prefix, array $rows): string {
+    $existingIds = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $id = (string) ($row['id'] ?? '');
+        if ($id !== '') {
+            $existingIds[$id] = true;
+        }
+    }
+
+    do {
+        $candidate = strtoupper($prefix) . '-' . date('Y') . '-' . bin2hex(random_bytes(2));
+    } while (isset($existingIds[$candidate]));
+
+    return $candidate;
+};
+
 $isArchivedRecord = static function (array $row): bool {
     return documents_is_archived($row);
 };
@@ -843,7 +862,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             } else {
-                $row['id'] = 'CMP-' . date('Y') . '-' . bin2hex(random_bytes(2));
+                $row['id'] = $generateInventoryEntityId('CMP', $components);
                 $row['created_at'] = date('c');
             }
             if ($editing && (string) ($row['id'] ?? '') !== $componentId) {
@@ -910,7 +929,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             } else {
-                $row['id'] = 'KIT-' . date('Y') . '-' . bin2hex(random_bytes(2));
+                $row['id'] = $generateInventoryEntityId('KIT', $kits);
                 $row['created_at'] = date('c');
             }
             if ($editing && ((string) ($row['id'] ?? '') !== $kitId || $kitId === '')) {
@@ -1140,7 +1159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             } else {
-                $row['id'] = 'VAR-' . date('Y') . '-' . bin2hex(random_bytes(2));
+                $row['id'] = $generateInventoryEntityId('VAR', $rows);
                 $row['created_at'] = date('c');
             }
             if ($editing && ((string) ($row['id'] ?? '') !== $variantId || $variantId === '')) {
@@ -1494,6 +1513,102 @@ if (!in_array($itemsSubtab, ['components', 'kits', 'tax_profiles', 'variants', '
 }
 $itemsEditId = safe_text((string) ($_GET['edit'] ?? ''));
 $componentFilter = safe_text((string) ($_GET['component_filter'] ?? ''));
+$cloneId = safe_text((string) ($_GET['clone'] ?? ''));
+
+if ($activeTab === 'items' && $cloneId !== '' && in_array($itemsSubtab, ['components', 'kits', 'variants'], true)) {
+    if (!$isAdmin) {
+        http_response_code(403);
+        echo 'Access denied';
+        exit;
+    }
+
+    $now = date('c');
+
+    if ($itemsSubtab === 'components') {
+        $components = documents_inventory_components(true);
+        $source = null;
+        foreach ($components as $component) {
+            if ((string) ($component['id'] ?? '') === $cloneId) {
+                $source = array_merge(documents_inventory_component_defaults(), $component);
+                break;
+            }
+        }
+        if ($source === null) {
+            $redirectDocuments('items', 'error', 'Component not found for clone.', ['items_subtab' => 'components']);
+        }
+
+        $clone = $source;
+        $clone['id'] = $generateInventoryEntityId('CMP', $components);
+        $clone['name'] = safe_text((string) ($source['name'] ?? '')) . ' (Copy)';
+        $clone['archived_flag'] = false;
+        $clone['created_at'] = $now;
+        $clone['updated_at'] = $now;
+
+        $components[] = $clone;
+        $result = documents_inventory_save_components($components);
+        if (!($result['ok'] ?? false)) {
+            $redirectDocuments('items', 'error', 'Failed to clone component.', ['items_subtab' => 'components']);
+        }
+
+        $redirectDocuments('items', 'success', 'Component cloned.', ['items_subtab' => 'components', 'edit' => (string) ($clone['id'] ?? '')]);
+    }
+
+    if ($itemsSubtab === 'kits') {
+        $kits = documents_inventory_kits(true);
+        $source = null;
+        foreach ($kits as $kit) {
+            if ((string) ($kit['id'] ?? '') === $cloneId) {
+                $source = array_merge(documents_inventory_kit_defaults(), $kit);
+                break;
+            }
+        }
+        if ($source === null) {
+            $redirectDocuments('items', 'error', 'Kit not found for clone.', ['items_subtab' => 'kits']);
+        }
+
+        $clone = $source;
+        $clone['id'] = $generateInventoryEntityId('KIT', $kits);
+        $clone['name'] = safe_text((string) ($source['name'] ?? '')) . ' (Copy)';
+        $clone['archived_flag'] = false;
+        $clone['created_at'] = $now;
+        $clone['updated_at'] = $now;
+
+        $kits[] = $clone;
+        $result = documents_inventory_save_kits($kits);
+        if (!($result['ok'] ?? false)) {
+            $redirectDocuments('items', 'error', 'Failed to clone kit.', ['items_subtab' => 'kits']);
+        }
+
+        $redirectDocuments('items', 'success', 'Kit cloned.', ['items_subtab' => 'kits', 'edit' => (string) ($clone['id'] ?? '')]);
+    }
+
+    $rows = documents_inventory_component_variants(true);
+    $source = null;
+    foreach ($rows as $variant) {
+        if ((string) ($variant['id'] ?? '') === $cloneId) {
+            $source = array_merge(documents_component_variant_defaults(), $variant);
+            break;
+        }
+    }
+    if ($source === null) {
+        $redirectDocuments('items', 'error', 'Variant not found for clone.', ['items_subtab' => 'variants']);
+    }
+
+    $clone = $source;
+    $clone['id'] = $generateInventoryEntityId('VAR', $rows);
+    $clone['display_name'] = safe_text((string) ($source['display_name'] ?? '')) . ' (Copy)';
+    $clone['archived_flag'] = false;
+    $clone['created_at'] = $now;
+    $clone['updated_at'] = $now;
+
+    $rows[] = $clone;
+    $result = documents_inventory_save_component_variants($rows);
+    if (!($result['ok'] ?? false)) {
+        $redirectDocuments('items', 'error', 'Failed to clone variant.', ['items_subtab' => 'variants']);
+    }
+
+    $redirectDocuments('items', 'success', 'Variant cloned.', ['items_subtab' => 'variants', 'component_filter' => (string) ($clone['component_id'] ?? ''), 'edit' => (string) ($clone['id'] ?? '')]);
+}
 
 $quotes = documents_list_quotes();
 $salesAgreements = documents_list_sales_documents('agreement');
@@ -2083,7 +2198,7 @@ usort($archivedRows, static function (array $a, array $b): int {
                 <td><?php $cmpTax = documents_inventory_get_tax_profile((string) ($component['tax_profile_id'] ?? '')); ?><?= htmlspecialchars((string) ($cmpTax['name'] ?? ''), ENT_QUOTES) ?></td>
                 <td><?= !empty($component['has_variants']) ? 'Yes' : 'No' ?></td><td><?= !empty($component['is_cuttable']) ? 'Yes' : 'No' ?></td>
                 <td><?= !empty($component['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td>
-                <td class="row-actions"><?php if ($isAdmin): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'components', 'sub' => 'components', 'edit' => (string) ($component['id'] ?? '')]), ENT_QUOTES) ?>">Edit</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_component_archive" /><input type="hidden" name="component_id" value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($component['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($component['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php else: ?><span class="muted">View only</span><?php endif; ?></td>
+                <td class="row-actions"><?php if ($isAdmin): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'components', 'sub' => 'components', 'edit' => (string) ($component['id'] ?? '')]), ENT_QUOTES) ?>">Edit</a><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'components', 'sub' => 'components', 'clone' => (string) ($component['id'] ?? '')]), ENT_QUOTES) ?>">Clone</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_component_archive" /><input type="hidden" name="component_id" value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($component['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($component['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php else: ?><span class="muted">View only</span><?php endif; ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody></table>
@@ -2139,7 +2254,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <button class="btn" type="submit"><?= is_array($editingKit) ? 'Update Kit BOM' : 'Create Kit BOM' ?></button>
             </form>
           <?php else: ?><p class="muted">Read-only for employees.</p><?php endif; ?>
-          <table><thead><tr><th>ID</th><th>Name</th><th>Category</th><th>Tax</th><th>Items</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($inventoryKits as $kit): ?><tr><td><?= htmlspecialchars((string) ($kit['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($kit['name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($kit['category'] ?? ''), ENT_QUOTES) ?></td><td><?php $kitTax = documents_inventory_get_tax_profile((string) ($kit['tax_profile_id'] ?? '')); ?><?= htmlspecialchars((string) ($kitTax['name'] ?? ''), ENT_QUOTES) ?></td><td><?= count((array) ($kit['items'] ?? [])) ?></td><td><?= !empty($kit['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td><td class="row-actions"><?php if ($isAdmin): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'kits', 'sub' => 'kits', 'edit' => (string) ($kit['id'] ?? '')]), ENT_QUOTES) ?>">Edit</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_kit_archive" /><input type="hidden" name="kit_id" value="<?= htmlspecialchars((string) ($kit['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($kit['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($kit['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table>
+          <table><thead><tr><th>ID</th><th>Name</th><th>Category</th><th>Tax</th><th>Items</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($inventoryKits as $kit): ?><tr><td><?= htmlspecialchars((string) ($kit['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($kit['name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($kit['category'] ?? ''), ENT_QUOTES) ?></td><td><?php $kitTax = documents_inventory_get_tax_profile((string) ($kit['tax_profile_id'] ?? '')); ?><?= htmlspecialchars((string) ($kitTax['name'] ?? ''), ENT_QUOTES) ?></td><td><?= count((array) ($kit['items'] ?? [])) ?></td><td><?= !empty($kit['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td><td class="row-actions"><?php if ($isAdmin): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'kits', 'sub' => 'kits', 'edit' => (string) ($kit['id'] ?? '')]), ENT_QUOTES) ?>">Edit</a><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'kits', 'sub' => 'kits', 'clone' => (string) ($kit['id'] ?? '')]), ENT_QUOTES) ?>">Clone</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_kit_archive" /><input type="hidden" name="kit_id" value="<?= htmlspecialchars((string) ($kit['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($kit['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($kit['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table>
         <?php elseif ($itemsSubtab === 'tax_profiles'): ?>
           <h3>Tax Profiles</h3>
           <?php if ($isAdmin): ?>
@@ -2186,7 +2301,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <div><label>&nbsp;</label><button class="btn" type="submit"><?= is_array($editingVariant) ? 'Update Variant' : 'Save Variant' ?></button></div>
             </form>
           <?php endif; ?>
-          <table><thead><tr><th>ID</th><th>Component</th><th>Display</th><th>Specs</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($inventoryVariants as $variant): ?><tr><td><?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($componentMap[(string) ($variant['component_id'] ?? '')]['name'] ?? $variant['component_id'] ?? '')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($variant['display_name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) trim(((string) ($variant['brand'] ?? '')) . ' ' . ((string) ($variant['technology'] ?? '')) . ' ' . ((string) ($variant['model_no'] ?? ''))), ENT_QUOTES) ?></td><td><?= !empty($variant['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td><td class="row-actions"><?php if ($isAdmin): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'variants', 'sub' => 'variants', 'edit' => (string) ($variant['id'] ?? '')]), ENT_QUOTES) ?>">Edit</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_variant_archive" /><input type="hidden" name="variant_id" value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($variant['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($variant['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table>
+          <table><thead><tr><th>ID</th><th>Component</th><th>Display</th><th>Specs</th><th>Status</th><th>Action</th></tr></thead><tbody><?php foreach ($inventoryVariants as $variant): ?><tr><td><?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) (($componentMap[(string) ($variant['component_id'] ?? '')]['name'] ?? $variant['component_id'] ?? '')), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($variant['display_name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) trim(((string) ($variant['brand'] ?? '')) . ' ' . ((string) ($variant['technology'] ?? '')) . ' ' . ((string) ($variant['model_no'] ?? ''))), ENT_QUOTES) ?></td><td><?= !empty($variant['archived_flag']) ? '<span class="pill archived">Archived</span>' : 'Active' ?></td><td class="row-actions"><?php if ($isAdmin): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'variants', 'sub' => 'variants', 'edit' => (string) ($variant['id'] ?? '')]), ENT_QUOTES) ?>">Edit</a><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'variants', 'sub' => 'variants', 'clone' => (string) ($variant['id'] ?? '')]), ENT_QUOTES) ?>">Clone</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_variant_archive" /><input type="hidden" name="variant_id" value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= !empty($variant['archived_flag']) ? 'unarchive' : 'archive' ?>" /><button class="btn secondary" type="submit"><?= !empty($variant['archived_flag']) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table>
         <?php elseif ($itemsSubtab === 'inventory'): ?>
           <h3>Inventory Transactions</h3>
           <div class="grid" style="margin-bottom:1rem;">
