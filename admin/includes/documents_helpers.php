@@ -44,6 +44,11 @@ function documents_inventory_transactions_path(): string
     return documents_inventory_dir() . '/transactions.json';
 }
 
+function documents_inventory_verification_log_path(): string
+{
+    return documents_inventory_dir() . '/verification_log.json';
+}
+
 function documents_inventory_locations_path(): string
 {
     return documents_inventory_dir() . '/locations.json';
@@ -272,6 +277,7 @@ function documents_ensure_structure(): void
         documents_inventory_component_variants_path(),
         documents_inventory_locations_path(),
         documents_inventory_transactions_path(),
+        documents_inventory_verification_log_path(),
         documents_inventory_edits_log_path(),
         documents_packing_lists_path(),
     ] as $storePath) {
@@ -3368,6 +3374,20 @@ function documents_inventory_component_entry_defaults(): array
     return ['on_hand_qty' => 0, 'location_breakdown' => [], 'lots' => [], 'batches' => [], 'updated_at' => ''];
 }
 
+function documents_inventory_verification_defaults(): array
+{
+    return [
+        'txn_id' => '',
+        'txn_type' => 'IN',
+        'created_by' => ['role' => '', 'id' => '', 'name' => ''],
+        'created_at' => '',
+        'status' => 'not_verified',
+        'admin_note' => '',
+        'verified_by' => null,
+        'verified_at' => null,
+    ];
+}
+
 function documents_inventory_location_defaults(): array
 {
     return [
@@ -3657,6 +3677,97 @@ function documents_inventory_append_transaction(array $tx): array
 function documents_inventory_save_transactions(array $transactions): array
 {
     return json_save(documents_inventory_transactions_path(), array_values($transactions));
+}
+
+function documents_inventory_load_verification_log(): array
+{
+    $rows = json_load(documents_inventory_verification_log_path(), []);
+    if (!is_array($rows)) {
+        return [];
+    }
+
+    $list = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $record = array_merge(documents_inventory_verification_defaults(), $row);
+        if (!in_array((string) ($record['status'] ?? ''), ['not_verified', 'verified', 'needs_clarification'], true)) {
+            $record['status'] = 'not_verified';
+        }
+        if (!is_array($record['created_by'] ?? null)) {
+            $record['created_by'] = ['role' => '', 'id' => '', 'name' => ''];
+        }
+        if (!is_array($record['verified_by'] ?? null)) {
+            $record['verified_by'] = null;
+        }
+        $list[] = $record;
+    }
+    return $list;
+}
+
+function documents_inventory_save_verification_log(array $rows): array
+{
+    return json_save(documents_inventory_verification_log_path(), array_values($rows));
+}
+
+function documents_inventory_is_employee_actor(array $actor): bool
+{
+    return strtolower((string) ($actor['role'] ?? '')) === 'employee';
+}
+
+function documents_inventory_sync_verification_log(array $transactions, bool $persist = false): array
+{
+    $logRows = documents_inventory_load_verification_log();
+    $byTxnId = [];
+    foreach ($logRows as $idx => $row) {
+        $txnId = (string) ($row['txn_id'] ?? '');
+        if ($txnId === '' || isset($byTxnId[$txnId])) {
+            continue;
+        }
+        $byTxnId[$txnId] = $idx;
+    }
+
+    $dirty = false;
+    foreach ($transactions as $tx) {
+        if (!is_array($tx)) {
+            continue;
+        }
+        $row = array_merge(documents_inventory_transaction_defaults(), $tx);
+        $txnId = (string) ($row['id'] ?? '');
+        if ($txnId === '') {
+            continue;
+        }
+        $creator = is_array($row['created_by'] ?? null) ? $row['created_by'] : ['role' => '', 'id' => '', 'name' => ''];
+        if (!documents_inventory_is_employee_actor($creator)) {
+            continue;
+        }
+        if (isset($byTxnId[$txnId])) {
+            continue;
+        }
+
+        $logRows[] = [
+            'txn_id' => $txnId,
+            'txn_type' => (string) ($row['type'] ?? 'IN'),
+            'created_by' => [
+                'role' => (string) ($creator['role'] ?? ''),
+                'id' => (string) ($creator['id'] ?? ''),
+                'name' => (string) ($creator['name'] ?? ''),
+            ],
+            'created_at' => (string) ($row['created_at'] ?? ''),
+            'status' => 'not_verified',
+            'admin_note' => '',
+            'verified_by' => null,
+            'verified_at' => null,
+        ];
+        $dirty = true;
+    }
+
+    if ($persist && $dirty) {
+        documents_inventory_save_verification_log($logRows);
+    }
+
+    return ['rows' => $logRows, 'dirty' => $dirty];
 }
 
 function documents_inventory_load_edits_log(): array
