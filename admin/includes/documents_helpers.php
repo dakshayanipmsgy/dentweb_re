@@ -3584,6 +3584,22 @@ function documents_inventory_load_stock(): array
     $stock = json_load(documents_inventory_stock_path(), documents_inventory_stock_defaults());
     $stock = array_merge(documents_inventory_stock_defaults(), is_array($stock) ? $stock : []);
     $stock['stock_by_component_id'] = is_array($stock['stock_by_component_id'] ?? null) ? $stock['stock_by_component_id'] : [];
+    foreach ($stock['stock_by_component_id'] as $componentId => $componentEntry) {
+        if (!is_array($componentEntry)) {
+            $componentEntry = [];
+        }
+        if (!isset($componentEntry['stock_by_variant_id']) || !is_array($componentEntry['stock_by_variant_id'])) {
+            $legacyEntry = array_merge(documents_inventory_component_entry_defaults(), $componentEntry);
+            $componentEntry = ['stock_by_variant_id' => [documents_inventory_stock_bucket_key('') => $legacyEntry]];
+        }
+        foreach ($componentEntry['stock_by_variant_id'] as $bucketKey => $bucketEntry) {
+            $componentEntry['stock_by_variant_id'][$bucketKey] = array_merge(
+                documents_inventory_component_entry_defaults(),
+                is_array($bucketEntry) ? $bucketEntry : []
+            );
+        }
+        $stock['stock_by_component_id'][$componentId] = $componentEntry;
+    }
     return $stock;
 }
 
