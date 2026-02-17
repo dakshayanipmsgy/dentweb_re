@@ -1655,11 +1655,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 if ((string) ($txRow['type'] ?? '') === 'IN') {
                     if ($isCuttable) {
-                        $pieceCount = max(0, (int) ($txRow['piece_count'] ?? 0));
-                        $pieceLength = max(0, (float) ($txRow['piece_length_ft'] ?? 0));
-                        if ($pieceCount <= 0 || $pieceLength <= 0) {
+                        $pieceCountRaw = trim((string) ($txRow['piece_count'] ?? ''));
+                        $pieceLengthRaw = trim((string) ($txRow['piece_length_ft'] ?? ''));
+                        if ($pieceCountRaw === '' || $pieceLengthRaw === '') {
                             return ['ok' => false, 'error' => 'Piece count and piece length are required.'];
                         }
+                        if (!preg_match('/^\d+$/', $pieceCountRaw)) {
+                            return ['ok' => false, 'error' => 'Piece count must be an integer of at least 1.'];
+                        }
+
+                        $pieceCount = (int) $pieceCountRaw;
+                        $pieceLength = (float) $pieceLengthRaw;
+                        if ($pieceCount < 1) {
+                            return ['ok' => false, 'error' => 'Piece count must be an integer of at least 1.'];
+                        }
+                        if ($pieceLength <= 0) {
+                            return ['ok' => false, 'error' => 'Piece length must be greater than zero.'];
+                        }
+                        $pieceLength = round($pieceLength, 2);
                         $createdLots = [];
                         for ($i = 0; $i < $pieceCount; $i++) {
                             $lot = [
@@ -1855,11 +1868,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $allTransactions = $rebuiltTransactions;
             }
 
-            $pieceCount = max(0, (int) ($_POST['piece_count'] ?? 0));
-            $pieceLengthFt = max(0, (float) ($_POST['piece_length_ft'] ?? 0));
-            if ($pieceLengthFt <= 0) {
-                $pieceLengthFt = max(0, (float) ($component['standard_length_ft'] ?? 0));
-            }
+            $pieceCount = trim((string) ($_POST['cut_piece_count'] ?? $_POST['piece_count'] ?? ''));
+            $pieceLengthFt = trim((string) ($_POST['cut_piece_length_ft'] ?? $_POST['piece_length_ft'] ?? ''));
 
             $txPayloadInput = [
                 'type' => $txType,
@@ -2812,8 +2822,9 @@ usort($archivedRows, static function (array $a, array $b): int {
               <h4>Add Stock (IN)</h4>
               <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): if (!empty($component['archived_flag'])) { continue; } ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div><label>Variant (optional)</label><select name="variant_id"><option value="">-- none --</option><?php foreach ($activeInventoryVariants as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-              <div><label>Qty</label><input type="number" step="0.01" min="0" name="qty" /></div>
-              <div><label>Length (ft for OUT; optional here)</label><input type="number" step="0.01" min="0" name="length_ft" /></div>
+              <div><label>Qty (non-cuttable)</label><input type="number" step="0.01" min="0" name="qty" /></div>
+              <div><label>Piece Count (cuttable)</label><input type="number" step="1" min="1" name="cut_piece_count" /></div>
+              <div><label>Piece Length (ft each, cuttable)</label><input type="number" step="0.01" min="0.01" name="cut_piece_length_ft" /></div>
               <div><label>Location</label><select name="location_id"><option value="">Unassigned</option><?php foreach ($activeInventoryLocations as $location): ?><option value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div><label>Notes</label><input name="notes" /></div>
               <button class="btn" type="submit">Create IN</button>
