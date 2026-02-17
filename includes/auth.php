@@ -80,14 +80,53 @@ function enforce_offline_session_validity(): void
     exit;
 }
 
-function require_login(): void
+
+function session_user(): ?array
+{
+    start_session();
+
+    $user = $_SESSION['user'] ?? null;
+    if (is_array($user) && !empty($user['role_name'])) {
+        return $user;
+    }
+
+    if (!empty($_SESSION['employee_logged_in']) && isset($_SESSION['employee_id'])) {
+        $employeeUser = [
+            'id' => (string) ($_SESSION['employee_id'] ?? ''),
+            'full_name' => (string) ($_SESSION['employee_name'] ?? 'Employee'),
+            'email' => '',
+            'username' => (string) ($_SESSION['employee_login_id'] ?? ''),
+            'role_name' => 'employee',
+            'offline_mode' => false,
+        ];
+        $_SESSION['user'] = $employeeUser;
+        return $employeeUser;
+    }
+
+    return null;
+}
+
+function require_login_any_role(array $roles = []): void
 {
     start_session();
     enforce_offline_session_validity();
-    if (empty($_SESSION['user'])) {
+
+    $user = session_user();
+    if ($user === null) {
         header('Location: login.php');
         exit;
     }
+
+    if ($roles !== [] && !in_array((string) ($user['role_name'] ?? ''), $roles, true)) {
+        http_response_code(403);
+        echo 'Access denied.';
+        exit;
+    }
+}
+
+function require_login(): void
+{
+    require_login_any_role();
 }
 
 function require_role(string $role): void
@@ -128,8 +167,7 @@ function require_admin(): void
 
 function current_user(): ?array
 {
-    start_session();
-    return $_SESSION['user'] ?? null;
+    return session_user();
 }
 
 function set_flash(string $type, string $message): void

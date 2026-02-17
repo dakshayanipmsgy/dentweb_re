@@ -4,7 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 
-require_login();
+require_login_any_role(['admin', 'employee']);
 
 $user = current_user();
 $isAdmin = (($user['role_name'] ?? '') === 'admin');
@@ -1967,6 +1967,14 @@ if (!in_array($itemsSubtab, ['components', 'kits', 'tax_profiles', 'variants', '
     $itemsSubtab = 'components';
 }
 
+if ($isEmployee && $activeTab === 'items' && !in_array($itemsSubtab, ['inventory', 'transactions'], true)) {
+    $itemsSubtab = 'inventory';
+    if ($status === '' && $message === '') {
+        $status = 'error';
+        $message = 'Access denied. Your role can access Inventory and Transactions only.';
+    }
+}
+
 $inventoryEditMode = ($isAdmin || $isEmployee) && $itemsSubtab === 'inventory' && safe_text((string) ($_GET['edit_mode'] ?? '')) === '1';
 $itemsEditId = safe_text((string) ($_GET['edit'] ?? ''));
 $componentFilter = safe_text((string) ($_GET['component_filter'] ?? ''));
@@ -2375,7 +2383,7 @@ usort($archivedRows, static function (array $a, array $b): int {
         <a class="btn" href="admin-challans.php">Challans</a>
         <a class="btn" href="admin-agreements.php">Agreements</a>
         <a class="btn secondary" href="admin-templates.php">Template Blocks &amp; Media</a>
-        <a class="btn secondary" href="admin-dashboard.php">Back to Admin Dashboard</a>
+        <a class="btn secondary" href="<?= $isAdmin ? 'admin-dashboard.php' : 'employee-dashboard.php' ?>"><?= $isAdmin ? 'Back to Admin Dashboard' : 'Back to Employee Dashboard' ?></a>
       </div>
     </div>
 
