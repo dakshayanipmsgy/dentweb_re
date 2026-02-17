@@ -240,6 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $quote['system_type'] = safe_text($_POST['system_type'] ?? 'Ongrid');
         $quote['capacity_kwp'] = $capacity;
+        $quote['system_capacity_kwp'] = max(0, (float) $capacity);
         $quote['project_summary_line'] = safe_text($_POST['project_summary_line'] ?? '');
         $quote['valid_until'] = safe_text($_POST['valid_until'] ?? '');
         $quote['pricing_mode'] = $pricingMode;

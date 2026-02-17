@@ -46,6 +46,24 @@ if ((string) ($challan['linked_quote_id'] ?? '') !== '') {
     $packingList = documents_get_packing_list_for_quote((string) ($challan['linked_quote_id'] ?? ''), true);
 }
 
+$variantMap = [];
+$variantsByComponent = [];
+foreach (documents_inventory_component_variants(false) as $variantRow) {
+    if (!is_array($variantRow)) {
+        continue;
+    }
+    $variantId = (string) ($variantRow['id'] ?? '');
+    $componentId = (string) ($variantRow['component_id'] ?? '');
+    if ($variantId === '' || $componentId === '') {
+        continue;
+    }
+    $variantMap[$variantId] = $variantRow;
+    if (!isset($variantsByComponent[$componentId])) {
+        $variantsByComponent[$componentId] = [];
+    }
+    $variantsByComponent[$componentId][] = $variantRow;
+}
+
 $redirectWith = static function (string $status, string $message) use ($id): void {
     header('Location: challan-view.php?id=' . urlencode($id) . '&status=' . urlencode($status) . '&message=' . urlencode($message));
     exit;
@@ -72,26 +90,117 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $challan['customer_snapshot']['consumer_account_no'] = safe_text($_POST['consumer_account_no'] ?? ($challan['customer_snapshot']['consumer_account_no'] ?? ''));
 
             $items = [];
-            $packNameMap = [];
             if ($packingList !== null) {
+                $componentMap = [];
+                foreach (documents_inventory_components(true) as $cmp) {
+                    if (!is_array($cmp)) {
+                        continue;
+                    }
+                    $componentMap[(string) ($cmp['id'] ?? '')] = $cmp;
+                }
+
+                $dispatchQtyMap = is_array($_POST['packing_dispatch_qty'] ?? null) ? $_POST['packing_dispatch_qty'] : [];
+                $dispatchFtMap = is_array($_POST['packing_dispatch_ft'] ?? null) ? $_POST['packing_dispatch_ft'] : [];
+                $manualNoteMap = is_array($_POST['packing_manual_note'] ?? null) ? $_POST['packing_manual_note'] : [];
+                $ruleVariantIds = is_array($_POST['rule_variant_id'] ?? null) ? $_POST['rule_variant_id'] : [];
+                $ruleVariantQtys = is_array($_POST['rule_dispatch_qty'] ?? null) ? $_POST['rule_dispatch_qty'] : [];
+                $ruleLineIds = is_array($_POST['rule_line_id'] ?? null) ? $_POST['rule_line_id'] : [];
+
                 foreach ((array) ($packingList['required_items'] ?? []) as $line) {
-                    if (is_array($line)) {
-                        $packNameMap[strtolower(trim((string) ($line['component_name_snapshot'] ?? '')))] = (string) ($line['component_id'] ?? '');
+                    if (!is_array($line)) {
+                        continue;
+                    }
+                    $lineId = (string) ($line['line_id'] ?? '');
+                    $componentId = (string) ($line['component_id'] ?? '');
+                    $mode = (string) ($line['mode'] ?? 'fixed_qty');
+                    $component = $componentMap[$componentId] ?? null;
+                    $isCuttable = is_array($component) && !empty($component['is_cuttable']);
+
+                    if (in_array($mode, ['fixed_qty', 'capacity_qty'], true)) {
+                        $dispatchQty = max(0, (float) ($dispatchQtyMap[$lineId] ?? 0));
+                        $dispatchFt = max(0, (float) ($dispatchFtMap[$lineId] ?? 0));
+                        if ($dispatchQty <= 0 && $dispatchFt <= 0) {
+                            continue;
+                        }
+                        $items[] = [
+                            'name' => (string) ($line['component_name_snapshot'] ?? ''),
+                            'description' => 'From packing list',
+                            'unit' => $isCuttable ? 'ft' : (string) ($line['unit'] ?? 'Nos'),
+                            'qty' => $isCuttable ? $dispatchFt : $dispatchQty,
+                            'remarks' => '',
+                            'component_id' => $componentId,
+                            'line_id' => $lineId,
+                            'mode' => $mode,
+                            'dispatch_qty' => $isCuttable ? 0 : $dispatchQty,
+                            'dispatch_ft' => $isCuttable ? $dispatchFt : 0,
+                        ];
+                    } elseif ($mode === 'unfixed_manual') {
+                        $dispatchQty = max(0, (float) ($dispatchQtyMap[$lineId] ?? 0));
+                        $dispatchFt = max(0, (float) ($dispatchFtMap[$lineId] ?? 0));
+                        $manualNote = safe_text((string) ($manualNoteMap[$lineId] ?? ''));
+                        if ($dispatchQty <= 0 && $dispatchFt <= 0 && $manualNote === '') {
+                            continue;
+                        }
+                        $items[] = [
+                            'name' => (string) ($line['component_name_snapshot'] ?? ''),
+                            'description' => 'Manual dispatch',
+                            'unit' => $isCuttable ? 'ft' : (string) ($line['unit'] ?? 'Nos'),
+                            'qty' => $isCuttable ? $dispatchFt : $dispatchQty,
+                            'remarks' => $manualNote,
+                            'component_id' => $componentId,
+                            'line_id' => $lineId,
+                            'mode' => $mode,
+                            'manual_note' => $manualNote,
+                            'dispatch_qty' => $isCuttable ? 0 : $dispatchQty,
+                            'dispatch_ft' => $isCuttable ? $dispatchFt : 0,
+                        ];
                     }
                 }
-            }
-            foreach ((array) ($_POST['item_name'] ?? []) as $i => $name) {
-                $itemName = safe_text((string) $name);
-                $items[] = [
-                    'name' => $itemName,
-                    'description' => safe_text((string) (($_POST['item_description'][$i] ?? ''))),
-                    'unit' => safe_text((string) (($_POST['item_unit'][$i] ?? 'Nos'))),
-                    'qty' => (float) (($_POST['item_qty'][$i] ?? 0)),
-                    'remarks' => safe_text((string) (($_POST['item_remarks'][$i] ?? ''))),
-                    'component_id' => (string) ($packNameMap[strtolower(trim($itemName))] ?? ''),
-                    'dispatch_qty' => 0,
-                    'dispatch_ft' => 0,
-                ];
+
+                foreach ($ruleVariantIds as $i => $variantIdRaw) {
+                    $variantId = safe_text((string) $variantIdRaw);
+                    $qty = max(0, (float) ($ruleVariantQtys[$i] ?? 0));
+                    $lineId = safe_text((string) ($ruleLineIds[$i] ?? ''));
+                    if ($variantId === '' || $lineId === '' || $qty <= 0) {
+                        continue;
+                    }
+                    $variant = $variantMap[$variantId] ?? null;
+                    if (!is_array($variant)) {
+                        continue;
+                    }
+                    $componentId = (string) ($variant['component_id'] ?? '');
+                    $wattage = (float) ($variant['wattage_wp'] ?? 0);
+                    $items[] = [
+                        'name' => (string) ($variant['display_name'] ?? 'Variant'),
+                        'description' => 'Rule fulfillment dispatch',
+                        'unit' => 'Nos',
+                        'qty' => $qty,
+                        'remarks' => 'Rule line ' . $lineId,
+                        'component_id' => $componentId,
+                        'line_id' => $lineId,
+                        'mode' => 'rule_fulfillment',
+                        'variant_id' => $variantId,
+                        'variant_name_snapshot' => (string) ($variant['display_name'] ?? ''),
+                        'wattage_wp' => $wattage,
+                        'dispatch_wp' => $qty * $wattage,
+                        'dispatch_qty' => $qty,
+                        'dispatch_ft' => 0,
+                    ];
+                }
+            } else {
+                foreach ((array) ($_POST['item_name'] ?? []) as $i => $name) {
+                    $itemName = safe_text((string) $name);
+                    $items[] = [
+                        'name' => $itemName,
+                        'description' => safe_text((string) (($_POST['item_description'][$i] ?? ''))),
+                        'unit' => safe_text((string) (($_POST['item_unit'][$i] ?? 'Nos'))),
+                        'qty' => (float) (($_POST['item_qty'][$i] ?? 0)),
+                        'remarks' => safe_text((string) (($_POST['item_remarks'][$i] ?? ''))),
+                        'component_id' => '',
+                        'dispatch_qty' => 0,
+                        'dispatch_ft' => 0,
+                    ];
+                }
             }
             $challan['items'] = documents_normalize_challan_items($items);
         }
@@ -105,7 +214,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $requiredMap = [];
                 foreach ((array) ($packingList['required_items'] ?? []) as $line) {
                     if (is_array($line)) {
-                        $requiredMap[(string) ($line['component_id'] ?? '')] = $line;
+                        $lineId = (string) ($line['line_id'] ?? '');
+                        if ($lineId !== '') {
+                            $requiredMap[$lineId] = $line;
+                        }
                     }
                 }
 
@@ -115,42 +227,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         continue;
                     }
                     $componentId = (string) ($line['component_id'] ?? '');
-                    if ($componentId === '') {
+                    $lineId = (string) ($line['line_id'] ?? '');
+                    $mode = (string) ($line['mode'] ?? 'fixed_qty');
+                    $qty = max(0, (float) ($line['dispatch_qty'] ?? $line['qty'] ?? 0));
+                    $ft = max(0, (float) ($line['dispatch_ft'] ?? 0));
+                    $wp = max(0, (float) ($line['dispatch_wp'] ?? 0));
+                    if ($mode !== 'rule_fulfillment' && $ft <= 0 && $qty <= 0) {
                         continue;
                     }
-                    $qty = max(0, (float) ($line['qty'] ?? 0));
-                    if ($qty <= 0) {
+                    if ($mode === 'rule_fulfillment' && $qty <= 0) {
                         continue;
                     }
-                    $unit = strtolower((string) ($line['unit'] ?? ''));
                     $dispatchRows[] = [
+                        'line_id' => $lineId,
                         'component_id' => $componentId,
-                        'dispatch_qty' => $unit === 'ft' ? 0 : $qty,
-                        'dispatch_ft' => $unit === 'ft' ? $qty : 0,
+                        'mode' => $mode,
+                        'dispatch_qty' => $qty,
+                        'dispatch_ft' => $ft,
+                        'dispatch_wp' => $wp,
+                        'variant_id' => (string) ($line['variant_id'] ?? ''),
+                        'variant_name_snapshot' => (string) ($line['variant_name_snapshot'] ?? ''),
+                        'wattage_wp' => (float) ($line['wattage_wp'] ?? 0),
+                        'manual_note' => (string) ($line['manual_note'] ?? ''),
                     ];
                 }
 
                 $stock = documents_inventory_load_stock();
                 foreach ($dispatchRows as $dispatch) {
-                    $componentId = (string) ($dispatch['component_id'] ?? '');
-                    $requiredLine = $requiredMap[$componentId] ?? null;
+                    $lineId = (string) ($dispatch['line_id'] ?? '');
+                    $requiredLine = $requiredMap[$lineId] ?? null;
                     if (!is_array($requiredLine)) {
                         $redirectWith('error', 'One or more challan items are not part of packing list.');
                     }
-                    if ((float) ($dispatch['dispatch_qty'] ?? 0) > (float) ($requiredLine['pending_qty'] ?? 0) + 0.00001 || (float) ($dispatch['dispatch_ft'] ?? 0) > (float) ($requiredLine['pending_ft'] ?? 0) + 0.00001) {
-                        $redirectWith('error', 'Dispatch cannot exceed pending quantity.');
+                    $mode = (string) ($requiredLine['mode'] ?? 'fixed_qty');
+                    $componentId = (string) ($requiredLine['component_id'] ?? $dispatch['component_id'] ?? '');
+                    if ($componentId === '') {
+                        $redirectWith('error', 'Component missing in dispatch line.');
                     }
-
                     $component = documents_inventory_get_component($componentId);
                     if ($component === null) {
                         $redirectWith('error', 'Component not found in inventory.');
                     }
-                    $entry = documents_inventory_component_stock($stock, $componentId);
-                    if (!empty($component['is_cuttable'])) {
+
+                    if (in_array($mode, ['fixed_qty', 'capacity_qty'], true)) {
+                        if ((float) ($dispatch['dispatch_qty'] ?? 0) > (float) ($requiredLine['pending_qty'] ?? 0) + 0.00001 || (float) ($dispatch['dispatch_ft'] ?? 0) > (float) ($requiredLine['pending_ft'] ?? 0) + 0.00001) {
+                            $redirectWith('error', 'Dispatch cannot exceed pending quantity.');
+                        }
+                    }
+
+                    if ($mode === 'rule_fulfillment') {
+                        $variantId = (string) ($dispatch['variant_id'] ?? '');
+                        if ($variantId === '') {
+                            $redirectWith('error', 'Variant is required for rule fulfillment dispatch.');
+                        }
+                        $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
+                        if ((float) ($dispatch['dispatch_qty'] ?? 0) > (float) ($entry['on_hand_qty'] ?? 0) + 0.00001) {
+                            $redirectWith('error', 'Insufficient stock for selected variant.');
+                        }
+
+                        $targetWp = (float) ($requiredLine['target_wp'] ?? 0);
+                        $alreadyWp = (float) ($requiredLine['dispatched_wp'] ?? 0);
+                        $nowWp = (float) ($dispatch['dispatch_wp'] ?? 0);
+                        $allowPct = max(0, (float) ($requiredLine['allow_overbuild_pct'] ?? 0));
+                        $maxWp = $targetWp * (1 + ($allowPct / 100));
+                        if (($alreadyWp + $nowWp) > $maxWp + 0.00001) {
+                            $redirectWith('error', 'Rule dispatch overbuild exceeds allowed percentage.');
+                        }
+                    } elseif (!empty($component['is_cuttable'])) {
+                        $entry = documents_inventory_component_stock($stock, $componentId);
                         if ((float) ($dispatch['dispatch_ft'] ?? 0) > documents_inventory_total_remaining_ft($entry) + 0.00001) {
                             $redirectWith('error', 'Insufficient cuttable stock.');
                         }
                     } else {
+                        $entry = documents_inventory_component_stock($stock, $componentId);
                         if ((float) ($dispatch['dispatch_qty'] ?? 0) > (float) ($entry['on_hand_qty'] ?? 0) + 0.00001) {
                             $redirectWith('error', 'Insufficient stock quantity.');
                         }
@@ -158,26 +307,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 foreach ($dispatchRows as $dispatch) {
-                    $componentId = (string) ($dispatch['component_id'] ?? '');
+                    $lineId = (string) ($dispatch['line_id'] ?? '');
+                    $requiredLine = $requiredMap[$lineId] ?? null;
+                    if (!is_array($requiredLine)) {
+                        continue;
+                    }
+                    $componentId = (string) ($requiredLine['component_id'] ?? $dispatch['component_id'] ?? '');
                     $component = documents_inventory_get_component($componentId);
                     if ($component === null) {
                         continue;
                     }
-                    $entry = documents_inventory_component_stock($stock, $componentId);
+                    $mode = (string) ($requiredLine['mode'] ?? 'fixed_qty');
+                    $variantId = $mode === 'rule_fulfillment' ? (string) ($dispatch['variant_id'] ?? '') : '';
+                    $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
                     $tx = [
                         'id' => 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)),
                         'type' => 'OUT',
                         'component_id' => $componentId,
+                        'variant_id' => $variantId,
                         'qty' => 0,
                         'length_ft' => 0,
                         'lot_consumption' => [],
                         'ref_type' => 'delivery_challan',
                         'ref_id' => (string) ($challan['id'] ?? ''),
                         'created_at' => date('c'),
-                        'created_by' => (string) ($user['full_name'] ?? $viewerType),
+                        'created_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => (string) ($user['full_name'] ?? $viewerType)],
                     ];
 
-                    if (!empty($component['is_cuttable'])) {
+                    if (!empty($component['is_cuttable']) && $mode !== 'rule_fulfillment') {
                         $needFt = (float) ($dispatch['dispatch_ft'] ?? 0);
                         $consume = documents_inventory_consume_fifo_lots((array) ($entry['lots'] ?? []), $needFt);
                         if (!($consume['ok'] ?? false)) {
@@ -192,7 +349,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $tx['qty'] = $needQty;
                     }
                     $entry['updated_at'] = date('c');
-                    $stock['stock_by_component_id'][$componentId] = $entry;
+                    documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
                     documents_inventory_append_transaction($tx);
                 }
 
@@ -225,6 +382,7 @@ $status = safe_text($_GET['status'] ?? '');
 $message = safe_text($_GET['message'] ?? '');
 $backLink = $viewerType === 'admin' ? 'admin-challans.php' : 'employee-challans.php';
 $units = ['Nos', 'Set', 'm', 'ft', 'kWp', 'Box', 'Lot'];
+$stockSnapshot = documents_inventory_load_stock();
 if ($challan['items'] === []) {
     $challan['items'] = [documents_challan_item_defaults()];
 }
@@ -238,7 +396,44 @@ if ($challan['items'] === []) {
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>">
 <h2 style="margin-top:0">Delivery Details</h2>
 <div class="grid"><div><label>Delivery Date</label><input type="date" name="delivery_date" value="<?= htmlspecialchars((string) $challan['delivery_date'], ENT_QUOTES) ?>" <?= $editable?'':'disabled' ?>></div><div><label>Vehicle No</label><input name="vehicle_no" value="<?= htmlspecialchars((string) $challan['vehicle_no'], ENT_QUOTES) ?>" <?= $editable?'':'disabled' ?>></div><div><label>Driver Name</label><input name="driver_name" value="<?= htmlspecialchars((string) $challan['driver_name'], ENT_QUOTES) ?>" <?= $editable?'':'disabled' ?>></div><div><label>Consumer Account No</label><input name="consumer_account_no" value="<?= htmlspecialchars((string) ($challan['customer_snapshot']['consumer_account_no'] ?? ''), ENT_QUOTES) ?>" <?= $editable?'':'disabled' ?>></div><div style="grid-column:1/-1"><label>Site Address</label><textarea name="site_address" <?= $editable?'':'disabled' ?>><?= htmlspecialchars((string) $challan['site_address'], ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Delivery Address</label><textarea name="delivery_address" <?= $editable?'':'disabled' ?>><?= htmlspecialchars((string) $challan['delivery_address'], ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Delivery Notes</label><textarea name="delivery_notes" <?= $editable?'':'disabled' ?>><?= htmlspecialchars((string) $challan['delivery_notes'], ENT_QUOTES) ?></textarea></div></div>
-<h2>Items</h2><table><thead><tr><th>Name</th><th>Description</th><th>Unit</th><th>Qty</th><th>Remarks</th></tr></thead><tbody><?php foreach ($challan['items'] as $it): ?><tr><td><input name="item_name[]" value="<?= htmlspecialchars((string) ($it['name'] ?? ''), ENT_QUOTES) ?>" <?= $editable?'':'disabled' ?>></td><td><input name="item_description[]" value="<?= htmlspecialchars((string) ($it['description'] ?? ''), ENT_QUOTES) ?>" <?= $editable?'':'disabled' ?>></td><td><select name="item_unit[]" <?= $editable?'':'disabled' ?>><?php foreach ($units as $u): ?><option value="<?= htmlspecialchars($u, ENT_QUOTES) ?>" <?= (string)($it['unit']??'')===$u?'selected':'' ?>><?= htmlspecialchars($u, ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="item_qty[]" value="<?= htmlspecialchars((string) ($it['qty'] ?? ''), ENT_QUOTES) ?>" <?= $editable?'':'disabled' ?>></td><td><input name="item_remarks[]" value="<?= htmlspecialchars((string) ($it['remarks'] ?? ''), ENT_QUOTES) ?>" <?= $editable?'':'disabled' ?>></td></tr><?php endforeach; ?></tbody></table>
+<h2>Items</h2>
+<?php if ($packingList !== null): ?>
+  <table><thead><tr><th>Component</th><th>Mode</th><th>Pending / Target</th><th>Dispatch now</th></tr></thead><tbody>
+  <?php foreach ((array) ($packingList['required_items'] ?? []) as $line): ?>
+    <?php $lineId = (string) ($line['line_id'] ?? ''); $mode = (string) ($line['mode'] ?? 'fixed_qty'); $componentId = (string) ($line['component_id'] ?? ''); $component = documents_inventory_get_component($componentId); $isCuttable = is_array($component) && !empty($component['is_cuttable']); ?>
+    <tr>
+      <td><?= htmlspecialchars((string) ($line['component_name_snapshot'] ?? ''), ENT_QUOTES) ?><input type="hidden" name="packing_line_id[]" value="<?= htmlspecialchars($lineId, ENT_QUOTES) ?>" /></td>
+      <td><?= htmlspecialchars($mode, ENT_QUOTES) ?></td>
+      <td><?php if ($mode === 'rule_fulfillment'): ?>Target <?= htmlspecialchars((string) ($line['target_wp'] ?? 0), ENT_QUOTES) ?> Wp, Remaining <?= htmlspecialchars((string) max(0, (float) ($line['target_wp'] ?? 0) - (float) ($line['dispatched_wp'] ?? 0)), ENT_QUOTES) ?> Wp<?php elseif ($mode === 'unfixed_manual'): ?>Manual dispatch<?php else: ?><?= htmlspecialchars((string) (((float) ($line['pending_ft'] ?? 0) > 0) ? (($line['pending_ft'] ?? 0) . ' ft') : (($line['pending_qty'] ?? 0) . ' ' . ($line['unit'] ?? ''))), ENT_QUOTES) ?><?php endif; ?></td>
+      <td>
+        <?php if (in_array($mode, ['fixed_qty', 'capacity_qty', 'unfixed_manual'], true)): ?>
+          <input type="hidden" name="packing_component_id[<?= htmlspecialchars($lineId, ENT_QUOTES) ?>]" value="<?= htmlspecialchars($componentId, ENT_QUOTES) ?>" />
+          <?php if ($isCuttable || (string) ($line['unit'] ?? '') === 'ft'): ?>
+            <label>Feet</label><input type="number" step="0.01" min="0" name="packing_dispatch_ft[<?= htmlspecialchars($lineId, ENT_QUOTES) ?>]" value="<?= htmlspecialchars((string) (($editable && $mode==='unfixed_manual') ? 0 : 0), ENT_QUOTES) ?>" <?= $editable?'':'disabled' ?> />
+          <?php else: ?>
+            <label>Qty</label><input type="number" step="0.01" min="0" name="packing_dispatch_qty[<?= htmlspecialchars($lineId, ENT_QUOTES) ?>]" value="0" <?= $editable?'':'disabled' ?> />
+          <?php endif; ?>
+          <?php if ($mode === 'unfixed_manual'): ?><label>Note</label><input name="packing_manual_note[<?= htmlspecialchars($lineId, ENT_QUOTES) ?>]" value="" <?= $editable?'':'disabled' ?> /><?php endif; ?>
+        <?php else: ?>
+          <?php $remainingWp = max(0, (float) ($line['target_wp'] ?? 0) - (float) ($line['dispatched_wp'] ?? 0)); $allowPct = max(0, (float) ($line['allow_overbuild_pct'] ?? 0)); $allowWp = $remainingWp * (1 + ($allowPct / 100)); ?>
+          <div class="muted">Remaining <?= htmlspecialchars((string) $remainingWp, ENT_QUOTES) ?> Wp (allow upto <?= htmlspecialchars((string) $allowWp, ENT_QUOTES) ?>)</div>
+          <?php foreach ((array) ($variantsByComponent[$componentId] ?? []) as $variant): $vid=(string)($variant['id']??''); $vStock=documents_inventory_component_stock($stockSnapshot, $componentId, $vid); $available=(float)($vStock['on_hand_qty'] ?? 0); ?>
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;align-items:center;margin-top:4px;">
+              <input type="hidden" name="rule_line_id[]" value="<?= htmlspecialchars($lineId, ENT_QUOTES) ?>" />
+              <input type="hidden" name="rule_variant_id[]" value="<?= htmlspecialchars($vid, ENT_QUOTES) ?>" />
+              <span><?= htmlspecialchars((string) ($variant['display_name'] ?? $vid), ENT_QUOTES) ?> (<?= htmlspecialchars((string) ($variant['wattage_wp'] ?? 0), ENT_QUOTES) ?>Wp, Avl <?= htmlspecialchars((string) $available, ENT_QUOTES) ?>)</span>
+              <input type="number" step="0.01" min="0" max="<?= htmlspecialchars((string) $available, ENT_QUOTES) ?>" name="rule_dispatch_qty[]" value="0" <?= $editable?'':'disabled' ?> />
+              <span class="muted">Wp/qty: <?= htmlspecialchars((string) ($variant['wattage_wp'] ?? 0), ENT_QUOTES) ?></span>
+            </div>
+          <?php endforeach; ?>
+        <?php endif; ?>
+      </td>
+    </tr>
+  <?php endforeach; ?>
+  </tbody></table>
+<?php else: ?>
+<table><thead><tr><th>Name</th><th>Description</th><th>Unit</th><th>Qty</th><th>Remarks</th></tr></thead><tbody><?php foreach ($challan['items'] as $it): ?><tr><td><input name="item_name[]" value="<?= htmlspecialchars((string) ($it['name'] ?? ''), ENT_QUOTES) ?>" <?= $editable?'':'disabled' ?>></td><td><input name="item_description[]" value="<?= htmlspecialchars((string) ($it['description'] ?? ''), ENT_QUOTES) ?>" <?= $editable?'':'disabled' ?>></td><td><select name="item_unit[]" <?= $editable?'':'disabled' ?>><?php foreach ($units as $u): ?><option value="<?= htmlspecialchars($u, ENT_QUOTES) ?>" <?= (string)($it['unit']??'')===$u?'selected':'' ?>><?= htmlspecialchars($u, ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="item_qty[]" value="<?= htmlspecialchars((string) ($it['qty'] ?? ''), ENT_QUOTES) ?>" <?= $editable?'':'disabled' ?>></td><td><input name="item_remarks[]" value="<?= htmlspecialchars((string) ($it['remarks'] ?? ''), ENT_QUOTES) ?>" <?= $editable?'':'disabled' ?>></td></tr><?php endforeach; ?></tbody></table>
+<?php endif; ?>
 <?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save">Save Draft</button><?php endif; ?>
 <?php if ((string) ($challan['status'] ?? '') === 'Draft'): ?><button class="btn" type="submit" name="action" value="issue">Mark Issued</button><?php endif; ?>
 <?php if ((string) ($challan['status'] ?? '') !== 'Archived'): ?><button class="btn secondary" type="submit" name="action" value="archive">Archive</button><?php endif; ?>
