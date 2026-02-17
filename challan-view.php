@@ -345,8 +345,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $tx['lot_consumption'] = (array) ($consume['lot_consumption'] ?? []);
                     } else {
                         $needQty = (float) ($dispatch['dispatch_qty'] ?? 0);
-                        $entry['on_hand_qty'] = (float) ($entry['on_hand_qty'] ?? 0) - $needQty;
+                        $consumed = documents_inventory_consume_from_location_breakdown($entry, $needQty, '');
+                        if (!($consumed['ok'] ?? false)) {
+                            $redirectWith('error', (string) ($consumed['error'] ?? 'Insufficient stock quantity.'));
+                        }
+                        $entry = (array) ($consumed['entry'] ?? $entry);
                         $tx['qty'] = $needQty;
+                        $tx['location_consumption'] = (array) ($consumed['location_consumption'] ?? []);
+                        $tx['location_id'] = (string) ($consumed['location_id'] ?? 'mixed');
                     }
                     $entry['updated_at'] = date('c');
                     documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
