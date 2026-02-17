@@ -3337,7 +3337,6 @@ function documents_inventory_transaction_defaults(): array
         'length_ft' => 0,
         'lot_consumption' => [],
         'location_consumption' => [],
-        'bucket_consumption' => [],
         'lots_created' => [],
         'location_id' => '',
         'consume_location_id' => '',
@@ -3355,65 +3354,7 @@ function documents_inventory_transaction_defaults(): array
 
 function documents_inventory_component_entry_defaults(): array
 {
-    return ['on_hand_qty' => 0, 'location_breakdown' => [], 'qty_buckets' => [], 'lots' => [], 'updated_at' => ''];
-}
-
-function documents_inventory_normalize_qty_buckets(array $rows): array
-{
-    $normalized = [];
-    foreach ($rows as $row) {
-        if (!is_array($row)) {
-            continue;
-        }
-        $bucketId = trim((string) ($row['bucket_id'] ?? ''));
-        if ($bucketId === '') {
-            $bucketId = 'legacy';
-        }
-        $qtyOriginal = max(0, (float) ($row['qty_original'] ?? 0));
-        $qtyRemaining = max(0, (float) ($row['qty_remaining'] ?? 0));
-        if ($qtyOriginal <= 0 && $qtyRemaining <= 0) {
-            continue;
-        }
-        if ($qtyOriginal <= 0 && $qtyRemaining > 0) {
-            $qtyOriginal = $qtyRemaining;
-        }
-        if ($qtyRemaining > $qtyOriginal) {
-            $qtyOriginal = $qtyRemaining;
-        }
-        $normalized[] = [
-            'bucket_id' => $bucketId,
-            'location_id' => trim((string) ($row['location_id'] ?? '')),
-            'qty_original' => $qtyOriginal,
-            'qty_remaining' => $qtyRemaining,
-            'received_at' => (string) ($row['received_at'] ?? ''),
-            'created_by' => is_array($row['created_by'] ?? null) ? $row['created_by'] : ['role' => '', 'id' => '', 'name' => ''],
-        ];
-    }
-    usort($normalized, static function (array $a, array $b): int {
-        $aAt = (string) ($a['received_at'] ?? '');
-        $bAt = (string) ($b['received_at'] ?? '');
-        if ($aAt !== $bAt) {
-            return strcmp($aAt, $bAt);
-        }
-        return strcmp((string) ($a['bucket_id'] ?? ''), (string) ($b['bucket_id'] ?? ''));
-    });
-    return $normalized;
-}
-
-function documents_inventory_recompute_qty_from_buckets(array $entry): array
-{
-    $buckets = documents_inventory_normalize_qty_buckets((array) ($entry['qty_buckets'] ?? []));
-    $entry['qty_buckets'] = $buckets;
-    $entry['location_breakdown'] = [];
-    $entry['on_hand_qty'] = 0;
-    foreach ($buckets as $bucket) {
-        $remaining = max(0, (float) ($bucket['qty_remaining'] ?? 0));
-        if ($remaining <= 0) {
-            continue;
-        }
-        $entry = documents_inventory_add_to_location_breakdown($entry, $remaining, (string) ($bucket['location_id'] ?? ''));
-    }
-    return $entry;
+    return ['on_hand_qty' => 0, 'location_breakdown' => [], 'lots' => [], 'updated_at' => ''];
 }
 
 function documents_inventory_location_defaults(): array
@@ -3737,29 +3678,11 @@ function documents_inventory_component_stock(array $stock, string $componentId, 
 
     $entry = array_merge(documents_inventory_component_entry_defaults(), is_array($entry) ? $entry : []);
     $entry['on_hand_qty'] = max(0, (float) ($entry['on_hand_qty'] ?? 0));
-    $entry['qty_buckets'] = is_array($entry['qty_buckets'] ?? null) ? $entry['qty_buckets'] : [];
     $entry['location_breakdown'] = documents_inventory_normalize_location_breakdown((array) ($entry['location_breakdown'] ?? []));
     $breakdownTotal = documents_inventory_location_breakdown_total($entry['location_breakdown']);
     if ($breakdownTotal <= 0 && $entry['on_hand_qty'] > 0) {
         $entry['location_breakdown'] = [['location_id' => '', 'qty' => $entry['on_hand_qty']]];
         $breakdownTotal = $entry['on_hand_qty'];
-    }
-    if ($entry['qty_buckets'] === [] && $breakdownTotal > 0) {
-        foreach ($entry['location_breakdown'] as $row) {
-            $entry['qty_buckets'][] = [
-                'bucket_id' => 'legacy-' . ((string) ($row['location_id'] ?? '') !== '' ? (string) ($row['location_id'] ?? '') : 'unassigned'),
-                'location_id' => (string) ($row['location_id'] ?? ''),
-                'qty_original' => max(0, (float) ($row['qty'] ?? 0)),
-                'qty_remaining' => max(0, (float) ($row['qty'] ?? 0)),
-                'received_at' => '',
-                'created_by' => ['role' => '', 'id' => '', 'name' => ''],
-            ];
-        }
-    }
-    $entry['qty_buckets'] = documents_inventory_normalize_qty_buckets((array) ($entry['qty_buckets'] ?? []));
-    if ($entry['qty_buckets'] !== []) {
-        $entry = documents_inventory_recompute_qty_from_buckets($entry);
-        $breakdownTotal = documents_inventory_location_breakdown_total((array) ($entry['location_breakdown'] ?? []));
     }
     $entry['on_hand_qty'] = $breakdownTotal > 0 ? $breakdownTotal : $entry['on_hand_qty'];
     $entry['lots'] = is_array($entry['lots'] ?? null) ? $entry['lots'] : [];
@@ -3845,31 +3768,23 @@ function documents_inventory_add_to_location_breakdown(array $entry, float $qty,
         return $entry;
     }
     $locationId = trim($locationId);
-    $entry['location_breakdown'] = documents_inventory_normalize_location_breakdown((array) ($entry['location_breakdown'] ?? []));
-    $rows = $entry['location_breakdown'];
-    $rows[] = ['location_id' => $locationId, 'qty' => $qty];
+    $rows = documents_inventory_normalize_location_breakdown((array) ($entry['location_breakdown'] ?? []));
+    $found = false;
+    foreach ($rows as &$row) {
+        if ((string) ($row['location_id'] ?? '') === $locationId) {
+            $row['qty'] = (float) ($row['qty'] ?? 0) + $qty;
+            $found = true;
+            break;
+        }
+    }
+    unset($row);
+    if (!$found) {
+        $rows[] = ['location_id' => $locationId, 'qty' => $qty];
+    }
     $rows = documents_inventory_normalize_location_breakdown($rows);
     $entry['location_breakdown'] = $rows;
     $entry['on_hand_qty'] = documents_inventory_location_breakdown_total($rows);
     return $entry;
-}
-
-function documents_inventory_add_qty_bucket(array $entry, string $bucketId, float $qty, string $locationId, array $actor = [], string $receivedAt = ''): array
-{
-    $qty = max(0, $qty);
-    if ($qty <= 0) {
-        return $entry;
-    }
-    $entry['qty_buckets'] = is_array($entry['qty_buckets'] ?? null) ? $entry['qty_buckets'] : [];
-    $entry['qty_buckets'][] = [
-        'bucket_id' => trim($bucketId) !== '' ? trim($bucketId) : 'legacy',
-        'location_id' => trim($locationId),
-        'qty_original' => $qty,
-        'qty_remaining' => $qty,
-        'received_at' => $receivedAt !== '' ? $receivedAt : date('c'),
-        'created_by' => $actor,
-    ];
-    return documents_inventory_recompute_qty_from_buckets($entry);
 }
 
 function documents_inventory_consume_from_location_breakdown(array $entry, float $qty, string $preferredLocationId = ''): array
@@ -3879,40 +3794,61 @@ function documents_inventory_consume_from_location_breakdown(array $entry, float
         return ['ok' => false, 'error' => 'Quantity must be greater than zero.'];
     }
 
-    $buckets = documents_inventory_normalize_qty_buckets((array) ($entry['qty_buckets'] ?? []));
-    $available = 0.0;
-    foreach ($buckets as $bucket) {
-        $available += max(0, (float) ($bucket['qty_remaining'] ?? 0));
+    $rows = documents_inventory_normalize_location_breakdown((array) ($entry['location_breakdown'] ?? []));
+    if ($rows === []) {
+        $legacyQty = max(0, (float) ($entry['on_hand_qty'] ?? 0));
+        if ($legacyQty > 0) {
+            $rows = [['location_id' => '', 'qty' => $legacyQty]];
+        }
     }
+
+    $available = documents_inventory_location_breakdown_total($rows);
     if ($available + 0.00001 < $qty) {
         return ['ok' => false, 'error' => 'Insufficient stock.'];
     }
 
     $preferredLocationId = trim($preferredLocationId);
     if ($preferredLocationId !== '') {
-        $preferredAvailable = 0.0;
-        foreach ($buckets as $row) {
+        foreach ($rows as $row) {
             if ((string) ($row['location_id'] ?? '') === $preferredLocationId) {
-                $preferredAvailable += (float) ($row['qty_remaining'] ?? 0);
-            }
-        }
-        if ($preferredAvailable + 0.00001 < $qty) {
+                if ((float) ($row['qty'] ?? 0) + 0.00001 < $qty) {
                     return ['ok' => false, 'error' => 'Insufficient stock at selected location.'];
+                }
+                break;
+            }
         }
     }
 
-    usort($buckets, static function (array $a, array $b): int {
-        return strcmp((string) ($a['received_at'] ?? ''), (string) ($b['received_at'] ?? ''));
+    usort($rows, static function (array $a, array $b): int {
+        $qtyCompare = (float) ($b['qty'] ?? 0) <=> (float) ($a['qty'] ?? 0);
+        if ($qtyCompare !== 0) {
+            return $qtyCompare;
+        }
+        return strcmp((string) ($a['location_id'] ?? ''), (string) ($b['location_id'] ?? ''));
     });
+
+    if ($preferredLocationId !== '') {
+        usort($rows, static function (array $a, array $b) use ($preferredLocationId): int {
+            $aIsPreferred = ((string) ($a['location_id'] ?? '') === $preferredLocationId) ? 0 : 1;
+            $bIsPreferred = ((string) ($b['location_id'] ?? '') === $preferredLocationId) ? 0 : 1;
+            if ($aIsPreferred !== $bIsPreferred) {
+                return $aIsPreferred <=> $bIsPreferred;
+            }
+            $qtyCompare = (float) ($b['qty'] ?? 0) <=> (float) ($a['qty'] ?? 0);
+            if ($qtyCompare !== 0) {
+                return $qtyCompare;
+            }
+            return strcmp((string) ($a['location_id'] ?? ''), (string) ($b['location_id'] ?? ''));
+        });
+    }
 
     $remaining = $qty;
     $consumption = [];
-    $bucketConsumption = [];
-    foreach ($buckets as &$row) {
+    foreach ($rows as &$row) {
         if ($remaining <= 0) {
             break;
         }
-        $rowQty = max(0, (float) ($row['qty_remaining'] ?? 0));
+        $rowQty = max(0, (float) ($row['qty'] ?? 0));
         if ($rowQty <= 0) {
             continue;
         }
@@ -3923,20 +3859,36 @@ function documents_inventory_consume_from_location_breakdown(array $entry, float
         if ($take <= 0) {
             continue;
         }
-        $row['qty_remaining'] = $rowQty - $take;
+        $row['qty'] = $rowQty - $take;
         $remaining -= $take;
         $consumption[] = ['location_id' => (string) ($row['location_id'] ?? ''), 'qty' => $take];
-        $bucketConsumption[] = ['bucket_id' => (string) ($row['bucket_id'] ?? ''), 'used_qty' => $take];
     }
     unset($row);
+
+    if ($remaining > 0.00001 && $preferredLocationId === '') {
+        foreach ($rows as &$row) {
+            if ($remaining <= 0) {
+                break;
+            }
+            $rowQty = max(0, (float) ($row['qty'] ?? 0));
+            if ($rowQty <= 0) {
+                continue;
+            }
+            $take = min($rowQty, $remaining);
+            $row['qty'] = $rowQty - $take;
+            $remaining -= $take;
+            $consumption[] = ['location_id' => (string) ($row['location_id'] ?? ''), 'qty' => $take];
+        }
+        unset($row);
+    }
 
     if ($remaining > 0.00001) {
         return ['ok' => false, 'error' => 'Insufficient stock.'];
     }
 
     $normalizedConsumption = documents_inventory_normalize_location_breakdown($consumption);
-    $entry['qty_buckets'] = documents_inventory_normalize_qty_buckets($buckets);
-    $entry = documents_inventory_recompute_qty_from_buckets($entry);
+    $entry['location_breakdown'] = documents_inventory_normalize_location_breakdown($rows);
+    $entry['on_hand_qty'] = documents_inventory_location_breakdown_total($entry['location_breakdown']);
 
     $consumedLocationId = '';
     if (count($normalizedConsumption) === 1) {
@@ -3949,7 +3901,6 @@ function documents_inventory_consume_from_location_breakdown(array $entry, float
         'ok' => true,
         'entry' => $entry,
         'location_consumption' => $normalizedConsumption,
-        'bucket_consumption' => $bucketConsumption,
         'location_id' => $consumedLocationId,
     ];
 }
