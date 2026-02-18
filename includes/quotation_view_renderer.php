@@ -119,11 +119,14 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
             if ($kitName === '') {
                 $kitName = safe_text((string) ($kit['name'] ?? 'Kit'));
             }
+            $description = safe_text((string) ($quoteItem['description_snapshot'] ?? ''));
+            if ($description === '') {
+                $description = safe_text((string) ($kit['description'] ?? ''));
+            }
             $itemRows[] = [
-                'sort' => 0,
-                'name' => '🧩 KIT: ' . ($kitName !== '' ? $kitName : 'Kit'),
-                'description' => safe_text((string) ($kit['description'] ?? '')) ?: 'As per kit inclusions',
-                'hsn' => safe_text((string) ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')) ?: '8541',
+                'name' => ($kitName !== '' ? $kitName : 'Kit'),
+                'description' => $description,
+                'hsn' => safe_text((string) ($quoteItem['hsn_snapshot'] ?? '')) ?: (safe_text((string) ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')) ?: '8541'),
                 'qty' => $qty,
                 'unit' => safe_text((string) ($quoteItem['unit'] ?? '')) ?: 'set',
             ];
@@ -140,16 +143,21 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
                 $name .= ' (' . $variantName . ')';
             }
         }
+        $description = safe_text((string) ($quoteItem['description_snapshot'] ?? ''));
+        if ($description === '') {
+            $description = safe_text((string) ($component['description'] ?? ''));
+            if ($description === '') {
+                $description = safe_text((string) ($component['notes'] ?? ''));
+            }
+        }
         $itemRows[] = [
-            'sort' => 1,
             'name' => $name,
-            'description' => safe_text((string) ($component['notes'] ?? '')),
-            'hsn' => safe_text((string) ($component['hsn'] ?? '')) ?: (safe_text((string) ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')) ?: '8541'),
+            'description' => $description,
+            'hsn' => safe_text((string) ($quoteItem['hsn_snapshot'] ?? '')) ?: (safe_text((string) ($component['hsn'] ?? '')) ?: (safe_text((string) ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')) ?: '8541')),
             'qty' => $qty,
             'unit' => safe_text((string) ($quoteItem['unit'] ?? '')) ?: safe_text((string) ($component['default_unit'] ?? '')),
         ];
     }
-    usort($itemRows, static fn(array $a, array $b): int => ((int) ($a['sort'] ?? 1)) <=> ((int) ($b['sort'] ?? 1)));
 
     $coverNote = trim((string) ($quote['cover_note_text'] ?? '')) ?: trim((string) ($quoteDefaults['defaults']['cover_note_template'] ?? ''));
     $specialReq = trim((string) ($quote['special_requests_text'] ?? $quote['special_requests_inclusive'] ?? ''));
@@ -234,7 +242,7 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <section class="card"><div class="h sec">🏠 Customer &amp; Site 📍</div><div class="grid2"><div class="metric"><b>Customer</b><div><?= htmlspecialchars((string)($quote['customer_name'] ?? ''), ENT_QUOTES) ?></div><div class="muted"><?= htmlspecialchars((string)($quote['customer_mobile'] ?? ''), ENT_QUOTES) ?></div></div><div class="metric"><b>Site</b><div><?= htmlspecialchars((string)($quote['site_address'] ?? ''), ENT_QUOTES) ?></div><div class="muted"><?= htmlspecialchars((string)($quote['district'] ?? ''), ENT_QUOTES) ?></div></div></div></section>
 <?php if ($coverNote !== ''): ?><section class="card"><div><?= quotation_sanitize_html($coverNote) ?></div></section><?php endif; ?>
 <section class="card"><div class="h sec">⚡ At a glance</div><div class="hero"><div class="metric">System Size<b><?= htmlspecialchars((string)($quote['capacity_kwp'] ?? '0'), ENT_QUOTES) ?> kWp</b></div><div class="metric">Monthly Bill (Without Solar)<b><?= quotation_format_inr_indian((float)($quote['finance_inputs']['monthly_bill_rs'] ?? 0), $showDecimals) ?></b></div><div class="metric">Monthly Outflow (With Solar – Bank Finance)<b id="heroOutflowBank">-</b></div><div class="metric">Monthly Outflow (With Solar – Self Funded)<b id="heroOutflowSelf">-</b></div></div><div class="save-line">🟢 You save approx <span id="heroSaving">-</span> every month</div></section>
-<section class="card"><div class="h sec">📦 Item summary</div><table><thead><tr><th>#</th><th>Particular</th><th>Description</th><th class="center">Qty</th><th class="center">Unit</th></tr></thead><tbody><?php $items = is_array($quote['items'] ?? null) ? $quote['items'] : []; if ($items === []): ?><tr><td colspan="5" class="center muted">No line items added.</td></tr><?php else: foreach ($items as $idx => $item): ?><tr><td><?= (int)$idx + 1 ?></td><td><?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['qty'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
+<section class="card"><div class="h sec">📦 Item summary</div><table><thead><tr><th>Sr No</th><th>Item and Description</th><th>HSN</th><th class="center">Quantity</th><th class="center">Unit</th></tr></thead><tbody><?php if ($itemRows === []): ?><tr><td colspan="5" class="center muted">No line items added.</td></tr><?php else: foreach ($itemRows as $idx => $item): ?><tr><td><?= (int)$idx + 1 ?></td><td><div><?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?></div><?php $itemDesc=(string)($item['description'] ?? ''); if (trim($itemDesc) !== ''): ?><div class="muted"><?= htmlspecialchars($itemDesc, ENT_QUOTES) ?></div><?php endif; ?></td><td><?= htmlspecialchars((string)($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['qty'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
 <?php if($specialReq!==''): ?><section class="card"><div class="h sec">✍️ Special Requests From Consumer (Inclusive in the rate)</div><div><?= quotation_sanitize_html($specialReq) ?></div><div><i>In case of conflict between annexures and special requests, special requests will be prioritized.</i></div></section><?php endif; ?>
 <section class="card"><div class="h sec">💰 Pricing summary</div><table><thead><tr><th>#</th><th>Particular</th><th class="right">Amount</th></tr></thead><tbody><tr><td>1</td><td>Gross payable</td><td class="right" id="upfront"></td></tr><tr><td>2</td><td>Subsidy expected</td><td class="right"><?= quotation_format_inr_indian((float)($calc['subsidy_expected_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td>3</td><td><b>Net Investment/Cost After Subsidy Credit</b></td><td class="right"><b id="upfrontNet"></b></td></tr></tbody></table></section>
 <section class="card"><div class="h sec">📊 Charts &amp; graphics</div>
