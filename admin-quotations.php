@@ -1,6 +1,68 @@
 <?php
 declare(strict_types=1);
 
+ob_start();
+
+$adminQuotationsLogDir = __DIR__ . '/data/logs';
+if (!is_dir($adminQuotationsLogDir)) {
+    @mkdir($adminQuotationsLogDir, 0775, true);
+}
+
+$adminQuotationsErrorLog = $adminQuotationsLogDir . '/admin-quotations-errors.log';
+$adminQuotationsTraceLog = $adminQuotationsLogDir . '/admin-quotations-trace.log';
+
+ini_set('log_errors', '1');
+ini_set('error_log', $adminQuotationsErrorLog);
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
+
+$adminQuotationsWriteErrorLog = static function (string $message) use ($adminQuotationsErrorLog): void {
+    error_log('[admin-quotations] ' . $message);
+    @error_log('[' . date('c') . '] ' . $message . PHP_EOL, 3, $adminQuotationsErrorLog);
+};
+
+set_exception_handler(static function (Throwable $exception) use ($adminQuotationsWriteErrorLog): void {
+    $adminQuotationsWriteErrorLog(sprintf(
+        'uncaught_exception message="%s" file=%s line=%d trace=%s',
+        $exception->getMessage(),
+        $exception->getFile(),
+        $exception->getLine(),
+        str_replace(["\n", "\r"], ' | ', $exception->getTraceAsString())
+    ));
+
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=UTF-8');
+    }
+    echo 'Quotation module encountered an error. Please contact admin.';
+});
+
+register_shutdown_function(static function () use ($adminQuotationsWriteErrorLog): void {
+    $lastError = error_get_last();
+    if (!is_array($lastError)) {
+        return;
+    }
+
+    $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR];
+    if (!in_array((int) ($lastError['type'] ?? 0), $fatalTypes, true)) {
+        return;
+    }
+
+    $adminQuotationsWriteErrorLog(sprintf(
+        'fatal_error type=%d message="%s" file=%s line=%d',
+        (int) ($lastError['type'] ?? 0),
+        (string) ($lastError['message'] ?? ''),
+        (string) ($lastError['file'] ?? ''),
+        (int) ($lastError['line'] ?? 0)
+    ));
+
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=UTF-8');
+    }
+    echo 'Quotation module encountered an error. Please contact admin.';
+});
+
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 
@@ -8,15 +70,27 @@ require_login_any_role(['admin', 'employee']);
 documents_ensure_structure();
 documents_seed_template_sets_if_empty();
 
-$templates = array_values(array_filter(json_load(documents_templates_dir() . '/template_sets.json', []), static function ($row): bool {
+$templatesRaw = json_load(documents_templates_dir() . '/template_sets.json', []);
+if (!is_array($templatesRaw)) {
+    $templatesRaw = [];
+    @error_log('[' . date('c') . '] template_sets invalid JSON payload; defaulted to []' . PHP_EOL, 3, $adminQuotationsErrorLog);
+}
+$templates = array_values(array_filter($templatesRaw, static function ($row): bool {
     return is_array($row) && !($row['archived_flag'] ?? false);
 }));
 $templateBlocks = documents_sync_template_block_entries($templates);
+$templateBlocks = is_array($templateBlocks) ? $templateBlocks : [];
 $company = load_company_profile();
+$quoteDefaults = load_quote_defaults();
+$quoteDefaults = is_array($quoteDefaults) ? $quoteDefaults : documents_quote_defaults_settings();
 $inventoryComponents = documents_inventory_components(false);
+$inventoryComponents = is_array($inventoryComponents) ? $inventoryComponents : [];
 $inventoryKits = documents_inventory_kits(false);
+$inventoryKits = is_array($inventoryKits) ? $inventoryKits : [];
 $inventoryTaxProfiles = documents_inventory_tax_profiles(false);
+$inventoryTaxProfiles = is_array($inventoryTaxProfiles) ? $inventoryTaxProfiles : [];
 $inventoryVariants = documents_inventory_component_variants(false);
+$inventoryVariants = is_array($inventoryVariants) ? $inventoryVariants : [];
 $variantsByComponent = [];
 foreach ($inventoryVariants as $variant) {
     $componentId = (string) ($variant['component_id'] ?? '');
@@ -33,6 +107,30 @@ $redirectWith = static function (string $type, string $msg): void {
     header('Location: admin-quotations.php?' . http_build_query(['status' => $type, 'message' => $msg]));
     exit;
 };
+
+$traceRole = 'guest';
+$traceUser = current_user();
+if (is_array($traceUser) && safe_text((string) ($traceUser['role_name'] ?? '')) !== '') {
+    $traceRole = safe_text((string) ($traceUser['role_name'] ?? ''));
+}
+$traceMethod = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+$traceAction = safe_text((string) ($_POST['action'] ?? $_GET['action'] ?? ''));
+$traceTab = safe_text((string) ($_POST['tab'] ?? $_GET['tab'] ?? ''));
+$traceQuoteId = safe_text((string) ($_POST['quote_id'] ?? $_GET['quote_id'] ?? $_GET['edit'] ?? ''));
+$traceItemType = safe_text((string) ($_POST['item_type'] ?? $_GET['item_type'] ?? ''));
+if ($traceItemType === '' && is_array($_POST['quote_item_type'] ?? null)) {
+    $traceItemType = implode(',', array_values(array_filter(array_map(static fn($type): string => safe_text((string) $type), $_POST['quote_item_type']), static fn(string $type): bool => $type !== '')));
+}
+@error_log(sprintf(
+    "[%s] role=%s method=%s action=%s tab=%s quote_id=%s item_type=%s\n",
+    date('c'),
+    $traceRole,
+    $traceMethod,
+    $traceAction,
+    $traceTab,
+    $traceQuoteId,
+    $traceItemType
+), 3, $adminQuotationsTraceLog);
 
 $sanitizeHexColor = static function ($raw, string $fallback = ''): string {
     $value = strtoupper(trim((string) $raw));
@@ -601,7 +699,6 @@ if ($statusFilter !== '') {
 }
 $editingId = safe_text($_GET['edit'] ?? '');
 $editing = $editingId !== '' ? documents_get_quote($editingId) : null;
-$quoteDefaults = load_quote_defaults();
 $resolveSegmentDefaults = static function (string $segmentCode) use ($quoteDefaults): array {
     $segments = is_array($quoteDefaults['segments'] ?? null) ? $quoteDefaults['segments'] : [];
     $segmentCode = strtoupper(trim($segmentCode));
@@ -623,7 +720,7 @@ $resolveSegmentDefaults = static function (string $segmentCode) use ($quoteDefau
     ];
 };
 $editingSegment = safe_text((string) ($editing['segment'] ?? ''));
-if ($editingSegment === '' && $editing['id'] === '') {
+if ($editingSegment === '' && (string) ($editing['id'] ?? '') === '') {
     $selectedTemplateId = safe_text((string) ($editing['template_set_id'] ?? ''));
     foreach ($templates as $tpl) {
         if ((string) ($tpl['id'] ?? '') === $selectedTemplateId) {
