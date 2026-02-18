@@ -4,7 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 
-require_admin();
+require_login_any_role(['admin', 'employee']);
 documents_ensure_structure();
 documents_seed_template_sets_if_empty();
 
@@ -178,10 +178,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quote['id'] = $id;
             $quote['quote_no'] = (string) $number['quote_no'];
             $quote['created_at'] = date('c');
-            $quote['created_by_type'] = 'admin';
             $user = current_user();
+            $roleName = (string) ($user['role_name'] ?? 'admin');
+            $quote['created_by_type'] = $roleName === 'employee' ? 'employee' : 'admin';
             $quote['created_by_id'] = (string) ($user['id'] ?? '');
-            $quote['created_by_name'] = (string) ($user['full_name'] ?? 'Admin');
+            $quote['created_by_name'] = (string) ($user['full_name'] ?? ($quote['created_by_type'] === 'employee' ? 'Employee' : 'Admin'));
             $quote['segment'] = (string) ($selectedTemplate['segment'] ?? 'RES');
             $quote['status'] = 'Draft';
         } else {
@@ -272,6 +273,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $structuredItems = [];
         $itemSummaryRows = [];
         $structuredCount = count($structuredTypes);
+        if ($structuredCount === 0) {
+            $redirectWith('error', 'Add at least one kit/component from Items Master.');
+        }
         for ($i = 0; $i < $structuredCount; $i++) {
             $lineType = safe_text((string) ($structuredTypes[$i] ?? 'component'));
             if (!in_array($lineType, ['kit', 'component'], true)) {
@@ -294,8 +298,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $lineName = (string) ($kit['name'] ?? 'Kit');
                 $lineUnit = $unit !== '' ? $unit : 'set';
-                $lineDescription = safe_text((string) ($kit['description'] ?? '')) ?: 'As per kit inclusions';
-                $lineHsn = $defaultHsn;
+                $lineDescription = safe_text((string) ($kit['description'] ?? ''));
+                $lineHsn = safe_text((string) ($kit['hsn'] ?? '')) ?: $defaultHsn;
 
                 $structuredItems[] = [
                     'type' => 'kit',
@@ -306,17 +310,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'variant_id' => '',
                     'variant_snapshot' => [],
                     'name_snapshot' => $lineName,
+                    'description_snapshot' => $lineDescription,
+                    'hsn_snapshot' => $lineHsn,
                     'meta' => [],
                 ];
                 $itemSummaryRows[] = [
-                    'name' => '🧩 KIT: ' . $lineName,
+                    'name' => $lineName,
                     'description' => $lineDescription,
                     'hsn' => $lineHsn,
                     'qty' => $qty,
                     'unit' => $lineUnit,
                     'gst_slab' => '5',
                     'basic_amount' => 0,
-                    '__sort' => 0,
                 ];
                 continue;
             }
@@ -340,6 +345,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $lineUnit = $unit !== '' ? $unit : ((string) ($component['default_unit'] ?? 'pcs'));
             $lineHsn = safe_text((string) ($component['hsn'] ?? '')) ?: $defaultHsn;
+            $lineDescription = safe_text((string) ($component['description'] ?? ''));
+            if ($lineDescription === '') {
+                $lineDescription = safe_text((string) ($component['notes'] ?? ''));
+            }
 
             $structuredItems[] = [
                 'type' => 'component',
@@ -357,17 +366,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'model_no' => (string) ($variant['model_no'] ?? ''),
                 ] : [],
                 'name_snapshot' => $lineName,
+                'description_snapshot' => $lineDescription,
+                'hsn_snapshot' => $lineHsn,
                 'meta' => [],
             ];
             $itemSummaryRows[] = [
                 'name' => $lineName,
-                'description' => safe_text((string) ($component['notes'] ?? '')),
+                'description' => $lineDescription,
                 'hsn' => $lineHsn,
                 'qty' => $qty,
                 'unit' => $lineUnit,
                 'gst_slab' => '5',
                 'basic_amount' => 0,
-                '__sort' => 1,
             ];
         }
 
@@ -375,9 +385,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectWith('error', 'Add at least one kit/component from Items Master.');
         }
 
-        usort($itemSummaryRows, static function (array $a, array $b): int {
-            return ((int) ($a['__sort'] ?? 1)) <=> ((int) ($b['__sort'] ?? 1));
-        });
         foreach ($itemSummaryRows as &$summaryRow) {
             unset($summaryRow['__sort']);
         }
@@ -729,7 +736,7 @@ if ($lookup !== null) {
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
-<div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Optional: add kits/components for packing list and dispatch workflows.</div><table id="structuredItemsTable"><thead><tr><th>Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Name Snapshot</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]"><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]"><option value="">-- select --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]"><option value="">-- select --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><input name="quote_item_name_snapshot[]" value="<?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?>"></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
+<div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Add kits/components from Items Master. Name/description snapshots are captured automatically.</div><table id="structuredItemsTable"><thead><tr><th>Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
 <div><label>Monthly electricity bill (₹)</label><input type="number" step="0.01" name="monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted">Suggested bill based on generation & tariff. You can change it. <a href="#" id="resetMonthlySuggestion">Reset suggestion</a></div></div>
 <div><label>Unit rate (₹/kWh)</label><input type="number" step="0.01" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['finance_inputs']['unit_rate_rs_per_kwh'] ?: ($segmentDefaults['unit_rate_rs_per_kwh'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($editing['finance_inputs']['annual_generation_per_kw'] ?: ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? '')), ENT_QUOTES) ?>"></div>
@@ -772,18 +779,78 @@ if ($lookup !== null) {
 </tbody></table>
 </form></div>
 <script>
+window.quoteItemVariantsByComponent = <?= json_encode($variantsByComponent, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+</script>
+<script>
 document.addEventListener('click', function (e) {
     if (e.target && e.target.id === 'addStructuredItemBtn') {
         const tb = document.querySelector('#structuredItemsTable tbody');
         if (!tb) return;
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td><select name="quote_item_type[]"><option value="kit">Kit</option><option value="component" selected>Component</option></select></td><td><select name="quote_item_kit_id[]"><option value="">-- select --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]"><option value="">-- select --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]"><option value="">-- none --</option></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="1"></td><td><input name="quote_item_unit[]" value=""></td><td><input name="quote_item_name_snapshot[]" value=""></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td>';
+        tr.innerHTML = '<td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit">Kit</option><option value="component" selected>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="1"></td><td><input name="quote_item_unit[]" value=""></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td>';
         tb.appendChild(tr);
+        syncStructuredItemRow(tr);
     }
     if (e.target && e.target.classList.contains('rm-structured-item')) {
         e.target.closest('tr')?.remove();
     }
 });
+
+
+const quoteItemVariants = window.quoteItemVariantsByComponent || {};
+const syncStructuredItemRow = (tr) => {
+    if (!tr) return;
+    const typeSel = tr.querySelector('.quote-item-type');
+    const kitSel = tr.querySelector('.quote-item-kit');
+    const componentSel = tr.querySelector('.quote-item-component');
+    const variantSel = tr.querySelector('.quote-item-variant');
+    if (!typeSel || !kitSel || !componentSel || !variantSel) return;
+
+    const type = typeSel.value === 'kit' ? 'kit' : 'component';
+    const componentId = String(componentSel.value || '');
+    const currentVariant = String(variantSel.value || '');
+    const variants = Array.isArray(quoteItemVariants[componentId]) ? quoteItemVariants[componentId] : [];
+
+    variantSel.innerHTML = '<option value="">-- none --</option>';
+    variants.forEach((row) => {
+        const opt = document.createElement('option');
+        opt.value = String(row.id || '');
+        opt.textContent = String(row.display_name || row.id || 'Variant');
+        variantSel.appendChild(opt);
+    });
+    if (currentVariant !== '') {
+        variantSel.value = currentVariant;
+    }
+
+    const requiresVariant = variants.length > 0;
+    variantSel.required = (type === 'component' && requiresVariant);
+    variantSel.closest('td').style.display = type === 'component' ? '' : 'none';
+
+    kitSel.disabled = type !== 'kit';
+    componentSel.disabled = type !== 'component';
+    variantSel.disabled = type !== 'component';
+
+    if (type === 'kit') {
+        componentSel.value = '';
+        variantSel.value = '';
+        componentSel.required = false;
+        kitSel.required = true;
+    } else {
+        kitSel.value = '';
+        kitSel.required = false;
+        componentSel.required = true;
+    }
+};
+
+document.addEventListener('change', function (e) {
+    const tr = e.target && e.target.closest ? e.target.closest('#structuredItemsTable tbody tr') : null;
+    if (!tr) return;
+    if (e.target.classList.contains('quote-item-type') || e.target.classList.contains('quote-item-component')) {
+        syncStructuredItemRow(tr);
+    }
+});
+
+document.querySelectorAll('#structuredItemsTable tbody tr').forEach((tr) => syncStructuredItemRow(tr));
 
 (function () {
     const settingsForm = document.querySelector('form.grid input[name="action"][value="save_settings"]')?.form;

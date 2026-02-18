@@ -4,6 +4,31 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../includes/customer_admin.php';
 require_once __DIR__ . '/../../includes/leads.php';
 
+function documents_php_error_log_path(): string
+{
+    return dirname(__DIR__, 2) . '/data/logs/php_errors.log';
+}
+
+function documents_configure_php_error_logging(): void
+{
+    static $configured = false;
+    if ($configured) {
+        return;
+    }
+    $configured = true;
+
+    $logDir = dirname(documents_php_error_log_path());
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0775, true);
+    }
+
+    ini_set('display_errors', '0');
+    ini_set('log_errors', '1');
+    ini_set('error_log', documents_php_error_log_path());
+}
+
+documents_configure_php_error_logging();
+
 function documents_base_dir(): string
 {
     return dirname(__DIR__, 2) . '/data/documents';
@@ -2934,6 +2959,7 @@ function documents_inventory_component_defaults(): array
         'is_cuttable' => false,
         'standard_length_ft' => 0,
         'min_issue_ft' => 1,
+        'description' => '',
         'notes' => '',
         'archived_flag' => false,
         'created_at' => '',
@@ -3463,6 +3489,8 @@ function documents_quote_structured_item_defaults(): array
         'kit_id' => '',
         'component_id' => '',
         'name_snapshot' => '',
+        'description_snapshot' => '',
+        'hsn_snapshot' => '',
         'qty' => 0,
         'unit' => '',
         'variant_id' => '',
@@ -4379,6 +4407,10 @@ function documents_normalize_quote_structured_items(array $rows): array
         $item = array_merge(documents_quote_structured_item_defaults(), $row);
         $item['type'] = in_array((string) ($item['type'] ?? 'component'), ['kit', 'component'], true) ? (string) $item['type'] : 'component';
         $item['qty'] = max(0, (float) ($item['qty'] ?? 0));
+        $item['name_snapshot'] = safe_text((string) ($item['name_snapshot'] ?? ''));
+        $item['description_snapshot'] = safe_text((string) ($item['description_snapshot'] ?? ''));
+        $item['hsn_snapshot'] = safe_text((string) ($item['hsn_snapshot'] ?? ''));
+        $item['unit'] = safe_text((string) ($item['unit'] ?? ''));
         $item['variant_id'] = safe_text((string) ($item['variant_id'] ?? ''));
         $item['variant_snapshot'] = is_array($item['variant_snapshot'] ?? null) ? $item['variant_snapshot'] : [];
         $item['meta'] = is_array($item['meta'] ?? null) ? $item['meta'] : [];

@@ -1314,6 +1314,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $row['is_cuttable'] = $isCuttable;
             $row['standard_length_ft'] = max(0, (float) ($_POST['standard_length_ft'] ?? 0));
             $row['min_issue_ft'] = max(0.01, (float) ($_POST['min_issue_ft'] ?? 1));
+            $row['description'] = safe_text((string) ($_POST['description'] ?? ''));
             $row['notes'] = safe_text((string) ($_POST['notes'] ?? ''));
             $row['updated_at'] = date('c');
 
@@ -3314,6 +3315,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <div><label>Min Issue (ft)</label><input type="number" step="0.01" min="0.01" name="min_issue_ft" value="<?= htmlspecialchars((string) ($componentForm['min_issue_ft'] ?? 1), ENT_QUOTES) ?>" /></div>
               <div><label><input type="checkbox" name="is_cuttable" value="1" <?= !empty($componentForm['is_cuttable']) ? 'checked' : '' ?> /> Cuttable (feet)</label></div>
               <div><label><input type="checkbox" name="has_variants" value="1" <?= !empty($componentForm['has_variants']) ? 'checked' : '' ?> /> Has variants</label></div>
+              <div style="grid-column:1/-1"><label>Description</label><textarea name="description"><?= htmlspecialchars((string) ($componentForm['description'] ?? ''), ENT_QUOTES) ?></textarea></div>
               <div style="grid-column:1/-1"><label>Notes</label><textarea name="notes"><?= htmlspecialchars((string) ($componentForm['notes'] ?? ''), ENT_QUOTES) ?></textarea></div>
               <div><label>&nbsp;</label><button class="btn" type="submit"><?= is_array($editingComponent) ? 'Update Component' : 'Save Component' ?></button></div>
             </form>
