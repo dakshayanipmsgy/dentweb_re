@@ -4123,6 +4123,182 @@ function documents_inventory_component_stock(array $stock, string $componentId, 
     return $entry;
 }
 
+function documents_inventory_stock_lookup_debug_enabled(): bool
+{
+    if (((string) ($_GET['debug_stock_lookup'] ?? '')) !== '1') {
+        return false;
+    }
+    if (!function_exists('current_user')) {
+        return false;
+    }
+    $user = current_user();
+    return is_array($user) && ((string) ($user['role_name'] ?? '')) === 'admin';
+}
+
+function documents_inventory_log_stock_lookup(string $componentId, string $variantId, string $branch, float $computed): void
+{
+    if (!documents_inventory_stock_lookup_debug_enabled()) {
+        return;
+    }
+    $path = dirname(__DIR__, 2) . '/data/logs/stock_lookup_debug.log';
+    $line = sprintf(
+        "[%s] component_id=%s variant_id=%s branch=%s computed=%s\n",
+        date('c'),
+        $componentId,
+        $variantId,
+        $branch,
+        rtrim(rtrim(sprintf('%.4F', $computed), '0'), '.')
+    );
+    @file_put_contents($path, $line, FILE_APPEND | LOCK_EX);
+}
+
+function documents_inventory_stock_entry_raw(array $stock, string $componentId, string $variantId = ''): array
+{
+    $entry = [];
+
+    $componentEntry = $stock['stock_by_component_id'][$componentId] ?? null;
+    if (is_array($componentEntry)) {
+        if (isset($componentEntry['stock_by_variant_id']) && is_array($componentEntry['stock_by_variant_id'])) {
+            $entry = $componentEntry['stock_by_variant_id'][documents_inventory_stock_bucket_key($variantId)] ?? [];
+        } else {
+            $entry = $componentEntry;
+        }
+    }
+
+    if (!is_array($entry) || $entry === []) {
+        $legacyStock = $stock['stock'][$componentId] ?? null;
+        if (is_array($legacyStock)) {
+            if ($variantId !== '') {
+                $entry = (array) (($legacyStock['variants'][$variantId] ?? $legacyStock['stock_by_variant_id'][$variantId] ?? $legacyStock['stock_by_variant_id'][documents_inventory_stock_bucket_key($variantId)] ?? []));
+            } else {
+                $entry = $legacyStock;
+            }
+        }
+    }
+
+    if (!is_array($entry)) {
+        $entry = [];
+    }
+
+    return array_merge(documents_inventory_component_entry_defaults(), $entry);
+}
+
+function documents_inventory_component_variant_entries(array $stock, string $componentId): array
+{
+    $entries = [];
+    $componentEntry = $stock['stock_by_component_id'][$componentId] ?? null;
+    if (is_array($componentEntry) && isset($componentEntry['stock_by_variant_id']) && is_array($componentEntry['stock_by_variant_id'])) {
+        foreach ($componentEntry['stock_by_variant_id'] as $bucketKey => $bucketEntry) {
+            if ($bucketKey === documents_inventory_stock_bucket_key('')) {
+                continue;
+            }
+            if (is_array($bucketEntry)) {
+                $entries[] = $bucketEntry;
+            }
+        }
+    }
+
+    $legacyStock = $stock['stock'][$componentId] ?? null;
+    if ($entries === [] && is_array($legacyStock)) {
+        $legacyVariants = null;
+        if (isset($legacyStock['variants']) && is_array($legacyStock['variants'])) {
+            $legacyVariants = $legacyStock['variants'];
+        } elseif (isset($legacyStock['stock_by_variant_id']) && is_array($legacyStock['stock_by_variant_id'])) {
+            $legacyVariants = $legacyStock['stock_by_variant_id'];
+        }
+        if (is_array($legacyVariants)) {
+            foreach ($legacyVariants as $variantKey => $variantEntry) {
+                if ((string) $variantKey === documents_inventory_stock_bucket_key('')) {
+                    continue;
+                }
+                if (is_array($variantEntry)) {
+                    $entries[] = $variantEntry;
+                }
+            }
+        }
+    }
+
+    return $entries;
+}
+
+function documents_inventory_compute_entry_on_hand(array $entry, bool $isCuttable, string &$branch): float
+{
+    if ($isCuttable) {
+        $branch = 'lots';
+        $sum = 0.0;
+        foreach ((array) ($entry['lots'] ?? []) as $lot) {
+            if (!is_array($lot)) {
+                continue;
+            }
+            $sum += (float) ($lot['remaining_length_ft'] ?? 0);
+        }
+        return $sum;
+    }
+
+    $batches = (array) ($entry['batches'] ?? []);
+    if ($batches !== []) {
+        $branch = 'batches';
+        $sum = 0.0;
+        foreach ($batches as $batch) {
+            if (!is_array($batch)) {
+                continue;
+            }
+            $sum += (float) ($batch['qty_remaining'] ?? 0);
+        }
+        return $sum;
+    }
+
+    $locationBreakdown = (array) ($entry['location_breakdown'] ?? []);
+    if ($locationBreakdown !== []) {
+        $branch = 'location_breakdown';
+        $sum = 0.0;
+        foreach ($locationBreakdown as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sum += (float) ($row['qty'] ?? 0);
+        }
+        return $sum;
+    }
+
+    $branch = 'legacy_on_hand_qty';
+    return (float) ($entry['on_hand_qty'] ?? 0);
+}
+
+function documents_inventory_compute_on_hand(array $stock, string $componentId, string $variantId = '', bool $isCuttable = false): float
+{
+    if ($componentId === '') {
+        return 0.0;
+    }
+
+    if ($variantId !== '') {
+        $entry = documents_inventory_stock_entry_raw($stock, $componentId, $variantId);
+        $branch = '';
+        $computed = documents_inventory_compute_entry_on_hand($entry, $isCuttable, $branch);
+        documents_inventory_log_stock_lookup($componentId, $variantId, $branch, $computed);
+        return $computed;
+    }
+
+    $variantEntries = documents_inventory_component_variant_entries($stock, $componentId);
+    if ($variantEntries !== []) {
+        $sum = 0.0;
+        $branchUsed = 'variants_total';
+        foreach ($variantEntries as $entry) {
+            $branch = '';
+            $sum += documents_inventory_compute_entry_on_hand(array_merge(documents_inventory_component_entry_defaults(), $entry), $isCuttable, $branch);
+            $branchUsed = 'variants_total:' . $branch;
+        }
+        documents_inventory_log_stock_lookup($componentId, '', $branchUsed, $sum);
+        return $sum;
+    }
+
+    $entry = documents_inventory_stock_entry_raw($stock, $componentId, '');
+    $branch = '';
+    $computed = documents_inventory_compute_entry_on_hand($entry, $isCuttable, $branch);
+    documents_inventory_log_stock_lookup($componentId, '', $branch, $computed);
+    return $computed;
+}
+
 function documents_inventory_set_component_stock(array &$stock, string $componentId, string $variantId, array $entry): void
 {
     if (!isset($stock['stock_by_component_id'][$componentId]) || !is_array($stock['stock_by_component_id'][$componentId])) {
