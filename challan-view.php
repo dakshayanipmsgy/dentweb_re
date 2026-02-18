@@ -90,8 +90,8 @@ foreach (documents_inventory_component_variants(false) as $variant) {
     $componentId = (string) ($variant['component_id'] ?? '');
     if ($variantId === '' || $componentId === '') { continue; }
     $variantMap[$variantId] = $variant;
-    $entry = documents_inventory_component_stock($stockSnapshot, $componentId, $variantId);
-    $varStock = !empty($componentMap[$componentId]['is_cuttable']) ? documents_inventory_total_remaining_ft($entry) : (float) ($entry['on_hand_qty'] ?? 0);
+    $isCuttable = !empty($componentMap[$componentId]['is_cuttable']);
+    $varStock = documents_inventory_compute_on_hand($stockSnapshot, $componentId, $variantId, $isCuttable);
     $variantsByComponent[$componentId][] = [
         'id' => $variantId,
         'name' => (string) ($variant['display_name'] ?? $variantId),
@@ -135,8 +135,7 @@ if (is_array($packingList)) {
 
         $component = $componentMap[$componentId] ?? [];
         $isCuttable = !empty($component['is_cuttable']);
-        $componentEntry = documents_inventory_component_stock($stockSnapshot, $componentId, '');
-        $onHand = $isCuttable ? documents_inventory_total_remaining_ft($componentEntry) : (float) ($componentEntry['on_hand_qty'] ?? 0);
+        $onHand = documents_inventory_compute_on_hand($stockSnapshot, $componentId, '', $isCuttable);
         $status = $fulfilled ? 'Fulfilled' : (($onHand > 0) ? 'Ready (in stock)' : 'Low/0 stock');
         $pendingText = $mode === 'rule_fulfillment'
             ? ('Pending ' . round($pendingWp, 2) . ' Wp')
@@ -459,7 +458,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <?php if ($editable): ?><p><button type="button" id="add-extra-line" class="btn secondary">+ Add Line</button></p><?php endif; ?>
 
 <table id="dc-lines"><thead><tr><th style="width:5%">Sr.</th><th style="width:44%">Components</th><th style="width:10%">HSN</th><th style="width:16%">Quantity / pieces</th><th style="width:15%">length</th><th style="width:10%">Actions</th></tr></thead><tbody>
-<?php foreach ((array) ($challan['lines'] ?? []) as $line): if (!is_array($line)) { continue; } $componentId=(string)($line['component_id']??''); $variantId=(string)($line['variant_id']??''); $entry=documents_inventory_component_stock($stockSnapshot,$componentId,$variantId); $isCuttable=!empty($line['is_cuttable_snapshot']); $lineStock=$isCuttable?documents_inventory_total_remaining_ft($entry):(float)($entry['on_hand_qty']??0); ?>
+<?php foreach ((array) ($challan['lines'] ?? []) as $line): if (!is_array($line)) { continue; } $componentId=(string)($line['component_id']??''); $variantId=(string)($line['variant_id']??''); $isCuttable=!empty($line['is_cuttable_snapshot']); $lineStock=documents_inventory_compute_on_hand($stockSnapshot,$componentId,$variantId,$isCuttable); ?>
 <tr class="dc-line-row">
 <td class="sr-col"></td>
 <td>
