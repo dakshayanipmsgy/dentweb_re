@@ -43,6 +43,21 @@ $company = array_merge(documents_company_profile_defaults(), json_load(documents
 $lines = documents_normalize_challan_lines((array) ($challan['lines'] ?? []));
 $totalQty = 0.0;
 $totalFt = 0.0;
+$kitNames = [];
+$quoteId = safe_text((string) ($challan['quote_id'] ?: $challan['linked_quote_id']));
+$packingList = $quoteId !== '' ? documents_get_packing_list_for_quote($quoteId, false) : null;
+if ($packingList !== null) {
+    foreach ((array) ($packingList['required_items'] ?? []) as $requiredLine) {
+        if (!is_array($requiredLine)) {
+            continue;
+        }
+        $kitName = safe_text((string) ($requiredLine['kit_name_snapshot'] ?? ''));
+        if ($kitName !== '' && !in_array($kitName, $kitNames, true)) {
+            $kitNames[] = $kitName;
+        }
+    }
+}
+
 foreach ($lines as $line) {
     if (!empty($line['is_cuttable_snapshot'])) {
         $totalFt += (float) ($line['length_ft'] ?? 0);
@@ -88,13 +103,20 @@ th,td{border:1px solid #444;padding:6px;vertical-align:top}
     <div class="box"><strong>Site/Delivery Address</strong><br><?= nl2br(htmlspecialchars((string) ($challan['site_address_snapshot'] ?: $challan['delivery_address']), ENT_QUOTES)) ?></div>
   </div>
 
+  <div class="box" style="margin-bottom:8px"><strong>Related Quotation / Kit</strong><br>
+    Quotation ID: <?= htmlspecialchars((string) ($challan['quote_id'] ?: $challan['linked_quote_id']), ENT_QUOTES) ?><br>
+    Kits: <?= htmlspecialchars($kitNames === [] ? 'N/A' : implode(', ', $kitNames), ENT_QUOTES) ?>
+  </div>
+
   <table>
     <thead><tr><th>Sr No</th><th>Item</th><th>Description/Notes</th><th>HSN</th><th>Qty/Length</th><th>Unit</th></tr></thead>
     <tbody>
-      <?php foreach ($lines as $i => $line): $itemName = (string) ($line['component_name_snapshot'] ?? ''); if ((string) ($line['variant_name_snapshot'] ?? '') !== '') { $itemName .= ' (' . (string) ($line['variant_name_snapshot'] ?? '') . ')'; } ?>
+      <?php foreach ($lines as $i => $line): $itemName = (string) ($line['component_name_snapshot'] ?? ''); if ((string) ($line['variant_name_snapshot'] ?? '') !== '') { $itemName .= ' (' . (string) ($line['variant_name_snapshot'] ?? '') . ')'; } $sourceType=(string)($line['source_type'] ?? 'extra'); $packRef=is_array($line['packing_ref'] ?? null) ? $line['packing_ref'] : []; ?>
       <tr>
         <td><?= $i + 1 ?></td>
-        <td><?= htmlspecialchars($itemName, ENT_QUOTES) ?></td>
+        <td><?= htmlspecialchars($itemName, ENT_QUOTES) ?>
+          <div style="font-size:11px;color:#4b5563"><?php if ($sourceType === 'packing'): ?>From Kit: <?= htmlspecialchars((string) (($packRef['kit_name'] ?? '') ?: 'Quotation Packing List'), ENT_QUOTES) ?><?php else: ?>Extra / Outside Quotation<?php endif; ?></div>
+        </td>
         <td><?= nl2br(htmlspecialchars((string) ($line['notes'] ?? ''), ENT_QUOTES)) ?></td>
         <td><?= htmlspecialchars((string) ($line['hsn_snapshot'] ?? ''), ENT_QUOTES) ?></td>
         <td><?= htmlspecialchars((string) (!empty($line['is_cuttable_snapshot']) ? (float) ($line['length_ft'] ?? 0) : (float) ($line['qty'] ?? 0)), ENT_QUOTES) ?></td>

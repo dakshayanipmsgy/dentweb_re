@@ -1376,6 +1376,13 @@ function documents_challan_line_defaults(): array
         'unit_snapshot' => '',
         'hsn_snapshot' => '',
         'notes' => '',
+        'source_type' => 'extra',
+        'packing_ref' => [
+            'packing_list_id' => '',
+            'kit_id' => '',
+            'kit_name' => '',
+            'requirement_id' => '',
+        ],
     ];
 }
 
@@ -1404,6 +1411,14 @@ function documents_normalize_challan_lines(array $lines): array
         $row['unit_snapshot'] = safe_text((string) ($row['unit_snapshot'] ?? ''));
         $row['hsn_snapshot'] = safe_text((string) ($row['hsn_snapshot'] ?? ''));
         $row['notes'] = safe_text((string) ($row['notes'] ?? ''));
+        $row['source_type'] = in_array((string) ($row['source_type'] ?? 'extra'), ['packing', 'extra'], true) ? (string) $row['source_type'] : 'extra';
+        $packingRef = is_array($row['packing_ref'] ?? null) ? $row['packing_ref'] : [];
+        $row['packing_ref'] = [
+            'packing_list_id' => safe_text((string) ($packingRef['packing_list_id'] ?? '')),
+            'kit_id' => safe_text((string) ($packingRef['kit_id'] ?? '')),
+            'kit_name' => safe_text((string) ($packingRef['kit_name'] ?? '')),
+            'requirement_id' => safe_text((string) ($packingRef['requirement_id'] ?? $row['line_id'] ?? '')),
+        ];
         if ($row['component_id'] === '') {
             continue;
         }
@@ -3595,8 +3610,12 @@ function documents_packing_required_line_defaults(): array
 {
     return [
         'line_id' => '',
+        'kit_id' => '',
+        'kit_name_snapshot' => '',
         'component_id' => '',
         'component_name_snapshot' => '',
+        'variant_id' => '',
+        'variant_name_snapshot' => '',
         'unit' => 'pcs',
         'mode' => 'fixed_qty',
         'required_qty' => 0,
@@ -4615,8 +4634,12 @@ function documents_create_packing_list_from_quote(array $quote): array
                 $bomLine = documents_normalize_kit_bom_line($bomLineRaw, $component);
                 $line = array_merge(documents_packing_required_line_defaults(), [
                     'line_id' => (string) ($bomLine['line_id'] ?? ('line_' . bin2hex(random_bytes(4)))),
+                    'kit_id' => (string) ($kit['id'] ?? ''),
+                    'kit_name_snapshot' => (string) ($kit['name'] ?? ''),
                     'component_id' => $componentId,
                     'component_name_snapshot' => (string) ($component['name'] ?? 'Component'),
+                    'variant_id' => safe_text((string) ($bomLine['variant_id'] ?? '')),
+                    'variant_name_snapshot' => safe_text((string) (($bomLine['variant_snapshot']['display_name'] ?? $bomLine['variant_name_snapshot'] ?? ''))),
                     'unit' => (string) ($bomLine['unit'] ?? ($component['default_unit'] ?? 'pcs')),
                     'mode' => (string) ($bomLine['mode'] ?? 'fixed_qty'),
                     'remarks' => (string) ($bomLine['remarks'] ?? ''),
@@ -4694,6 +4717,8 @@ function documents_create_packing_list_from_quote(array $quote): array
             'line_id' => 'line_' . bin2hex(random_bytes(4)),
             'component_id' => $componentId,
             'component_name_snapshot' => (string) ($component['name'] ?? 'Component'),
+            'variant_id' => safe_text((string) ($item['variant_id'] ?? '')),
+            'variant_name_snapshot' => safe_text((string) (($item['variant_snapshot']['display_name'] ?? ''))),
             'unit' => $isCuttable ? 'ft' : (string) ($item['unit'] ?: ($component['default_unit'] ?? 'pcs')),
             'mode' => 'fixed_qty',
         ]);
