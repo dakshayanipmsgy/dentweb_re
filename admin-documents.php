@@ -432,15 +432,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $challan['id'] = 'dc_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
             $challan['challan_no'] = (string) ($number['challan_no'] ?? '');
-            $challan['status'] = 'Draft';
+            $challan['dc_id'] = (string) $challan['id'];
+            $challan['dc_number'] = (string) $challan['challan_no'];
+            $challan['status'] = 'draft';
             $challan['linked_quote_id'] = (string) ($quote['id'] ?? '');
             $challan['linked_quote_no'] = (string) ($quote['quote_no'] ?? '');
+            $challan['quote_id'] = (string) ($quote['id'] ?? '');
             $challan['segment'] = safe_text((string) ($quote['segment'] ?? 'RES')) ?: 'RES';
             $challan['customer_snapshot'] = $snapshot;
+            $challan['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+            $challan['customer_name_snapshot'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
             $challan['site_address'] = safe_text((string) ($quote['site_address'] ?? $snapshot['address'] ?? ''));
+            $challan['site_address_snapshot'] = $challan['site_address'];
             $challan['delivery_address'] = $challan['site_address'];
             $challan['delivery_date'] = date('Y-m-d');
             $challan['items'] = [];
+            $challan['lines'] = [];
+            $challan['inventory_txn_ids'] = [];
             $packForQuote = documents_get_packing_list_for_quote((string) ($quote['id'] ?? ''), false);
             if ($packForQuote !== null) {
                 $challan['packing_list_id'] = (string) ($packForQuote['id'] ?? '');
@@ -473,6 +481,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $challan['created_by_type'] = 'admin';
             $challan['created_by_id'] = $viewer['id'];
             $challan['created_by_name'] = $viewer['name'];
+            $challan['created_by'] = ['role' => 'admin', 'id' => (string) $viewer['id'], 'name' => (string) $viewer['name']];
             $challan['created_at'] = date('c');
             $challan['updated_at'] = date('c');
 
@@ -3209,7 +3218,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td>
               <td><?= htmlspecialchars((string) ($row['challan_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td>
               <td><?= count(is_array($row['items'] ?? null) ? $row['items'] : []) ?></td>
-              <td class="row-actions"><a class="btn secondary" href="challan-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="delivery_challan" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td>
+              <td class="row-actions"><a class="btn secondary" href="challan-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">Open Builder</a> <a class="btn secondary" href="challan-print.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View HTML</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="delivery_challan" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td>
             </tr>
           <?php endforeach; ?>
           <?php if ($packChallans === []): ?><tr><td colspan="4" class="muted">No delivery challans available.</td></tr><?php endif; ?>

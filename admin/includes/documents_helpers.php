@@ -1299,24 +1299,34 @@ function documents_challan_defaults(): array
 {
     return [
         'id' => '',
+        'dc_id' => '',
+        'dc_number' => '',
         'challan_no' => '',
-        'status' => 'Draft',
+        'status' => 'draft',
         'segment' => 'RES',
         'template_set_id' => '',
         'linked_quote_id' => '',
         'linked_quote_no' => '',
+        'quote_id' => '',
         'party_type' => 'lead',
+        'customer_mobile' => '',
+        'customer_name_snapshot' => '',
         'customer_snapshot' => documents_customer_snapshot_defaults(),
         'site_address' => '',
+        'site_address_snapshot' => '',
         'delivery_address' => '',
         'delivery_date' => '',
         'vehicle_no' => '',
         'driver_name' => '',
         'delivery_notes' => '',
+        'lines' => [],
         'items' => [],
+        'created_by' => ['role' => '', 'id' => '', 'name' => ''],
         'created_by_type' => '',
         'created_by_id' => '',
         'created_by_name' => '',
+        'inventory_txn_ids' => [],
+        'archived_flag' => false,
         'created_at' => '',
         'updated_at' => '',
         'rendering' => [
@@ -1347,6 +1357,108 @@ function documents_challan_item_defaults(): array
         'dispatch_qty' => 0,
         'dispatch_ft' => 0,
     ];
+}
+
+function documents_challan_line_defaults(): array
+{
+    return [
+        'line_id' => '',
+        'component_id' => '',
+        'component_name_snapshot' => '',
+        'has_variants_snapshot' => false,
+        'variant_id' => '',
+        'variant_name_snapshot' => '',
+        'is_cuttable_snapshot' => false,
+        'qty' => 0,
+        'length_ft' => 0,
+        'pieces' => 0,
+        'lot_ids' => [],
+        'unit_snapshot' => '',
+        'hsn_snapshot' => '',
+        'notes' => '',
+    ];
+}
+
+function documents_normalize_challan_lines(array $lines): array
+{
+    $rows = [];
+    foreach ($lines as $line) {
+        if (!is_array($line)) {
+            continue;
+        }
+        $row = array_merge(documents_challan_line_defaults(), $line);
+        $row['line_id'] = safe_text((string) ($row['line_id'] ?? ''));
+        if ($row['line_id'] === '') {
+            $row['line_id'] = 'line_' . bin2hex(random_bytes(4));
+        }
+        $row['component_id'] = safe_text((string) ($row['component_id'] ?? ''));
+        $row['component_name_snapshot'] = safe_text((string) ($row['component_name_snapshot'] ?? ''));
+        $row['has_variants_snapshot'] = !empty($row['has_variants_snapshot']);
+        $row['variant_id'] = safe_text((string) ($row['variant_id'] ?? ''));
+        $row['variant_name_snapshot'] = safe_text((string) ($row['variant_name_snapshot'] ?? ''));
+        $row['is_cuttable_snapshot'] = !empty($row['is_cuttable_snapshot']);
+        $row['qty'] = max(0, (float) ($row['qty'] ?? 0));
+        $row['length_ft'] = max(0, (float) ($row['length_ft'] ?? 0));
+        $row['pieces'] = max(0, (int) ($row['pieces'] ?? 0));
+        $row['lot_ids'] = array_values(array_filter(array_map(static fn($lotId): string => safe_text((string) $lotId), is_array($row['lot_ids'] ?? null) ? $row['lot_ids'] : []), static fn(string $lotId): bool => $lotId !== ''));
+        $row['unit_snapshot'] = safe_text((string) ($row['unit_snapshot'] ?? ''));
+        $row['hsn_snapshot'] = safe_text((string) ($row['hsn_snapshot'] ?? ''));
+        $row['notes'] = safe_text((string) ($row['notes'] ?? ''));
+        if ($row['component_id'] === '') {
+            continue;
+        }
+        if ($row['is_cuttable_snapshot']) {
+            if ($row['length_ft'] <= 0) {
+                continue;
+            }
+        } elseif ($row['qty'] <= 0) {
+            continue;
+        }
+        $rows[] = $row;
+    }
+    return $rows;
+}
+
+function documents_migrate_challan_items_to_lines(array $challan): array
+{
+    $lines = documents_normalize_challan_lines(is_array($challan['lines'] ?? null) ? $challan['lines'] : []);
+    if ($lines !== []) {
+        return $lines;
+    }
+
+    $items = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
+    $migrated = [];
+    foreach ($items as $item) {
+        $componentId = safe_text((string) ($item['component_id'] ?? ''));
+        if ($componentId === '') {
+            continue;
+        }
+        $component = documents_inventory_get_component($componentId);
+        $isCuttable = is_array($component) && !empty($component['is_cuttable']);
+        $qty = max(0, (float) ($item['dispatch_qty'] ?? $item['qty'] ?? 0));
+        $lengthFt = max(0, (float) ($item['dispatch_ft'] ?? 0));
+        if ($isCuttable && $lengthFt <= 0) {
+            $lengthFt = $qty;
+            $qty = 0;
+        }
+        $migrated[] = [
+            'line_id' => safe_text((string) ($item['line_id'] ?? '')) ?: ('line_' . bin2hex(random_bytes(4))),
+            'component_id' => $componentId,
+            'component_name_snapshot' => safe_text((string) ($item['name'] ?? $item['description'] ?? '')),
+            'has_variants_snapshot' => safe_text((string) ($item['variant_id'] ?? '')) !== '',
+            'variant_id' => safe_text((string) ($item['variant_id'] ?? '')),
+            'variant_name_snapshot' => safe_text((string) ($item['variant_name_snapshot'] ?? '')),
+            'is_cuttable_snapshot' => $isCuttable,
+            'qty' => $isCuttable ? 0 : $qty,
+            'length_ft' => $isCuttable ? $lengthFt : 0,
+            'pieces' => 0,
+            'lot_ids' => [],
+            'unit_snapshot' => safe_text((string) ($item['unit'] ?? ($isCuttable ? 'ft' : 'Nos'))),
+            'hsn_snapshot' => '',
+            'notes' => safe_text((string) ($item['remarks'] ?? $item['manual_note'] ?? '')),
+        ];
+    }
+    return documents_normalize_challan_lines($migrated);
 }
 
 function documents_normalize_challan_items(array $items): array
@@ -1383,14 +1495,7 @@ function documents_normalize_challan_items(array $items): array
 
 function documents_challan_has_valid_items(array $challan): bool
 {
-    $items = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
-    foreach ($items as $row) {
-        if ((string) ($row['name'] ?? '') !== '' && (float) ($row['qty'] ?? 0) > 0) {
-            return true;
-        }
-    }
-
-    return false;
+    return documents_migrate_challan_items_to_lines($challan) !== [];
 }
 
 function documents_generate_challan_number(string $segment): array
@@ -1421,7 +1526,23 @@ function documents_get_challan(string $id): ?array
     }
 
     $challan = array_merge(documents_challan_defaults(), $row);
+    $challan['dc_id'] = (string) ($challan['dc_id'] ?: $challan['id']);
+    $challan['dc_number'] = (string) ($challan['dc_number'] ?: $challan['challan_no']);
+    $challan['quote_id'] = (string) ($challan['quote_id'] ?: $challan['linked_quote_id']);
+    $challan['customer_mobile'] = (string) ($challan['customer_mobile'] ?: ($challan['customer_snapshot']['mobile'] ?? ''));
+    $challan['customer_name_snapshot'] = (string) ($challan['customer_name_snapshot'] ?: ($challan['customer_snapshot']['name'] ?? ''));
+    $challan['site_address_snapshot'] = (string) ($challan['site_address_snapshot'] ?: $challan['site_address']);
     $challan['customer_snapshot'] = array_merge(documents_customer_snapshot_defaults(), is_array($challan['customer_snapshot'] ?? null) ? $challan['customer_snapshot'] : []);
+    $challan['created_by'] = array_merge(['role' => '', 'id' => '', 'name' => ''], is_array($challan['created_by'] ?? null) ? $challan['created_by'] : []);
+    if ((string) $challan['created_by']['role'] === '') {
+        $challan['created_by'] = ['role' => (string) ($challan['created_by_type'] ?? ''), 'id' => (string) ($challan['created_by_id'] ?? ''), 'name' => (string) ($challan['created_by_name'] ?? '')];
+    }
+    $challan['inventory_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['inventory_txn_ids'] ?? null) ? $challan['inventory_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
+    $challan['status'] = in_array(strtolower((string) ($challan['status'] ?? 'draft')), ['draft', 'final', 'archived'], true) ? strtolower((string) $challan['status']) : 'draft';
+    if ((string) ($row['status'] ?? '') === 'Draft') { $challan['status'] = 'draft'; }
+    if ((string) ($row['status'] ?? '') === 'Issued') { $challan['status'] = 'final'; }
+    if ((string) ($row['status'] ?? '') === 'Archived') { $challan['status'] = 'archived'; }
+    $challan['lines'] = documents_migrate_challan_items_to_lines($challan);
     $challan['items'] = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
     return $challan;
 }
@@ -1440,7 +1561,23 @@ function documents_list_challans(): array
             continue;
         }
         $challan = array_merge(documents_challan_defaults(), $row);
+        $challan['dc_id'] = (string) ($challan['dc_id'] ?: $challan['id']);
+        $challan['dc_number'] = (string) ($challan['dc_number'] ?: $challan['challan_no']);
+        $challan['quote_id'] = (string) ($challan['quote_id'] ?: $challan['linked_quote_id']);
+        $challan['customer_mobile'] = (string) ($challan['customer_mobile'] ?: ($challan['customer_snapshot']['mobile'] ?? ''));
+        $challan['customer_name_snapshot'] = (string) ($challan['customer_name_snapshot'] ?: ($challan['customer_snapshot']['name'] ?? ''));
+        $challan['site_address_snapshot'] = (string) ($challan['site_address_snapshot'] ?: $challan['site_address']);
         $challan['customer_snapshot'] = array_merge(documents_customer_snapshot_defaults(), is_array($challan['customer_snapshot'] ?? null) ? $challan['customer_snapshot'] : []);
+        $challan['created_by'] = array_merge(['role' => '', 'id' => '', 'name' => ''], is_array($challan['created_by'] ?? null) ? $challan['created_by'] : []);
+        if ((string) $challan['created_by']['role'] === '') {
+            $challan['created_by'] = ['role' => (string) ($challan['created_by_type'] ?? ''), 'id' => (string) ($challan['created_by_id'] ?? ''), 'name' => (string) ($challan['created_by_name'] ?? '')];
+        }
+        $challan['inventory_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['inventory_txn_ids'] ?? null) ? $challan['inventory_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
+        $challan['status'] = in_array(strtolower((string) ($challan['status'] ?? 'draft')), ['draft', 'final', 'archived'], true) ? strtolower((string) $challan['status']) : 'draft';
+        if ((string) ($row['status'] ?? '') === 'Draft') { $challan['status'] = 'draft'; }
+        if ((string) ($row['status'] ?? '') === 'Issued') { $challan['status'] = 'final'; }
+        if ((string) ($row['status'] ?? '') === 'Archived') { $challan['status'] = 'archived'; }
+        $challan['lines'] = documents_migrate_challan_items_to_lines($challan);
         $challan['items'] = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
         $rows[] = $challan;
     }
