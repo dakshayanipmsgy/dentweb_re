@@ -470,9 +470,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'qty' => in_array($mode, ['fixed_qty', 'capacity_qty'], true) ? ($pendingFt > 0 ? $pendingFt : $pendingQty) : 0,
                         'remarks' => '',
                         'component_id' => (string) ($line['component_id'] ?? ''),
-                        'required_item_id' => (string) ($line['required_item_id'] ?? ''),
-                        'kit_id' => (string) ($line['kit_id'] ?? ''),
-                        'kit_name_snapshot' => (string) ($line['kit_name_snapshot'] ?? ''),
                         'line_id' => (string) ($line['line_id'] ?? ''),
                         'mode' => $mode,
                         'dispatch_qty' => 0,
@@ -3083,36 +3080,32 @@ usort($archivedRows, static function (array $a, array $b): int {
           <?php $packPackingList = documents_get_packing_list_for_quote($packQuoteId, $includeArchivedPack); ?>
           <h3>Packing &amp; Dispatch Status</h3>
           <?php if ($packPackingList !== null): ?>
-            <?php $packGroups = []; foreach ((array) ($packPackingList['required_items'] ?? []) as $line) { if (!is_array($line)) { continue; } $groupKey = (string) ($line['kit_id'] ?? ''); if ($groupKey === '') { $groupKey = '__direct'; } if (!isset($packGroups[$groupKey])) { $packGroups[$groupKey] = ['name' => (string) ($line['kit_name_snapshot'] ?? ''), 'items' => []]; if ($groupKey === '__direct') { $packGroups[$groupKey]['name'] = 'Direct quotation components'; } } $packGroups[$groupKey]['items'][] = $line; } ?>
-            <?php foreach ($packGroups as $group): ?>
-            <h4><?= htmlspecialchars((string) (($group['name'] ?? '') ?: 'Kit'), ENT_QUOTES) ?></h4>
             <table><thead><tr><th>Component</th><th>Mode</th><th>Required/Target</th><th>Dispatched</th><th>Status</th></tr></thead><tbody>
-              <?php foreach ((array) ($group['items'] ?? []) as $line): ?>
+              <?php foreach ((array) ($packPackingList['required_items'] ?? []) as $line): ?>
                 <?php $mode = (string) ($line['mode'] ?? 'fixed_qty'); ?>
                 <tr>
                   <td><?= htmlspecialchars((string) ($line['component_name_snapshot'] ?? ''), ENT_QUOTES) ?></td>
                   <td><?= htmlspecialchars($mode, ENT_QUOTES) ?></td>
                   <?php if ($mode === 'rule_fulfillment'): ?>
                     <td>Target <?= htmlspecialchars((string) ((float) ($line['target_wp'] ?? 0)), ENT_QUOTES) ?> Wp</td>
-                    <td><?= htmlspecialchars((string) ((float) ($line['supplied_total_wp'] ?? $line['dispatched_wp'] ?? 0)), ENT_QUOTES) ?> Wp</td>
-                    <td><?= htmlspecialchars((string) ($line['status'] ?? 'pending'), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) ((float) ($line['dispatched_wp'] ?? 0)), ENT_QUOTES) ?> Wp</td>
+                    <td><?= !empty($line['fulfilled_flag']) ? '<span class="pill" style="background:#dcfce7;color:#166534">Fulfilled</span>' : ('Remaining ' . htmlspecialchars((string) max(0, (float) ($line['target_wp'] ?? 0) - (float) ($line['dispatched_wp'] ?? 0)), ENT_QUOTES) . ' Wp') ?></td>
                   <?php elseif ($mode === 'unfixed_manual'): ?>
                     <td><?= htmlspecialchars((string) (($line['planned_note'] ?? '') ?: 'planned at dispatch'), ENT_QUOTES) ?></td>
-                    <td><?= htmlspecialchars((string) (((float) ($line['supplied_ft'] ?? $line['dispatched_ft'] ?? 0) > 0) ? (($line['supplied_ft'] ?? $line['dispatched_ft'] ?? 0) . ' ft') : (($line['supplied_qty'] ?? $line['dispatched_qty'] ?? 0) . ' ' . ($line['unit'] ?? ''))), ENT_QUOTES) ?></td>
-                    <td><?= htmlspecialchars((string) ($line['status'] ?? 'pending'), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) (((float) ($line['dispatched_ft'] ?? 0) > 0) ? (($line['dispatched_ft'] ?? 0) . ' ft') : (($line['dispatched_qty'] ?? 0) . ' ' . ($line['unit'] ?? ''))), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) ($line['dispatched_summary'] ?? ''), ENT_QUOTES) ?></td>
                   <?php else: ?>
                     <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ($line['required_ft'] . ' ft') : ($line['required_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
-                    <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? (($line['supplied_ft'] ?? $line['dispatched_ft'] ?? 0) . ' ft') : (($line['supplied_qty'] ?? $line['dispatched_qty'] ?? 0) . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
-                    <td><?= htmlspecialchars((string) ($line['status'] ?? 'pending'), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ($line['dispatched_ft'] . ' ft') : ($line['dispatched_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ('Pending ' . $line['pending_ft'] . ' ft') : ('Pending ' . $line['pending_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
                   <?php endif; ?>
                 </tr>
                 <?php if ($mode === 'rule_fulfillment' && (array) ($line['dispatch_variant_breakdown'] ?? []) !== []): ?>
                   <tr><td colspan="5"><table><thead><tr><th>Variant</th><th>Wattage</th><th>Qty</th><th>Total Wp</th></tr></thead><tbody><?php foreach ((array) ($line['dispatch_variant_breakdown'] ?? []) as $b): ?><tr><td><?= htmlspecialchars((string) ($b['variant_name_snapshot'] ?? $b['variant_id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($b['wattage_wp'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($b['dispatched_qty'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($b['dispatched_wp'] ?? 0), ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table></td></tr>
                 <?php endif; ?>
               <?php endforeach; ?>
-              <?php if ((array) ($group['items'] ?? []) === []): ?><tr><td colspan="5" class="muted">No structured items in this group.</td></tr><?php endif; ?>
+              <?php if ((array) ($packPackingList['required_items'] ?? []) === []): ?><tr><td colspan="5" class="muted">No structured items in packing list.</td></tr><?php endif; ?>
             </tbody></table>
-            <?php endforeach; ?>
             <h4>Dispatch Log</h4>
             <table><thead><tr><th>Delivery Challan</th><th>Date</th><th>Items Count</th></tr></thead><tbody>
               <?php foreach ((array) ($packPackingList['dispatch_log'] ?? []) as $dispatchRow): ?>
