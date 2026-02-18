@@ -33,47 +33,83 @@ if ($challan === null) {
     echo 'Challan not found.';
     exit;
 }
-if ($viewerType === 'employee' && ((string) ($challan['created_by_type'] ?? '') !== 'employee' || (string) ($challan['created_by_id'] ?? '') !== $viewerId)) {
+if ($viewerType === 'employee' && ((string) ($challan['created_by']['role'] ?? $challan['created_by_type'] ?? '') !== 'employee' || (string) ($challan['created_by']['id'] ?? $challan['created_by_id'] ?? '') !== $viewerId)) {
     http_response_code(403);
     echo 'Access denied.';
     exit;
 }
 
 $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
-$bg = safe_text((string) ($challan['rendering']['background_image'] ?? ''));
-if ($bg === '') {
-    $templates = json_load(documents_templates_dir() . '/template_sets.json', []);
-    if (is_array($templates)) {
-        foreach ($templates as $tpl) {
-            if (!is_array($tpl) || (string) ($tpl['id'] ?? '') !== (string) ($challan['template_set_id'] ?? '')) {
-                continue;
-            }
-            $bg = safe_text((string) ($tpl['default_doc_theme']['page_background_image'] ?? ''));
-            break;
-        }
+$lines = documents_normalize_challan_lines((array) ($challan['lines'] ?? []));
+$totalQty = 0.0;
+$totalFt = 0.0;
+foreach ($lines as $line) {
+    if (!empty($line['is_cuttable_snapshot'])) {
+        $totalFt += (float) ($line['length_ft'] ?? 0);
+    } else {
+        $totalQty += (float) ($line['qty'] ?? 0);
     }
 }
-$opacity = max(0.1, min(1.0, (float) ($challan['rendering']['background_opacity'] ?? 1)));
-?>
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delivery Challan <?= htmlspecialchars((string) $challan['challan_no'], ENT_QUOTES) ?></title>
+?><!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delivery Challan <?= htmlspecialchars((string) ($challan['dc_number'] ?: $challan['challan_no']), ENT_QUOTES) ?></title>
 <style>
-@page { size:A4; margin:14mm; }
-body { font-family: Arial, sans-serif; font-size:12px; color:#111; }
-.page-bg { position:fixed; inset:0; z-index:-1; opacity:<?= htmlspecialchars((string) $opacity, ENT_QUOTES) ?>; background: <?= $bg !== '' ? 'url(' . htmlspecialchars($bg, ENT_QUOTES) . ') center/cover no-repeat' : 'none' ?>; }
-.header { display:flex; justify-content:space-between; border-bottom:2px solid #111; margin-bottom:10px; padding-bottom:8px; }
-.title { font-size:24px; font-weight:700; margin:8px 0; text-align:center; }
-.grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-.box { border:1px solid #444; padding:8px; min-height:42px; }
-table { width:100%; border-collapse:collapse; margin-top:10px; }
-th,td { border:1px solid #444; padding:6px; vertical-align:top; }
-.sign { margin-top:40px; display:grid; grid-template-columns:1fr 1fr; gap:24px; }
-</style></head><body>
-<?php if ($bg !== ''): ?><div class="page-bg"></div><?php endif; ?>
-<div class="header"><div><strong><?= htmlspecialchars((string) ($company['brand_name'] ?: $company['company_name'] ?: 'Dakshayani Enterprises'), ENT_QUOTES) ?></strong><br><?= htmlspecialchars((string) ($company['address_line'] ?? ''), ENT_QUOTES) ?><br><?= htmlspecialchars((string) ($company['phone_primary'] ?? ''), ENT_QUOTES) ?></div><div><strong>Challan No:</strong> <?= htmlspecialchars((string) $challan['challan_no'], ENT_QUOTES) ?><br><strong>Date:</strong> <?= htmlspecialchars((string) $challan['delivery_date'], ENT_QUOTES) ?></div></div>
-<div class="title">Delivery Challan</div>
-<div class="grid"><div class="box"><strong>Customer:</strong> <?= htmlspecialchars((string) ($challan['customer_snapshot']['name'] ?? ''), ENT_QUOTES) ?><br><strong>Mobile:</strong> <?= htmlspecialchars((string) ($challan['customer_snapshot']['mobile'] ?? ''), ENT_QUOTES) ?><br><strong>Consumer Account No:</strong> <?= htmlspecialchars((string) ($challan['customer_snapshot']['consumer_account_no'] ?? ''), ENT_QUOTES) ?></div><div class="box"><strong>Delivery Address:</strong><br><?= nl2br(htmlspecialchars((string) $challan['delivery_address'], ENT_QUOTES)) ?><br><strong>Vehicle No:</strong> <?= htmlspecialchars((string) $challan['vehicle_no'], ENT_QUOTES) ?><br><strong>Driver:</strong> <?= htmlspecialchars((string) $challan['driver_name'], ENT_QUOTES) ?></div></div>
-<table><thead><tr><th>Sr</th><th>Item name + description</th><th>Unit</th><th>Qty</th><th>Remarks</th></tr></thead><tbody><?php foreach ($challan['items'] as $i => $it): ?><tr><td><?= $i + 1 ?></td><td><strong><?= htmlspecialchars((string) ($it['name'] ?? ''), ENT_QUOTES) ?></strong><br><?= htmlspecialchars((string) ($it['description'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($it['unit'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($it['qty'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($it['remarks'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; if ($challan['items']===[]): ?><tr><td colspan="5">No items listed.</td></tr><?php endif; ?></tbody></table>
-<?php if ((string) ($challan['delivery_notes'] ?? '') !== ''): ?><p><strong>Notes:</strong> <?= nl2br(htmlspecialchars((string) $challan['delivery_notes'], ENT_QUOTES)) ?></p><?php endif; ?>
-<div class="sign"><div><strong>Delivered by (Dakshayani)</strong><br><br>_______________________</div><div><strong>Received by (Customer)</strong><br><br>_______________________</div></div>
-<?php if (!isset($_GET['pdf'])): ?><script>window.print();</script><?php endif; ?>
-</body></html>
+@page { size: A4; margin: 12mm; }
+html,body{margin:0;padding:0}
+body{font-family:Arial,sans-serif;font-size:12px;color:#111;line-height:1.35}
+.doc{width:100%}
+.header{display:flex;justify-content:space-between;gap:18px;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:10px}
+.title{text-align:center;font-size:22px;font-weight:700;margin:8px 0}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.box{border:1px solid #444;padding:8px;min-height:52px}
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid #444;padding:6px;vertical-align:top}
+.footer{margin-top:16px;border-top:1px solid #444;padding-top:8px}
+.sign{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:26px}
+.no-print{display:none}
+@media print {
+  body { margin: 0; }
+  .doc { break-inside: avoid; }
+}
+</style></head><body><div class="doc">
+  <div class="header">
+    <div><strong><?= htmlspecialchars((string) ($company['brand_name'] ?: $company['company_name'] ?: 'Dakshayani Enterprises'), ENT_QUOTES) ?></strong><br>
+      <?= htmlspecialchars((string) ($company['address_line'] ?? ''), ENT_QUOTES) ?><br>
+      <?= htmlspecialchars((string) ($company['phone_primary'] ?? ''), ENT_QUOTES) ?></div>
+    <div><strong>DC No:</strong> <?= htmlspecialchars((string) ($challan['dc_number'] ?: $challan['challan_no']), ENT_QUOTES) ?><br>
+      <strong>Date:</strong> <?= htmlspecialchars((string) ($challan['delivery_date'] ?? ''), ENT_QUOTES) ?><br>
+      <strong>Quotation:</strong> <?= htmlspecialchars((string) ($challan['quote_id'] ?: $challan['linked_quote_id']), ENT_QUOTES) ?></div>
+  </div>
+
+  <div class="title">Delivery Challan</div>
+
+  <div class="meta">
+    <div class="box"><strong>Customer</strong><br><?= htmlspecialchars((string) ($challan['customer_name_snapshot'] ?: ($challan['customer_snapshot']['name'] ?? '')), ENT_QUOTES) ?><br>
+      <strong>Mobile:</strong> <?= htmlspecialchars((string) ($challan['customer_mobile'] ?: ($challan['customer_snapshot']['mobile'] ?? '')), ENT_QUOTES) ?></div>
+    <div class="box"><strong>Site/Delivery Address</strong><br><?= nl2br(htmlspecialchars((string) ($challan['site_address_snapshot'] ?: $challan['delivery_address']), ENT_QUOTES)) ?></div>
+  </div>
+
+  <table>
+    <thead><tr><th>Sr No</th><th>Item</th><th>Description/Notes</th><th>HSN</th><th>Qty/Length</th><th>Unit</th></tr></thead>
+    <tbody>
+      <?php foreach ($lines as $i => $line): $itemName = (string) ($line['component_name_snapshot'] ?? ''); if ((string) ($line['variant_name_snapshot'] ?? '') !== '') { $itemName .= ' (' . (string) ($line['variant_name_snapshot'] ?? '') . ')'; } ?>
+      <tr>
+        <td><?= $i + 1 ?></td>
+        <td><?= htmlspecialchars($itemName, ENT_QUOTES) ?></td>
+        <td><?= nl2br(htmlspecialchars((string) ($line['notes'] ?? ''), ENT_QUOTES)) ?></td>
+        <td><?= htmlspecialchars((string) ($line['hsn_snapshot'] ?? ''), ENT_QUOTES) ?></td>
+        <td><?= htmlspecialchars((string) (!empty($line['is_cuttable_snapshot']) ? (float) ($line['length_ft'] ?? 0) : (float) ($line['qty'] ?? 0)), ENT_QUOTES) ?></td>
+        <td><?= htmlspecialchars((string) ($line['unit_snapshot'] ?: (!empty($line['is_cuttable_snapshot']) ? 'ft' : 'Nos')), ENT_QUOTES) ?></td>
+      </tr>
+      <?php endforeach; ?>
+      <?php if ($lines === []): ?><tr><td colspan="6">No lines added.</td></tr><?php endif; ?>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <strong>Totals:</strong> Qty <?= htmlspecialchars((string) $totalQty, ENT_QUOTES) ?> | Length <?= htmlspecialchars((string) $totalFt, ENT_QUOTES) ?> ft
+    <div class="sign">
+      <div><strong>Prepared by</strong><br><br><br>_________________________</div>
+      <div><strong>Received by</strong><br><br><br>_________________________</div>
+    </div>
+  </div>
+</div></body></html>
