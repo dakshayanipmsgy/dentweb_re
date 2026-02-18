@@ -154,11 +154,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $lengths = is_array($_POST['line_length_ft'] ?? null) ? $_POST['line_length_ft'] : [];
             $pieces = is_array($_POST['line_pieces'] ?? null) ? $_POST['line_pieces'] : [];
             $notes = is_array($_POST['line_notes'] ?? null) ? $_POST['line_notes'] : [];
-            $lineSources = is_array($_POST['line_source_type'] ?? null) ? $_POST['line_source_type'] : [];
-            $linePackingListIds = is_array($_POST['line_packing_list_id'] ?? null) ? $_POST['line_packing_list_id'] : [];
-            $linePackingKitIds = is_array($_POST['line_packing_kit_id'] ?? null) ? $_POST['line_packing_kit_id'] : [];
-            $linePackingKitNames = is_array($_POST['line_packing_kit_name'] ?? null) ? $_POST['line_packing_kit_name'] : [];
-            $linePackingRequirementIds = is_array($_POST['line_packing_requirement_id'] ?? null) ? $_POST['line_packing_requirement_id'] : [];
             $lotIdsRows = is_array($_POST['line_lot_ids'] ?? null) ? $_POST['line_lot_ids'] : [];
 
             $lines = [];
@@ -206,7 +201,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($variantId !== '') {
                     $variantName = (string) (($variantMap[$variantId]['display_name'] ?? $variantId));
                 }
-                $sourceType = in_array((string) ($lineSources[$idx] ?? 'extra'), ['packing', 'extra'], true) ? (string) ($lineSources[$idx] ?? 'extra') : 'extra';
                 $lines[] = [
                     'line_id' => safe_text((string) ($lineIds[$idx] ?? '')) ?: ('line_' . bin2hex(random_bytes(4))),
                     'component_id' => $componentId,
@@ -222,13 +216,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'unit_snapshot' => (string) ($component['unit'] ?? ($isCuttable ? 'ft' : 'Nos')),
                     'hsn_snapshot' => (string) ($component['hsn'] ?? ''),
                     'notes' => safe_text((string) ($notes[$idx] ?? '')),
-                    'source_type' => $sourceType,
-                    'packing_ref' => [
-                        'packing_list_id' => safe_text((string) ($linePackingListIds[$idx] ?? '')),
-                        'kit_id' => safe_text((string) ($linePackingKitIds[$idx] ?? '')),
-                        'kit_name' => safe_text((string) ($linePackingKitNames[$idx] ?? '')),
-                        'requirement_id' => safe_text((string) ($linePackingRequirementIds[$idx] ?? '')),
-                    ],
                 ];
             }
 
@@ -262,23 +249,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'finalize') {
             $stock = documents_inventory_load_stock();
             $txnIds = [];
-            $packingListId = safe_text((string) ($challan['packing_list_id'] ?? ''));
-            $packingList = $packingListId !== '' ? documents_get_packing_list_for_quote((string) ($challan['quote_id'] ?? $challan['linked_quote_id'] ?? ''), false) : null;
-            if ($packingList !== null) {
-                $packingListId = (string) ($packingList['id'] ?? $packingListId);
-            }
-            $packingByReq = [];
-            if ($packingList !== null) {
-                foreach ((array) ($packingList['required_items'] ?? []) as $requiredLine) {
-                    if (!is_array($requiredLine)) {
-                        continue;
-                    }
-                    $reqId = (string) ($requiredLine['line_id'] ?? '');
-                    if ($reqId !== '') {
-                        $packingByReq[$reqId] = $requiredLine;
-                    }
-                }
-            }
 
             foreach ((array) ($challan['lines'] ?? []) as $line) {
                 if (!is_array($line)) {
@@ -289,21 +259,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $component = $componentMap[$componentId] ?? null;
                 if (!is_array($component)) {
                     $redirectWith('error', 'Component not found for one or more lines.');
-                }
-
-                if ((string) ($line['source_type'] ?? 'extra') === 'packing' && $packingList !== null) {
-                    $requirementId = (string) (($line['packing_ref']['requirement_id'] ?? '') ?: ($line['line_id'] ?? ''));
-                    $requiredLine = $packingByReq[$requirementId] ?? null;
-                    if (is_array($requiredLine)) {
-                        $pendingQty = max(0, (float) ($requiredLine['pending_qty'] ?? 0));
-                        $pendingFt = max(0, (float) ($requiredLine['pending_ft'] ?? 0));
-                        if (!empty($line['is_cuttable_snapshot']) && (float) ($line['length_ft'] ?? 0) > $pendingFt + 0.00001) {
-                            $redirectWith('error', ((string) ($line['component_name_snapshot'] ?? 'Component')) . ': requested ' . (string) ((float) ($line['length_ft'] ?? 0)) . ' ft, pending ' . (string) $pendingFt . ' ft.');
-                        }
-                        if (empty($line['is_cuttable_snapshot']) && (float) ($line['qty'] ?? 0) > $pendingQty + 0.00001) {
-                            $redirectWith('error', ((string) ($line['component_name_snapshot'] ?? 'Component')) . ': requested ' . (string) ((float) ($line['qty'] ?? 0)) . ' pcs, pending ' . (string) $pendingQty . ' pcs.');
-                        }
-                    }
                 }
 
                 $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
@@ -332,9 +287,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($needFt <= 0) {
                         continue;
                     }
-                    $availableFt = documents_inventory_total_remaining_ft($entry);
-                    if ($needFt > $availableFt + 0.00001) {
-                        $redirectWith('error', ((string) ($line['component_name_snapshot'] ?? 'Component')) . ': requested ' . (string) $needFt . ' ft, available ' . (string) $availableFt . ' ft.');
+                    if ($needFt > documents_inventory_total_remaining_ft($entry) + 0.00001) {
+                        $redirectWith('error', 'Insufficient cuttable stock for ' . (string) ($line['component_name_snapshot'] ?? 'component') . '.');
                     }
                     $selectedLotIds = is_array($line['lot_ids'] ?? null) ? $line['lot_ids'] : [];
                     if ($selectedLotIds !== []) {
@@ -353,9 +307,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($needQty <= 0) {
                         continue;
                     }
-                    $availableQty = (float) ($entry['on_hand_qty'] ?? 0);
-                    if ($needQty > $availableQty + 0.00001) {
-                        $redirectWith('error', ((string) ($line['component_name_snapshot'] ?? 'Component')) . ': requested ' . (string) $needQty . ' pcs, available ' . (string) $availableQty . ' pcs.');
+                    if ($needQty > (float) ($entry['on_hand_qty'] ?? 0) + 0.00001) {
+                        $redirectWith('error', 'Insufficient stock quantity for ' . (string) ($line['component_name_snapshot'] ?? 'component') . '.');
                     }
                     $consumed = documents_inventory_consume_from_location_breakdown($entry, $needQty, '');
                     if (!($consumed['ok'] ?? false)) {
@@ -376,33 +329,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!($savedStock['ok'] ?? false)) {
                 $redirectWith('error', 'Failed to update inventory stock.');
             }
-
-            if ($packingList !== null) {
-                $dispatchRows = [];
-                foreach ((array) ($challan['lines'] ?? []) as $line) {
-                    if (!is_array($line) || (string) ($line['source_type'] ?? 'extra') !== 'packing') {
-                        continue;
-                    }
-                    $dispatchRows[] = [
-                        'line_id' => (string) (($line['packing_ref']['requirement_id'] ?? '') ?: ($line['line_id'] ?? '')),
-                        'component_id' => (string) ($line['component_id'] ?? ''),
-                        'dispatch_qty' => max(0, (float) ($line['qty'] ?? 0)),
-                        'dispatch_ft' => max(0, (float) ($line['length_ft'] ?? 0)),
-                        'dispatch_wp' => 0,
-                        'variant_id' => (string) ($line['variant_id'] ?? ''),
-                        'variant_name_snapshot' => (string) ($line['variant_name_snapshot'] ?? ''),
-                    ];
-                }
-                if ($dispatchRows !== []) {
-                    $packingList = documents_apply_dispatch_to_packing_list($packingList, (string) ($challan['id'] ?? ''), $dispatchRows);
-                    $savedPacking = documents_save_packing_list($packingList);
-                    if (!($savedPacking['ok'] ?? false)) {
-                        $redirectWith('error', 'Inventory updated, but packing list update failed.');
-                    }
-                }
-            }
-
-            $challan['packing_list_id'] = $packingListId;
             $challan['inventory_txn_ids'] = $txnIds;
             $challan['status'] = 'final';
         }
@@ -439,101 +365,6 @@ $statusParam = safe_text($_GET['status'] ?? '');
 $messageParam = safe_text($_GET['message'] ?? '');
 $editable = (string) ($challan['status'] ?? 'draft') === 'draft';
 $stockSnapshot = documents_inventory_load_stock();
-$packingList = null;
-$kitPanels = [];
-$kitNameList = [];
-$packingListId = safe_text((string) ($challan['packing_list_id'] ?? ''));
-$quoteId = safe_text((string) ($challan['quote_id'] ?: $challan['linked_quote_id']));
-if ($quoteId !== '') {
-    $packingList = documents_get_packing_list_for_quote($quoteId, false);
-}
-if ($packingList !== null) {
-    $packingListId = (string) ($packingList['id'] ?? $packingListId);
-    foreach ((array) ($packingList['required_items'] ?? []) as $line) {
-        if (!is_array($line)) {
-            continue;
-        }
-        $componentId = (string) ($line['component_id'] ?? '');
-        if ($componentId === '') {
-            continue;
-        }
-        $component = $componentMap[$componentId] ?? null;
-        if (!is_array($component)) {
-            continue;
-        }
-        $kitId = (string) ($line['kit_id'] ?? '');
-        $kitName = (string) ($line['kit_name_snapshot'] ?? '');
-        if ($kitName === '') {
-            $kitName = $kitId !== '' ? ('Kit ' . $kitId) : 'Non-kit requirements';
-        }
-        $bucketKey = $kitId !== '' ? ('kit_' . $kitId) : '__no_kit';
-        if (!isset($kitPanels[$bucketKey])) {
-            $kitPanels[$bucketKey] = ['kit_id' => $kitId, 'kit_name' => $kitName, 'items' => []];
-        }
-        if ($kitName !== '' && !in_array($kitName, $kitNameList, true)) {
-            $kitNameList[] = $kitName;
-        }
-
-        $isCuttable = !empty($component['is_cuttable']);
-        $pendingQty = max(0, (float) ($line['pending_qty'] ?? 0));
-        $pendingFt = max(0, (float) ($line['pending_ft'] ?? 0));
-        $requiredQty = max(0, (float) ($line['required_qty'] ?? 0));
-        $requiredFt = max(0, (float) ($line['required_ft'] ?? 0));
-        $dispatchedQty = max(0, (float) ($line['dispatched_qty'] ?? 0));
-        $dispatchedFt = max(0, (float) ($line['dispatched_ft'] ?? 0));
-
-        $readyNow = 0.0;
-        $readyVariants = [];
-        $fixedVariantId = safe_text((string) ($line['variant_id'] ?? ''));
-        $fixedVariantName = safe_text((string) ($line['variant_name_snapshot'] ?? ''));
-        if ($isCuttable) {
-            $entry = documents_inventory_component_stock($stockSnapshot, $componentId, $fixedVariantId);
-            $readyNow = documents_inventory_total_remaining_ft($entry);
-        } else {
-            if (!empty($component['has_variants'])) {
-                if ($fixedVariantId !== '') {
-                    $entry = documents_inventory_component_stock($stockSnapshot, $componentId, $fixedVariantId);
-                    $readyNow = (float) ($entry['on_hand_qty'] ?? 0);
-                    $readyVariants[] = ['id' => $fixedVariantId, 'name' => $fixedVariantName !== '' ? $fixedVariantName : ((string) (($variantMap[$fixedVariantId]['display_name'] ?? $fixedVariantId))), 'qty' => $readyNow];
-                } else {
-                    foreach ((array) ($variantsByComponent[$componentId] ?? []) as $variantRow) {
-                        $variantId = (string) ($variantRow['id'] ?? '');
-                        if ($variantId === '') {
-                            continue;
-                        }
-                        $entry = documents_inventory_component_stock($stockSnapshot, $componentId, $variantId);
-                        $qty = (float) ($entry['on_hand_qty'] ?? 0);
-                        if ($qty <= 0) {
-                            continue;
-                        }
-                        $readyNow += $qty;
-                        $readyVariants[] = ['id' => $variantId, 'name' => (string) ($variantRow['name'] ?? $variantId), 'qty' => $qty];
-                    }
-                }
-            } else {
-                $entry = documents_inventory_component_stock($stockSnapshot, $componentId, '');
-                $readyNow = (float) ($entry['on_hand_qty'] ?? 0);
-            }
-        }
-
-        $kitPanels[$bucketKey]['items'][] = [
-            'line_id' => (string) ($line['line_id'] ?? ''),
-            'component_id' => $componentId,
-            'component_name' => (string) ($line['component_name_snapshot'] ?? ($component['name'] ?? $componentId)),
-            'variant_id' => $fixedVariantId,
-            'variant_name' => $fixedVariantName,
-            'required' => $isCuttable ? $requiredFt : $requiredQty,
-            'dispatched' => $isCuttable ? $dispatchedFt : $dispatchedQty,
-            'pending' => $isCuttable ? $pendingFt : $pendingQty,
-            'ready_now' => max(0, $readyNow),
-            'is_cuttable' => $isCuttable,
-            'has_variants' => !empty($component['has_variants']),
-            'ready_variants' => $readyVariants,
-            'unit' => $isCuttable ? 'ft' : ((string) ($line['unit'] ?? 'Nos')),
-        ];
-    }
-    $kitPanels = array_values($kitPanels);
-}
 ?><!doctype html>
 <html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Delivery Challan Builder</title>
 <style>
@@ -557,69 +388,12 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 </div>
 <div style="margin-top:8px"><label>Delivery Notes</label><textarea name="delivery_notes" <?= $editable ? '' : 'disabled' ?>><?= htmlspecialchars((string) ($challan['delivery_notes'] ?? ''), ENT_QUOTES) ?></textarea></div>
 
-<h3>Quotation Kits / Packing List</h3>
-<?php if ($kitPanels === []): ?>
-<p class="muted">No packing list linked to this quotation.</p>
-<?php else: ?>
-<?php foreach ($kitPanels as $kitPanel): ?>
-<div class="card" style="margin:8px 0;padding:10px;background:#f8fbff">
-  <strong>🧩 Kit: <?= htmlspecialchars((string) ($kitPanel['kit_name'] ?? 'Kit'), ENT_QUOTES) ?></strong>
-  <table style="margin-top:8px"><thead><tr><th>Component</th><th>Required</th><th>Dispatched</th><th>Pending</th><th>Ready now</th><th>Action</th></tr></thead><tbody>
-  <?php foreach ((array) ($kitPanel['items'] ?? []) as $req):
-    $canAdd = ((float) ($req['ready_now'] ?? 0) > 0.00001) && ((float) ($req['pending'] ?? 0) > 0.00001);
-    $prefill = min((float) ($req['ready_now'] ?? 0), (float) ($req['pending'] ?? 0));
-  ?>
-  <tr>
-    <td>
-      <?= htmlspecialchars((string) ($req['component_name'] ?? ''), ENT_QUOTES) ?>
-      <?php if ((string) ($req['variant_id'] ?? '') !== ''): ?><div class="muted">Variant: <?= htmlspecialchars((string) ($req['variant_name'] ?: $req['variant_id']), ENT_QUOTES) ?></div><?php endif; ?>
-      <?php if ((string) ($req['variant_id'] ?? '') === '' && !empty($req['has_variants']) && !$req['is_cuttable']): ?>
-      <select class="packing-variant-select" data-requirement-id="<?= htmlspecialchars((string) ($req['line_id'] ?? ''), ENT_QUOTES) ?>">
-        <option value="">Select variant</option>
-        <?php foreach ((array) ($req['ready_variants'] ?? []) as $readyVariant): ?>
-          <option value="<?= htmlspecialchars((string) ($readyVariant['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($readyVariant['name'] ?? ''), ENT_QUOTES) ?> (<?= htmlspecialchars((string) ((float) ($readyVariant['qty'] ?? 0)), ENT_QUOTES) ?>)</option>
-        <?php endforeach; ?>
-      </select>
-      <?php endif; ?>
-    </td>
-    <td><?= htmlspecialchars((string) ((float) ($req['required'] ?? 0)), ENT_QUOTES) ?> <?= htmlspecialchars((string) ($req['unit'] ?? ''), ENT_QUOTES) ?></td>
-    <td><?= htmlspecialchars((string) ((float) ($req['dispatched'] ?? 0)), ENT_QUOTES) ?> <?= htmlspecialchars((string) ($req['unit'] ?? ''), ENT_QUOTES) ?></td>
-    <td><?= htmlspecialchars((string) ((float) ($req['pending'] ?? 0)), ENT_QUOTES) ?> <?= htmlspecialchars((string) ($req['unit'] ?? ''), ENT_QUOTES) ?></td>
-    <td><?= htmlspecialchars((string) ((float) ($req['ready_now'] ?? 0)), ENT_QUOTES) ?> <?= htmlspecialchars((string) ($req['unit'] ?? ''), ENT_QUOTES) ?></td>
-    <td>
-      <button type="button" class="btn secondary add-from-packing" <?= $editable && $canAdd ? '' : 'disabled' ?>
-        data-packing-list-id="<?= htmlspecialchars($packingListId, ENT_QUOTES) ?>"
-        data-kit-id="<?= htmlspecialchars((string) ($kitPanel['kit_id'] ?? ''), ENT_QUOTES) ?>"
-        data-kit-name="<?= htmlspecialchars((string) ($kitPanel['kit_name'] ?? ''), ENT_QUOTES) ?>"
-        data-line-id="<?= htmlspecialchars((string) ($req['line_id'] ?? ''), ENT_QUOTES) ?>"
-        data-component-id="<?= htmlspecialchars((string) ($req['component_id'] ?? ''), ENT_QUOTES) ?>"
-        data-fixed-variant-id="<?= htmlspecialchars((string) ($req['variant_id'] ?? ''), ENT_QUOTES) ?>"
-        data-prefill="<?= htmlspecialchars((string) $prefill, ENT_QUOTES) ?>"
-        data-is-cuttable="<?= !empty($req['is_cuttable']) ? '1' : '0' ?>">Add to DC</button>
-    </td>
-  </tr>
-  <?php endforeach; ?>
-  </tbody></table>
-</div>
-<?php endforeach; ?>
-<?php endif; ?>
-
-<div class="row-actions" style="margin:10px 0">
-  <button type="button" id="add-extra-line" class="btn secondary" <?= $editable ? '' : 'disabled' ?>>➕ Add Extra Item (Outside Quotation)</button>
-</div>
-
 <h3>DC Lines</h3>
-<table id="dc-lines"><thead><tr><th style="width:20%">Component</th><th style="width:12%">Variant</th><th style="width:8%">Qty</th><th style="width:10%">Length(ft)</th><th style="width:9%">Pieces</th><th style="width:16%">Lot Selection</th><th style="width:17%">Notes</th><th style="width:8%">Actions</th></tr></thead><tbody>
-<?php foreach ((array) ($challan['lines'] ?? []) as $lineIdx => $line): if (!is_array($line)) { continue; } $componentId=(string)($line['component_id']??''); $variantId=(string)($line['variant_id']??''); $entry=documents_inventory_component_stock($stockSnapshot,$componentId,$variantId); $sourceType=(string)($line['source_type']??'extra'); $packingRef=is_array($line['packing_ref']??null)?$line['packing_ref']:[]; ?>
-<tr class="dc-line-row" data-source-type="<?= htmlspecialchars($sourceType, ENT_QUOTES) ?>">
+<table id="dc-lines"><thead><tr><th style="width:18%">Component</th><th style="width:14%">Variant</th><th style="width:8%">Qty</th><th style="width:10%">Length(ft)</th><th style="width:9%">Pieces</th><th style="width:17%">Lot Selection</th><th>Notes</th><th style="width:10%">Actions</th></tr></thead><tbody>
+<?php foreach ((array) ($challan['lines'] ?? []) as $lineIdx => $line): if (!is_array($line)) { continue; } $componentId=(string)($line['component_id']??''); $variantId=(string)($line['variant_id']??''); $entry=documents_inventory_component_stock($stockSnapshot,$componentId,$variantId); ?>
+<tr class="dc-line-row">
 <td>
 <input type="hidden" name="line_id[]" value="<?= htmlspecialchars((string) ($line['line_id'] ?? ''), ENT_QUOTES) ?>" />
-<input type="hidden" name="line_source_type[]" class="line-source-type" value="<?= htmlspecialchars($sourceType, ENT_QUOTES) ?>" />
-<input type="hidden" name="line_packing_list_id[]" value="<?= htmlspecialchars((string) ($packingRef['packing_list_id'] ?? ''), ENT_QUOTES) ?>" />
-<input type="hidden" name="line_packing_kit_id[]" value="<?= htmlspecialchars((string) ($packingRef['kit_id'] ?? ''), ENT_QUOTES) ?>" />
-<input type="hidden" name="line_packing_kit_name[]" value="<?= htmlspecialchars((string) ($packingRef['kit_name'] ?? ''), ENT_QUOTES) ?>" />
-<input type="hidden" name="line_packing_requirement_id[]" value="<?= htmlspecialchars((string) ($packingRef['requirement_id'] ?? ''), ENT_QUOTES) ?>" />
-<div class="muted" style="margin-bottom:4px"><?= $sourceType === 'packing' ? 'From Quotation Packing List' : 'Extra / Outside Quotation' ?></div>
 <select name="line_component_id[]" class="component-select" <?= $editable ? '' : 'disabled' ?>><option value="">Select</option><?php foreach ($componentMap as $cmpId => $cmp): ?><option value="<?= htmlspecialchars($cmpId, ENT_QUOTES) ?>" <?= $cmpId===$componentId?'selected':'' ?>><?= htmlspecialchars((string) ($cmp['name'] ?? $cmpId), ENT_QUOTES) ?></option><?php endforeach; ?></select>
 </td>
 <td><select name="line_variant_id[]" class="variant-select" <?= $editable ? '' : 'disabled' ?>><option value="">N/A</option><?php foreach ((array) ($variantsByComponent[$componentId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variant['id'] ?? ''))===$variantId?'selected':'' ?>><?= htmlspecialchars((string) ($variant['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td>
@@ -637,6 +411,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <?php endforeach; ?>
 </tbody></table>
 <?php if ($editable): ?><p style="margin-top:8px"><button type="button" id="add-line" class="btn secondary">+ Add Line</button></p><?php endif; ?>
+
 <div class="row-actions" style="margin-top:12px">
 <?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="finalize">Finalize DC</button><?php endif; ?>
 <?php if ((string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php endif; ?>
@@ -649,31 +424,11 @@ const VARIANTS = <?= json_encode($variantsByComponent, JSON_UNESCAPED_SLASHES | 
 const editable = <?= $editable ? 'true' : 'false' ?>;
 if (editable) {
   const tbody = document.querySelector('#dc-lines tbody');
-  const componentOptions = Object.values(COMPONENTS).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
   const templateRow = () => {
     const tr = document.createElement('tr');
     tr.className = 'dc-line-row';
-    tr.dataset.sourceType = 'extra';
-    tr.innerHTML = `<td>
-      <input type="hidden" name="line_id[]" value="line_${Math.random().toString(16).slice(2)}"/>
-      <input type="hidden" name="line_source_type[]" class="line-source-type" value="extra"/>
-      <input type="hidden" name="line_packing_list_id[]" value=""/>
-      <input type="hidden" name="line_packing_kit_id[]" value=""/>
-      <input type="hidden" name="line_packing_kit_name[]" value=""/>
-      <input type="hidden" name="line_packing_requirement_id[]" value=""/>
-      <div class="muted line-source-label" style="margin-bottom:4px">Extra / Outside Quotation</div>
-      <select name="line_component_id[]" class="component-select"><option value="">Select</option>${componentOptions}</select>
-    </td><td><select name="line_variant_id[]" class="variant-select"><option value="">N/A</option></select></td><td><input type="number" step="0.01" min="0" name="line_qty[]" class="qty-input" value="0"></td><td><input type="number" step="0.01" min="0" name="line_length_ft[]" class="length-input" value="0"></td><td><input type="number" step="1" min="0" name="line_pieces[]" value="0"></td><td class="lot-cell"></td><td><input name="line_notes[]" value=""></td><td class="row-actions"><button type="button" class="btn secondary duplicate-line">+</button><button type="button" class="btn warn remove-line">×</button></td>`;
+    tr.innerHTML = `<td><input type="hidden" name="line_id[]" value="line_${Math.random().toString(16).slice(2)}"/><select name="line_component_id[]" class="component-select"><option value="">Select</option>${Object.values(COMPONENTS).map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></td><td><select name="line_variant_id[]" class="variant-select"><option value="">N/A</option></select></td><td><input type="number" step="0.01" min="0" name="line_qty[]" class="qty-input" value="0"></td><td><input type="number" step="0.01" min="0" name="line_length_ft[]" class="length-input" value="0"></td><td><input type="number" step="1" min="0" name="line_pieces[]" value="0"></td><td class="lot-cell"></td><td><input name="line_notes[]" value=""></td><td class="row-actions"><button type="button" class="btn secondary duplicate-line">+</button><button type="button" class="btn warn remove-line">×</button></td>`;
     return tr;
-  };
-
-  const setRowSourceLabel = (tr, sourceType) => {
-    tr.dataset.sourceType = sourceType;
-    tr.querySelector('.line-source-type').value = sourceType;
-    const label = tr.querySelector('.line-source-label');
-    if (label) {
-      label.textContent = sourceType === 'packing' ? 'From Quotation Packing List' : 'Extra / Outside Quotation';
-    }
   };
 
   const wireRow = (tr) => {
@@ -722,58 +477,12 @@ if (editable) {
     refreshForComponent();
   };
 
-  const addExtraLine = () => {
-    const row = templateRow();
-    tbody.appendChild(row);
-    wireRow(row);
-  };
-
-  const addPackingLine = (btn) => {
-    const row = templateRow();
-    tbody.appendChild(row);
-    wireRow(row);
-    setRowSourceLabel(row, 'packing');
-
-    const componentSelect = row.querySelector('.component-select');
-    const variantSelect = row.querySelector('.variant-select');
-    const qtyInput = row.querySelector('.qty-input');
-    const lengthInput = row.querySelector('.length-input');
-
-    componentSelect.value = btn.dataset.componentId || '';
-    componentSelect.dispatchEvent(new Event('change'));
-
-    const requirementId = btn.dataset.lineId || '';
-    const variantPick = document.querySelector(`.packing-variant-select[data-requirement-id="${CSS.escape(requirementId)}"]`);
-    const fixedVariantId = btn.dataset.fixedVariantId || '';
-    const chosenVariantId = fixedVariantId || (variantPick ? variantPick.value : '');
-    if (!fixedVariantId && variantPick && chosenVariantId === '') {
-      alert('Please choose a variant for this packing item.');
-      row.remove();
-      return;
-    }
-    if (chosenVariantId) {
-      variantSelect.value = chosenVariantId;
-    }
-
-    row.querySelector('input[name="line_packing_list_id[]"]').value = btn.dataset.packingListId || '';
-    row.querySelector('input[name="line_packing_kit_id[]"]').value = btn.dataset.kitId || '';
-    row.querySelector('input[name="line_packing_kit_name[]"]').value = btn.dataset.kitName || '';
-    row.querySelector('input[name="line_packing_requirement_id[]"]').value = requirementId;
-
-    const prefill = parseFloat(btn.dataset.prefill || '0') || 0;
-    if ((btn.dataset.isCuttable || '') === '1') {
-      lengthInput.value = prefill.toFixed(2);
-      qtyInput.value = '0';
-    } else {
-      qtyInput.value = prefill.toFixed(2);
-      lengthInput.value = '0';
-    }
-  };
-
   document.querySelectorAll('.dc-line-row').forEach(wireRow);
-  document.getElementById('add-line')?.addEventListener('click', addExtraLine);
-  document.getElementById('add-extra-line')?.addEventListener('click', addExtraLine);
-  document.querySelectorAll('.add-from-packing').forEach(btn => btn.addEventListener('click', () => addPackingLine(btn)));
+  document.getElementById('add-line')?.addEventListener('click', () => {
+    const row = templateRow();
+    tbody.appendChild(row);
+    wireRow(row);
+  });
 }
 </script>
 </body></html>
