@@ -91,6 +91,66 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
         ? (array) $quote['calc']
         : documents_calc_quote_pricing_with_tax_profile($quote, $transport, $subsidy, (float) ($quote['input_total_gst_inclusive'] ?? 0), $quoteDefaults);
     $ann = is_array($quote['annexures_overrides'] ?? null) ? $quote['annexures_overrides'] : [];
+    $templateSetId = safe_text((string) ($quote['template_set_id'] ?? ''));
+    if ($templateSetId !== '') {
+        $templateBlocks = documents_get_template_blocks();
+        $templateAnnex = documents_quote_annexure_from_template($templateBlocks, $templateSetId);
+        foreach ($templateAnnex as $annKey => $annValue) {
+            if (trim((string) ($ann[$annKey] ?? '')) === '' && trim((string) $annValue) !== '') {
+                $ann[$annKey] = (string) $annValue;
+            }
+        }
+    }
+
+    $quoteItems = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
+    $itemRows = [];
+    foreach ($quoteItems as $quoteItem) {
+        if (!is_array($quoteItem)) {
+            continue;
+        }
+        $lineType = (string) ($quoteItem['type'] ?? 'component');
+        $qty = (float) ($quoteItem['qty'] ?? 0);
+        if ($qty <= 0) {
+            continue;
+        }
+        if ($lineType === 'kit') {
+            $kit = documents_inventory_get_kit((string) ($quoteItem['kit_id'] ?? ''));
+            $kitName = safe_text((string) ($quoteItem['name_snapshot'] ?? ''));
+            if ($kitName === '') {
+                $kitName = safe_text((string) ($kit['name'] ?? 'Kit'));
+            }
+            $itemRows[] = [
+                'sort' => 0,
+                'name' => '🧩 KIT: ' . ($kitName !== '' ? $kitName : 'Kit'),
+                'description' => safe_text((string) ($kit['description'] ?? '')) ?: 'As per kit inclusions',
+                'hsn' => safe_text((string) ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')) ?: '8541',
+                'qty' => $qty,
+                'unit' => safe_text((string) ($quoteItem['unit'] ?? '')) ?: 'set',
+            ];
+            continue;
+        }
+
+        $component = documents_inventory_get_component((string) ($quoteItem['component_id'] ?? ''));
+        $variantSnapshot = is_array($quoteItem['variant_snapshot'] ?? null) ? $quoteItem['variant_snapshot'] : [];
+        $name = safe_text((string) ($quoteItem['name_snapshot'] ?? ''));
+        if ($name === '') {
+            $name = safe_text((string) ($component['name'] ?? 'Component'));
+            $variantName = safe_text((string) ($variantSnapshot['display_name'] ?? ''));
+            if ($variantName !== '') {
+                $name .= ' (' . $variantName . ')';
+            }
+        }
+        $itemRows[] = [
+            'sort' => 1,
+            'name' => $name,
+            'description' => safe_text((string) ($component['notes'] ?? '')),
+            'hsn' => safe_text((string) ($component['hsn'] ?? '')) ?: (safe_text((string) ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')) ?: '8541'),
+            'qty' => $qty,
+            'unit' => safe_text((string) ($quoteItem['unit'] ?? '')) ?: safe_text((string) ($component['default_unit'] ?? '')),
+        ];
+    }
+    usort($itemRows, static fn(array $a, array $b): int => ((int) ($a['sort'] ?? 1)) <=> ((int) ($b['sort'] ?? 1)));
+
     $coverNote = trim((string) ($quote['cover_note_text'] ?? '')) ?: trim((string) ($quoteDefaults['defaults']['cover_note_template'] ?? ''));
     $specialReq = trim((string) ($quote['special_requests_text'] ?? $quote['special_requests_inclusive'] ?? ''));
 
@@ -167,7 +227,7 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
 <style>
 :root{--color-primary:<?= htmlspecialchars((string)($colors['primary'] ?? '#0ea5e9'), ENT_QUOTES) ?>;--color-accent:<?= htmlspecialchars((string)($colors['accent'] ?? '#22c55e'), ENT_QUOTES) ?>;--color-text:<?= htmlspecialchars((string)($colors['text'] ?? '#0f172a'), ENT_QUOTES) ?>;--color-muted:<?= htmlspecialchars((string)($colors['muted_text'] ?? '#475569'), ENT_QUOTES) ?>;--page-bg:<?= htmlspecialchars((string)($colors['page_bg'] ?? '#f8fafc'), ENT_QUOTES) ?>;--card-bg:<?= htmlspecialchars((string)($colors['card_bg'] ?? '#ffffff'), ENT_QUOTES) ?>;--border-color:<?= htmlspecialchars((string)($colors['border'] ?? '#e2e8f0'), ENT_QUOTES) ?>;--base-font-size:<?= (int)($typo['base_px'] ?? 14) ?>px;--h1-size:<?= (int)($typo['h1_px'] ?? 24) ?>px;--h2-size:<?= (int)($typo['h2_px'] ?? 18) ?>px;--h3-size:<?= (int)($typo['h3_px'] ?? 16) ?>px;--line-height:<?= (float)($typo['line_height'] ?? 1.6) ?>;--shadow-preset:<?= quotation_shadow_css((string)($tokens['shadow'] ?? 'soft')) ?>;--header-bg:<?= htmlspecialchars($headerBg, ENT_QUOTES) ?>;--footer-bg:<?= htmlspecialchars($footerBg, ENT_QUOTES) ?>;--header-text-color:<?= htmlspecialchars($headerText, ENT_QUOTES) ?>;--footer-text-color:<?= htmlspecialchars($footerText, ENT_QUOTES) ?>}
 body{font-family:Inter,Arial,sans-serif;background:var(--page-bg);margin:0;color:var(--color-text);font-size:var(--base-font-size);line-height:var(--line-height)}
-h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-size)}.wrap{max-width:1100px;margin:0 auto;padding:12px}.card{background:var(--card-bg);border:1px solid var(--border-color);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow-preset)}.h{font-weight:700}.sec{border-bottom:2px solid var(--color-primary);padding-bottom:5px;margin-bottom:8px}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bank-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.metric{background:var(--page-bg);border:1px solid var(--border-color);border-radius:10px;padding:8px}.hero{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.hero .metric b{display:block;font-size:1.2rem;margin-top:4px}.save-line{margin-top:10px;padding:10px 12px;border:1px solid #86efac;background:#f0fdf4;color:#166534;border-radius:10px;font-weight:700}.chip{background:#ccfbf1;color:#134e4a;border-radius:99px;padding:5px 10px;display:inline-block;margin:3px 6px 0 0}.muted{color:var(--color-muted)}table{width:100%;border-collapse:collapse}th,td{border:1px solid var(--border-color);padding:8px;text-align:left}th{background:#f8fafc}.right{text-align:right}.center{text-align:center}.footer{background:var(--footer-bg);color:var(--footer-text-color)}.footer a,.footer a:visited{color:var(--footer-text-color)}.footer-brand-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}.footer-logo{display:inline-flex;align-items:center;justify-content:center}.footer-logo img{max-height:38px;width:auto;display:block}.footer-brand-name{color:var(--footer-text-color);font-size:1.1em;font-weight:700;line-height:1.3}.header{background:var(--header-bg);color:var(--header-text-color)}.header a,.header a:visited{color:var(--header-text-color)}.header-top{display:flex;align-items:center;gap:12px}.header-logo{background:rgba(255,255,255,.18);padding:4px 8px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center}.header-logo img{max-height:50px;width:auto;display:block}.header-main{min-width:0}.screen-only{display:block}.hide-print{display:block}.chart-block{margin-bottom:12px}.chart-title{font-weight:700;margin:2px 0 8px}.chart-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}.legend-item{display:flex;align-items:center;gap:6px;font-size:.92rem}.legend-swatch{width:12px;height:12px;border-radius:3px;display:inline-block}.bar-chart,.bar-chart *{box-sizing:border-box}.bar-chart{position:relative;overflow:hidden;display:flex;align-items:flex-end;justify-content:space-around;gap:10px;min-height:220px;padding:10px 12px 14px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.bar-wrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;min-width:0}.bar-area{height:160px;width:100%;padding:8px 8px 0;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}.bar{width:min(52px,100%);max-height:100%;border-radius:8px 8px 4px 4px;min-height:2px}.bar-label{font-size:.82rem;text-align:center;line-height:1.35;width:100%;overflow-wrap:anywhere}.axis-label{font-size:.82rem;color:var(--color-muted);text-align:center;margin-top:6px}.line-chart svg{width:100%;height:220px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.payback-meter{width:100%;height:16px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px}.payback-meter-fill{height:100%;background:linear-gradient(to right,var(--color-primary),var(--color-accent));width:0}.scenario-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}@media (max-width:700px){.header-top{flex-direction:column;align-items:flex-start}.footer-brand-row{align-items:flex-start}.scenario-grid{grid-template-columns:1fr}.bank-grid{grid-template-columns:1fr}}@media print{.hide-print,.screen-only{display:none!important}.card{break-inside:avoid;box-shadow:none}}</style>
+h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-size)}.wrap{max-width:1100px;margin:0 auto;padding:12px}.card{background:var(--card-bg);border:1px solid var(--border-color);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow-preset)}.h{font-weight:700}.sec{border-bottom:2px solid var(--color-primary);padding-bottom:5px;margin-bottom:8px}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bank-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.metric{background:var(--page-bg);border:1px solid var(--border-color);border-radius:10px;padding:8px}.hero{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.hero .metric b{display:block;font-size:1.2rem;margin-top:4px}.save-line{margin-top:10px;padding:10px 12px;border:1px solid #86efac;background:#f0fdf4;color:#166534;border-radius:10px;font-weight:700}.chip{background:#ccfbf1;color:#134e4a;border-radius:99px;padding:5px 10px;display:inline-block;margin:3px 6px 0 0}.muted{color:var(--color-muted)}table{width:100%;border-collapse:collapse}th,td{border:1px solid var(--border-color);padding:8px;text-align:left}th{background:#f8fafc}.right{text-align:right}.center{text-align:center}.footer{background:var(--footer-bg);color:var(--footer-text-color)}.footer a,.footer a:visited{color:var(--footer-text-color)}.footer-brand-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}.footer-logo{display:inline-flex;align-items:center;justify-content:center}.footer-logo img{max-height:38px;width:auto;display:block}.footer-brand-name{color:var(--footer-text-color);font-size:1.1em;font-weight:700;line-height:1.3}.header{background:var(--header-bg);color:var(--header-text-color)}.header a,.header a:visited{color:var(--header-text-color)}.header-top{display:flex;align-items:center;gap:12px}.header-logo{background:rgba(255,255,255,.18);padding:4px 8px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center}.header-logo img{max-height:50px;width:auto;display:block}.header-main{min-width:0}.screen-only{display:block}.hide-print{display:block}.chart-block{margin-bottom:12px;break-inside:avoid;page-break-inside:avoid}.chart-title{font-weight:700;margin:2px 0 8px}.chart-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}.legend-item{display:flex;align-items:center;gap:6px;font-size:.92rem}.legend-swatch{width:12px;height:12px;border-radius:3px;display:inline-block}.bar-chart,.bar-chart *{box-sizing:border-box}.bar-chart{position:relative;overflow:hidden;display:flex;align-items:flex-end;justify-content:space-around;gap:10px;min-height:220px;padding:10px 12px 14px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.bar-wrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;min-width:0}.bar-area{height:160px;width:100%;padding:8px 8px 0;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}.bar{width:min(52px,100%);max-height:100%;border-radius:8px 8px 4px 4px;min-height:2px}.bar-label{font-size:.82rem;text-align:center;line-height:1.35;width:100%;overflow-wrap:anywhere}.axis-label{font-size:.82rem;color:var(--color-muted);text-align:center;margin-top:6px}.line-chart svg{width:100%;height:220px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.chart-print-img{display:none;width:100%;height:auto;max-width:100%;border:1px solid var(--border-color);border-radius:10px;background:#fff}.payback-meter{width:100%;height:16px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px}.payback-meter-fill{height:100%;background:linear-gradient(to right,var(--color-primary),var(--color-accent));width:0}.scenario-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}@media (max-width:700px){.header-top{flex-direction:column;align-items:flex-start}.footer-brand-row{align-items:flex-start}.scenario-grid{grid-template-columns:1fr}.bank-grid{grid-template-columns:1fr}}@media print{.hide-print,.screen-only{display:none!important}.card{break-inside:avoid;box-shadow:none}.chart-block,.bar-chart,.line-chart{overflow:visible!important;height:auto!important}.bar-chart,.line-chart svg{display:none!important}.chart-print-img{display:block!important}}</style>
 </head><body><div id="quotation-root" class="wrap">
 <section class="card header"><div class="header-top"><?php if ($hasLogo): ?><div class="header-logo"><img src="<?= htmlspecialchars($logoSrc, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($companyName, ENT_QUOTES) ?> logo" /></div><?php endif; ?><div class="header-main"><div class="h"><?= htmlspecialchars($companyName, ENT_QUOTES) ?></div><div><?= htmlspecialchars((string)($company['address_line'] ?? ''), ENT_QUOTES) ?>, <?= htmlspecialchars((string)($company['city'] ?? ''), ENT_QUOTES) ?></div><div><?= implode(' | ', $phoneBits) ?><?= $phoneBits !== [] ? ' | ' : '' ?>✉️ <?= htmlspecialchars((string)($company['email_primary'] ?? ''), ENT_QUOTES) ?> · 🌐 <?= htmlspecialchars($website, ENT_QUOTES) ?><?= $waLink !== '' ? ' · <a href="' . htmlspecialchars($waLink, ENT_QUOTES) . '">Chat</a>' : '' ?></div><div>GSTIN <?= htmlspecialchars((string)($company['gstin'] ?? ''), ENT_QUOTES) ?> · UDYAM <?= htmlspecialchars((string)($company['udyam'] ?? ''), ENT_QUOTES) ?> · PAN <?= htmlspecialchars((string)($company['pan'] ?? ''), ENT_QUOTES) ?></div><div>Quote No <b><?= htmlspecialchars((string)($quote['quote_no'] ?? ''), ENT_QUOTES) ?></b></div></div></div></section>
 <section class="card"><span class="chip">✅ MNRE compliant</span><span class="chip"><?= $segment === 'RES' ? '✅ PM Surya Ghar eligible' : 'ℹ️ Segment specific policy' ?></span><span class="chip">🔌 Net metering supported</span><span class="chip">🛡️ 25+ year life / warranty</span></section>
@@ -176,11 +236,11 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <section class="card"><div class="h sec">⚡ At a glance</div><div class="hero"><div class="metric">System Size<b><?= htmlspecialchars((string)($quote['capacity_kwp'] ?? '0'), ENT_QUOTES) ?> kWp</b></div><div class="metric">Monthly Bill (Without Solar)<b><?= quotation_format_inr_indian((float)($quote['finance_inputs']['monthly_bill_rs'] ?? 0), $showDecimals) ?></b></div><div class="metric">Monthly Outflow (With Solar – Bank Finance)<b id="heroOutflowBank">-</b></div><div class="metric">Monthly Outflow (With Solar – Self Funded)<b id="heroOutflowSelf">-</b></div></div><div class="save-line">🟢 You save approx <span id="heroSaving">-</span> every month</div></section>
 <section class="card"><div class="h sec">📦 Item summary</div><table><thead><tr><th>#</th><th>Particular</th><th>Description</th><th class="center">Qty</th><th class="center">Unit</th></tr></thead><tbody><?php $items = is_array($quote['items'] ?? null) ? $quote['items'] : []; if ($items === []): ?><tr><td colspan="5" class="center muted">No line items added.</td></tr><?php else: foreach ($items as $idx => $item): ?><tr><td><?= (int)$idx + 1 ?></td><td><?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['qty'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
 <?php if($specialReq!==''): ?><section class="card"><div class="h sec">✍️ Special Requests From Consumer (Inclusive in the rate)</div><div><?= quotation_sanitize_html($specialReq) ?></div><div><i>In case of conflict between annexures and special requests, special requests will be prioritized.</i></div></section><?php endif; ?>
-<section class="card"><div class="h sec">💰 Pricing summary</div><table><thead><tr><th>#</th><th>Particular</th><th class="right">Amount</th></tr></thead><tbody><tr><td>1</td><td>Gross payable</td><td class="right" id="upfront"></td></tr><tr><td>2</td><td>Subsidy expected</td><td class="right"><?= quotation_format_inr_indian((float)($calc['subsidy_expected_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td>3</td><td><b>Net upfront</b></td><td class="right"><b id="upfrontNet"></b></td></tr></tbody></table></section>
+<section class="card"><div class="h sec">💰 Pricing summary</div><table><thead><tr><th>#</th><th>Particular</th><th class="right">Amount</th></tr></thead><tbody><tr><td>1</td><td>Gross payable</td><td class="right" id="upfront"></td></tr><tr><td>2</td><td>Subsidy expected</td><td class="right"><?= quotation_format_inr_indian((float)($calc['subsidy_expected_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td>3</td><td><b>Net Investment/Cost After Subsidy Credit</b></td><td class="right"><b id="upfrontNet"></b></td></tr></tbody></table></section>
 <section class="card"><div class="h sec">📊 Charts &amp; graphics</div>
 <div class="chart-block">
 <div class="chart-title">Monthly Outflow Comparison</div>
-<div id="monthlyOutflowChart" class="bar-chart"></div>
+<div id="monthlyOutflowChart" class="bar-chart"></div><img id="monthlyOutflowChartPrint" class="chart-print-img" alt="Monthly outflow comparison chart for print">
 <div class="axis-label">Scenario</div>
 <div class="axis-label">Monthly Outflow (₹)</div>
 <div id="monthlyOutflowLegend" class="chart-legend"></div>
@@ -188,7 +248,7 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <div class="chart-block">
 <div class="chart-title">Cumulative Expense Over 25 Years</div>
 <div id="cumulativeLegend" class="chart-legend"></div>
-<div class="line-chart"><svg id="cumulativeExpenseChart" viewBox="0 0 920 220" preserveAspectRatio="none"></svg></div>
+<div class="line-chart"><svg id="cumulativeExpenseChart" viewBox="0 0 920 220" preserveAspectRatio="none"></svg><img id="cumulativeExpenseChartPrint" class="chart-print-img" alt="Cumulative expense chart for print"></div>
 <div class="axis-label">Years</div>
 <div class="axis-label">Cumulative Expense (₹)</div>
 </div>
@@ -201,8 +261,8 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <section class="card"><div class="h sec">🔆 Generation estimate</div><table><tbody><tr><th>Expected monthly generation (units)</th><td class="right" id="genMonthly">-</td></tr><tr><th>Expected annual generation (units)</th><td class="right" id="genAnnual">-</td></tr><tr><th>Estimated payback period (years)</th><td class="right" id="genPayback">-</td></tr><tr><th>Units produced in 25 years (units)</th><td class="right" id="gen25">-</td></tr></tbody></table></section>
 <section class="card"><div class="h sec">🌱 Your Green Impact</div><div class="grid4"><div class="metric">CO₂/year<b id="co2y">-</b></div><div class="metric">Trees/year<b id="treey">-</b></div><div class="metric">CO₂ over 25 years<b id="co225">-</b></div><div class="metric">Trees over 25 years<b id="tree25">-</b></div></div></section>
 <section class="card"><div class="h sec">⭐ Why <?= htmlspecialchars($companyName, ENT_QUOTES) ?></div><ul><?php foreach ($whyPoints as $point): ?><li><?= htmlspecialchars((string)$point, ENT_QUOTES) ?></li><?php endforeach; ?></ul></section>
-<section class="card"><div class="h sec">📑 Annexures</div><?php foreach(['warranty'=>'Warranty','system_inclusions'=>'System inclusions','pm_subsidy_info'=>'PM subsidy info','completion_milestones'=>'Completion milestones','payment_terms'=>'Payment terms','system_type_explainer'=>'System Type explainer (ongrid vs hybrid vs offgrid)','transportation'=>'Transportation','terms_conditions'=>'Terms and conditions'] as $k=>$label): ?><div class="metric"><div class="h"><?= htmlspecialchars($label, ENT_QUOTES) ?></div><div><?= quotation_sanitize_html((string)($ann[$k] ?? '')) ?></div></div><?php endforeach; ?></section>
-<section class="card"><div class="h sec">🚀 Next steps</div><div><?= quotation_sanitize_html((string)($ann['completion_milestones'] ?? '')) ?></div></section>
+<section class="card"><div class="h sec">📑 Annexures</div><?php foreach(['warranty'=>'Warranty','system_inclusions'=>'System inclusions','pm_subsidy_info'=>'PM subsidy info','completion_milestones'=>'Completion milestones','payment_terms'=>'Payment terms','system_type_explainer'=>'System Type explainer (ongrid vs hybrid vs offgrid)','transportation'=>'Transportation','terms_conditions'=>'Terms and conditions'] as $k=>$label): ?><?php $annVal = trim((string)($ann[$k] ?? '')); if ($annVal === '') { continue; } ?><div class="metric"><div class="h"><?= htmlspecialchars($label, ENT_QUOTES) ?></div><div><?= quotation_sanitize_html($annVal) ?></div></div><?php endforeach; ?></section>
+<?php $nextStepsHtml = trim((string)($ann['next_steps'] ?? '')); if ($nextStepsHtml !== ''): ?><section class="card"><div class="h sec">🚀 Next steps</div><div><?= quotation_sanitize_html($nextStepsHtml) ?></div></section><?php endif; ?>
 <?php if ($bankFields !== []): ?>
 <section class="card"><div class="h sec">Bank Details</div><div class="bank-grid"><?php foreach ($bankFields as $bankField): ?><div class="metric"><div class="h"><?= htmlspecialchars((string) ($bankField['icon'] . ' ' . $bankField['label']), ENT_QUOTES) ?></div><div><?= htmlspecialchars((string) $bankField['value'], ENT_QUOTES) ?></div></div><?php endforeach; ?></div></section>
 <?php endif; ?>
@@ -262,6 +322,59 @@ if(svg&&cumLegend){
   svg.innerHTML=lines;
   cumLegend.innerHTML=cumSeries.map((item)=>`<span class="legend-item"><span class="legend-swatch" style="background:${item.color}"></span>${item.label}</span>`).join('');
 }
+
+
+const buildChartPrintImages=()=>{
+  const monthlyPrintImg=document.getElementById('monthlyOutflowChartPrint');
+  if(monthlyPrintImg){
+    const canvas=document.createElement('canvas');
+    canvas.width=920;
+    canvas.height=320;
+    const ctx=canvas.getContext('2d');
+    if(ctx){
+      ctx.fillStyle='#ffffff';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      const maxVal=Math.max(1,...monthlySeries.map((x)=>x.value));
+      const baseY=245;
+      const chartTop=36;
+      const slotW=canvas.width/monthlySeries.length;
+      const barW=72;
+      ctx.strokeStyle='#94a3b8';
+      ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.moveTo(32,baseY);
+      ctx.lineTo(canvas.width-32,baseY);
+      ctx.stroke();
+      monthlySeries.forEach((item,index)=>{
+        const h=Math.max(2,((item.value/maxVal)*(baseY-chartTop)));
+        const x=(index*slotW)+(slotW/2)-(barW/2);
+        const y=baseY-h;
+        ctx.fillStyle=item.color;
+        ctx.fillRect(x,y,barW,h);
+        ctx.fillStyle='#0f172a';
+        ctx.font='14px Arial';
+        ctx.textAlign='center';
+        ctx.fillText(item.label,(index*slotW)+(slotW/2),275);
+        ctx.fillText(r(item.value),(index*slotW)+(slotW/2),296);
+      });
+      monthlyPrintImg.src=canvas.toDataURL('image/png');
+    }
+  }
+
+  const cumulativeSvg=document.getElementById('cumulativeExpenseChart');
+  const cumulativePrintImg=document.getElementById('cumulativeExpenseChartPrint');
+  if(cumulativeSvg&&cumulativePrintImg){
+    const svgData=new XMLSerializer().serializeToString(cumulativeSvg);
+    const encoded='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svgData);
+    cumulativePrintImg.src=encoded;
+  }
+};
+if(document.readyState==='complete'){
+  buildChartPrintImages();
+}else{
+  window.addEventListener('load',buildChartPrintImages,{once:true});
+}
+window.addEventListener('beforeprint',buildChartPrintImages);
 
 const yearly=q.cap*q.gen,co2=yearly*<?= json_encode($emissionFactor) ?>,tree=co2/Math.max(0.1,<?= json_encode($treeAbsorption) ?>);
 document.getElementById('co2y').textContent=co2.toFixed(0)+' kg';document.getElementById('treey').textContent=tree.toFixed(1);document.getElementById('co225').textContent=(co2*25).toFixed(0)+' kg';document.getElementById('tree25').textContent=(tree*25).toFixed(1);

@@ -976,6 +976,8 @@ function documents_quote_defaults(): array
             'transportation' => '',
             'terms_conditions' => '',
             'pm_subsidy_info' => '',
+            'completion_milestones' => '',
+            'next_steps' => '',
         ],
         'template_attachments' => documents_template_attachment_defaults(),
         'finance_inputs' => [
@@ -1718,6 +1720,8 @@ function documents_template_block_defaults(): array
     return [
         'cover_notes' => '',
         'pm_subsidy_info' => '',
+        'completion_milestones' => '',
+        'next_steps' => '',
         'system_inclusions' => '',
         'payment_terms' => '',
         'warranty' => '',
