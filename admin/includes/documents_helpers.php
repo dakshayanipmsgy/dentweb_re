@@ -24,7 +24,10 @@ function documents_configure_php_error_logging(): void
 
     ini_set('display_errors', '0');
     ini_set('log_errors', '1');
-    ini_set('error_log', documents_php_error_log_path());
+    $currentErrorLog = (string) ini_get('error_log');
+    if (trim($currentErrorLog) === '') {
+        ini_set('error_log', documents_php_error_log_path());
+    }
 }
 
 documents_configure_php_error_logging();
@@ -608,6 +611,10 @@ function json_load(string $absPath, $default)
 
     try {
         $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        if (is_array($default) && !is_array($decoded)) {
+            documents_log('JSON shape mismatch at ' . $absPath . ': expected array payload');
+            return $default;
+        }
         return $decoded;
     } catch (Throwable $exception) {
         documents_log('JSON parse error at ' . $absPath . ': ' . $exception->getMessage());
