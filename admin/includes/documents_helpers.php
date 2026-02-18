@@ -1376,6 +1376,8 @@ function documents_challan_line_defaults(): array
         'unit_snapshot' => '',
         'hsn_snapshot' => '',
         'notes' => '',
+        'line_origin' => 'extra',
+        'packing_line_id' => '',
     ];
 }
 
@@ -1404,6 +1406,9 @@ function documents_normalize_challan_lines(array $lines): array
         $row['unit_snapshot'] = safe_text((string) ($row['unit_snapshot'] ?? ''));
         $row['hsn_snapshot'] = safe_text((string) ($row['hsn_snapshot'] ?? ''));
         $row['notes'] = safe_text((string) ($row['notes'] ?? ''));
+        $origin = strtolower(safe_text((string) ($row['line_origin'] ?? 'extra')));
+        $row['line_origin'] = $origin === 'quotation' ? 'quotation' : 'extra';
+        $row['packing_line_id'] = safe_text((string) ($row['packing_line_id'] ?? ''));
         if ($row['component_id'] === '') {
             continue;
         }
@@ -3614,6 +3619,8 @@ function documents_packing_required_line_defaults(): array
         'planned_note' => '',
         'dispatched_summary' => '',
         'remarks' => '',
+        'source_kit_id' => '',
+        'source_kit_name_snapshot' => '',
     ];
 }
 
@@ -4620,6 +4627,8 @@ function documents_create_packing_list_from_quote(array $quote): array
                     'unit' => (string) ($bomLine['unit'] ?? ($component['default_unit'] ?? 'pcs')),
                     'mode' => (string) ($bomLine['mode'] ?? 'fixed_qty'),
                     'remarks' => (string) ($bomLine['remarks'] ?? ''),
+                    'source_kit_id' => (string) ($kit['id'] ?? ''),
+                    'source_kit_name_snapshot' => (string) (($item['name_snapshot'] ?? '') ?: ($kit['name'] ?? 'Kit')),
                 ]);
 
                 if ($line['mode'] === 'fixed_qty') {
@@ -4696,6 +4705,8 @@ function documents_create_packing_list_from_quote(array $quote): array
             'component_name_snapshot' => (string) ($component['name'] ?? 'Component'),
             'unit' => $isCuttable ? 'ft' : (string) ($item['unit'] ?: ($component['default_unit'] ?? 'pcs')),
             'mode' => 'fixed_qty',
+            'source_kit_id' => '',
+            'source_kit_name_snapshot' => '',
         ]);
         if ($isCuttable) {
             $line['required_ft'] = $multiplier;
