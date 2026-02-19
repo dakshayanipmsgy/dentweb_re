@@ -3803,6 +3803,8 @@ function documents_quote_structured_item_defaults(): array
         'component_id' => '',
         'name_snapshot' => '',
         'description_snapshot' => '',
+        'master_description_snapshot' => '',
+        'custom_description' => '',
         'hsn_snapshot' => '',
         'qty' => 0,
         'unit' => '',
@@ -4898,6 +4900,13 @@ function documents_normalize_quote_structured_items(array $rows): array
         $item['qty'] = max(0, (float) ($item['qty'] ?? 0));
         $item['name_snapshot'] = safe_text((string) ($item['name_snapshot'] ?? ''));
         $item['description_snapshot'] = safe_text((string) ($item['description_snapshot'] ?? ''));
+        $masterDescriptionSnapshot = safe_text((string) ($item['master_description_snapshot'] ?? ''));
+        if ($masterDescriptionSnapshot === '') {
+            $masterDescriptionSnapshot = $item['description_snapshot'];
+        }
+        $item['master_description_snapshot'] = $masterDescriptionSnapshot;
+        $item['description_snapshot'] = $masterDescriptionSnapshot;
+        $item['custom_description'] = safe_text((string) ($item['custom_description'] ?? ''));
         $item['hsn_snapshot'] = safe_text((string) ($item['hsn_snapshot'] ?? ''));
         $item['unit'] = safe_text((string) ($item['unit'] ?? ''));
         $item['variant_id'] = safe_text((string) ($item['variant_id'] ?? ''));
