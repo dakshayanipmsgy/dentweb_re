@@ -29,6 +29,27 @@ if ($receipt === null) {
 $quote = documents_get_quote((string) ($receipt['quotation_id'] ?? $receipt['quote_id'] ?? ''));
 $company = load_company_profile();
 
+$companyName = trim((string) ($company['company_name'] ?? ''));
+if ($companyName === '') {
+    $companyName = trim((string) ($company['brand_name'] ?? ''));
+}
+
+$companyPhone = trim((string) ($company['phone_primary'] ?? ($company['phone'] ?? '')));
+
+$companyAddress = trim((string) ($company['address_line'] ?? ($company['address'] ?? '')));
+if ($companyAddress === '') {
+    $parts = [
+        trim((string) ($company['city'] ?? '')),
+        trim((string) ($company['district'] ?? '')),
+        trim((string) ($company['state'] ?? '')),
+        trim((string) ($company['pin'] ?? '')),
+    ];
+    $parts = array_values(array_filter($parts, static fn(string $value): bool => $value !== ''));
+    $companyAddress = implode(', ', $parts);
+}
+
+$companyLogo = trim((string) ($company['logo_path'] ?? ''));
+
 $amount = (float) ($receipt['amount_rs'] ?? $receipt['amount_received'] ?? $receipt['amount'] ?? 0);
 $dateReceived = (string) ($receipt['date_received'] ?? $receipt['receipt_date'] ?? $receipt['created_at'] ?? date('Y-m-d'));
 $receiptNo = (string) ($receipt['receipt_number'] ?? $receipt['id'] ?? '');
@@ -48,7 +69,10 @@ $quoteNo = (string) ($quote['quote_no'] ?? $receipt['quotation_id'] ?? '');
     * { box-sizing: border-box; }
     body { margin: 0; font-family: Arial, sans-serif; color: var(--ink); background: #f3f4f6; }
     .sheet { max-width: 794px; margin: 16px auto; background: #fff; min-height: 1123px; padding: 28px 34px; }
-    .header { border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 14px; }
+    .header { border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 14px; display:flex; gap:14px; align-items:center; }
+    .header-logo { flex:0 0 auto; }
+    .header-logo img { max-height: 56px; width: auto; display:block; }
+    .header-text { min-width:0; }
     .title { font-size: 24px; font-weight: 700; }
     .muted { color: var(--muted); }
     .row { display:flex; justify-content:space-between; gap:16px; margin: 8px 0; }
@@ -59,6 +83,8 @@ $quoteNo = (string) ($quote['quote_no'] ?? $receipt['quotation_id'] ?? '');
       body { background: #fff; }
       .print-tools { display:none !important; }
       .sheet { margin:0; max-width:none; width:210mm; min-height:auto; padding:12mm 14mm; }
+      .header { break-inside: avoid; }
+      .header-logo img { max-height: 52px; }
       @page { size:A4; margin:0; }
     }
   </style>
@@ -67,9 +93,14 @@ $quoteNo = (string) ($quote['quote_no'] ?? $receipt['quotation_id'] ?? '');
   <div class="print-tools"><button onclick="window.print()">Print</button></div>
   <main class="sheet">
     <header class="header">
-      <div class="title"><?= htmlspecialchars((string) ($company['legal_name'] ?? 'Company'), ENT_QUOTES) ?></div>
-      <div class="muted"><?= nl2br(htmlspecialchars((string) ($company['address'] ?? ''), ENT_QUOTES)) ?></div>
-      <div class="muted">Phone: <?= htmlspecialchars((string) ($company['phone'] ?? ''), ENT_QUOTES) ?> | Email: <?= htmlspecialchars((string) ($company['email'] ?? ''), ENT_QUOTES) ?></div>
+      <?php if ($companyLogo !== ''): ?>
+      <div class="header-logo"><img src="<?= htmlspecialchars($companyLogo, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($companyName !== '' ? $companyName . ' logo' : 'Company logo', ENT_QUOTES) ?>" /></div>
+      <?php endif; ?>
+      <div class="header-text">
+        <?php if ($companyName !== ''): ?><div class="title"><?= htmlspecialchars($companyName, ENT_QUOTES) ?></div><?php endif; ?>
+        <?php if ($companyPhone !== ''): ?><div class="muted"><?= htmlspecialchars($companyPhone, ENT_QUOTES) ?></div><?php endif; ?>
+        <?php if ($companyAddress !== ''): ?><div class="muted"><?= nl2br(htmlspecialchars($companyAddress, ENT_QUOTES)) ?></div><?php endif; ?>
+      </div>
     </header>
 
     <h2 style="margin:8px 0 0;">Payment Receipt</h2>
