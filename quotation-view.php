@@ -87,8 +87,16 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
  }
 
  if($action==='share_update'){
-    $quote['share']['public_enabled']=isset($_POST['public_enabled']);
-    if(isset($_POST['generate_token']) || (string)($quote['share']['public_token'] ?? '')===''){ $quote['share']['public_token']=bin2hex(random_bytes(16)); }
+    $quote['public_share_enabled']=isset($_POST['public_share_enabled']);
+    if(isset($_POST['generate_token']) || (string)($quote['public_share_token'] ?? '')===''){
+        $quote['public_share_token']=documents_generate_quote_public_share_token();
+        if ((string)($quote['public_share_created_at'] ?? '') === '') {
+            $quote['public_share_created_at']=date('c');
+        }
+    }
+    if (!$quote['public_share_enabled']) {
+        $quote['public_share_revoked_at']=date('c');
+    }
     $quote['updated_at']=date('c');
     documents_save_quote($quote);
     $redirect('success','Share settings updated.');
@@ -206,5 +214,5 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 
 $quoteDefaults = load_quote_defaults();
 $company = documents_get_company_profile_for_quotes();
-$shareUrl=((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']!=='off')?'https://':'http://').($_SERVER['HTTP_HOST'] ?? 'localhost').'/quotation-public.php?token='.urlencode((string)($quote['share']['public_token'] ?? ''));
+$shareUrl=((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']!=='off')?'https://':'http://').($_SERVER['HTTP_HOST'] ?? 'localhost').'/quotation-public.php?t='.urlencode((string)($quote['public_share_token'] ?? ''));
 quotation_render($quote, $quoteDefaults, $company, false, $shareUrl, $viewerType, $viewerId);

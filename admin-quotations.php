@@ -622,6 +622,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+
+    if ($action === 'toggle_public_share') {
+        $quoteId = safe_text($_POST['quote_id'] ?? '');
+        $shareMode = safe_text($_POST['share_mode'] ?? '');
+        $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
+        if ($quote === null) {
+            $redirectWith('error', 'Quotation not found.');
+        }
+
+        if ($shareMode === 'enable') {
+            if (safe_text((string) ($quote['public_share_token'] ?? '')) === '') {
+                $quote['public_share_token'] = documents_generate_quote_public_share_token();
+                $quote['public_share_created_at'] = date('c');
+            }
+            $quote['public_share_enabled'] = true;
+            $quote['public_share_revoked_at'] = null;
+            $quote['updated_at'] = date('c');
+            $saved = documents_save_quote($quote);
+            if (!($saved['ok'] ?? false)) {
+                $redirectWith('error', 'Unable to enable public link.');
+            }
+            $redirectWith('success', 'Public share link enabled.');
+        }
+
+        if ($shareMode === 'disable') {
+            $quote['public_share_enabled'] = false;
+            $quote['public_share_revoked_at'] = date('c');
+            $quote['updated_at'] = date('c');
+            $saved = documents_save_quote($quote);
+            if (!($saved['ok'] ?? false)) {
+                $redirectWith('error', 'Unable to disable public link.');
+            }
+            $redirectWith('success', 'Public share link disabled.');
+        }
+
+        $redirectWith('error', 'Invalid share action.');
+    }
+
     if ($action === 'bulk_quote_action') {
         $bulkAction = safe_text($_POST['bulk_action'] ?? '');
         $selected = is_array($_POST['selected_ids'] ?? null) ? $_POST['selected_ids'] : [];
@@ -883,7 +921,33 @@ if ($lookup !== null) {
 <table><thead><tr><th>Quote No</th><th>Name</th><th>Created By</th><th>Status</th><th>Amount</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
 <?php foreach ($allQuotes as $q): ?><tr>
 <td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['created_by_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></td><td>₹<?= number_format((float)$q['calc']['grand_total'],2) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td>
-<td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <?php if (documents_quote_can_edit($q, 'admin')): ?><a class="btn secondary" href="admin-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?><?php if (documents_quote_is_locked($q)): ?><details style="margin-top:6px"><summary class="muted" style="cursor:pointer">✅ Create Revision</summary><form method="post" style="margin-top:6px"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="create_revision"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><label>Revision reason (optional)</label><textarea name="revision_reason" placeholder="Reason for revision"></textarea><?php if (documents_quote_has_workflow_documents($q)): ?><p class="muted" style="margin:6px 0">Documents already exist for this accepted quotation. Creating a revision will not change existing PI/Invoice. New documents must be created under the revised quotation.</p><label><input type="checkbox" name="archive_existing_documents" value="1"> Archive existing PI/Invoice after creating revision</label><?php endif; ?><div style="margin-top:6px"><button class="btn" type="submit" onclick="return confirm('Create a new revision from this accepted quotation?');">Create Revision</button></div></form></details><?php endif; ?></td>
+<td>
+<a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a>
+<?php if (documents_quote_can_edit($q, 'admin')): ?><a class="btn secondary" href="admin-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?>
+<?php
+$publicShareToken = safe_text((string) ($q['public_share_token'] ?? ''));
+$publicShareEnabled = !empty($q['public_share_enabled']) && $publicShareToken !== '';
+$publicShareUrl = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/quotation-public.php?t=' . urlencode($publicShareToken);
+$waDraftMessage = rawurlencode('Please review this quotation: ' . $publicShareUrl);
+?>
+<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">🔗 Share</summary>
+    <form method="post" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
+        <input type="hidden" name="action" value="toggle_public_share">
+        <input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>">
+        <?php if (!$publicShareEnabled): ?>
+            <input type="hidden" name="share_mode" value="enable">
+            <button class="btn" type="submit">Enable Public Link</button>
+        <?php else: ?>
+            <input id="public-share-link-<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>" type="text" readonly value="<?= htmlspecialchars($publicShareUrl, ENT_QUOTES) ?>" style="flex:1;min-width:260px">
+            <button class="btn secondary" type="button" data-copy-target="public-share-link-<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>">Copy Link</button>
+            <a class="btn secondary" target="_blank" rel="noopener" href="https://wa.me/?text=<?= $waDraftMessage ?>">Send via WhatsApp draft</a>
+            <button class="btn secondary" type="submit" name="share_mode" value="disable">Disable Public Link</button>
+        <?php endif; ?>
+    </form>
+</details>
+<?php if (documents_quote_is_locked($q)): ?><details style="margin-top:6px"><summary class="muted" style="cursor:pointer">✅ Create Revision</summary><form method="post" style="margin-top:6px"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="create_revision"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><label>Revision reason (optional)</label><textarea name="revision_reason" placeholder="Reason for revision"></textarea><?php if (documents_quote_has_workflow_documents($q)): ?><p class="muted" style="margin:6px 0">Documents already exist for this accepted quotation. Creating a revision will not change existing PI/Invoice. New documents must be created under the revised quotation.</p><label><input type="checkbox" name="archive_existing_documents" value="1"> Archive existing PI/Invoice after creating revision</label><?php endif; ?><div style="margin-top:6px"><button class="btn" type="submit" onclick="return confirm('Create a new revision from this accepted quotation?');">Create Revision</button></div></form></details><?php endif; ?>
+</td>
 </tr><?php endforeach; if ($allQuotes===[]): ?><tr><td colspan="7">No quotations yet.</td></tr><?php endif; ?></tbody></table>
 </div>
 <?php if ($tab === "settings"): $d = $quoteDefaults; ?><div class="card"><h2>Quotation Settings</h2><form method="post" class="grid"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ""), ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_settings"><div><label>Primary color</label><div style="display:flex;gap:6px"><input type="color" name="ui_primary" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="ui_primary_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Accent color</label><div style="display:flex;gap:6px"><input type="color" name="ui_accent" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="ui_accent_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"><input name="ui_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"></div></div><div><label>Muted text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_muted_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"><input name="ui_muted_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"></div></div><div><label>Page background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_page_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"><input name="ui_page_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"></div></div><div><label>Card background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_card_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="ui_card_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Border color</label><div style="display:flex;gap:6px"><input type="color" name="ui_border" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"><input name="ui_border_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient A</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="header_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient B</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="header_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient A</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="footer_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient B</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="footer_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Header font color</label><div style="display:flex;gap:6px"><input type="color" name="header_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="header_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Footer font color</label><div style="display:flex;gap:6px"><input type="color" name="footer_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="footer_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient direction</label><select name="header_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="header_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['header']['enabled'])?'checked':'' ?>> Enable header gradient</label></div><div><label>Footer gradient direction</label><select name="footer_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="footer_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['footer']['enabled'])?'checked':'' ?>> Enable footer gradient</label></div><div><label>Default interest rate (%)</label><input type="number" step="0.01" name="res_interest_pct" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['interest_pct'] ?? 6), ENT_QUOTES) ?>"></div><div><label>Default loan tenure (years)</label><input type="number" name="res_tenure_years" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['tenure_years'] ?? 10), ENT_QUOTES) ?>"></div><div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450), ENT_QUOTES) ?>"></div><div><label>Emission factor (kg CO2/kWh)</label><input type="number" step="0.01" name="emission_factor_kg_per_kwh" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['emission_factor_kg_per_kwh'] ?? 0.82), ENT_QUOTES) ?>"></div><div><label>CO2 absorbed per tree per year (kg)</label><input type="number" step="0.01" name="tree_absorption_kg_per_tree_per_year" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'] ?? 20), ENT_QUOTES) ?>"></div><div><label><input type="checkbox" name="show_decimals" <?= !empty($d['global']['quotation_ui']['show_decimals'])?'checked':'' ?>> Show INR decimals in quotation</label></div><div><label>QR target</label><select name="qr_target"><option value="quotation" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="quotation")?'selected':'' ?>>This quotation link</option><option value="website" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="website")?'selected':'' ?>>Company website</option></select></div><div style="grid-column:1/-1"><label>Why Dakshayani points (one per line)</label><textarea name="why_dakshayani_points"><?= htmlspecialchars(implode("\n", (array)($d['global']['quotation_ui']['why_dakshayani_points'] ?? [])), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Footer disclaimer</label><textarea name="footer_disclaimer"><?= htmlspecialchars((string)($d['global']['quotation_ui']['footer_disclaimer'] ?? ''), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><button class="btn" type="submit">Save Settings</button></div></form></div><?php endif; ?>
@@ -898,6 +962,24 @@ if ($lookup !== null) {
 </form></div>
 <script>
 window.quoteItemVariantsByComponent = <?= json_encode($variantsByComponent, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+document.addEventListener('click', function(e){
+    const target = e.target instanceof HTMLElement ? e.target : null;
+    if (!target || !target.matches('[data-copy-target]')) {
+        return;
+    }
+    const inputId = target.getAttribute('data-copy-target') || '';
+    const input = document.getElementById(inputId);
+    if (!(input instanceof HTMLInputElement)) {
+        return;
+    }
+    input.select();
+    input.setSelectionRange(0, 99999);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(input.value);
+    } else {
+        document.execCommand('copy');
+    }
+});
 </script>
 <script>
 document.addEventListener('click', function (e) {

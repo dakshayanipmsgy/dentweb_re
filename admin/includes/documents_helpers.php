@@ -1033,11 +1033,11 @@ function documents_quote_defaults(): array
             'typography' => ['base_font_px' => '', 'heading_scale' => '', 'density' => ''],
             'watermark' => ['enabled' => '', 'image_path' => '', 'opacity' => ''],
         ],
-        'share' => [
-            'public_enabled' => false,
-            'public_token' => '',
-            'public_created_at' => '',
-        ],
+        'public_share_enabled' => false,
+        'public_share_token' => '',
+        'public_share_created_at' => '',
+        'public_share_revoked_at' => null,
+        'public_share_expires_at' => null,
         'rendering' => [
             'background_image' => '',
             'background_opacity' => 1.0,
@@ -2981,6 +2981,15 @@ function documents_quote_prepare(array $quote): array
     $revisionReason = trim((string) ($quote['revision_reason'] ?? ''));
     $quote['revision_reason'] = $revisionReason === '' ? null : $revisionReason;
     $quote['revision_child_ids'] = array_values(array_filter(array_map(static fn($v): string => safe_text((string) $v), is_array($quote['revision_child_ids'] ?? null) ? $quote['revision_child_ids'] : []), static fn(string $v): bool => $v !== ''));
+    $legacyShare = is_array($quote['share'] ?? null) ? $quote['share'] : [];
+    $quote['public_share_enabled'] = (bool) ($quote['public_share_enabled'] ?? $legacyShare['public_enabled'] ?? false);
+    $quote['public_share_token'] = safe_text((string) ($quote['public_share_token'] ?? $legacyShare['public_token'] ?? ''));
+    $quote['public_share_created_at'] = safe_text((string) ($quote['public_share_created_at'] ?? $legacyShare['public_created_at'] ?? ''));
+    $revokedAt = safe_text((string) ($quote['public_share_revoked_at'] ?? ''));
+    $quote['public_share_revoked_at'] = $revokedAt === '' ? null : $revokedAt;
+    $expiresAt = safe_text((string) ($quote['public_share_expires_at'] ?? ''));
+    $quote['public_share_expires_at'] = $expiresAt === '' ? null : $expiresAt;
+    unset($quote['share']);
     $isAccepted = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')) === 'accepted';
     $quote['locked_flag'] = (bool) ($quote['locked_flag'] ?? false) || $isAccepted;
     if ($quote['locked_flag'] === true) {
@@ -2993,6 +3002,32 @@ function documents_quote_prepare(array $quote): array
     }
     $quote['archived_flag'] = documents_is_archived($quote);
     return $quote;
+}
+
+function documents_generate_quote_public_share_token(int $bytes = 24): string
+{
+    $bytes = max(16, $bytes);
+    do {
+        $token = bin2hex(random_bytes($bytes));
+    } while (documents_get_quote_by_public_share_token($token) !== null);
+
+    return $token;
+}
+
+function documents_get_quote_by_public_share_token(string $token): ?array
+{
+    $token = safe_text($token);
+    if ($token === '') {
+        return null;
+    }
+
+    foreach (documents_list_quotes() as $quote) {
+        if (hash_equals((string) ($quote['public_share_token'] ?? ''), $token)) {
+            return $quote;
+        }
+    }
+
+    return null;
 }
 
 function documents_quote_is_locked(array $quote): bool
