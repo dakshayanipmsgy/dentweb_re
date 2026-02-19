@@ -584,6 +584,12 @@ function safe_text($s): string
     return preg_replace('/[\x00-\x1F\x7F]/u', '', $value) ?? '';
 }
 
+function safe_multiline_text($s): string
+{
+    $value = trim((string) $s);
+    return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $value) ?? '';
+}
+
 function safe_slug($s): string
 {
     $value = strtolower(safe_text((string) $s));
@@ -989,6 +995,9 @@ function documents_quote_defaults(): array
             'grand_total' => 0,
             'final_price_incl_gst' => 0,
             'transportation_rs' => 0,
+            'gross_payable_before_discount' => 0,
+            'discount_rs' => 0,
+            'discount_note' => '',
             'gross_payable' => 0,
             'subsidy_expected_rs' => 0,
             'net_after_subsidy' => 0,
@@ -1027,6 +1036,8 @@ function documents_quote_defaults(): array
             ],
             'subsidy_expected_rs' => '',
             'transportation_rs' => '',
+            'discount_rs' => '0',
+            'discount_note' => '',
             'notes_for_customer' => '',
         ],
         'style_overrides' => [
@@ -1783,7 +1794,11 @@ function documents_calc_quote_pricing_with_tax_profile(array $quote, float $tran
     $bucket18Gst = (float) ($gstByRate['18.00']['gst_total'] ?? 0);
 
     $transportationRs = max(0, $transportationRs);
-    $grossPayable = $gross + $transportationRs;
+    $grossPayableBeforeDiscount = $gross + $transportationRs;
+    $discountRs = max(0, (float) ($quote['discount_rs'] ?? $quote['finance_inputs']['discount_rs'] ?? 0));
+    $discountRs = min($discountRs, $grossPayableBeforeDiscount);
+    $grossPayable = $grossPayableBeforeDiscount - $discountRs;
+    $discountNote = safe_text((string) ($quote['discount_note'] ?? $quote['finance_inputs']['discount_note'] ?? ''));
     $subsidyExpectedRs = max(0, $subsidyExpectedRs);
     $calc = [
         'basic_total' => documents_money_round((float) ($breakdown['basic_total'] ?? 0)),
@@ -1812,6 +1827,9 @@ function documents_calc_quote_pricing_with_tax_profile(array $quote, float $tran
         'grand_total' => documents_money_round($gross),
         'final_price_incl_gst' => documents_money_round($gross),
         'transportation_rs' => documents_money_round($transportationRs),
+        'gross_payable_before_discount' => documents_money_round($grossPayableBeforeDiscount),
+        'discount_rs' => documents_money_round($discountRs),
+        'discount_note' => $discountNote,
         'gross_payable' => documents_money_round($grossPayable),
         'subsidy_expected_rs' => documents_money_round($subsidyExpectedRs),
         'net_after_subsidy' => documents_money_round($grossPayable - $subsidyExpectedRs),
@@ -4899,14 +4917,14 @@ function documents_normalize_quote_structured_items(array $rows): array
         $item['type'] = in_array((string) ($item['type'] ?? 'component'), ['kit', 'component'], true) ? (string) $item['type'] : 'component';
         $item['qty'] = max(0, (float) ($item['qty'] ?? 0));
         $item['name_snapshot'] = safe_text((string) ($item['name_snapshot'] ?? ''));
-        $item['description_snapshot'] = safe_text((string) ($item['description_snapshot'] ?? ''));
-        $masterDescriptionSnapshot = safe_text((string) ($item['master_description_snapshot'] ?? ''));
+        $item['description_snapshot'] = safe_multiline_text((string) ($item['description_snapshot'] ?? ''));
+        $masterDescriptionSnapshot = safe_multiline_text((string) ($item['master_description_snapshot'] ?? ''));
         if ($masterDescriptionSnapshot === '') {
             $masterDescriptionSnapshot = $item['description_snapshot'];
         }
         $item['master_description_snapshot'] = $masterDescriptionSnapshot;
         $item['description_snapshot'] = $masterDescriptionSnapshot;
-        $item['custom_description'] = safe_text((string) ($item['custom_description'] ?? ''));
+        $item['custom_description'] = safe_multiline_text((string) ($item['custom_description'] ?? ''));
         $item['hsn_snapshot'] = safe_text((string) ($item['hsn_snapshot'] ?? ''));
         $item['unit'] = safe_text((string) ($item['unit'] ?? ''));
         $item['variant_id'] = safe_text((string) ($item['variant_id'] ?? ''));

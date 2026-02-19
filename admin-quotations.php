@@ -411,7 +411,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'name_snapshot' => $lineName,
                     'description_snapshot' => $lineDescription,
                     'master_description_snapshot' => $lineDescription,
-                    'custom_description' => safe_text((string) ($structuredCustomDescriptions[$i] ?? '')),
+                    'custom_description' => safe_multiline_text((string) ($structuredCustomDescriptions[$i] ?? '')),
                     'hsn_snapshot' => $lineHsn,
                     'meta' => [],
                 ];
@@ -469,7 +469,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'name_snapshot' => $lineName,
                 'description_snapshot' => $lineDescription,
                 'master_description_snapshot' => $lineDescription,
-                'custom_description' => safe_text((string) ($structuredCustomDescriptions[$i] ?? '')),
+                'custom_description' => safe_multiline_text((string) ($structuredCustomDescriptions[$i] ?? '')),
                 'hsn_snapshot' => $lineHsn,
                 'meta' => [],
             ];
@@ -514,6 +514,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $systemTotalInclGstRs = (float) ($_POST['system_total_incl_gst_rs'] ?? 0);
         $transportationRs = (float) ($_POST['transportation_rs'] ?? 0);
         $subsidyExpectedRs = (float) ($_POST['subsidy_expected_rs'] ?? 0);
+        $discountRs = (float) ($_POST['discount_rs'] ?? 0);
+        $discountNote = safe_text((string) ($_POST['discount_note'] ?? ''));
+        if ($discountRs < 0) {
+            $redirectWith('error', 'Discount cannot be negative.');
+        }
+        $grossPayableBeforeDiscount = max(0, $systemTotalInclGstRs) + max(0, $transportationRs);
+        if ($discountRs > $grossPayableBeforeDiscount) {
+            $redirectWith('error', 'Discount cannot exceed Gross Payable (System + Transportation).');
+        }
+        $quote['discount_rs'] = $discountRs;
+        $quote['discount_note'] = $discountNote;
         $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, $transportationRs, $subsidyExpectedRs, $systemTotalInclGstRs, $quoteDefaults);
         $quote['tax_breakdown'] = is_array($quote['calc']['tax_breakdown'] ?? null) ? (array) $quote['calc']['tax_breakdown'] : ['basic_total' => 0, 'gst_total' => 0, 'gross_incl_gst' => 0, 'slabs' => []];
         $quote['gst_mode_snapshot'] = (string) ($quote['tax_breakdown']['mode'] ?? 'single');
@@ -535,6 +546,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['finance_inputs']['loan']['loan_amount'] = safe_text($_POST['loan_amount'] ?? '');
         $quote['finance_inputs']['subsidy_expected_rs'] = (string) $subsidyExpectedRs;
         $quote['finance_inputs']['transportation_rs'] = (string) $transportationRs;
+        $quote['finance_inputs']['discount_rs'] = (string) $discountRs;
+        $quote['finance_inputs']['discount_note'] = $discountNote;
         $quote['finance_inputs']['notes_for_customer'] = trim((string) ($_POST['notes_for_customer'] ?? ''));
         $quote['style_overrides']['typography']['base_font_px'] = safe_text($_POST['style_base_font_px'] ?? '');
         $quote['style_overrides']['typography']['heading_scale'] = safe_text($_POST['style_heading_scale'] ?? '');
@@ -902,6 +915,8 @@ if ($lookup !== null) {
 <div><label>Unit rate (₹/kWh)</label><input type="number" step="0.01" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['finance_inputs']['unit_rate_rs_per_kwh'] ?: ($segmentDefaults['unit_rate_rs_per_kwh'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($editing['finance_inputs']['annual_generation_per_kw'] ?: ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Transportation ₹</label><input type="number" step="0.01" name="transportation_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['transportation_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Discount (₹)</label><input type="number" step="0.01" min="0" name="discount_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['discount_rs'] ?? ($editing['discount_rs'] ?? '0')), ENT_QUOTES) ?>"></div>
+<div><label>Discount note</label><input name="discount_note" value="<?= htmlspecialchars((string)($editing['finance_inputs']['discount_note'] ?? ($editing['discount_note'] ?? '')), ENT_QUOTES) ?>" placeholder="Optional (e.g. Festival Offer)"></div>
 <div><label>Subsidy ₹</label><input type="number" step="0.01" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['subsidy_expected_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted"><a href="#" id="resetSubsidyDefault">Reset to scheme default</a></div></div>
 <div><label>Loan amount ₹</label><input type="number" step="0.01" name="loan_amount" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['loan_amount'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label><input type="checkbox" name="loan_enabled" <?= !empty($editing['finance_inputs']['loan']['enabled']) ? 'checked' : '' ?>> Loan enabled</label></div>
