@@ -252,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = safe_text($_POST['action'] ?? '');
 
-    $employeeAllowedActions = ['create_inventory_tx', 'edit_inventory_tx', 'save_inventory_edits', 'import_inventory_stock_in_csv'];
+    $employeeAllowedActions = ['create_inventory_tx', 'edit_inventory_tx', 'save_inventory_edits', 'import_inventory_stock_in_csv', 'create_receipt', 'save_receipt_draft', 'finalize_receipt'];
     if (!$isAdmin && !in_array($action, $employeeAllowedActions, true)) {
         $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
     }
@@ -310,9 +310,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $snapshot = documents_quote_resolve_snapshot($quote);
         $companyProfile = load_company_profile();
         $viewer = [
-            'type' => 'admin',
+            'type' => $isAdmin ? 'admin' : 'employee',
             'id' => (string) ($user['id'] ?? ''),
-            'name' => (string) ($user['full_name'] ?? 'Admin'),
+            'name' => (string) ($user['full_name'] ?? ($isAdmin ? 'Admin' : 'Employee')),
         ];
 
         if ($action === 'create_agreement') {
@@ -402,17 +402,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($action === 'create_receipt') {
             $receipt = documents_sales_document_defaults('receipt');
-            $receipt['id'] = documents_generate_simple_document_id('rcpt');
+            $receipt['id'] = documents_generate_simple_document_id('RCPT');
+            $receipt['receipt_id'] = (string) $receipt['id'];
             $receipt['quotation_id'] = (string) ($quote['id'] ?? '');
+            $receipt['quote_id'] = (string) ($quote['id'] ?? '');
             $receipt['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
             $receipt['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
-            $receipt['receipt_date'] = date('Y-m-d');
-            $receipt['amount_received'] = '';
-            $receipt['mode'] = '';
+            $receipt['customer_name_snapshot'] = (string) $receipt['customer_name'];
+            $receipt['site_address_snapshot'] = safe_text((string) ($quote['site_address'] ?? $snapshot['address'] ?? ''));
+            $receipt['receipt_number'] = 'PR-' . date('Ymd') . '-' . strtoupper(substr((string) $receipt['id'], -4));
+            $receipt['date_received'] = date('Y-m-d');
+            $receipt['receipt_date'] = (string) $receipt['date_received'];
+            $receipt['amount_rs'] = 0;
+            $receipt['amount_received'] = 0;
+            $receipt['mode'] = 'Cash';
+            $receipt['txn_ref'] = '';
             $receipt['reference'] = '';
+            $receipt['notes'] = '';
             $receipt['status'] = 'draft';
-            $receipt['created_by'] = $viewer;
+            $receipt['created_by'] = ['role' => (string) ($viewer['type'] ?? ''), 'id' => (string) ($viewer['id'] ?? ''), 'name' => (string) ($viewer['name'] ?? '')];
             $receipt['created_at'] = date('c');
+            $receipt['updated_at'] = (string) $receipt['created_at'];
+            $receipt['archived_flag'] = false;
+            $receipt['archived_at'] = '';
+            $receipt['archived_by'] = ['role' => '', 'id' => '', 'name' => ''];
 
             $saved = documents_save_sales_document('receipt', $receipt);
             if (!$saved['ok']) {
@@ -421,7 +434,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             documents_quote_link_workflow_doc($quote, 'receipt', (string) $receipt['id']);
             $quote['updated_at'] = date('c');
             documents_save_quote($quote);
-            $redirectDocuments($tab, 'success', 'Receipt draft created.', ['view' => $view]);
+            $redirectDocuments($tab, 'success', 'Receipt draft created.', ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => (string) $receipt['id']]);
         }
 
         if ($action === 'create_delivery_challan') {
@@ -805,6 +818,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $redirectWith('templates', 'success', $action === 'archive_template_set' ? 'Template archived.' : 'Template unarchived.');
+    }
+
+
+    if (in_array($action, ['save_receipt_draft', 'finalize_receipt'], true)) {
+        $tab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
+        $view = safe_text($_POST['quotation_id'] ?? safe_text($_POST['return_view'] ?? ''));
+        $receiptId = safe_text($_POST['receipt_id'] ?? '');
+        if ($view === '' || $receiptId === '') {
+            $redirectDocuments($tab, 'error', 'Receipt context missing.', ['view' => $view]);
+        }
+
+        $quote = documents_get_quote($view);
+        if ($quote === null) {
+            $redirectDocuments($tab, 'error', 'Quotation not found.', ['view' => $view]);
+        }
+
+        $receipt = documents_get_sales_document('receipt', $receiptId);
+        if ($receipt === null || (string) ($receipt['quotation_id'] ?? '') !== (string) ($quote['id'] ?? '')) {
+            $redirectDocuments($tab, 'error', 'Receipt not found.', ['view' => $view]);
+        }
+
+        if (documents_is_archived($receipt)) {
+            $redirectDocuments($tab, 'error', 'Archived receipts cannot be edited.', ['view' => $view]);
+        }
+
+        $currentStatus = strtolower(trim((string) ($receipt['status'] ?? 'draft')));
+        if ($currentStatus === 'final') {
+            $redirectDocuments($tab, 'error', 'Finalized receipts are locked.', ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => $receiptId]);
+        }
+
+        $dateReceived = safe_text($_POST['date_received'] ?? ($_POST['receipt_date'] ?? (string) ($receipt['date_received'] ?? $receipt['receipt_date'] ?? date('Y-m-d'))));
+        if ($dateReceived === '') {
+            $dateReceived = date('Y-m-d');
+        }
+        $dateObj = DateTime::createFromFormat('Y-m-d', $dateReceived);
+        if (!($dateObj instanceof DateTime) || $dateObj->format('Y-m-d') !== $dateReceived) {
+            $redirectDocuments($tab, 'error', 'Invalid receipt date.', ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => $receiptId]);
+        }
+
+        $amount = (float) ($_POST['amount_rs'] ?? $_POST['amount_received'] ?? $receipt['amount_rs'] ?? $receipt['amount_received'] ?? 0);
+        $mode = safe_text($_POST['mode'] ?? (string) ($receipt['mode'] ?? ''));
+        $txnRef = safe_text($_POST['txn_ref'] ?? $_POST['reference'] ?? (string) ($receipt['txn_ref'] ?? $receipt['reference'] ?? ''));
+        $notes = safe_text($_POST['notes'] ?? (string) ($receipt['notes'] ?? ''));
+
+        if ($action === 'finalize_receipt' && $amount <= 0) {
+            $redirectDocuments($tab, 'error', 'Amount must be greater than 0 to finalize receipt.', ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => $receiptId]);
+        }
+
+        $receipt['date_received'] = $dateReceived;
+        $receipt['receipt_date'] = $dateReceived;
+        $receipt['amount_rs'] = round($amount, 2);
+        $receipt['amount_received'] = round($amount, 2);
+        $receipt['mode'] = $mode;
+        $receipt['txn_ref'] = $txnRef;
+        $receipt['reference'] = $txnRef;
+        $receipt['notes'] = $notes;
+        $receipt['status'] = ($action === 'finalize_receipt') ? 'final' : 'draft';
+
+        $saved = documents_save_sales_document('receipt', $receipt);
+        if (!$saved['ok']) {
+            $redirectDocuments($tab, 'error', 'Unable to save receipt.', ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => $receiptId]);
+        }
+
+        $msg = $action === 'finalize_receipt' ? 'Receipt finalized.' : 'Receipt draft saved.';
+        $redirectDocuments($tab, 'success', $msg, ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => $receiptId]);
     }
 
 
@@ -2531,6 +2609,8 @@ $templates = is_array($templates) ? $templates : [];
 $includeArchivedAccepted = isset($_GET['include_archived_accepted']) && $_GET['include_archived_accepted'] === '1';
 $acceptedSearch = strtolower(trim(safe_text($_GET['accepted_q'] ?? '')));
 $packViewId = safe_text($_GET['view'] ?? '');
+$packAction = safe_text($_GET['action'] ?? '');
+$packReceiptId = safe_text($_GET['receipt_id'] ?? '');
 $includeArchivedPack = isset($_GET['include_archived_pack']) && $_GET['include_archived_pack'] === '1';
 $archiveTypeFilter = safe_text($_GET['archive_type'] ?? 'all');
 $archiveSearch = strtolower(trim(safe_text($_GET['archive_q'] ?? '')));
@@ -2858,16 +2938,16 @@ foreach ($quotes as $quote) {
     $quotationAmount = (float) ($quote['calc']['gross_payable'] ?? $quote['calc']['final_price_incl_gst'] ?? $quote['calc']['grand_total'] ?? 0);
     $received = 0.0;
     foreach (($receiptsByQuote[(string) ($quote['id'] ?? '')] ?? []) as $receipt) {
-        if ($isArchivedRecord($receipt) && !$includeArchivedAccepted) {
+        if ($isArchivedRecord($receipt)) {
             continue;
         }
         $receiptStatus = strtolower(trim((string) ($receipt['status'] ?? '')));
-        if (in_array($receiptStatus, ['void', 'cancelled', 'canceled'], true)) {
+        if ($receiptStatus !== 'final') {
             continue;
         }
-        $received += (float) ($receipt['amount_received'] ?? $receipt['amount'] ?? 0);
+        $received += (float) ($receipt['amount_rs'] ?? $receipt['amount_received'] ?? $receipt['amount'] ?? 0);
     }
-    $receivable = max(0, $quotationAmount - $received);
+    $receivable = $quotationAmount - $received;
     $acceptedRows[] = [
         'quote' => $quote,
         'quotation_amount' => $quotationAmount,
@@ -3066,6 +3146,23 @@ usort($archivedRows, static function (array $a, array $b): int {
             $packChallans = $collectByQuote($salesChallans, $packQuoteId, $includeArchivedPack);
             $packProformas = $collectByQuote($salesProformas, $packQuoteId, $includeArchivedPack);
             $packInvoices = $collectByQuote($salesInvoices, $packQuoteId, $includeArchivedPack);
+            $packReceiptsActive = array_values(array_filter($packReceipts, static fn(array $r): bool => !documents_is_archived($r)));
+            $packFinalReceived = 0.0;
+            foreach ($packReceiptsActive as $receiptRow) {
+                if (strtolower(trim((string) ($receiptRow['status'] ?? 'draft'))) !== 'final') {
+                    continue;
+                }
+                $packFinalReceived += (float) ($receiptRow['amount_rs'] ?? $receiptRow['amount_received'] ?? $receiptRow['amount'] ?? 0);
+            }
+            $packQuoteAmount = (float) ($packQuote['calc']['gross_payable'] ?? $packQuote['calc']['final_price_incl_gst'] ?? $packQuote['calc']['grand_total'] ?? 0);
+            $packRemainingReceivable = $packQuoteAmount - $packFinalReceived;
+            $editingReceipt = null;
+            if ($packAction === 'edit_receipt' && $packReceiptId !== '') {
+                $editingReceipt = documents_get_sales_document('receipt', $packReceiptId);
+                if (!is_array($editingReceipt) || (string) ($editingReceipt['quotation_id'] ?? '') !== $packQuoteId) {
+                    $editingReceipt = null;
+                }
+            }
           ?>
           <p><a class="btn secondary" href="?tab=accepted_customers">&larr; Back to Accepted Customers</a></p>
           <h2 style="margin-top:0;">Document Pack: <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></h2>
@@ -3174,32 +3271,84 @@ usort($archivedRows, static function (array $a, array $b): int {
           <?php endif; ?>
 
           <h3>C) Payment Receipts</h3>
+          <div class="card" style="padding:10px;margin-bottom:10px;display:flex;gap:14px;flex-wrap:wrap">
+            <div><strong>Total received (final):</strong> <?= htmlspecialchars($inr($packFinalReceived), ENT_QUOTES) ?></div>
+            <div><strong>Remaining receivable:</strong> <?= htmlspecialchars($inr($packRemainingReceivable), ENT_QUOTES) ?></div>
+          </div>
           <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
             <input type="hidden" name="action" value="create_receipt" />
             <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
             <input type="hidden" name="return_tab" value="accepted_customers" />
             <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
-            <button class="btn" type="submit">Add Receipt</button>
+            <button class="btn" type="submit">Add Payment Receipt</button>
           </form>
+
+          <?php if ($editingReceipt !== null): ?>
+            <?php $isReceiptFinal = strtolower(trim((string) ($editingReceipt['status'] ?? 'draft'))) === 'final'; ?>
+            <div class="card" style="padding:12px;margin-bottom:12px;">
+              <h4 style="margin:0 0 8px 0;">Edit Receipt: <?= htmlspecialchars((string) ($editingReceipt['receipt_number'] ?? $editingReceipt['id'] ?? ''), ENT_QUOTES) ?></h4>
+              <form method="post">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+                <input type="hidden" name="receipt_id" value="<?= htmlspecialchars((string) ($editingReceipt['id'] ?? ''), ENT_QUOTES) ?>" />
+                <input type="hidden" name="return_tab" value="accepted_customers" />
+                <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">
+                  <label>Date received
+                    <input type="date" name="date_received" value="<?= htmlspecialchars((string) ($editingReceipt['date_received'] ?? $editingReceipt['receipt_date'] ?? date('Y-m-d')), ENT_QUOTES) ?>" <?= $isReceiptFinal ? 'readonly' : '' ?> />
+                  </label>
+                  <label>Amount (₹)
+                    <input type="number" min="0" step="0.01" name="amount_rs" value="<?= htmlspecialchars((string) ($editingReceipt['amount_rs'] ?? $editingReceipt['amount_received'] ?? ''), ENT_QUOTES) ?>" <?= $isReceiptFinal ? 'readonly' : '' ?> />
+                  </label>
+                  <label>Mode
+                    <select name="mode" <?= $isReceiptFinal ? 'disabled' : '' ?>>
+                      <?php $receiptMode=(string)($editingReceipt['mode'] ?? ''); foreach (['Cash','UPI','Bank Transfer','Cheque','Other'] as $modeOpt): ?>
+                        <option value="<?= htmlspecialchars($modeOpt, ENT_QUOTES) ?>" <?= strcasecmp($receiptMode, $modeOpt) === 0 ? 'selected' : '' ?>><?= htmlspecialchars($modeOpt, ENT_QUOTES) ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                  </label>
+                  <label>Txn / Ref
+                    <input type="text" name="txn_ref" value="<?= htmlspecialchars((string) ($editingReceipt['txn_ref'] ?? $editingReceipt['reference'] ?? ''), ENT_QUOTES) ?>" <?= $isReceiptFinal ? 'readonly' : '' ?> />
+                  </label>
+                </div>
+                <label>Notes
+                  <textarea name="notes" rows="3" <?= $isReceiptFinal ? 'readonly' : '' ?>><?= htmlspecialchars((string) ($editingReceipt['notes'] ?? ''), ENT_QUOTES) ?></textarea>
+                </label>
+                <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+                  <?php if (!$isReceiptFinal): ?>
+                    <button class="btn secondary" type="submit" name="action" value="save_receipt_draft">Save Draft</button>
+                    <button class="btn" type="submit" name="action" value="finalize_receipt">Finalize</button>
+                  <?php else: ?>
+                    <span class="pill" style="background:#dcfce7;color:#166534">Finalized (Locked)</span>
+                  <?php endif; ?>
+                  <a class="btn secondary" href="receipt-view.php?rid=<?= urlencode((string) ($editingReceipt['id'] ?? '')) ?>" target="_blank" rel="noopener">View as HTML</a>
+                  <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => $packQuoteId, 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">Close</a>
+                </div>
+              </form>
+            </div>
+          <?php endif; ?>
+
           <table>
-            <thead><tr><th>ID</th><th>Date</th><th>Amount</th><th>Mode/Ref</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Receipt No</th><th>Date</th><th>Amount</th><th>Mode</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               <?php foreach ($packReceipts as $row): ?>
                 <tr>
-                  <td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td>
-                  <td><?= htmlspecialchars((string) ($row['receipt_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars($inr((float) ($row['amount_received'] ?? $row['amount'] ?? 0)), ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars((string) ($row['mode'] ?? ''), ENT_QUOTES) ?> <?= htmlspecialchars((string) ($row['reference'] ?? ''), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) ($row['receipt_number'] ?? $row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td>
+                  <td><?= htmlspecialchars((string) ($row['date_received'] ?? $row['receipt_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars($inr((float) ($row['amount_rs'] ?? $row['amount_received'] ?? $row['amount'] ?? 0)), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) ($row['mode'] ?? ''), ENT_QUOTES) ?> <?= htmlspecialchars((string) ($row['txn_ref'] ?? $row['reference'] ?? ''), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) ($row['status'] ?? 'draft'), ENT_QUOTES) ?></td>
                   <td class="row-actions">
-                    <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => $packQuoteId, 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">View/Edit</a>
+                    <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => $packQuoteId, 'action' => 'edit_receipt', 'receipt_id' => (string) ($row['id'] ?? ''), 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">Edit</a>
+                    <a class="btn secondary" href="receipt-view.php?rid=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View HTML</a>
                     <?php if ($isAdmin): ?>
                       <form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="receipt" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form>
                     <?php endif; ?>
                   </td>
                 </tr>
               <?php endforeach; ?>
-              <?php if ($packReceipts === []): ?><tr><td colspan="5" class="muted">No receipts available.</td></tr><?php endif; ?>
+              <?php if ($packReceipts === []): ?><tr><td colspan="6" class="muted">No receipts available.</td></tr><?php endif; ?>
             </tbody>
           </table>
 
@@ -3743,7 +3892,7 @@ usort($archivedRows, static function (array $a, array $b): int {
                 <td><?= htmlspecialchars($inr((float) ($row['amount'] ?? 0)), ENT_QUOTES) ?></td>
                 <td><?= htmlspecialchars((string) ($row['archived_at'] ?? ''), ENT_QUOTES) ?></td>
                 <td class="row-actions">
-                  <?php if ((string) ($row['type'] ?? '') === 'agreement'): ?><a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['doc_id'] ?? '')) ?>" target="_blank" rel="noopener">View as HTML</a><a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['doc_id'] ?? '')) ?>&mode=edit" target="_blank" rel="noopener">View / Edit</a><?php elseif ((string) ($row['type'] ?? '') === 'quotation' && (string) ($row['quotation_status'] ?? '') === 'accepted'): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => (string) ($row['quotation_id'] ?? ''), 'include_archived_pack' => '1']), ENT_QUOTES) ?>">View pack</a><?php elseif ((string) ($row['quotation_id'] ?? '') !== ''): ?><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string) ($row['quotation_id'] ?? '')) ?>" target="_blank" rel="noopener">View</a><?php endif; ?>
+                  <?php if ((string) ($row['type'] ?? '') === 'agreement'): ?><a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['doc_id'] ?? '')) ?>" target="_blank" rel="noopener">View as HTML</a><a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['doc_id'] ?? '')) ?>&mode=edit" target="_blank" rel="noopener">View / Edit</a><?php elseif ((string) ($row['type'] ?? '') === 'receipt'): ?><a class="btn secondary" href="receipt-view.php?rid=<?= urlencode((string) ($row['doc_id'] ?? '')) ?>" target="_blank" rel="noopener">View as HTML</a><?php elseif ((string) ($row['type'] ?? '') === 'quotation' && (string) ($row['quotation_status'] ?? '') === 'accepted'): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => (string) ($row['quotation_id'] ?? ''), 'include_archived_pack' => '1']), ENT_QUOTES) ?>">View pack</a><?php elseif ((string) ($row['quotation_id'] ?? '') !== ''): ?><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string) ($row['quotation_id'] ?? '')) ?>" target="_blank" rel="noopener">View</a><?php endif; ?>
                   <?php if ($isAdmin): ?>
                     <?php if ((string) ($row['type'] ?? '') === 'quotation' && (string) ($row['quotation_status'] ?? '') === 'accepted'): ?>
                       <form class="inline-form" method="post">

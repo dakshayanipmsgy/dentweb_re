@@ -139,6 +139,11 @@ function documents_sales_agreements_store_path(): string
 
 function documents_sales_receipts_store_path(): string
 {
+    return documents_base_dir() . '/payment_receipts.json';
+}
+
+function documents_sales_receipts_legacy_store_path(): string
+{
     return documents_sales_documents_dir() . '/receipts/receipts.json';
 }
 
@@ -291,6 +296,17 @@ function documents_ensure_structure(): void
     $quoteDefaultsPath = documents_quote_defaults_path();
     if (!is_file($quoteDefaultsPath)) {
         json_save($quoteDefaultsPath, documents_quote_defaults_settings());
+    }
+
+    $receiptsPath = documents_sales_receipts_store_path();
+    $legacyReceiptsPath = documents_sales_receipts_legacy_store_path();
+    if (!is_file($receiptsPath)) {
+        if (is_file($legacyReceiptsPath)) {
+            $legacyReceipts = json_load($legacyReceiptsPath, []);
+            json_save($receiptsPath, is_array($legacyReceipts) ? $legacyReceipts : []);
+        } else {
+            json_save($receiptsPath, []);
+        }
     }
 
     foreach ([
