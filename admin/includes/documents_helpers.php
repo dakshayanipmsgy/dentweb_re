@@ -2041,7 +2041,7 @@ function resolve_public_image_to_absolute(string $publicPath): ?string
 
 function documents_find_customer_by_mobile(string $mobile): ?array
 {
-    $normalized = normalize_customer_mobile($mobile);
+    $normalized = documents_normalize_mobile($mobile);
     if ($normalized === '') {
         return null;
     }
@@ -2053,6 +2053,133 @@ function documents_find_customer_by_mobile(string $mobile): ?array
     }
 
     return documents_map_customer_record($record);
+}
+
+function documents_normalize_mobile(string $input): string
+{
+    $digits = preg_replace('/\D+/', '', trim($input));
+    if (!is_string($digits) || $digits === '') {
+        return '';
+    }
+
+    if (strlen($digits) === 10) {
+        return $digits;
+    }
+
+    if (strlen($digits) === 12 && str_starts_with($digits, '91')) {
+        return substr($digits, -10);
+    }
+
+    return strlen($digits) > 10 ? substr($digits, -10) : '';
+}
+
+function documents_map_lead_record(array $lead, string $matchedMobile = ''): array
+{
+    $location = is_array($lead['location'] ?? null) ? $lead['location'] : [];
+    $mobile = documents_normalize_mobile((string) ($lead['mobile'] ?? ''));
+    if ($mobile === '') {
+        $mobile = documents_normalize_mobile((string) ($lead['alt_mobile'] ?? ''));
+    }
+    if ($matchedMobile !== '') {
+        $mobile = $matchedMobile;
+    }
+
+    $city = safe_text((string) ($lead['city'] ?? ''));
+    if ($city === '') {
+        $city = safe_text((string) ($lead['lead_city'] ?? ($location['city'] ?? '')));
+    }
+
+    $locality = safe_text((string) ($lead['area_or_locality'] ?? ($location['area_or_locality'] ?? ($location['locality'] ?? ''))));
+
+    return [
+        'id' => safe_text((string) ($lead['id'] ?? '')),
+        'mobile' => $mobile,
+        'name' => safe_text((string) ($lead['name'] ?? '')),
+        'city' => $city,
+        'district' => safe_text((string) ($lead['district'] ?? ($location['district'] ?? ''))),
+        'state' => safe_text((string) ($lead['state'] ?? ($location['state'] ?? ''))),
+        'locality' => $locality,
+        'address' => $locality,
+        'notes' => safe_text((string) ($lead['notes'] ?? '')),
+    ];
+}
+
+function documents_find_lead_by_mobile(string $mobile): ?array
+{
+    $normalized = documents_normalize_mobile($mobile);
+    if ($normalized === '') {
+        return null;
+    }
+
+    $best = null;
+    $bestTs = PHP_INT_MIN;
+    foreach (load_all_leads() as $lead) {
+        if (!is_array($lead) || !empty($lead['archived_flag'])) {
+            continue;
+        }
+
+        $primary = documents_normalize_mobile((string) ($lead['mobile'] ?? ''));
+        $alt = documents_normalize_mobile((string) ($lead['alt_mobile'] ?? ''));
+        $matchedMobile = '';
+        $rank = 0;
+        if ($primary !== '' && $primary === $normalized) {
+            $matchedMobile = $primary;
+            $rank = 2;
+        } elseif ($alt !== '' && $alt === $normalized) {
+            $matchedMobile = $alt;
+            $rank = 1;
+        }
+
+        if ($rank === 0) {
+            continue;
+        }
+
+        $updatedAt = trim((string) ($lead['updated_at'] ?? ''));
+        if ($updatedAt === '') {
+            $updatedAt = trim((string) ($lead['created_at'] ?? ''));
+        }
+        $ts = strtotime($updatedAt);
+        if ($ts === false) {
+            $ts = 0;
+        }
+
+        if ($best === null || $rank > $best['rank'] || ($rank === $best['rank'] && $ts > $bestTs)) {
+            $best = ['rank' => $rank, 'mapped' => documents_map_lead_record($lead, $matchedMobile)];
+            $bestTs = $ts;
+        }
+    }
+
+    return is_array($best) ? $best['mapped'] : null;
+}
+
+function documents_lookup_party_by_mobile(string $mobile): ?array
+{
+    $normalized = documents_normalize_mobile($mobile);
+    if ($normalized === '') {
+        return null;
+    }
+
+    $customer = documents_find_customer_by_mobile($normalized);
+    if ($customer !== null) {
+        return [
+            'type' => 'customer',
+            'record' => $customer,
+            'source' => ['type' => 'customer', 'lead_id' => '', 'lead_mobile' => ''],
+            'note' => '',
+        ];
+    }
+
+    $lead = documents_find_lead_by_mobile($normalized);
+    if ($lead === null) {
+        return null;
+    }
+
+    return [
+        'type' => 'lead',
+        'record' => $lead,
+        'source' => ['type' => 'lead', 'lead_id' => (string) ($lead['id'] ?? ''), 'lead_mobile' => $normalized],
+        'note' => 'Lead data loaded. Please fill missing address/meter fields if needed.',
+    ];
 }
 
 

@@ -219,7 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $partyType = safe_text($_POST['party_type'] ?? 'lead');
-        $mobile = normalize_customer_mobile((string) ($_POST['customer_mobile'] ?? ''));
+        $mobile = documents_normalize_mobile((string) ($_POST['customer_mobile'] ?? ''));
         $customerName = safe_text($_POST['customer_name'] ?? '');
         $customerRecord = $partyType === 'customer' ? documents_find_customer_by_mobile($mobile) : null;
 
@@ -293,7 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quote['source'] = [
                 'type' => 'lead',
                 'lead_id' => safe_text($_POST['source_lead_id'] ?? (string) ($quote['source']['lead_id'] ?? '')),
-                'lead_mobile' => normalize_customer_mobile((string) ($_POST['source_lead_mobile'] ?? ($quote['source']['lead_mobile'] ?? ''))),
+                'lead_mobile' => documents_normalize_mobile((string) ($_POST['source_lead_mobile'] ?? ($quote['source']['lead_mobile'] ?? ''))),
             ];
         }
         $quote['party_type'] = in_array($partyType, ['customer', 'lead'], true) ? $partyType : 'lead';
@@ -779,10 +779,24 @@ $status = safe_text($_GET['status'] ?? '');
 $editingQuoteItems = documents_normalize_quote_structured_items(is_array($editing['quote_items'] ?? null) ? $editing['quote_items'] : []);
 $message = safe_text($_GET['message'] ?? '');
 $lookupMobile = safe_text($_GET['lookup_mobile'] ?? '');
-$lookup = $lookupMobile !== '' ? documents_find_customer_by_mobile($lookupMobile) : null;
+$lookupResult = $lookupMobile !== '' ? documents_lookup_party_by_mobile($lookupMobile) : null;
+$lookup = is_array($lookupResult['record'] ?? null) ? $lookupResult['record'] : null;
+$lookupType = (string) ($lookupResult['type'] ?? '');
+$lookupNote = (string) ($lookupResult['note'] ?? '');
+$lookupBadge = $lookupType === 'customer' ? 'Customer' : ($lookupType === 'lead' ? 'Lead' : '');
 $quoteSnapshot = documents_quote_resolve_snapshot($editing);
 if ($lookup !== null) {
     $quoteSnapshot = array_merge($quoteSnapshot, $lookup);
+    if ($lookupType === 'lead') {
+        if (safe_text((string) ($editing['source']['lead_id'] ?? '')) === '') {
+            $editing['source']['lead_id'] = (string) ($lookupResult['source']['lead_id'] ?? '');
+        }
+        $editing['source']['type'] = 'lead';
+        $editing['source']['lead_mobile'] = (string) ($lookupResult['source']['lead_mobile'] ?? '');
+        $editing['party_type'] = 'lead';
+    } elseif ($lookupType === 'customer') {
+        $editing['party_type'] = 'customer';
+    }
 }
 ?>
 <!doctype html>
@@ -796,17 +810,24 @@ if ($lookup !== null) {
 <h2><?= $editing['id'] === '' ? 'Create Quotation' : 'Edit Quotation' ?></h2>
 <form method="get" style="margin-bottom:10px">
 <label>Customer Lookup by Mobile</label><div style="display:flex;gap:8px"><input type="text" name="lookup_mobile" value="<?= htmlspecialchars($lookupMobile, ENT_QUOTES) ?>"><button class="btn secondary" type="submit">Lookup</button></div>
+<?php if ($lookupMobile !== ""): ?>
+    <?php if ($lookup !== null): ?>
+        <div class="muted" style="margin-top:6px">Lookup matched: <strong><?= htmlspecialchars($lookupBadge, ENT_QUOTES) ?></strong><?php if ($lookupType === "lead"): ?> • <?= htmlspecialchars($lookupNote, ENT_QUOTES) ?><?php endif; ?></div>
+    <?php else: ?>
+        <div class="muted" style="margin-top:6px">Not found in customers or leads.</div>
+    <?php endif; ?>
+<?php endif; ?>
 </form>
 <form method="post">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
 <input type="hidden" name="action" value="save_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string) $editing['id'], ENT_QUOTES) ?>">
-<input type="hidden" name="source_type" value="<?= htmlspecialchars((string) ($editing['source']['type'] ?? ''), ENT_QUOTES) ?>">
-<input type="hidden" name="source_lead_id" value="<?= htmlspecialchars((string) ($editing['source']['lead_id'] ?? ''), ENT_QUOTES) ?>">
-<input type="hidden" name="source_lead_mobile" value="<?= htmlspecialchars((string) ($editing['source']['lead_mobile'] ?? ''), ENT_QUOTES) ?>">
+<input type="hidden" name="source_type" value="<?= htmlspecialchars((string) ($editing['source']['type'] ?? ($lookupResult['source']['type'] ?? '')), ENT_QUOTES) ?>">
+<input type="hidden" name="source_lead_id" value="<?= htmlspecialchars((string) ($editing['source']['lead_id'] ?? ($lookupResult['source']['lead_id'] ?? '')), ENT_QUOTES) ?>">
+<input type="hidden" name="source_lead_mobile" value="<?= htmlspecialchars((string) ($editing['source']['lead_mobile'] ?? ($lookupResult['source']['lead_mobile'] ?? '')), ENT_QUOTES) ?>">
 <div class="grid">
 <div><label>Template Set</label><select name="template_set_id" required><?php foreach ($templates as $tpl): ?><option value="<?= htmlspecialchars((string)$tpl['id'], ENT_QUOTES) ?>" data-segment="<?= htmlspecialchars((string)($tpl['segment'] ?? 'RES'), ENT_QUOTES) ?>" <?= ((string)$editing['template_set_id']===(string)$tpl['id'])?'selected':'' ?>><?= htmlspecialchars((string)$tpl['name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$tpl['segment'], ENT_QUOTES) ?>)</option><?php endforeach; ?></select></div>
 <div><label>Party Type</label><select name="party_type"><option value="customer" <?= $editing['party_type']==='customer'?'selected':'' ?>>Customer</option><option value="lead" <?= $editing['party_type']!=='customer'?'selected':'' ?>>Lead</option></select></div>
-<div><label>Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string)(($lookupMobile !== '' && $lookup !== null) ? $lookupMobile : $editing['customer_mobile']), ENT_QUOTES) ?>"></div>
+<div><label>Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string)(($lookup !== null) ? (string) ($lookup['mobile'] ?? $lookupMobile) : $editing['customer_mobile']), ENT_QUOTES) ?>"></div>
 <div><label>Name</label><input name="customer_name" required value="<?= htmlspecialchars((string)($quoteSnapshot['name'] ?? $editing['customer_name']), ENT_QUOTES) ?>"></div>
 <div><label>Consumer Account No. (JBVNL)</label><input name="consumer_account_no" value="<?= htmlspecialchars((string)(($editing['consumer_account_no'] !== '') ? $editing['consumer_account_no'] : ($quoteSnapshot['consumer_account_no'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Meter Number</label><input name="meter_number" value="<?= htmlspecialchars((string)(($editing['meter_number'] !== '') ? $editing['meter_number'] : ($quoteSnapshot['meter_number'] ?? '')), ENT_QUOTES) ?>"></div>
