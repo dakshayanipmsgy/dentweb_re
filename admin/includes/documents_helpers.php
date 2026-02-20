@@ -1056,6 +1056,18 @@ function documents_quote_defaults(): array
             'discount_note' => '',
             'notes_for_customer' => '',
         ],
+        'customer_savings_inputs' => [
+            'unit_rate_rs_per_kwh' => null,
+            'annual_generation_kwh_per_kw' => null,
+            'bank_loan_enabled' => true,
+            'loan_interest_rate_percent' => null,
+            'loan_tenure_months' => null,
+            'loan_cap_rs' => null,
+            'margin_rule_percent' => null,
+            'margin_amount_rs' => null,
+            'monthly_bill_before_rs' => null,
+            'monthly_units_before' => null,
+        ],
         'style_overrides' => [
             'typography' => ['base_font_px' => '', 'heading_scale' => '', 'density' => ''],
             'watermark' => ['enabled' => '', 'image_path' => '', 'opacity' => ''],
@@ -1080,6 +1092,92 @@ function documents_quote_defaults(): array
         'locked_flag' => false,
         'locked_at' => null,
     ];
+}
+
+function documents_quote_resolve_customer_savings_inputs(array $quote, ?array $quoteDefaults = null): array
+{
+    $defaults = $quoteDefaults ?? documents_get_quote_defaults_settings();
+    $segmentCode = strtoupper(trim((string) ($quote['segment'] ?? 'RES')));
+    $segments = is_array($defaults['segments'] ?? null) ? $defaults['segments'] : [];
+    $segment = is_array($segments[$segmentCode] ?? null) ? $segments[$segmentCode] : [];
+    $fallbackRes = is_array($segments['RES'] ?? null) ? $segments['RES'] : [];
+    $loanSegment = is_array($segment['loan_bestcase'] ?? null) ? $segment['loan_bestcase'] : [];
+    $loanRes = is_array($fallbackRes['loan_bestcase'] ?? null) ? $fallbackRes['loan_bestcase'] : [];
+    $financeInputs = is_array($quote['finance_inputs'] ?? null) ? $quote['finance_inputs'] : [];
+    $loanFinance = is_array($financeInputs['loan'] ?? null) ? $financeInputs['loan'] : [];
+    $saved = is_array($quote['customer_savings_inputs'] ?? null) ? $quote['customer_savings_inputs'] : [];
+
+    $toNullableFloat = static function ($value): ?float {
+        if ($value === null) {
+            return null;
+        }
+        if (is_string($value) && trim($value) === '') {
+            return null;
+        }
+        return (float) $value;
+    };
+    $toNullableInt = static function ($value): ?int {
+        if ($value === null) {
+            return null;
+        }
+        if (is_string($value) && trim($value) === '') {
+            return null;
+        }
+        return (int) round((float) $value);
+    };
+
+    $resolved = [
+        'unit_rate_rs_per_kwh' => $toNullableFloat($saved['unit_rate_rs_per_kwh'] ?? $financeInputs['unit_rate_rs_per_kwh'] ?? $segment['unit_rate_rs_per_kwh'] ?? $fallbackRes['unit_rate_rs_per_kwh'] ?? 0),
+        'annual_generation_kwh_per_kw' => $toNullableFloat($saved['annual_generation_kwh_per_kw'] ?? $financeInputs['annual_generation_per_kw'] ?? $segment['annual_generation_per_kw'] ?? $defaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450),
+        'bank_loan_enabled' => array_key_exists('bank_loan_enabled', $saved) ? (bool) $saved['bank_loan_enabled'] : (bool) ($loanFinance['enabled'] ?? true),
+        'loan_interest_rate_percent' => $toNullableFloat($saved['loan_interest_rate_percent'] ?? $loanFinance['interest_pct'] ?? $loanSegment['interest_pct'] ?? $loanRes['interest_pct'] ?? 6.0),
+        'loan_tenure_months' => $toNullableInt($saved['loan_tenure_months'] ?? ((float) ($loanFinance['tenure_years'] ?? $loanSegment['tenure_years'] ?? $loanRes['tenure_years'] ?? 10) * 12)),
+        'loan_cap_rs' => $toNullableFloat($saved['loan_cap_rs'] ?? $loanFinance['loan_amount'] ?? $loanSegment['max_loan_rs'] ?? $loanRes['max_loan_rs'] ?? 200000),
+        'margin_rule_percent' => $toNullableFloat($saved['margin_rule_percent'] ?? $loanSegment['min_margin_pct'] ?? $loanRes['min_margin_pct'] ?? 10),
+        'margin_amount_rs' => $toNullableFloat($saved['margin_amount_rs'] ?? $loanFinance['margin_pct'] ?? null),
+        'monthly_bill_before_rs' => $toNullableFloat($saved['monthly_bill_before_rs'] ?? $financeInputs['monthly_bill_rs'] ?? null),
+        'monthly_units_before' => $toNullableFloat($saved['monthly_units_before'] ?? null),
+    ];
+
+    if (($resolved['loan_tenure_months'] ?? 0) <= 0) {
+        $resolved['loan_tenure_months'] = 120;
+    }
+
+    return $resolved;
+}
+
+function documents_quote_apply_customer_savings_inputs(array $quote, array $request, ?array $quoteDefaults = null): array
+{
+    $resolved = documents_quote_resolve_customer_savings_inputs($quote, $quoteDefaults);
+    $setFloat = static function (string $key, string $postKey) use (&$resolved, $request): void {
+        if (!array_key_exists($postKey, $request)) {
+            return;
+        }
+        $raw = $request[$postKey];
+        if (is_string($raw) && trim($raw) === '') {
+            return;
+        }
+        $resolved[$key] = (float) $raw;
+    };
+
+    $setFloat('unit_rate_rs_per_kwh', 'unit_rate_rs_per_kwh');
+    $setFloat('annual_generation_kwh_per_kw', 'annual_generation_per_kw');
+    $setFloat('loan_interest_rate_percent', 'loan_interest_pct');
+    $setFloat('loan_cap_rs', 'loan_amount');
+    $setFloat('margin_amount_rs', 'loan_margin_pct');
+    $setFloat('monthly_bill_before_rs', 'monthly_bill_rs');
+    $setFloat('monthly_units_before', 'monthly_units_before');
+    if (array_key_exists('loan_tenure_years', $request) && trim((string) $request['loan_tenure_years']) !== '') {
+        $resolved['loan_tenure_months'] = max(1, (int) round(((float) $request['loan_tenure_years']) * 12));
+    }
+    if (array_key_exists('loan_enabled', $request)) {
+        $resolved['bank_loan_enabled'] = true;
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $resolved['bank_loan_enabled'] = false;
+    }
+
+    $quote['customer_savings_inputs'] = $resolved;
+    return $quote;
 }
 
 function documents_proforma_defaults(): array

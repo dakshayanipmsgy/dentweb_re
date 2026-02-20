@@ -207,6 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['finance_inputs']['loan']['tenure_years'] = safe_text($_POST['loan_tenure_years'] ?? '');
         $quote['finance_inputs']['loan']['margin_pct'] = safe_text($_POST['loan_margin_pct'] ?? '');
         $quote['finance_inputs']['loan']['loan_amount'] = safe_text($_POST['loan_amount'] ?? '');
+        $quote = documents_quote_apply_customer_savings_inputs($quote, $_POST, $quoteDefaults);
         $quote['finance_inputs']['funding_mode_show_both'] = !isset($_POST['funding_mode_show_both']) || $_POST['funding_mode_show_both'] === '1';
         $quote['finance_inputs']['customer_plans_bank_loan'] = isset($_POST['customer_plans_bank_loan']);
         $quote['finance_inputs']['subsidy_expected_rs'] = (string) $subsidyExpectedRs;
