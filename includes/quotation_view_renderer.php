@@ -356,7 +356,7 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 </div>
 </section>
 <section class="card"><div class="h sec">🏦 Finance clarity</div><div class="muted" style="font-size:.85em;margin-bottom:8px">Assumptions: ₹<?= number_format((float)($financialClarity['unit_rate_rs_per_kwh'] ?? 0), 2) ?>/unit, <?= number_format((float)($financialClarity['annual_generation_kwh_per_kw'] ?? 0), 0) ?> kWh/kWp/year, <?= number_format((float)($financialClarity['loan_interest_rate_percent'] ?? 0), 2) ?>% for <?= (int)($financialClarity['loan_tenure_months'] ?? 0) ?> months, loan cap ₹<?= number_format((float)($financialClarity['loan_cap_rs'] ?? 0), 0) ?></div><div class="scenario-grid"><div class="metric"><b>With Loan</b><div style="margin-top:6px">Margin<b id="margin">-</b></div><div>Loan eligible<b id="loan">-</b></div><div>Effective principal<b id="loanEff">-</b></div><div>EMI<b id="emi">-</b></div><div>Residual bill<b id="residual">-</b></div><div>Total outflow<b id="outflow">-</b></div></div><div class="metric"><b>Self Funded</b><div style="margin-top:6px">Upfront investment<b id="upfrontFinance">-</b></div><div>Investment minus subsidy<b id="upfrontNetFinance">-</b></div><div>Residual bill<b id="selfResidual">-</b></div></div></div></section>
-<section class="card"><div class="h sec">🔆 Generation estimate</div><table><tbody><tr><th>Expected monthly generation (units)</th><td class="right" id="genMonthly">-</td></tr><tr><th>Expected annual generation (units)</th><td class="right" id="genAnnual">-</td></tr><tr><th>Estimated payback period (years)</th><td class="right" id="genPayback">-</td></tr><tr><th>Units produced in 25 years (units)</th><td class="right" id="gen25">-</td></tr></tbody></table></section>
+<section class="card"><div class="h sec">🔆 Generation estimate</div><table><tbody><tr><th>Expected monthly generation (units)</th><td class="right" id="genMonthly">-</td></tr><tr><th>Expected annual generation (units)</th><td class="right" id="genAnnual">-</td></tr><tr><th>Estimated payback period (years)</th><td class="right" id="genPayback">-</td></tr><tr><th>Units produced in 25 years (units)</th><td class="right" id="gen25">-</td></tr><tr><th>₹ saved in 25 years (today’s rate)</th><td class="right" id="gen25Savings">-</td></tr></tbody></table></section>
 <section class="card"><div class="h sec">🌱 Your Green Impact</div><div class="grid4"><div class="metric">CO₂/year<b id="co2y">-</b></div><div class="metric">Trees/year<b id="treey">-</b></div><div class="metric">CO₂ over 25 years<b id="co225">-</b></div><div class="metric">Trees over 25 years<b id="tree25">-</b></div></div></section>
 <section class="card"><div class="h sec">⭐ Why <?= htmlspecialchars($companyName, ENT_QUOTES) ?></div><ul><?php foreach ($whyPoints as $point): ?><li><?= htmlspecialchars((string)$point, ENT_QUOTES) ?></li><?php endforeach; ?></ul></section>
 <section class="card"><div class="h sec">📑 Annexures</div><?php foreach(['warranty'=>'Warranty','system_inclusions'=>'System inclusions','pm_subsidy_info'=>'PM subsidy info','completion_milestones'=>'Completion milestones','payment_terms'=>'Payment terms','system_type_explainer'=>'System Type explainer (ongrid vs hybrid vs offgrid)','transportation'=>'Transportation','terms_conditions'=>'Terms and conditions'] as $k=>$label): ?><?php $annVal = trim((string)($ann[$k] ?? '')); if ($annVal === '') { continue; } ?><div class="metric"><div class="h"><?= htmlspecialchars($label, ENT_QUOTES) ?></div><div><?= quotation_sanitize_html($annVal) ?></div></div><?php endforeach; ?></section>
@@ -384,7 +384,13 @@ const q={
 };
 const showDecimals=<?= json_encode($showDecimals) ?>;
 const r=x=>'₹'+Number(x).toLocaleString('en-IN',{minimumFractionDigits:showDecimals?2:0,maximumFractionDigits:showDecimals?2:0});
-const nUnits=x=>Number(x).toLocaleString('en-US',{maximumFractionDigits:0});
+const nUnits=x=>Number(x).toLocaleString('en-IN',{maximumFractionDigits:0});
+const setMetric=(id,value,formatter)=>{
+  const el=document.getElementById(id);
+  if(!el){return;}
+  if(!Number.isFinite(value)){el.textContent='—';return;}
+  el.textContent=formatter(value);
+};
 const margin=q.margin,loan=q.loan,loanEff=q.loanEff,emi=q.emi,res=q.residual,out=q.out;
 ['margin','loan','loanEff','emi','residual','outflow','selfResidual'].forEach((id)=>{const map={margin,loan,loanEff,emi,residual:res,outflow:out,selfResidual:res};const el=document.getElementById(id);if(el)el.textContent=r(map[id]);});
 const upfrontNet=Math.max(0,q.gross-q.subsidy);
@@ -487,9 +493,16 @@ if(document.readyState==='complete'){
 }
 window.addEventListener('beforeprint',buildChartPrintImages);
 
-const yearly=q.cap*q.gen,co2=yearly*<?= json_encode($emissionFactor) ?>,tree=co2/Math.max(0.1,<?= json_encode($treeAbsorption) ?>);
+const yearly=q.cap*q.gen;
+const solar=yearly/12;
+const units25=yearly*25;
+const saved25=units25*q.unit;
+const co2=yearly*<?= json_encode($emissionFactor) ?>,tree=co2/Math.max(0.1,<?= json_encode($treeAbsorption) ?>);
 document.getElementById('co2y').textContent=co2.toFixed(0)+' kg';document.getElementById('treey').textContent=tree.toFixed(1);document.getElementById('co225').textContent=(co2*25).toFixed(0)+' kg';document.getElementById('tree25').textContent=(tree*25).toFixed(1);
-document.getElementById('genMonthly').textContent=nUnits(solar);document.getElementById('genAnnual').textContent=nUnits(yearly);const gen25El=document.getElementById('gen25');if(gen25El){gen25El.textContent=nUnits(yearly*25);}
+setMetric('genMonthly',solar,nUnits);
+setMetric('genAnnual',yearly,nUnits);
+setMetric('gen25',units25,nUnits);
+setMetric('gen25Savings',saved25,r);
 </script>
 </body></html>
 <?php
