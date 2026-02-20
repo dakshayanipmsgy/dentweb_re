@@ -3856,6 +3856,14 @@ function documents_inventory_transaction_defaults(): array
         'updated_at' => '',
         'updated_by' => ['role' => '', 'id' => '', 'name' => ''],
         'edit_history' => [],
+        'archived_flag' => false,
+        'archived_at' => '',
+        'archived_by' => ['role' => '', 'id' => '', 'name' => ''],
+        'voided_flag' => false,
+        'voided_at' => '',
+        'voided_by' => ['role' => '', 'id' => '', 'name' => ''],
+        'reverses_txn_id' => '',
+        'reversed_by_txn_id' => '',
     ];
 }
 
@@ -4291,6 +4299,9 @@ function documents_inventory_build_usage_index(array $transactions): array
             continue;
         }
         $row = array_merge(documents_inventory_transaction_defaults(), $tx);
+        if (!empty($row['archived_flag']) || !empty($row['voided_flag'])) {
+            continue;
+        }
         $type = strtoupper((string) ($row['type'] ?? ''));
         if (!in_array($type, ['OUT', 'ADJUST', 'MOVE'], true)) {
             continue;
@@ -4342,6 +4353,100 @@ function documents_inventory_build_usage_index(array $transactions): array
         'lot_blocked' => $lotBlocked,
         'batch_blocked' => $batchBlocked,
     ];
+}
+
+function is_lot_editable(array $lot, array $transactionsIndex = []): array
+{
+    $lotId = (string) ($lot['lot_id'] ?? '');
+    if ($lotId === '') {
+        return ['editable' => false, 'reason' => 'Missing lot id.'];
+    }
+    $remainingFt = (float) ($lot['remaining_length_ft'] ?? 0);
+    $originalFt = (float) ($lot['original_length_ft'] ?? 0);
+    if (abs($remainingFt - $originalFt) > 0.00001) {
+        return ['editable' => false, 'reason' => 'Lot is partially used/cut.'];
+    }
+    $blocked = (array) ($transactionsIndex['lot_blocked'] ?? []);
+    if (isset($blocked[$lotId])) {
+        return ['editable' => false, 'reason' => (string) $blocked[$lotId]];
+    }
+    if (!empty((array) ($lot['cuts_history'] ?? []))) {
+        return ['editable' => false, 'reason' => 'Lot has cut history.'];
+    }
+    if (!empty((array) ($lot['consumed_by_txn_ids'] ?? []))) {
+        return ['editable' => false, 'reason' => 'Lot has consumption reference.'];
+    }
+    return ['editable' => true, 'reason' => ''];
+}
+
+function documents_reverse_dispatch_from_packing_list(array $packingList, string $challanId): array
+{
+    $challanId = safe_text($challanId);
+    if ($challanId === '') {
+        return $packingList;
+    }
+    $required = is_array($packingList['required_items'] ?? null) ? $packingList['required_items'] : [];
+    $logs = is_array($packingList['dispatch_log'] ?? null) ? $packingList['dispatch_log'] : [];
+    foreach ($logs as $log) {
+        if (!is_array($log) || (string) ($log['delivery_challan_id'] ?? '') !== $challanId) {
+            continue;
+        }
+        foreach ((array) ($log['items'] ?? []) as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $lineId = (string) ($item['line_id'] ?? '');
+            if ($lineId === '') {
+                continue;
+            }
+            foreach ($required as $idx => $line) {
+                if (!is_array($line) || (string) ($line['line_id'] ?? '') !== $lineId) {
+                    continue;
+                }
+                $mode = (string) ($line['mode'] ?? 'fixed_qty');
+                $qty = max(0, (float) ($item['qty'] ?? 0));
+                $ft = max(0, (float) ($item['ft'] ?? 0));
+                $wp = max(0, (float) ($item['dispatch_wp'] ?? 0));
+                if (in_array($mode, ['fixed_qty', 'capacity_qty'], true)) {
+                    if (strtolower((string) ($line['unit'] ?? '')) === 'ft') {
+                        $line['dispatched_ft'] = max(0, (float) ($line['dispatched_ft'] ?? 0) - $ft);
+                        $line['pending_ft'] = max(0, (float) ($line['required_ft'] ?? 0) - (float) ($line['dispatched_ft'] ?? 0));
+                    } else {
+                        $line['dispatched_qty'] = max(0, (float) ($line['dispatched_qty'] ?? 0) - $qty);
+                        $line['pending_qty'] = max(0, (float) ($line['required_qty'] ?? 0) - (float) ($line['dispatched_qty'] ?? 0));
+                    }
+                } elseif ($mode === 'rule_fulfillment') {
+                    $line['dispatched_wp'] = max(0, (float) ($line['dispatched_wp'] ?? 0) - $wp);
+                    $line['fulfilled_flag'] = (float) ($line['dispatched_wp'] ?? 0) >= (float) ($line['target_wp'] ?? 0);
+                } elseif ($mode === 'unfixed_manual') {
+                    if (strtolower((string) ($line['unit'] ?? '')) === 'ft') {
+                        $line['dispatched_ft'] = max(0, (float) ($line['dispatched_ft'] ?? 0) - $ft);
+                    } else {
+                        $line['dispatched_qty'] = max(0, (float) ($line['dispatched_qty'] ?? 0) - $qty);
+                    }
+                }
+                $required[$idx] = $line;
+                break;
+            }
+        }
+    }
+    $packingList['required_items'] = array_values($required);
+    $packingList['dispatch_log'] = array_values(array_filter($logs, static function ($log) use ($challanId): bool {
+        return !is_array($log) || (string) ($log['delivery_challan_id'] ?? '') !== $challanId;
+    }));
+    $allPendingDone = true;
+    foreach ($packingList['required_items'] as $line) {
+        if (!is_array($line)) { continue; }
+        $mode = (string) ($line['mode'] ?? 'fixed_qty');
+        if (in_array($mode, ['fixed_qty', 'capacity_qty'], true)) {
+            if ((float) ($line['pending_qty'] ?? 0) > 0.00001 || (float) ($line['pending_ft'] ?? 0) > 0.00001) { $allPendingDone = false; break; }
+        } elseif ($mode === 'rule_fulfillment' && empty($line['fulfilled_flag'])) {
+            $allPendingDone = false; break;
+        }
+    }
+    $packingList['status'] = $allPendingDone ? 'complete' : 'active';
+    $packingList['updated_at'] = date('c');
+    return $packingList;
 }
 
 function documents_inventory_actor(array $viewer): array
