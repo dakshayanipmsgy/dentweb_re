@@ -78,6 +78,90 @@ function quotation_shadow_css(string $preset): string
     return $map[$preset] ?? $map['soft'];
 }
 
+
+function compute_financial_clarity(array $quote, array $calc, array $snapshot): array
+{
+    $toFloat = static function ($value, float $fallback = 0.0): float {
+        if ($value === null) {
+            return $fallback;
+        }
+        if (is_string($value) && trim($value) === '') {
+            return $fallback;
+        }
+        return (float) $value;
+    };
+
+    $gross = $toFloat($calc['gross_payable'] ?? 0);
+    $subsidy = $toFloat($calc['subsidy_expected_rs'] ?? 0);
+    $capacity = max(0, $toFloat($quote['capacity_kwp'] ?? $quote['system_capacity_kwp'] ?? 0));
+    $tariff = max(0.1, $toFloat($snapshot['unit_rate_rs_per_kwh'] ?? null, 1));
+    $annualGeneration = max(0, $toFloat($snapshot['annual_generation_kwh_per_kw'] ?? null, 0));
+    $monthlyUnitsSolar = ($capacity * $annualGeneration) / 12;
+
+    $monthlyUnitsBefore = null;
+    if (($snapshot['monthly_units_before'] ?? null) !== null && (float) $snapshot['monthly_units_before'] > 0) {
+        $monthlyUnitsBefore = (float) $snapshot['monthly_units_before'];
+    } elseif (($snapshot['monthly_bill_before_rs'] ?? null) !== null && (float) $snapshot['monthly_bill_before_rs'] > 0) {
+        $monthlyUnitsBefore = (float) $snapshot['monthly_bill_before_rs'] / $tariff;
+    }
+
+    if ($monthlyUnitsBefore === null) {
+        $fallbackBill = $toFloat($quote['finance_inputs']['monthly_bill_rs'] ?? 0);
+        $monthlyUnitsBefore = $fallbackBill > 0 ? ($fallbackBill / $tariff) : 0.0;
+    }
+    $residualUnits = max(0, $monthlyUnitsBefore - $monthlyUnitsSolar);
+    $residualBill = $residualUnits * $tariff;
+
+    $marginAmount = ($snapshot['margin_amount_rs'] ?? null) !== null ? max(0, (float) $snapshot['margin_amount_rs']) : null;
+    if ($marginAmount === null) {
+        $marginPct = max(0, $toFloat($snapshot['margin_rule_percent'] ?? null, 10));
+        $marginAmount = ($marginPct / 100) * $gross;
+    }
+
+    $loanEligible = max(0, $gross - $marginAmount);
+    $loanCap = max(0, $toFloat($snapshot['loan_cap_rs'] ?? null, $loanEligible));
+    if ($loanCap > 0 && $loanEligible > $loanCap) {
+        $loanEligible = $loanCap;
+        $marginAmount = max(0, $gross - $loanEligible);
+    }
+
+    $effectivePrincipal = max(0, $loanEligible - $subsidy);
+    $interestPct = max(0, $toFloat($snapshot['loan_interest_rate_percent'] ?? null, 0));
+    $tenureMonths = max(1, (int) round($toFloat($snapshot['loan_tenure_months'] ?? null, 120)));
+    $monthlyRate = ($interestPct / 100) / 12;
+    if ($effectivePrincipal <= 0) {
+        $emi = 0.0;
+    } elseif ($monthlyRate <= 0) {
+        $emi = $effectivePrincipal / $tenureMonths;
+    } else {
+        $pow = pow(1 + $monthlyRate, $tenureMonths);
+        $emi = ($effectivePrincipal * $monthlyRate * $pow) / max(0.000001, $pow - 1);
+    }
+
+    return [
+        'gross' => $gross,
+        'subsidy' => $subsidy,
+        'monthly_bill_before_rs' => $toFloat($snapshot['monthly_bill_before_rs'] ?? 0),
+        'monthly_units_before' => $monthlyUnitsBefore,
+        'unit_rate_rs_per_kwh' => $tariff,
+        'annual_generation_kwh_per_kw' => $annualGeneration,
+        'capacity_kwp' => $capacity,
+        'monthly_units_solar' => $monthlyUnitsSolar,
+        'residual_bill' => $residualBill,
+        'margin_amount_rs' => $marginAmount,
+        'loan_eligible_rs' => $loanEligible,
+        'loan_cap_rs' => $loanCap,
+        'loan_interest_rate_percent' => $interestPct,
+        'loan_tenure_months' => $tenureMonths,
+        'effective_principal_rs' => $effectivePrincipal,
+        'emi_rs' => $emi,
+        'loan_total_outflow_rs' => $emi + $residualBill,
+        'self_upfront_rs' => $gross,
+        'self_upfront_net_rs' => max(0, $gross - $subsidy),
+        'self_residual_bill_rs' => $residualBill,
+    ];
+}
+
 function quotation_render(array $quote, array $quoteDefaults, array $company, bool $showAdmin = false, string $shareUrl = '', string $viewerType = 'admin', string $viewerId = ''): void
 {
     ini_set('display_errors', '0');
@@ -171,14 +255,13 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
 
     $showDecimals = !empty($quoteDefaults['global']['quotation_ui']['show_decimals']);
 
-    $loanDefaults = is_array($segmentDefaults['loan_bestcase'] ?? null) ? $segmentDefaults['loan_bestcase'] : [];
-    $loanOverrides = is_array($quote['finance_inputs']['loan'] ?? null) ? $quote['finance_inputs']['loan'] : [];
-    $loanInterest = (float) ($loanOverrides['interest_pct'] ?? $loanDefaults['interest_pct'] ?? $quoteDefaults['segments']['RES']['loan_bestcase']['interest_pct'] ?? 6.0);
-    $loanTenureYears = (float) ($loanOverrides['tenure_years'] ?? $loanDefaults['tenure_years'] ?? $quoteDefaults['segments']['RES']['loan_bestcase']['tenure_years'] ?? 10);
-    $loanTenureMonths = max(1, (int) round($loanTenureYears * 12));
+    $savingsSnapshot = documents_quote_resolve_customer_savings_inputs($quote, $quoteDefaults);
+    $financialClarity = compute_financial_clarity($quote, $calc, $savingsSnapshot);
 
-    $annualGeneration = (float) ($quote['finance_inputs']['annual_generation_per_kw'] ?? $segmentDefaults['annual_generation_per_kw'] ?? $quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450);
-    $unitRate = (float) ($quote['finance_inputs']['unit_rate_rs_per_kwh'] ?? $segmentDefaults['unit_rate_rs_per_kwh'] ?? $quoteDefaults['segments']['RES']['unit_rate_rs_per_kwh'] ?? 8);
+    $annualGeneration = (float) ($financialClarity['annual_generation_kwh_per_kw'] ?? 0);
+    $unitRate = (float) ($financialClarity['unit_rate_rs_per_kwh'] ?? 0);
+    $loanInterest = (float) ($financialClarity['loan_interest_rate_percent'] ?? 0);
+    $loanTenureMonths = (int) ($financialClarity['loan_tenure_months'] ?? 120);
     $emissionFactor = (float) ($quoteDefaults['global']['energy_defaults']['emission_factor_kg_per_kwh'] ?? 0.82);
     $treeAbsorption = (float) ($quoteDefaults['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'] ?? 20);
 
@@ -248,7 +331,7 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <section class="card"><span class="chip">✅ MNRE compliant</span><span class="chip"><?= $segment === 'RES' ? '✅ PM Surya Ghar eligible' : 'ℹ️ Segment specific policy' ?></span><span class="chip">🔌 Net metering supported</span><span class="chip">🛡️ 25+ year life / warranty</span></section>
 <section class="card"><div class="h sec">🏠 Customer &amp; Site 📍</div><div class="grid2"><div class="metric"><b>Customer</b><div><?= htmlspecialchars((string)($quote['customer_name'] ?? ''), ENT_QUOTES) ?></div><div class="muted"><?= htmlspecialchars((string)($quote['customer_mobile'] ?? ''), ENT_QUOTES) ?></div></div><div class="metric"><b>Site</b><div><?= htmlspecialchars((string)($quote['site_address'] ?? ''), ENT_QUOTES) ?></div><div class="muted"><?= htmlspecialchars((string)($quote['district'] ?? ''), ENT_QUOTES) ?></div></div></div></section>
 <?php if ($coverNote !== ''): ?><section class="card"><div><?= quotation_sanitize_html($coverNote) ?></div></section><?php endif; ?>
-<section class="card"><div class="h sec">⚡ At a glance</div><div class="hero"><div class="metric">System Size<b><?= htmlspecialchars((string)($quote['capacity_kwp'] ?? '0'), ENT_QUOTES) ?> kWp</b></div><div class="metric">Monthly Bill (Without Solar)<b><?= quotation_format_inr_indian((float)($quote['finance_inputs']['monthly_bill_rs'] ?? 0), $showDecimals) ?></b></div><div class="metric">Monthly Outflow (With Solar – Bank Finance)<b id="heroOutflowBank">-</b></div><div class="metric">Monthly Outflow (With Solar – Self Funded)<b id="heroOutflowSelf">-</b></div></div><div class="save-line">🟢 You save approx <span id="heroSaving">-</span> every month</div></section>
+<section class="card"><div class="h sec">⚡ At a glance</div><div class="hero"><div class="metric">System Size<b><?= htmlspecialchars((string)($quote['capacity_kwp'] ?? '0'), ENT_QUOTES) ?> kWp</b></div><div class="metric">Monthly Bill (Without Solar)<b><?= quotation_format_inr_indian((float)($financialClarity['monthly_bill_before_rs'] ?? 0), $showDecimals) ?></b></div><div class="metric">Monthly Outflow (With Solar – Bank Finance)<b id="heroOutflowBank">-</b></div><div class="metric">Monthly Outflow (With Solar – Self Funded)<b id="heroOutflowSelf">-</b></div></div><div class="save-line">🟢 You save approx <span id="heroSaving">-</span> every month</div></section>
 <section class="card"><div class="h sec">📦 Item summary</div><table><thead><tr><th>Sr No</th><th>Item and Description</th><th>HSN</th><th class="center">Quantity</th><th class="center">Unit</th></tr></thead><tbody><?php if ($itemRows === []): ?><tr><td colspan="5" class="center muted">No line items added.</td></tr><?php else: foreach ($itemRows as $idx => $item): ?><tr><td><?= (int)$idx + 1 ?></td><td><div><?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?></div><?php $itemDesc=(string)($item['description'] ?? ''); if (trim($itemDesc) !== ''): ?><div class="item-master-description"><?= nl2br(htmlspecialchars($itemDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?><?php $customDesc=(string)($item['custom_description'] ?? ''); if (trim($customDesc) !== ''): ?><div class="item-custom-description">📝 <?= nl2br(htmlspecialchars($customDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?></td><td><?= htmlspecialchars((string)($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['qty'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
 <?php if($specialReq!==''): ?><section class="card"><div class="h sec">✍️ Special Requests From Consumer (Inclusive in the rate)</div><div><?= quotation_sanitize_html($specialReq) ?></div><div><i>In case of conflict between annexures and special requests, special requests will be prioritized.</i></div></section><?php endif; ?>
 <section class="card"><div class="h sec">💰 Pricing summary</div><table><thead><tr><th>#</th><th>Particular</th><th class="right">Amount</th></tr></thead><tbody><tr><td>1</td><td>Gross payable (before discount)</td><td class="right"><?= quotation_format_inr_indian((float)($calc['gross_payable_before_discount'] ?? $calc['gross_payable'] ?? 0), $showDecimals) ?></td></tr><tr><td>2</td><td>Discount<?php $discountNote=(string)($calc['discount_note'] ?? ''); if(trim($discountNote)!==''): ?><div class="muted" style="font-size:.85em;margin-top:2px"><?= htmlspecialchars($discountNote, ENT_QUOTES) ?></div><?php endif; ?></td><td class="right">- <?= quotation_format_inr_indian((float)($calc['discount_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td>3</td><td>Gross payable (after discount)</td><td class="right" id="upfront"></td></tr><tr><td>4</td><td>Subsidy expected</td><td class="right"><?= quotation_format_inr_indian((float)($calc['subsidy_expected_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td>5</td><td><b>Net Investment/Cost After Subsidy Credit</b></td><td class="right"><b id="upfrontNet"></b></td></tr></tbody></table></section>
@@ -272,7 +355,7 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <div class="metric">Estimated payback<b id="payback">-</b><div class="payback-meter"><div class="payback-meter-fill" id="paybackMeterFill"></div></div></div>
 </div>
 </section>
-<section class="card"><div class="h sec">🏦 Finance clarity</div><div class="scenario-grid"><div class="metric"><b>With Loan</b><div style="margin-top:6px">Margin<b id="margin">-</b></div><div>Loan eligible<b id="loan">-</b></div><div>Effective principal<b id="loanEff">-</b></div><div>EMI<b id="emi">-</b></div><div>Residual bill<b id="residual">-</b></div><div>Total outflow<b id="outflow">-</b></div></div><div class="metric"><b>Self Funded</b><div style="margin-top:6px">Upfront investment<b id="upfrontFinance">-</b></div><div>Investment minus subsidy<b id="upfrontNetFinance">-</b></div><div>Residual bill<b id="selfResidual">-</b></div></div></div></section>
+<section class="card"><div class="h sec">🏦 Finance clarity</div><div class="muted" style="font-size:.85em;margin-bottom:8px">Assumptions: ₹<?= number_format((float)($financialClarity['unit_rate_rs_per_kwh'] ?? 0), 2) ?>/unit, <?= number_format((float)($financialClarity['annual_generation_kwh_per_kw'] ?? 0), 0) ?> kWh/kWp/year, <?= number_format((float)($financialClarity['loan_interest_rate_percent'] ?? 0), 2) ?>% for <?= (int)($financialClarity['loan_tenure_months'] ?? 0) ?> months, loan cap ₹<?= number_format((float)($financialClarity['loan_cap_rs'] ?? 0), 0) ?></div><div class="scenario-grid"><div class="metric"><b>With Loan</b><div style="margin-top:6px">Margin<b id="margin">-</b></div><div>Loan eligible<b id="loan">-</b></div><div>Effective principal<b id="loanEff">-</b></div><div>EMI<b id="emi">-</b></div><div>Residual bill<b id="residual">-</b></div><div>Total outflow<b id="outflow">-</b></div></div><div class="metric"><b>Self Funded</b><div style="margin-top:6px">Upfront investment<b id="upfrontFinance">-</b></div><div>Investment minus subsidy<b id="upfrontNetFinance">-</b></div><div>Residual bill<b id="selfResidual">-</b></div></div></div></section>
 <section class="card"><div class="h sec">🔆 Generation estimate</div><table><tbody><tr><th>Expected monthly generation (units)</th><td class="right" id="genMonthly">-</td></tr><tr><th>Expected annual generation (units)</th><td class="right" id="genAnnual">-</td></tr><tr><th>Estimated payback period (years)</th><td class="right" id="genPayback">-</td></tr><tr><th>Units produced in 25 years (units)</th><td class="right" id="gen25">-</td></tr></tbody></table></section>
 <section class="card"><div class="h sec">🌱 Your Green Impact</div><div class="grid4"><div class="metric">CO₂/year<b id="co2y">-</b></div><div class="metric">Trees/year<b id="treey">-</b></div><div class="metric">CO₂ over 25 years<b id="co225">-</b></div><div class="metric">Trees over 25 years<b id="tree25">-</b></div></div></section>
 <section class="card"><div class="h sec">⭐ Why <?= htmlspecialchars($companyName, ENT_QUOTES) ?></div><ul><?php foreach ($whyPoints as $point): ?><li><?= htmlspecialchars((string)$point, ENT_QUOTES) ?></li><?php endforeach; ?></ul></section>
@@ -284,14 +367,27 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <section class="card footer"><div class="footer-brand-row"><?php if ($hasLogo): ?><div class="footer-logo"><img src="<?= htmlspecialchars($logoSrc, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($companyName, ENT_QUOTES) ?> logo" /></div><?php endif; ?><div class="footer-brand-name"><?= htmlspecialchars($companyName, ENT_QUOTES) ?></div></div><div>Registered office: <?= htmlspecialchars((string)($company['address_line'] ?? ''), ENT_QUOTES) ?></div><div>📞 <?= htmlspecialchars((string)($company['phone_primary'] ?? ''), ENT_QUOTES) ?><?= $whatsappDisplay !== '' ? ' · 💬 ' . htmlspecialchars($whatsappDisplay, ENT_QUOTES) : '' ?> · ✉️ <?= htmlspecialchars((string)($company['email_primary'] ?? ''), ENT_QUOTES) ?> · 🌐 <?= htmlspecialchars($website, ENT_QUOTES) ?></div><div>GSTIN: <?= htmlspecialchars((string)($company['gstin'] ?? ''), ENT_QUOTES) ?> · UDYAM: <?= htmlspecialchars((string)($company['udyam'] ?? ''), ENT_QUOTES) ?> · PAN: <?= htmlspecialchars((string)($company['pan'] ?? ''), ENT_QUOTES) ?></div><div>JREDA: <?= htmlspecialchars((string)($company['jreda_license'] ?? ''), ENT_QUOTES) ?> · DWSD: <?= htmlspecialchars((string)($company['dwsd_license'] ?? ''), ENT_QUOTES) ?></div><div><small>🧾 <?= htmlspecialchars((string)($quoteDefaults['global']['quotation_ui']['footer_disclaimer'] ?? 'Values are indicative and subject to site conditions, DISCOM approvals, and policy updates.'), ENT_QUOTES) ?></small></div></section>
 </div>
 <script>
-const q={gross:<?= json_encode((float)$calc['gross_payable']) ?>,subsidy:<?= json_encode((float)$calc['subsidy_expected_rs']) ?>,subsidyProvided:<?= json_encode($subsidyProvided) ?>,monthly:<?= json_encode((float)($quote['finance_inputs']['monthly_bill_rs'] ?? 0)) ?>,unit:<?= json_encode($unitRate) ?>,cap:<?= json_encode((float)($quote['capacity_kwp'] ?? 0)) ?>,gen:<?= json_encode($annualGeneration) ?>};
+const q={
+  gross:<?= json_encode((float)($financialClarity['gross'] ?? 0)) ?>,
+  subsidy:<?= json_encode((float)($financialClarity['subsidy'] ?? 0)) ?>,
+  subsidyProvided:<?= json_encode($subsidyProvided) ?>,
+  monthly:<?= json_encode((float)($financialClarity['monthly_bill_before_rs'] ?? 0)) ?>,
+  unit:<?= json_encode((float)($financialClarity['unit_rate_rs_per_kwh'] ?? 0)) ?>,
+  cap:<?= json_encode((float)($financialClarity['capacity_kwp'] ?? 0)) ?>,
+  gen:<?= json_encode((float)($financialClarity['annual_generation_kwh_per_kw'] ?? 0)) ?>,
+  margin:<?= json_encode((float)($financialClarity['margin_amount_rs'] ?? 0)) ?>,
+  loan:<?= json_encode((float)($financialClarity['loan_eligible_rs'] ?? 0)) ?>,
+  loanEff:<?= json_encode((float)($financialClarity['effective_principal_rs'] ?? 0)) ?>,
+  emi:<?= json_encode((float)($financialClarity['emi_rs'] ?? 0)) ?>,
+  residual:<?= json_encode((float)($financialClarity['residual_bill'] ?? 0)) ?>,
+  out:<?= json_encode((float)($financialClarity['loan_total_outflow_rs'] ?? 0)) ?>
+};
 const showDecimals=<?= json_encode($showDecimals) ?>;
 const r=x=>'₹'+Number(x).toLocaleString('en-IN',{minimumFractionDigits:showDecimals?2:0,maximumFractionDigits:showDecimals?2:0});
 const nUnits=x=>Number(x).toLocaleString('en-US',{maximumFractionDigits:0});
-const rr=(<?= json_encode($loanInterest) ?>)/100/12,n=<?= json_encode($loanTenureMonths) ?>;
-const minMargin=q.gross*0.10,loan=Math.max(0,q.gross-minMargin),margin=q.gross-loan,loanEff=Math.max(0,loan-q.subsidy),emi=loanEff>0?(loanEff*rr*Math.pow(1+rr,n))/((Math.pow(1+rr,n))-1):0,mUnits=q.monthly/Math.max(0.1,q.unit),solar=(q.cap*q.gen)/12,res=Math.max(0,mUnits-solar)*q.unit,out=emi+res;
+const margin=q.margin,loan=q.loan,loanEff=q.loanEff,emi=q.emi,res=q.residual,out=q.out;
 ['margin','loan','loanEff','emi','residual','outflow','selfResidual'].forEach((id)=>{const map={margin,loan,loanEff,emi,residual:res,outflow:out,selfResidual:res};const el=document.getElementById(id);if(el)el.textContent=r(map[id]);});
-const upfrontNet=q.gross-q.subsidy;
+const upfrontNet=Math.max(0,q.gross-q.subsidy);
 const financeMap={upfront:q.gross,upfrontNet,upfrontFinance:q.gross,upfrontNetFinance:upfrontNet};
 Object.keys(financeMap).forEach((id)=>{const el=document.getElementById(id);if(el)el.textContent=r(financeMap[id]);});
 const heroSaving=Math.max(0,q.monthly-res);document.getElementById('heroOutflowBank').textContent=r(out);document.getElementById('heroOutflowSelf').textContent=r(res);document.getElementById('heroSaving').textContent=r(heroSaving);
