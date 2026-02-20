@@ -392,6 +392,7 @@ const setMetric=(id,value,formatter)=>{
   el.textContent=formatter(value);
 };
 const margin=q.margin,loan=q.loan,loanEff=q.loanEff,emi=q.emi,res=q.residual,out=q.out;
+const loanMarginBaseline=(Number.isFinite(margin)&&margin>0)?margin:Math.max(0,q.gross-loan);
 ['margin','loan','loanEff','emi','residual','outflow','selfResidual'].forEach((id)=>{const map={margin,loan,loanEff,emi,residual:res,outflow:out,selfResidual:res};const el=document.getElementById(id);if(el)el.textContent=r(map[id]);});
 const upfrontNet=Math.max(0,q.gross-q.subsidy);
 const financeMap={upfront:q.gross,upfrontNet,upfrontFinance:q.gross,upfrontNetFinance:upfrontNet};
@@ -423,7 +424,7 @@ const cumSeries=[
   {label:'With Solar (Loan)',color:'#0ea5e9',points:[]},
   {label:'With Solar (Self funded)',color:'#22c55e',points:[]}
 ];
-for(let y=0;y<=25;y+=1){const m=y*12;cumSeries[0].points.push({x:y,y:m*q.monthly});cumSeries[1].points.push({x:y,y:m*out});cumSeries[2].points.push({x:y,y:q.gross+(m*res)});}
+for(let y=0;y<=25;y+=1){const m=y*12;cumSeries[0].points.push({x:y,y:m*q.monthly});cumSeries[1].points.push({x:y,y:loanMarginBaseline+(m*out)});cumSeries[2].points.push({x:y,y:q.gross+(m*res)});}
 const svg=document.getElementById('cumulativeExpenseChart');
 const cumLegend=document.getElementById('cumulativeLegend');
 if(svg&&cumLegend){
