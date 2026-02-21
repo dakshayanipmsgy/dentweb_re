@@ -4210,6 +4210,38 @@ function documents_inventory_get_component(string $id): ?array
     return null;
 }
 
+function get_active_components(): array
+{
+    return documents_inventory_components(false);
+}
+
+function get_active_kits(): array
+{
+    return documents_inventory_kits(false);
+}
+
+function get_active_variants(?string $componentId = null): array
+{
+    $variants = documents_inventory_component_variants(false);
+    $componentId = trim((string) $componentId);
+    if ($componentId === '') {
+        return $variants;
+    }
+    return array_values(array_filter($variants, static function ($row) use ($componentId): bool {
+        return is_array($row) && (string) ($row['component_id'] ?? '') === $componentId;
+    }));
+}
+
+function get_active_tax_profiles(): array
+{
+    return documents_inventory_tax_profiles(false);
+}
+
+function get_active_locations(): array
+{
+    return documents_inventory_locations(false);
+}
+
 function documents_inventory_get_kit(string $id): ?array
 {
     foreach (documents_inventory_kits(true) as $kit) {
