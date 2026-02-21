@@ -3847,6 +3847,9 @@ function documents_inventory_transaction_defaults(): array
         'consume_location_id' => '',
         'from_location_id' => '',
         'to_location_id' => '',
+        'purpose' => '',
+        'quote_id' => '',
+        'customer_mobile' => '',
         'ref_type' => 'manual',
         'ref_id' => '',
         'reason' => '',
@@ -3865,6 +3868,44 @@ function documents_inventory_transaction_defaults(): array
         'reverses_txn_id' => '',
         'reversed_by_txn_id' => '',
     ];
+}
+
+function documents_inventory_normalize_tx_purpose(string $purpose): string
+{
+    $purpose = strtolower(safe_text($purpose));
+    if (in_array($purpose, ['internal_transfer', 'customer_dispatch', 'manual_adjustment', 'procurement_in'], true)) {
+        return $purpose;
+    }
+    return '';
+}
+
+function documents_inventory_infer_tx_purpose(array $tx): string
+{
+    $row = array_merge(documents_inventory_transaction_defaults(), $tx);
+    $explicit = documents_inventory_normalize_tx_purpose((string) ($row['purpose'] ?? ''));
+    if ($explicit !== '') {
+        return $explicit;
+    }
+
+    $type = strtoupper((string) ($row['type'] ?? ''));
+    $refType = strtolower((string) ($row['ref_type'] ?? ''));
+    $hasCustomerLink = safe_text((string) ($row['quote_id'] ?? '')) !== '' || safe_text((string) ($row['customer_mobile'] ?? '')) !== '';
+
+    if ($type === 'IN' || in_array($refType, ['manual_in', 'csv_import_in', 'stock_in'], true)) {
+        return 'procurement_in';
+    }
+    if ($type === 'MOVE' || in_array($refType, ['move', 'inventory_move'], true)) {
+        return 'internal_transfer';
+    }
+    if ($refType === 'delivery_challan' || $hasCustomerLink) {
+        return 'customer_dispatch';
+    }
+    return 'manual_adjustment';
+}
+
+function documents_inventory_is_customer_dispatch_tx(array $tx): bool
+{
+    return documents_inventory_infer_tx_purpose($tx) === 'customer_dispatch';
 }
 
 function documents_inventory_component_entry_defaults(): array
@@ -4168,19 +4209,42 @@ function documents_inventory_save_stock(array $stock): array
 function documents_inventory_load_transactions(): array
 {
     $rows = json_load(documents_inventory_transactions_path(), []);
-    return is_array($rows) ? $rows : [];
+    if (!is_array($rows)) {
+        return [];
+    }
+    $list = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $tx = array_merge(documents_inventory_transaction_defaults(), $row);
+        $tx['purpose'] = documents_inventory_infer_tx_purpose($tx);
+        $list[] = $tx;
+    }
+    return $list;
 }
 
 function documents_inventory_append_transaction(array $tx): array
 {
     $rows = documents_inventory_load_transactions();
-    $rows[] = array_merge(documents_inventory_transaction_defaults(), $tx);
+    $normalized = array_merge(documents_inventory_transaction_defaults(), $tx);
+    $normalized['purpose'] = documents_inventory_infer_tx_purpose($normalized);
+    $rows[] = $normalized;
     return json_save(documents_inventory_transactions_path(), $rows);
 }
 
 function documents_inventory_save_transactions(array $transactions): array
 {
-    return json_save(documents_inventory_transactions_path(), array_values($transactions));
+    $rows = [];
+    foreach ($transactions as $tx) {
+        if (!is_array($tx)) {
+            continue;
+        }
+        $row = array_merge(documents_inventory_transaction_defaults(), $tx);
+        $row['purpose'] = documents_inventory_infer_tx_purpose($row);
+        $rows[] = $row;
+    }
+    return json_save(documents_inventory_transactions_path(), array_values($rows));
 }
 
 function documents_inventory_load_verification_log(): array
@@ -4305,17 +4369,17 @@ function documents_inventory_build_usage_index(array $transactions): array
             continue;
         }
         $type = strtoupper((string) ($row['type'] ?? ''));
-        if (!in_array($type, ['OUT', 'ADJUST', 'MOVE'], true)) {
+        if ($type !== 'OUT' || !documents_inventory_is_customer_dispatch_tx($row)) {
             continue;
         }
 
         $componentId = (string) ($row['component_id'] ?? '');
         $variantId = (string) ($row['variant_id'] ?? '');
-        if ($componentId !== '' && $type !== 'MOVE') {
+        if ($componentId !== '') {
             if ($variantId === '') {
-                $componentBlocked[$componentId] = 'Used in ' . $type . ' transaction.';
+                $componentBlocked[$componentId] = 'Dispatched to customer.';
             } else {
-                $variantBlocked[$variantId] = 'Used in ' . $type . ' transaction.';
+                $variantBlocked[$variantId] = 'Dispatched to customer.';
             }
         }
 
@@ -4327,7 +4391,7 @@ function documents_inventory_build_usage_index(array $transactions): array
             if ($lotId === '') {
                 continue;
             }
-            $lotBlocked[$lotId] = $type === 'MOVE' ? 'Lot moved in transaction.' : 'Lot consumed in transaction.';
+            $lotBlocked[$lotId] = 'Lot dispatched to customer.';
             $lotActiveTxnIds[$lotId][] = (string) ($row['id'] ?? '');
         }
 
@@ -4339,7 +4403,7 @@ function documents_inventory_build_usage_index(array $transactions): array
             if ($batchId === '') {
                 continue;
             }
-            $batchBlocked[$batchId] = 'Batch moved/consumed in transaction.';
+            $batchBlocked[$batchId] = 'Batch dispatched to customer.';
             $batchActiveTxnIds[$batchId][] = (string) ($row['id'] ?? '');
         }
         foreach ((array) ($row['batch_ids'] ?? []) as $batchId) {
@@ -4347,7 +4411,7 @@ function documents_inventory_build_usage_index(array $transactions): array
             if ($batchId === '') {
                 continue;
             }
-            $batchBlocked[$batchId] = 'Batch moved/consumed in transaction.';
+            $batchBlocked[$batchId] = 'Batch dispatched to customer.';
             $batchActiveTxnIds[$batchId][] = (string) ($row['id'] ?? '');
         }
     }
