@@ -4145,6 +4145,13 @@ function documents_inventory_load_stock(): array
         if (!is_array($componentEntry)) {
             $componentEntry = [];
         }
+        if (
+            (!isset($componentEntry['stock_by_variant_id']) || !is_array($componentEntry['stock_by_variant_id']))
+            && isset($componentEntry['variants'])
+            && is_array($componentEntry['variants'])
+        ) {
+            $componentEntry['stock_by_variant_id'] = $componentEntry['variants'];
+        }
         if (!isset($componentEntry['stock_by_variant_id']) || !is_array($componentEntry['stock_by_variant_id'])) {
             $legacyEntry = array_merge(documents_inventory_component_entry_defaults(), $componentEntry);
             $componentEntry = ['stock_by_variant_id' => [documents_inventory_stock_bucket_key('') => $legacyEntry]];
@@ -4162,6 +4169,16 @@ function documents_inventory_load_stock(): array
 
 function documents_inventory_save_stock(array $stock): array
 {
+    if (is_array($stock['stock_by_component_id'] ?? null)) {
+        foreach ($stock['stock_by_component_id'] as $componentId => $componentEntry) {
+            if (!is_array($componentEntry)) {
+                continue;
+            }
+            if (isset($componentEntry['stock_by_variant_id']) && is_array($componentEntry['stock_by_variant_id'])) {
+                $stock['stock_by_component_id'][$componentId]['variants'] = $componentEntry['stock_by_variant_id'];
+            }
+        }
+    }
     return json_save(documents_inventory_stock_path(), $stock);
 }
 
@@ -4578,6 +4595,8 @@ function documents_inventory_stock_entry_raw(array $stock, string $componentId, 
     if (is_array($componentEntry)) {
         if (isset($componentEntry['stock_by_variant_id']) && is_array($componentEntry['stock_by_variant_id'])) {
             $entry = $componentEntry['stock_by_variant_id'][documents_inventory_stock_bucket_key($variantId)] ?? [];
+        } elseif (isset($componentEntry['variants']) && is_array($componentEntry['variants'])) {
+            $entry = $componentEntry['variants'][documents_inventory_stock_bucket_key($variantId)] ?? $componentEntry['variants'][$variantId] ?? [];
         } else {
             $entry = $componentEntry;
         }
@@ -4605,8 +4624,15 @@ function documents_inventory_component_variant_entries(array $stock, string $com
 {
     $entries = [];
     $componentEntry = $stock['stock_by_component_id'][$componentId] ?? null;
+    $variantBuckets = [];
     if (is_array($componentEntry) && isset($componentEntry['stock_by_variant_id']) && is_array($componentEntry['stock_by_variant_id'])) {
-        foreach ($componentEntry['stock_by_variant_id'] as $bucketKey => $bucketEntry) {
+        $variantBuckets = $componentEntry['stock_by_variant_id'];
+    } elseif (is_array($componentEntry) && isset($componentEntry['variants']) && is_array($componentEntry['variants'])) {
+        $variantBuckets = $componentEntry['variants'];
+    }
+
+    if ($variantBuckets !== []) {
+        foreach ($variantBuckets as $bucketKey => $bucketEntry) {
             if ($bucketKey === documents_inventory_stock_bucket_key('')) {
                 continue;
             }
@@ -4730,6 +4756,16 @@ function documents_inventory_set_component_stock(array &$stock, string $componen
 
     $bucketKey = documents_inventory_stock_bucket_key($variantId);
     $stock['stock_by_component_id'][$componentId]['stock_by_variant_id'][$bucketKey] = array_merge(documents_inventory_component_entry_defaults(), $entry);
+    $stock['stock_by_component_id'][$componentId]['variants'] = $stock['stock_by_component_id'][$componentId]['stock_by_variant_id'];
+}
+
+function documents_inventory_format_number(float $value, int $decimals = 2): string
+{
+    $value = (float) $value;
+    if (abs($value - round($value)) <= 0.00001) {
+        return (string) (int) round($value);
+    }
+    return rtrim(rtrim(number_format($value, $decimals, '.', ''), '0'), '.');
 }
 
 function documents_inventory_total_remaining_ft(array $entry): float
