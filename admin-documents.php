@@ -2026,7 +2026,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ];
             }
 
-            $variantEdits = $isAdmin && isset($_POST['variant_edits']) && is_array($_POST['variant_edits']) ? $_POST['variant_edits'] : [];
+            $variantEdits = isset($_POST['variant_edits']) && is_array($_POST['variant_edits']) ? $_POST['variant_edits'] : [];
             foreach ($variantEdits as $variantId => $payload) {
                 $variantId = safe_text((string) $variantId);
                 if ($variantId === '' || !is_array($payload)) {
@@ -2043,6 +2043,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $rows = isset($payload['rows']) && is_array($payload['rows']) ? $payload['rows'] : [];
                 $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
+                $hasBatches = is_array($entry['batches'] ?? null) && (array) ($entry['batches'] ?? []) !== [];
                 $newRows = [];
                 foreach ($rows as $row) {
                     if (!is_array($row)) {
@@ -2059,6 +2060,115 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $newRows = documents_inventory_normalize_location_breakdown($newRows);
                 $oldRows = documents_inventory_normalize_location_breakdown((array) ($entry['location_breakdown'] ?? []));
                 if (json_encode($newRows) === json_encode($oldRows)) {
+                    continue;
+                }
+
+                if ($hasBatches) {
+                    $batches = is_array($entry['batches'] ?? null) ? $entry['batches'] : [];
+                    $batchesByLocation = [];
+                    foreach ($batches as $batchIdx => $batch) {
+                        if (!is_array($batch)) {
+                            continue;
+                        }
+                        $locKey = (string) ($batch['location_id'] ?? '');
+                        if (!isset($batchesByLocation[$locKey])) {
+                            $batchesByLocation[$locKey] = [];
+                        }
+                        $batchesByLocation[$locKey][] = $batchIdx;
+                    }
+
+                    $oldByLocation = [];
+                    foreach ($oldRows as $row) {
+                        if (!is_array($row)) {
+                            continue;
+                        }
+                        $oldByLocation[(string) ($row['location_id'] ?? '')] = max(0, (float) ($row['qty'] ?? 0));
+                    }
+                    $newByLocation = [];
+                    foreach ($newRows as $row) {
+                        if (!is_array($row)) {
+                            continue;
+                        }
+                        $newByLocation[(string) ($row['location_id'] ?? '')] = max(0, (float) ($row['qty'] ?? 0));
+                    }
+
+                    $oldLocations = array_keys($oldByLocation);
+                    $newLocations = array_keys($newByLocation);
+                    sort($oldLocations);
+                    sort($newLocations);
+                    if ($oldLocations !== $newLocations) {
+                        $errors[] = 'Variant ' . $variantId . ' quantity edits can only update existing batch locations.';
+                        continue;
+                    }
+
+                    $entryChanged = false;
+                    foreach ($newByLocation as $locationId => $newQty) {
+                        $oldQty = max(0, (float) ($oldByLocation[$locationId] ?? 0));
+                        if (abs($newQty - $oldQty) <= 0.00001) {
+                            continue;
+                        }
+                        $batchIndexes = $batchesByLocation[$locationId] ?? [];
+                        if (count($batchIndexes) !== 1) {
+                            $errors[] = 'Variant ' . $variantId . ' at location ' . documents_inventory_resolve_location_name($locationId) . ' has multiple batches; edit is blocked for safety.';
+                            continue 2;
+                        }
+                        $batchIndex = (int) $batchIndexes[0];
+                        $batch = is_array($batches[$batchIndex] ?? null) ? $batches[$batchIndex] : [];
+                        $batchId = (string) ($batch['batch_id'] ?? '');
+                        if ($batchId === '' || isset($batchBlocked[$batchId])) {
+                            $errors[] = 'Batch ' . $batchId . ' has already been moved/consumed and cannot be edited.';
+                            continue 2;
+                        }
+                        if (!$isAdmin) {
+                            $owner = is_array($batch['created_by'] ?? null) ? $batch['created_by'] : [];
+                            if ((string) ($owner['role'] ?? '') !== 'employee' || (string) ($owner['id'] ?? '') !== (string) ($user['id'] ?? '')) {
+                                $errors[] = 'Batch ' . $batchId . ' is not owned by you.';
+                                continue 2;
+                            }
+                        }
+
+                        $oldBatchQty = max(0, (float) ($batch['qty_remaining'] ?? 0));
+                        $batches[$batchIndex]['qty_remaining'] = $newQty;
+                        $changed[] = [
+                            'entity_type' => 'variant_batch',
+                            'entity_id' => $batchId,
+                            'field' => 'qty',
+                            'from' => $oldBatchQty,
+                            'to' => $newQty,
+                        ];
+                        $entryChanged = true;
+                    }
+
+                    if (!$entryChanged) {
+                        continue;
+                    }
+
+                    $normalizedBatches = [];
+                    foreach ($batches as $batch) {
+                        if (!is_array($batch)) {
+                            continue;
+                        }
+                        $qtyRemaining = max(0, (float) ($batch['qty_remaining'] ?? 0));
+                        if ($qtyRemaining <= 0) {
+                            continue;
+                        }
+                        $batch['qty_remaining'] = $qtyRemaining;
+                        $normalizedBatches[] = $batch;
+                    }
+                    $entry['batches'] = $normalizedBatches;
+                    $entry['location_breakdown'] = [];
+                    foreach ($entry['batches'] as $batch) {
+                        $entry['location_breakdown'][] = ['location_id' => (string) ($batch['location_id'] ?? ''), 'qty' => (float) ($batch['qty_remaining'] ?? 0)];
+                    }
+                    $entry['location_breakdown'] = documents_inventory_normalize_location_breakdown($entry['location_breakdown']);
+                    $entry['on_hand_qty'] = documents_inventory_location_breakdown_total($entry['location_breakdown']);
+                    $entry['updated_at'] = date('c');
+                    documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
+                    continue;
+                }
+
+                if (!$isAdmin) {
+                    $errors[] = 'Variant ' . $variantId . ' uses legacy stock and can only be edited by admin.';
                     continue;
                 }
 
