@@ -84,7 +84,7 @@ $variantMap = [];
 $variantsByComponent = [];
 $variantStockById = [];
 $stockSnapshot = documents_inventory_load_stock();
-foreach (documents_inventory_component_variants(true) as $variant) {
+foreach (documents_inventory_component_variants(false) as $variant) {
     if (!is_array($variant)) { continue; }
     $variantId = (string) ($variant['id'] ?? '');
     $componentId = (string) ($variant['component_id'] ?? '');
@@ -97,13 +97,12 @@ foreach (documents_inventory_component_variants(true) as $variant) {
         'name' => (string) ($variant['display_name'] ?? $variantId),
         'stock' => $varStock,
         'wattage_wp' => (float) ($variant['wattage_wp'] ?? 0),
-        'archived' => !empty($variant['archived']),
     ];
     $variantStockById[$variantId] = $varStock;
 }
 
 $locationsMap = [];
-foreach (documents_inventory_locations(true) as $locationRow) {
+foreach (documents_inventory_locations(false) as $locationRow) {
     if (!is_array($locationRow)) {
         continue;
     }
@@ -112,6 +111,32 @@ foreach (documents_inventory_locations(true) as $locationRow) {
         continue;
     }
     $locationsMap[$locId] = (string) ($locationRow['name'] ?? $locId);
+}
+
+$locationStockByComponentVariant = [];
+foreach ($componentMap as $componentId => $component) {
+    $variantEntries = !empty($component['has_variants']) ? ($variantsByComponent[$componentId] ?? []) : [['id' => '']];
+    if ($variantEntries === []) {
+        $variantEntries = [['id' => '']];
+    }
+    foreach ($variantEntries as $variantEntry) {
+        $variantId = (string) ($variantEntry['id'] ?? '');
+        $entry = documents_inventory_component_stock($stockSnapshot, $componentId, $variantId);
+        $rows = [];
+        foreach ((array) ($entry['location_breakdown'] ?? []) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $locationId = safe_text((string) ($row['location_id'] ?? ''));
+            $qty = (float) ($row['qty'] ?? 0);
+            $rows[] = [
+                'location_id' => $locationId,
+                'location_name' => $locationsMap[$locationId] ?? ($locationId !== '' ? $locationId : 'Unassigned'),
+                'qty' => $qty,
+            ];
+        }
+        $locationStockByComponentVariant[$componentId . '|' . $variantId] = $rows;
+    }
 }
 
 $cuttableStockByComponentVariant = [];
@@ -310,6 +335,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $isCuttable = !empty($component['is_cuttable']);
+                $consumeFromLocationId = safe_text((string) ($linePostRaw['consume_from_location_id'] ?? ''));
                 $qtyRaw = trim((string) ($linePostRaw['qty'] ?? ''));
                 $lengthRaw = trim((string) ($linePostRaw['cut_length_ft'] ?? ''));
                 $piecesRaw = trim((string) ($linePostRaw['pieces'] ?? ''));
@@ -398,6 +424,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $lineErrors[] = $linePrefix . 'Quantity is required.';
                 }
 
+                if (!$isCuttable) {
+                    $locationRows = (array) ($locationStockByComponentVariant[$componentId . '|' . ($hasVariants ? $variantId : '')] ?? []);
+                    if ($locationRows !== []) {
+                        if ($consumeFromLocationId === '') {
+                            $lineErrors[] = $linePrefix . 'Select consume location.';
+                        } else {
+                            $knownLocationIds = array_values(array_filter(array_map(static fn($row): string => safe_text((string) (($row['location_id'] ?? ''))), $locationRows), static fn(string $id): bool => $id !== ''));
+                            if ($knownLocationIds !== [] && !in_array($consumeFromLocationId, $knownLocationIds, true)) {
+                                $lineErrors[] = $linePrefix . 'Selected consume location is invalid.';
+                            }
+                        }
+                    }
+                }
+
                 if ($isCuttable && $cutPlanMode === 'manual' && $lotAllocations !== []) {
                     $stockEntryForLine = documents_inventory_component_stock($stockSnapshot, $componentId, $hasVariants ? $variantId : '');
                     $lotMeta = [];
@@ -439,6 +479,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'variant_name_snapshot' => $variantName,
                     'is_cuttable_snapshot' => $isCuttable,
                     'qty' => $isCuttable ? 0 : $qty,
+                    'consume_from_location_id' => $isCuttable ? '' : $consumeFromLocationId,
                     'length_ft' => $isCuttable ? $lengthFt : 0,
                     'pieces' => $pieceCount,
                     'selected_lot_ids' => $selectedLotIds,
@@ -647,14 +688,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($needQty <= 0) { continue; }
                     $availableQty = max(0, (float) ($entry['on_hand_qty'] ?? 0));
                     $consumeQty = min($needQty, $availableQty);
-                    $consumed = $consumeQty > 0 ? documents_inventory_consume_from_location_breakdown($entry, $consumeQty, '') : ['ok' => true, 'entry' => $entry, 'location_consumption' => []];
+                    $preferredLocationId = safe_text((string) ($line['consume_from_location_id'] ?? ''));
+                    $consumed = $consumeQty > 0 ? documents_inventory_consume_from_location_breakdown($entry, $consumeQty, $preferredLocationId) : ['ok' => true, 'entry' => $entry, 'location_consumption' => []];
                     if (!($consumed['ok'] ?? false)) {
                         $consumed = ['ok' => true, 'entry' => $entry, 'location_consumption' => []];
                     }
                     $entry = (array) ($consumed['entry'] ?? $entry);
-                    $entry['on_hand_qty'] = ((float) ($entry['on_hand_qty'] ?? 0)) - ($needQty - $consumeQty);
+                    if ($needQty - $consumeQty > 0.00001) {
+                        $entry = documents_inventory_add_to_location_breakdown($entry, -($needQty - $consumeQty), $preferredLocationId);
+                    }
                     $tx['qty'] = $needQty;
                     $tx['location_consumption'] = (array) ($consumed['location_consumption'] ?? []);
+                    if ($needQty - $consumeQty > 0.00001) {
+                        $tx['location_consumption'][] = ['location_id' => $preferredLocationId, 'qty' => ($needQty - $consumeQty)];
+                    }
+                    $tx['consume_location_id'] = $preferredLocationId;
                 }
 
                 $entry['updated_at'] = date('c');
@@ -933,9 +981,11 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <select name="" data-field="component_id" class="component-select" <?= $editable ? '' : 'disabled' ?>>
 <option value="">Select</option><?php foreach ($componentClientMap as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($component['id'] ?? ''))===$componentId?'selected':'' ?>><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?>
 </select>
-<select name="" data-field="variant_id" class="variant-select" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>><option value="">N/A</option><?php foreach ((array) ($variantsByComponent[$componentId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variant['id'] ?? ''))===$variantId?'selected':'' ?>><?= htmlspecialchars((string) ($variant['name'] ?? ''), ENT_QUOTES) ?><?= !empty($variant['archived']) ? ' (archived)' : '' ?> — Stock: <?= htmlspecialchars((string) round((float) ($variant['stock'] ?? 0), 2), ENT_QUOTES) ?></option><?php endforeach; ?></select>
+<select name="" data-field="variant_id" class="variant-select" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>><option value="">N/A</option><?php foreach ((array) ($variantsByComponent[$componentId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variant['id'] ?? ''))===$variantId?'selected':'' ?>><?= htmlspecialchars((string) ($variant['name'] ?? ''), ENT_QUOTES) ?> — Stock: <?= htmlspecialchars((string) round((float) ($variant['stock'] ?? 0), 2), ENT_QUOTES) ?></option><?php endforeach; ?></select>
 <input name="" data-field="notes" placeholder="Description / notes" value="<?= htmlspecialchars((string) ($line['notes'] ?? ''), ENT_QUOTES) ?>" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>>
 <div class="small muted stock-hint" style="margin-top:6px">Stock: <?= htmlspecialchars((string) round($lineStock, 2), ENT_QUOTES) ?><?= $isCuttable ? ' ft' : '' ?><?= $lineStock <= 0 ? ' (will go negative)' : '' ?></div>
+<div class="small stock-location-panel" style="margin-top:6px"></div>
+<input type="hidden" name="" data-field="consume_from_location_id" class="consume-location-input" value="<?= htmlspecialchars((string) ($line['consume_from_location_id'] ?? ''), ENT_QUOTES) ?>">
 <div class="small" style="margin-top:6px;color:#b91c1c"><?php foreach ((array) ($line['line_errors'] ?? []) as $lineError): ?><div><?= htmlspecialchars((string) $lineError, ENT_QUOTES) ?></div><?php endforeach; ?></div>
 <div class="cuttable-panel small" style="margin-top:6px"></div>
 </td>
@@ -963,6 +1013,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 const COMPONENTS = <?= json_encode($componentClientMap, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 const VARIANTS = <?= json_encode($variantsByComponent, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 const CUTTABLE_STOCK = <?= json_encode($cuttableStockByComponentVariant, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+const LOCATION_STOCK = <?= json_encode($locationStockByComponentVariant, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 const editable = <?= $editable ? 'true' : 'false' ?>;
 
 const componentOptions = `<option value="">Select</option>${Object.values(COMPONENTS).map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}`;
@@ -1143,6 +1194,8 @@ const wireRow = (tr) => {
   const pieces = tr.querySelector('.pieces-input');
   const hsn = tr.querySelector('.hsn-display');
   const stockHint = tr.querySelector('.stock-hint');
+  const stockLocationPanel = tr.querySelector('.stock-location-panel');
+  const consumeLocationInput = tr.querySelector('.consume-location-input');
 
   const refresh = () => {
     const cid = comp.value;
@@ -1155,7 +1208,7 @@ const wireRow = (tr) => {
       (VARIANTS[cid] || []).forEach(v => {
         const o = document.createElement('option');
         o.value = v.id;
-        o.textContent = `${v.name}${v.archived ? ' (archived)' : ''} — Stock: ${Number(v.stock||0).toFixed(2)}`;
+        o.textContent = `${v.name} — Stock: ${Number(v.stock||0).toFixed(2)}`;
         variant.appendChild(o);
       });
       variant.disabled = false;
@@ -1168,6 +1221,31 @@ const wireRow = (tr) => {
     length.style.display = isCuttable ? '' : 'none';
     pieces.style.display = isCuttable ? '' : 'none';
     hsn.value = c ? (c.hsn || '') : '';
+    if (stockLocationPanel) {
+      const key = stockKey(cid, hasVariants ? (variant.value || '') : '');
+      const rows = Array.isArray(LOCATION_STOCK[key]) ? LOCATION_STOCK[key] : [];
+      const lineId = ensureLineId(tr);
+      if (c && !isCuttable) {
+        let selected = consumeLocationInput ? (consumeLocationInput.value || '') : '';
+        const positiveRows = rows.filter((r) => Number(r.qty || 0) > 0);
+        if (!selected && positiveRows.length === 1) {
+          selected = positiveRows[0].location_id || '';
+          if (consumeLocationInput) consumeLocationInput.value = selected;
+        }
+        const warning = rows.length > 0 && positiveRows.length === 0
+          ? '<div style="color:#b91c1c">No positive stock in any location. Negative stock allowed on selected location.</div>'
+          : '';
+        stockLocationPanel.innerHTML = `<div><strong>Available Stock by Location</strong></div>${rows.map((r) => `<label style="display:block;margin-top:4px"><input type="radio" name="consume_loc_${lineId}" value="${r.location_id || ''}" ${selected === (r.location_id || '') ? 'checked' : ''} ${editable ? '' : 'disabled'}> ${(r.location_name || (r.location_id || 'Unassigned'))} — ${Number(r.qty || 0).toFixed(2)}</label>`).join('') || '<div class="muted">No location breakdown available.</div>'}${warning}`;
+        stockLocationPanel.querySelectorAll(`input[name="consume_loc_${lineId}"]`).forEach((radio) => {
+          radio.addEventListener('change', () => {
+            if (consumeLocationInput) consumeLocationInput.value = radio.value || '';
+          });
+        });
+      } else {
+        stockLocationPanel.innerHTML = '';
+        if (consumeLocationInput) consumeLocationInput.value = '';
+      }
+    }
     renderCuttablePanel(tr);
   };
 
@@ -1201,7 +1279,7 @@ if (editable) {
   const createLine = () => {
     const tr = document.createElement('tr');
     tr.className = 'dc-line-row';
-    tr.innerHTML = `<td class="sr-col"></td><td><input type="hidden" name="" data-field="line_id" value="line_${Math.random().toString(16).slice(2)}"><input type="hidden" name="" data-field="line_origin" class="line-origin" value="extra"><input type="hidden" name="" data-field="packing_line_id" class="line-packing-line-id" value=""><select name="" data-field="component_id" class="component-select">${componentOptions}</select><select name="" data-field="variant_id" class="variant-select" style="margin-top:6px"><option value="">N/A</option></select><input name="" data-field="notes" placeholder="Description / notes" style="margin-top:6px"><div class="small muted stock-hint" style="margin-top:6px"></div><div class="small" style="margin-top:6px;color:#b91c1c"></div><div class="cuttable-panel small" style="margin-top:6px"></div></td><td class="mono"><input class="hsn-display" readonly></td><td><input type="number" step="0.01" min="0" name="" data-field="qty" class="qty-input" value="0"><input type="number" step="1" min="0" name="" data-field="pieces" class="pieces-input" value="0" style="margin-top:6px"><input type="hidden" name="" data-field="selected_lot_ids" class="line-selected-lot-ids" value="[]"><input type="hidden" name="" data-field="lot_cuts" class="line-lot-cuts-input" value="[]"><input type="hidden" name="" data-field="cut_plan_mode" class="line-cut-plan-mode" value="suggested"><input type="hidden" name="" data-field="lot_allocations" class="line-lot-allocations-input" value="[]"></td><td><input type="number" step="0.01" min="0" name="" data-field="cut_length_ft" class="length-input" value="0"></td><td class="row-actions"><button type="button" class="btn warn remove-line">×</button></td>`;
+    tr.innerHTML = `<td class="sr-col"></td><td><input type="hidden" name="" data-field="line_id" value="line_${Math.random().toString(16).slice(2)}"><input type="hidden" name="" data-field="line_origin" class="line-origin" value="extra"><input type="hidden" name="" data-field="packing_line_id" class="line-packing-line-id" value=""><select name="" data-field="component_id" class="component-select">${componentOptions}</select><select name="" data-field="variant_id" class="variant-select" style="margin-top:6px"><option value="">N/A</option></select><input name="" data-field="notes" placeholder="Description / notes" style="margin-top:6px"><div class="small muted stock-hint" style="margin-top:6px"></div><div class="small stock-location-panel" style="margin-top:6px"></div><input type="hidden" name="" data-field="consume_from_location_id" class="consume-location-input" value=""><div class="small" style="margin-top:6px;color:#b91c1c"></div><div class="cuttable-panel small" style="margin-top:6px"></div></td><td class="mono"><input class="hsn-display" readonly></td><td><input type="number" step="0.01" min="0" name="" data-field="qty" class="qty-input" value="0"><input type="number" step="1" min="0" name="" data-field="pieces" class="pieces-input" value="0" style="margin-top:6px"><input type="hidden" name="" data-field="selected_lot_ids" class="line-selected-lot-ids" value="[]"><input type="hidden" name="" data-field="lot_cuts" class="line-lot-cuts-input" value="[]"><input type="hidden" name="" data-field="cut_plan_mode" class="line-cut-plan-mode" value="suggested"><input type="hidden" name="" data-field="lot_allocations" class="line-lot-allocations-input" value="[]"></td><td><input type="number" step="0.01" min="0" name="" data-field="cut_length_ft" class="length-input" value="0"></td><td class="row-actions"><button type="button" class="btn warn remove-line">×</button></td>`;
     return tr;
   };
 

@@ -1495,6 +1495,7 @@ function documents_challan_line_defaults(): array
         'variant_name_snapshot' => '',
         'is_cuttable_snapshot' => false,
         'qty' => 0,
+        'consume_from_location_id' => '',
         'length_ft' => 0,
         'pieces' => 0,
         'lot_ids' => [],
@@ -1532,6 +1533,7 @@ function documents_normalize_challan_lines(array $lines): array
         $row['variant_name_snapshot'] = safe_text((string) ($row['variant_name_snapshot'] ?? ''));
         $row['is_cuttable_snapshot'] = !empty($row['is_cuttable_snapshot']);
         $row['qty'] = max(0, (float) ($row['qty'] ?? 0));
+        $row['consume_from_location_id'] = safe_text((string) ($row['consume_from_location_id'] ?? ''));
         $lengthAlias = $row['length_ft'] ?? $row['piece_length_ft'] ?? 0;
         $piecesAlias = $row['pieces'] ?? $row['piece_count'] ?? 0;
         $row['length_ft'] = max(0, (float) $lengthAlias);
@@ -5270,7 +5272,7 @@ function documents_create_packing_list_from_quote(array $quote): array
         return ['ok' => false, 'error' => 'No structured items selected'];
     }
 
-    $components = documents_inventory_components(true);
+    $components = documents_inventory_components(false);
     $componentMap = [];
     foreach ($components as $component) {
         $componentMap[(string) ($component['id'] ?? '')] = $component;
@@ -5287,7 +5289,7 @@ function documents_create_packing_list_from_quote(array $quote): array
 
         if ((string) ($item['type'] ?? '') === 'kit') {
             $kit = documents_inventory_get_kit((string) ($item['kit_id'] ?? ''));
-            if ($kit === null) {
+            if ($kit === null || !empty($kit['archived_flag'])) {
                 continue;
             }
             foreach ((array) ($kit['items'] ?? []) as $bomLineRaw) {
@@ -5299,7 +5301,7 @@ function documents_create_packing_list_from_quote(array $quote): array
                     continue;
                 }
                 $component = $componentMap[$componentId] ?? null;
-                if (!is_array($component)) {
+                if (!is_array($component) || !empty($component['archived_flag'])) {
                     continue;
                 }
                 $bomLine = documents_normalize_kit_bom_line($bomLineRaw, $component);
@@ -5378,7 +5380,7 @@ function documents_create_packing_list_from_quote(array $quote): array
             continue;
         }
         $component = $componentMap[$componentId] ?? null;
-        if (!is_array($component)) {
+        if (!is_array($component) || !empty($component['archived_flag'])) {
             continue;
         }
         $isCuttable = !empty($component['is_cuttable']);
@@ -5429,6 +5431,50 @@ function documents_create_packing_list_from_quote(array $quote): array
     }
 
     return ['ok' => true, 'packing_list' => $packingList, 'error' => ''];
+}
+
+function documents_inventory_cleanup_kits_for_archived_component(string $componentId): array
+{
+    $componentId = safe_text($componentId);
+    if ($componentId === '') {
+        return ['ok' => true, 'updated_kits' => 0, 'removed_lines' => 0, 'error' => ''];
+    }
+
+    $kits = documents_inventory_kits(true);
+    $updatedKits = 0;
+    $removedLines = 0;
+    foreach ($kits as &$kit) {
+        if (!is_array($kit)) {
+            continue;
+        }
+        $items = is_array($kit['items'] ?? null) ? $kit['items'] : [];
+        $before = count($items);
+        $items = array_values(array_filter($items, static function ($line) use ($componentId): bool {
+            return is_array($line) && (string) ($line['component_id'] ?? '') !== $componentId;
+        }));
+        if (count($items) === $before) {
+            continue;
+        }
+        $removedLines += ($before - count($items));
+        $updatedKits++;
+        $kit['items'] = $items;
+        $kit['updated_at'] = date('c');
+        $log = is_array($kit['change_log'] ?? null) ? $kit['change_log'] : [];
+        $log[] = [
+            'at' => date('c'),
+            'event' => 'archived_component_removed',
+            'component_id' => $componentId,
+            'message' => 'Archived component removed from BOM.',
+        ];
+        $kit['change_log'] = $log;
+    }
+    unset($kit);
+
+    $saved = documents_inventory_save_kits($kits);
+    if (!($saved['ok'] ?? false)) {
+        return ['ok' => false, 'updated_kits' => 0, 'removed_lines' => 0, 'error' => 'Failed to save kits after cleanup.'];
+    }
+    return ['ok' => true, 'updated_kits' => $updatedKits, 'removed_lines' => $removedLines, 'error' => ''];
 }
 
 function documents_apply_dispatch_to_packing_list(array $packingList, string $challanId, array $dispatchRows): array
