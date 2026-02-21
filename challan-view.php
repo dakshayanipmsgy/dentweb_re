@@ -629,8 +629,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'qty' => $qty,
                         'length_ft' => $lengthFt,
                         'lot_consumption' => (array) ($source['lot_consumption'] ?? []),
-                        'batch_consumption' => (array) ($source['batch_consumption'] ?? []),
-                        'batch_ids' => (array) ($source['batch_ids'] ?? []),
                         'location_consumption' => (array) ($source['location_consumption'] ?? []),
                         'unit' => (string) ($source['unit'] ?? ''),
                         'ref_type' => 'delivery_challan_archive_reversal',
@@ -664,17 +662,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $savedTx = documents_inventory_save_transactions($allTransactions);
                 if (!($savedTx['ok'] ?? false)) {
                     $redirectWith('error', 'Inventory stock was reversed, but transaction history update failed.');
-                }
-
-                $stock = documents_inventory_cleanup_dc_usage_locks(
-                    $stock,
-                    $allTransactions,
-                    (string) ($challan['id'] ?? ''),
-                    $sourceTxnIds
-                );
-                $savedStockCleanup = documents_inventory_save_stock($stock);
-                if (!($savedStockCleanup['ok'] ?? false)) {
-                    $redirectWith('error', 'Inventory rollback completed, but failed to clear DC usage locks.');
                 }
 
                 if (is_array($packingList)) {
