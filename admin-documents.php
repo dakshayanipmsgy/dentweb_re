@@ -2571,10 +2571,6 @@ $batch = documents_inventory_create_batch($txLocationId, $qty, is_array($txRow['
                             if ($fromLocation !== '' && (string) ($lot['location_id'] ?? '') !== $fromLocation) {
                                 continue;
                             }
-                            $remainingFt = max(0, (float) ($lot['remaining_length_ft'] ?? 0));
-                            if ($remainingFt <= 0) {
-                                return ['ok' => false, 'error' => 'Selected lot has no remaining stock to move.'];
-                            }
                             $found = true;
                             $fromLocation = (string) ($lot['location_id'] ?? '');
                             $lot['location_id'] = $toLocation;
@@ -2989,20 +2985,6 @@ $inventoryVariants = documents_inventory_component_variants(true);
 $activeInventoryVariants = documents_inventory_component_variants(false);
 $inventoryLocations = documents_inventory_locations(true);
 $activeInventoryLocations = documents_inventory_locations(false);
-$showArchivedInventory = (string) ($_GET['show_archived_components'] ?? '') === '1';
-$includeArchivedInventoryForms = $isAdmin && (string) ($_GET['include_archived_components'] ?? '') === '1';
-$inventoryComponentsForSummary = array_values(array_filter($inventoryComponents, static function ($component) use ($showArchivedInventory): bool {
-    if (!is_array($component)) {
-        return false;
-    }
-    return $showArchivedInventory || empty($component['archived_flag']);
-}));
-$inventoryComponentsForForms = array_values(array_filter($inventoryComponents, static function ($component) use ($includeArchivedInventoryForms): bool {
-    if (!is_array($component)) {
-        return false;
-    }
-    return $includeArchivedInventoryForms || empty($component['archived_flag']);
-}));
 $inventoryLocationMap = [];
 foreach ($inventoryLocations as $locationRow) {
     if (!is_array($locationRow)) {
@@ -3013,48 +2995,26 @@ foreach ($inventoryLocations as $locationRow) {
 documents_inventory_resolve_location_name('', $inventoryLocationMap);
 $variantMap = [];
 $variantsByComponent = [];
-$variantsByComponentForSummary = [];
-$inventoryVariantsForSelectors = $includeArchivedInventoryForms ? $inventoryVariants : $activeInventoryVariants;
-$inventoryVariantsForSummary = $showArchivedInventory ? $inventoryVariants : $activeInventoryVariants;
-foreach ($inventoryVariants as $variantRow) {
+foreach ($activeInventoryVariants as $variantRow) {
     if (!is_array($variantRow)) {
         continue;
     }
     $variantKey = (string) ($variantRow['id'] ?? '');
-    if ($variantKey === '') {
+    $componentKey = (string) ($variantRow['component_id'] ?? '');
+    if ($variantKey === '' || $componentKey === '') {
         continue;
     }
     $variantMap[$variantKey] = $variantRow;
-}
-$appendVariantOption = static function (array &$target, array $variantRow): void {
-    $variantKey = (string) ($variantRow['id'] ?? '');
-    $componentKey = (string) ($variantRow['component_id'] ?? '');
-    if ($variantKey === '' || $componentKey === '') {
-        return;
+    if (!isset($variantsByComponent[$componentKey]) || !is_array($variantsByComponent[$componentKey])) {
+        $variantsByComponent[$componentKey] = [];
     }
-    if (!isset($target[$componentKey]) || !is_array($target[$componentKey])) {
-        $target[$componentKey] = [];
-    }
-    $target[$componentKey][] = [
+    $variantsByComponent[$componentKey][] = [
         'id' => $variantKey,
         'display_name' => (string) ($variantRow['display_name'] ?? ''),
         'brand' => (string) ($variantRow['brand'] ?? ''),
         'technology' => (string) ($variantRow['technology'] ?? ''),
         'wattage_wp' => max(0, (float) ($variantRow['wattage_wp'] ?? 0)),
-        'archived_flag' => !empty($variantRow['archived_flag']),
     ];
-};
-foreach ($inventoryVariantsForSelectors as $variantRow) {
-    if (!is_array($variantRow)) {
-        continue;
-    }
-    $appendVariantOption($variantsByComponent, $variantRow);
-}
-foreach ($inventoryVariantsForSummary as $variantRow) {
-    if (!is_array($variantRow)) {
-        continue;
-    }
-    $appendVariantOption($variantsByComponentForSummary, $variantRow);
 }
 $inventoryStock = documents_inventory_load_stock();
 $inventoryTransactions = documents_inventory_load_transactions();
@@ -3114,54 +3074,6 @@ $inventoryVerificationPendingRows = array_values(array_filter($inventoryVerifica
     return $status !== 'verified';
 }));
 $inventoryUsageIndex = documents_inventory_build_usage_index($inventoryTransactions);
-$inventoryMoveLotsByComponentVariant = [];
-foreach ($inventoryComponents as $componentRow) {
-    if (!is_array($componentRow) || empty($componentRow['is_cuttable'])) {
-        continue;
-    }
-    $componentId = (string) ($componentRow['id'] ?? '');
-    if ($componentId === '') {
-        continue;
-    }
-    $variantCandidates = [''];
-    foreach ($inventoryVariants as $variantRow) {
-        if (!is_array($variantRow) || (string) ($variantRow['component_id'] ?? '') !== $componentId) {
-            continue;
-        }
-        $variantCandidates[] = (string) ($variantRow['id'] ?? '');
-    }
-    foreach (array_values(array_unique($variantCandidates)) as $variantCandidateId) {
-        $lotEntry = documents_inventory_component_stock($inventoryStock, $componentId, (string) $variantCandidateId);
-        foreach ((array) ($lotEntry['lots'] ?? []) as $lot) {
-            if (!is_array($lot)) {
-                continue;
-            }
-            $lotId = safe_text((string) ($lot['lot_id'] ?? ''));
-            $remainingFt = max(0, (float) ($lot['remaining_length_ft'] ?? 0));
-            if ($lotId === '' || $remainingFt <= 0) {
-                continue;
-            }
-            $lotVariantId = safe_text((string) ($lot['variant_id'] ?? ''));
-            if ($lotVariantId === '') {
-                $lotVariantId = (string) $variantCandidateId;
-            }
-            $variantKey = $lotVariantId !== '' ? $lotVariantId : '__none__';
-            if (!isset($inventoryMoveLotsByComponentVariant[$componentId])) {
-                $inventoryMoveLotsByComponentVariant[$componentId] = [];
-            }
-            if (!isset($inventoryMoveLotsByComponentVariant[$componentId][$variantKey])) {
-                $inventoryMoveLotsByComponentVariant[$componentId][$variantKey] = [];
-            }
-            $inventoryMoveLotsByComponentVariant[$componentId][$variantKey][] = [
-                'lot_id' => $lotId,
-                'remaining_length_ft' => $remainingFt,
-                'original_length_ft' => max(0, (float) ($lot['original_length_ft'] ?? 0)),
-                'from_location_id' => (string) ($lot['location_id'] ?? ''),
-                'from_location_name' => documents_inventory_resolve_location_name((string) ($lot['location_id'] ?? '')),
-            ];
-        }
-    }
-}
 $inventoryComponentBlocked = (array) ($inventoryUsageIndex['component_blocked'] ?? []);
 $inventoryVariantBlocked = (array) ($inventoryUsageIndex['variant_blocked'] ?? []);
 $inventoryLotBlocked = (array) ($inventoryUsageIndex['lot_blocked'] ?? []);
@@ -3970,22 +3882,13 @@ usort($archivedRows, static function (array $a, array $b): int {
 
         <?php elseif ($itemsSubtab === 'inventory'): ?>
           <h3>Inventory Transactions</h3>
-          <?php if ($isAdmin): ?>
-            <form method="get" style="margin:0.5rem 0;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-              <input type="hidden" name="tab" value="items" />
-              <input type="hidden" name="items_subtab" value="inventory" />
-              <?php if ($inventoryEditMode): ?><input type="hidden" name="edit_mode" value="1" /><?php endif; ?>
-              <label><input type="checkbox" name="include_archived_components" value="1" <?= $includeArchivedInventoryForms ? 'checked' : '' ?> onchange="this.form.submit()" /> Include archived in forms</label>
-              <label><input type="checkbox" name="show_archived_components" value="1" <?= $showArchivedInventory ? 'checked' : '' ?> onchange="this.form.submit()" /> Show archived in summary</label>
-            </form>
-          <?php endif; ?>
           <div class="grid" style="margin-bottom:1rem;">
             <form method="post" data-inventory-form="1" data-tx-type="IN">
               <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
               <input type="hidden" name="action" value="create_inventory_tx" />
               <input type="hidden" name="tx_type" value="IN" />
               <h4>Add Stock (IN)</h4>
-              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponentsForForms as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?><?= !empty($component['archived_flag']) ? ' [ARCHIVED]' : '' ?></option><?php endforeach; ?></select></div>
+              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): if (!empty($component['archived_flag'])) { continue; } ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div data-variant-wrap="1"><label>Variant</label><select name="variant_id"><option value="">-- select variant --</option></select><small class="muted" data-variant-empty="1" style="display:none;">No variants found for selected component.</small></div>
               <div data-non-cuttable-wrap="1"><label>Qty (non-cuttable)</label><input type="number" step="0.01" min="0" name="qty" /></div>
               <div data-cuttable-wrap="1"><label>Piece Count (cuttable)</label><input type="number" step="1" min="1" name="cut_piece_count" /></div>
@@ -3999,7 +3902,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <input type="hidden" name="action" value="create_inventory_tx" />
               <input type="hidden" name="tx_type" value="OUT" />
               <h4>Issue Stock (OUT)</h4>
-              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponentsForForms as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?><?= !empty($component['archived_flag']) ? ' [ARCHIVED]' : '' ?></option><?php endforeach; ?></select></div>
+              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): if (!empty($component['archived_flag'])) { continue; } ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div data-variant-wrap="1"><label>Variant</label><select name="variant_id"><option value="">-- select variant --</option></select><small class="muted" data-variant-empty="1" style="display:none;">No variants found for selected component.</small></div>
               <div data-non-cuttable-wrap="1"><label>Qty</label><input type="number" step="0.01" min="0" name="qty" /></div>
               <div data-cuttable-wrap="1"><label>Length (ft for cuttable)</label><input type="number" step="0.01" min="0" name="length_ft" /></div>
@@ -4014,10 +3917,10 @@ usort($archivedRows, static function (array $a, array $b): int {
               <input type="hidden" name="action" value="create_inventory_tx" />
               <input type="hidden" name="tx_type" value="MOVE" />
               <h4>Move Stock (MOVE)</h4>
-              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponentsForForms as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?><?= !empty($component['archived_flag']) ? ' [ARCHIVED]' : '' ?></option><?php endforeach; ?></select></div>
+              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): if (!empty($component['archived_flag'])) { continue; } ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div data-variant-wrap="1"><label>Variant</label><select name="variant_id"><option value="">-- select variant --</option></select><small class="muted" data-variant-empty="1" style="display:none;">No variants found for selected component.</small></div>
               <div data-non-cuttable-wrap="1"><label>Batch ID (for qty stock)</label><input name="move_batch_id" placeholder="Optional" /></div>
-              <div data-cuttable-wrap="1"><label>Lot (cuttable, remaining > 0)</label><select name="move_lot_id"><option value="">-- select lot --</option></select><small class="muted" data-move-lot-empty="1" style="display:none;">No movable lots with remaining stock.</small></div>
+              <div data-cuttable-wrap="1"><label>Lot ID (for cuttable)</label><input name="move_lot_id" placeholder="Optional" /></div>
               <div data-non-cuttable-wrap="1"><label>Qty to move (non-cuttable)</label><input type="number" step="0.01" min="0" name="qty" /></div>
               <div><label>From location (optional)</label><select name="from_location_id"><option value="">Any</option><?php foreach ($activeInventoryLocations as $location): ?><option value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div><label>To location</label><select name="to_location_id" required><option value="">-- select --</option><?php foreach ($activeInventoryLocations as $location): ?><option value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
@@ -4031,7 +3934,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <input type="hidden" name="action" value="create_inventory_tx" />
               <input type="hidden" name="tx_type" value="ADJUST" />
               <h4>Adjust Stock (ADJUST)</h4>
-              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponentsForForms as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?><?= !empty($component['archived_flag']) ? ' [ARCHIVED]' : '' ?></option><?php endforeach; ?></select></div>
+              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): if (!empty($component['archived_flag'])) { continue; } ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div data-variant-wrap="1"><label>Variant</label><select name="variant_id"><option value="">-- select variant --</option></select><small class="muted" data-variant-empty="1" style="display:none;">No variants found for selected component.</small></div>
               <div data-non-cuttable-wrap="1"><label>Qty</label><input type="number" step="0.01" min="0" name="qty" /></div>
               <div data-cuttable-wrap="1"><label>Length (ft)</label><input type="number" step="0.01" min="0" name="length_ft" /></div>
@@ -4059,22 +3962,18 @@ usort($archivedRows, static function (array $a, array $b): int {
               <input type="hidden" name="action" value="save_inventory_edits" />
           <?php endif; ?>
 
-          <div class="inventory-summary-filter" style="margin:0.75rem 0;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-            <div><label for="inventorySummarySearch">Search Summary</label>
-            <input type="text" id="inventorySummarySearch" placeholder="Component or variant name" /></div>
-            <?php if (!$isAdmin): ?>
-              <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'inventory', 'edit_mode' => $inventoryEditMode ? '1' : null, 'show_archived_components' => $showArchivedInventory ? null : '1']), ENT_QUOTES) ?>"><?= $showArchivedInventory ? 'Hide Archived Components' : 'Show Archived Components' ?></a>
-            <?php endif; ?>
+          <div class="inventory-summary-filter" style="margin:0.75rem 0;">
+            <label for="inventorySummarySearch">Search Summary</label>
+            <input type="text" id="inventorySummarySearch" placeholder="Component or variant name" />
           </div>
-          <div style="margin-top:-0.5rem;margin-bottom:0.5rem;"><span class="muted">Showing <?= $showArchivedInventory ? 'active + archived' : 'active only' ?> components.</span></div>
           <table id="inventorySummaryTable"><thead><tr><th>Component</th><th>Type</th><th>Summary</th></tr></thead><tbody>
-            <?php foreach ($inventoryComponentsForSummary as $component):
-                if (!is_array($component)) { continue; }
+            <?php foreach ($inventoryComponents as $component):
+                if (!is_array($component) || !empty($component['archived_flag'])) { continue; }
                 $componentId=(string) ($component['id'] ?? '');
                 $isCuttable=!empty($component['is_cuttable']);
                 $hasVariants=!empty($component['has_variants']);
                 $componentEntry = documents_inventory_component_stock($inventoryStock, $componentId, '');
-                $variantRows = (array) ($variantsByComponentForSummary[$componentId] ?? []);
+                $variantRows = (array) ($variantsByComponent[$componentId] ?? []);
                 $lots = [];
                 if ($isCuttable) {
                     $variantCandidates = [''];
@@ -4102,7 +4001,7 @@ usort($archivedRows, static function (array $a, array $b): int {
                 $locationBreakdownText = array_map(static function (array $row) use ($component): string { return documents_inventory_resolve_location_name((string) ($row['location_id'] ?? '')) . ': ' . rtrim(rtrim((string) ((float) ($row['qty'] ?? 0)), '0'), '.') . ' ' . (string) ($component['default_unit'] ?? 'qty'); }, (array) ($componentEntry['location_breakdown'] ?? []));
                 $componentEditable = !isset($inventoryComponentBlocked[$componentId]);
             ?>
-              <tr class="inventory-summary-group" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>"><td><strong><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></strong><?php if (!empty($component['archived_flag'])): ?> <span class="pill warn">ARCHIVED</span><?php endif; ?></td><td><?php if ($isCuttable): ?><span class="pill">Cuttable (ft)</span><?php endif; ?><?php if ($hasVariants): ?><span class="pill">Variants</span><?php endif; ?><?php if (!$isCuttable && !$hasVariants): ?><span class="muted">Plain</span><?php endif; ?></td><td><?= htmlspecialchars($summaryText, ENT_QUOTES) ?><?php if (!$isCuttable && !$hasVariants): ?><br><span class="muted"><?= htmlspecialchars(implode(' | ', $locationBreakdownText !== [] ? $locationBreakdownText : ['Unassigned: 0']), ENT_QUOTES) ?></span><?php endif; ?><?php if ($inventoryEditMode && !$isCuttable && !$hasVariants && !$componentEditable): ?><br><span class="muted">Used stock cannot be edited.</span><?php endif; ?></td></tr>
+              <tr class="inventory-summary-group" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>"><td><strong><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></strong></td><td><?php if ($isCuttable): ?><span class="pill">Cuttable (ft)</span><?php endif; ?><?php if ($hasVariants): ?><span class="pill">Variants</span><?php endif; ?><?php if (!$isCuttable && !$hasVariants): ?><span class="muted">Plain</span><?php endif; ?></td><td><?= htmlspecialchars($summaryText, ENT_QUOTES) ?><?php if (!$isCuttable && !$hasVariants): ?><br><span class="muted"><?= htmlspecialchars(implode(' | ', $locationBreakdownText !== [] ? $locationBreakdownText : ['Unassigned: 0']), ENT_QUOTES) ?></span><?php endif; ?><?php if ($inventoryEditMode && !$isCuttable && !$hasVariants && !$componentEditable): ?><br><span class="muted">Used stock cannot be edited.</span><?php endif; ?></td></tr>
               <?php if ($isCuttable): ?>
                 <tr class="inventory-summary-detail" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>">
                   <td colspan="3">
@@ -4544,7 +4443,6 @@ const INVENTORY_COMPONENTS = <?= json_encode($inventoryComponentJsMap, JSON_UNES
 const verificationCheckAll = document.querySelector('[data-check-all="verification"]');
 if (verificationCheckAll) { verificationCheckAll.addEventListener('change', function () { document.querySelectorAll('input[name="txn_ids[]"]').forEach(function (box) { box.checked = verificationCheckAll.checked; }); }); }
 window.VARIANTS_BY_COMPONENT = <?= json_encode($variantsByComponent, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-window.MOVE_LOTS_BY_COMPONENT_VARIANT = <?= json_encode($inventoryMoveLotsByComponentVariant, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
 function formatVariantOptionLabel(variant) {
   if (!variant || typeof variant !== 'object') return '';
@@ -4623,50 +4521,15 @@ function syncInventoryCuttableField(form) {
   });
 }
 
-function syncInventoryMoveLotField(form) {
-  if (!form || (form.getAttribute('data-tx-type') || '') !== 'MOVE') return;
-  const lotSelect = form.querySelector('select[name="move_lot_id"]');
-  if (!lotSelect) return;
-  const emptyMsg = form.querySelector('[data-move-lot-empty="1"]');
-  const componentId = (form.querySelector('select[name="component_id"]') || {}).value || '';
-  const variantId = (form.querySelector('select[name="variant_id"]') || {}).value || '';
-  const variantKey = variantId !== '' ? variantId : '__none__';
-  const previous = lotSelect.value || '';
-  lotSelect.innerHTML = '<option value="">-- select lot --</option>';
-  const byComponent = window.MOVE_LOTS_BY_COMPONENT_VARIANT[componentId] || {};
-  const lots = (byComponent[variantKey] || []).filter(function (lot) {
-    return Number(lot.remaining_length_ft || 0) > 0;
-  });
-  lots.forEach(function (lot) {
-    const opt = document.createElement('option');
-    opt.value = lot.lot_id || '';
-    const rem = Number(lot.remaining_length_ft || 0);
-    const org = Number(lot.original_length_ft || 0);
-    const loc = lot.from_location_name || 'Unassigned';
-    opt.textContent = (lot.lot_id || '') + ' · ' + rem + 'ft / ' + org + 'ft · ' + loc;
-    lotSelect.appendChild(opt);
-  });
-  if (previous !== '' && lots.some(function (lot) { return (lot.lot_id || '') === previous; })) {
-    lotSelect.value = previous;
-  }
-  if (emptyMsg) emptyMsg.style.display = lots.length === 0 ? '' : 'none';
-}
-
 document.querySelectorAll('form[data-inventory-form="1"]').forEach(function (form) {
   syncInventoryVariantField(form);
   syncInventoryCuttableField(form);
-  syncInventoryMoveLotField(form);
   const componentSelect = form.querySelector('select[name="component_id"]');
   if (componentSelect) {
     componentSelect.addEventListener('change', function () {
       syncInventoryVariantField(form);
       syncInventoryCuttableField(form);
-      syncInventoryMoveLotField(form);
     });
-  }
-  const variantSelect = form.querySelector('select[name="variant_id"]');
-  if (variantSelect) {
-    variantSelect.addEventListener('change', function () { syncInventoryMoveLotField(form); });
   }
 });
 
