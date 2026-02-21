@@ -245,8 +245,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $notes = is_array($_POST['line_notes'] ?? null) ? $_POST['line_notes'] : [];
             $origins = is_array($_POST['line_origin'] ?? null) ? $_POST['line_origin'] : [];
             $packingLineIds = is_array($_POST['line_packing_line_id'] ?? null) ? $_POST['line_packing_line_id'] : [];
+            $lineCutPlanModes = is_array($_POST['line_cut_plan_mode'] ?? null) ? $_POST['line_cut_plan_mode'] : [];
             $lineSelectedLotIds = is_array($_POST['line_selected_lot_ids'] ?? null) ? $_POST['line_selected_lot_ids'] : [];
             $lineLotCuts = is_array($_POST['line_lot_cuts'] ?? null) ? $_POST['line_lot_cuts'] : [];
+            $lineLotAllocations = is_array($_POST['line_lot_allocations'] ?? null) ? $_POST['line_lot_allocations'] : [];
 
             $lines = [];
             foreach ($componentIds as $idx => $componentIdRaw) {
@@ -314,6 +316,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     $lotCuts[] = ['lot_id' => $lotId, 'count' => $cutCount, 'cut_length_ft' => $cutLength];
                 }
+                $cutPlanMode = strtolower(safe_text((string) ($lineCutPlanModes[$idx] ?? 'suggested')));
+                $cutPlanMode = in_array($cutPlanMode, ['suggested', 'manual'], true) ? $cutPlanMode : 'suggested';
+                $lotAllocationsRaw = $lineLotAllocations[$idx] ?? [];
+                if (!is_array($lotAllocationsRaw)) {
+                    $decodedAlloc = json_decode((string) $lotAllocationsRaw, true);
+                    $lotAllocationsRaw = is_array($decodedAlloc) ? $decodedAlloc : [];
+                }
+                $lotAllocations = [];
+                $lineTotalLengthFt = 0.0;
+                foreach ($lotAllocationsRaw as $allocationRaw) {
+                    if (!is_array($allocationRaw)) {
+                        continue;
+                    }
+                    $allocLotId = safe_text((string) ($allocationRaw['lot_id'] ?? ''));
+                    $allocVariantId = safe_text((string) ($allocationRaw['variant_id'] ?? $variantId));
+                    $allocLength = max(0, (float) ($allocationRaw['cut_length_ft'] ?? 0));
+                    $allocPieces = max(1, (int) ($allocationRaw['cut_pieces'] ?? 1));
+                    $allocLocation = safe_text((string) ($allocationRaw['location_id_snapshot'] ?? ''));
+                    if ($allocLotId === '' || $allocLength <= 0) {
+                        continue;
+                    }
+                    $lotAllocations[] = [
+                        'lot_id' => $allocLotId,
+                        'variant_id' => $allocVariantId,
+                        'cut_length_ft' => $allocLength,
+                        'cut_pieces' => $allocPieces,
+                        'location_id_snapshot' => $allocLocation,
+                    ];
+                    $lineTotalLengthFt += $allocLength;
+                }
+
+                if ($isCuttable && $cutPlanMode === 'manual') {
+                    if ($lotAllocations === []) {
+                        $lineErrors[] = 'Add at least one lot allocation in manual cutting mode.';
+                    }
+                    $stockEntryForLine = documents_inventory_component_stock($stockSnapshot, $componentId, $hasVariants ? $variantId : '');
+                    $lotBucket = ['lots' => (array) ($stockEntryForLine['lots'] ?? [])];
+                    $lotMeta = [];
+                    foreach ((array) ($lotBucket['lots'] ?? []) as $lotEntry) {
+                        if (!is_array($lotEntry)) {
+                            continue;
+                        }
+                        $lotMeta[(string) ($lotEntry['lot_id'] ?? '')] = [
+                            'remaining' => max(0, (float) ($lotEntry['remaining_length_ft'] ?? 0)),
+                            'location_id' => safe_text((string) ($lotEntry['location_id'] ?? '')),
+                        ];
+                    }
+                    foreach ($lotAllocations as &$allocation) {
+                        $allocLotId = (string) ($allocation['lot_id'] ?? '');
+                        if (!isset($lotMeta[$allocLotId])) {
+                            $lineErrors[] = 'Selected lot ' . $allocLotId . ' is not valid for this component/variant.';
+                            continue;
+                        }
+                        if ($hasVariants && (string) ($allocation['variant_id'] ?? '') !== $variantId) {
+                            $lineErrors[] = 'Lot ' . $allocLotId . ' allocation variant mismatch.';
+                        }
+                        $allocation['location_id_snapshot'] = (string) ($lotMeta[$allocLotId]['location_id'] ?? '');
+                        if ($action === 'finalize' && (float) ($allocation['cut_length_ft'] ?? 0) > ((float) ($lotMeta[$allocLotId]['remaining'] ?? 0) + 0.00001)) {
+                            $lineErrors[] = 'Lot ' . $allocLotId . ' does not have sufficient remaining length. Please revise allocations.';
+                        }
+                    }
+                    unset($allocation);
+                    if ($lineTotalLengthFt > 0) {
+                        $lengthFt = $lineTotalLengthFt;
+                    }
+                }
 
                 $variantName = $variantId !== '' ? (string) (($variantMap[$variantId]['display_name'] ?? $variantId)) : '';
 
@@ -333,6 +401,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'selected_lot_ids' => $selectedLotIds,
                     'lot_ids' => $selectedLotIds,
                     'lot_cuts' => $lotCuts,
+                    'cut_plan_mode' => $cutPlanMode,
+                    'lot_allocations' => $lotAllocations,
+                    'total_length_ft' => $lineTotalLengthFt,
+                    'stock_changed_warning' => false,
                     'line_errors' => $lineErrors,
                     'unit_snapshot' => (string) ($component['unit'] ?? ($isCuttable ? 'ft' : 'Nos')),
                     'hsn_snapshot' => (string) ($component['hsn'] ?? ''),
@@ -345,12 +417,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $redirectWith('error', 'Add at least one line.');
             }
             $lineErrorsFound = false;
-            foreach ($challan['lines'] as $line) {
+            foreach ($challan['lines'] as &$line) {
+                if (!empty($line['is_cuttable_snapshot']) && (string) ($line['cut_plan_mode'] ?? 'suggested') === 'manual') {
+                    $componentId = (string) ($line['component_id'] ?? '');
+                    $variantId = (string) ($line['variant_id'] ?? '');
+                    $bucket = $cuttableStockByComponentVariant[$componentId . '|' . $variantId] ?? ['lots' => []];
+                    $remainingByLotId = [];
+                    foreach ((array) ($bucket['lots'] ?? []) as $lotRow) {
+                        if (!is_array($lotRow)) {
+                            continue;
+                        }
+                        $remainingByLotId[(string) ($lotRow['lot_id'] ?? '')] = max(0, (float) ($lotRow['remaining_length_ft'] ?? 0));
+                    }
+                    $line['stock_changed_warning'] = false;
+                    foreach ((array) ($line['lot_allocations'] ?? []) as $allocation) {
+                        if (!is_array($allocation)) {
+                            continue;
+                        }
+                        $allocLotId = (string) ($allocation['lot_id'] ?? '');
+                        $requested = max(0, (float) ($allocation['cut_length_ft'] ?? 0));
+                        $available = $remainingByLotId[$allocLotId] ?? 0;
+                        if ($requested > $available + 0.00001) {
+                            $line['stock_changed_warning'] = true;
+                            break;
+                        }
+                    }
+                }
                 if (!empty($line['line_errors'])) {
                     $lineErrorsFound = true;
                     break;
                 }
             }
+            unset($line);
             if ($action === 'finalize' && $lineErrorsFound) {
                 $redirectWith('error', 'Resolve line errors before finalizing. Save draft to keep your edits.');
             }
@@ -416,9 +514,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $needFt = max(0, (float) ($line['length_ft'] ?? 0));
                     if ($needFt <= 0) { continue; }
                     $availableFt = documents_inventory_total_remaining_ft($entry);
+                    $cutPlanMode = (string) ($line['cut_plan_mode'] ?? 'suggested');
+                    $lotAllocations = is_array($line['lot_allocations'] ?? null) ? $line['lot_allocations'] : [];
+                    if ($cutPlanMode === 'manual' && $lotAllocations !== []) {
+                        $needFt = max(0, (float) ($line['total_length_ft'] ?? 0));
+                    }
                     $plannedCuts = is_array($line['lot_cuts'] ?? null) ? $line['lot_cuts'] : [];
                     $consume = ['lots' => (array) ($entry['lots'] ?? []), 'lot_consumption' => []];
-                    if ($plannedCuts !== []) {
+                    if ($cutPlanMode === 'manual') {
+                        $lotIndexById = [];
+                        foreach ((array) ($entry['lots'] ?? []) as $lotIdx => $lotRow) {
+                            if (!is_array($lotRow)) {
+                                continue;
+                            }
+                            $lotIndexById[(string) ($lotRow['lot_id'] ?? '')] = $lotIdx;
+                        }
+                        $lotUseByLotId = [];
+                        foreach ($lotAllocations as $allocation) {
+                            if (!is_array($allocation)) {
+                                continue;
+                            }
+                            $allocLotId = safe_text((string) ($allocation['lot_id'] ?? ''));
+                            $allocFt = max(0, (float) ($allocation['cut_length_ft'] ?? 0));
+                            if ($allocLotId === '' || $allocFt <= 0) {
+                                continue;
+                            }
+                            $lotUseByLotId[$allocLotId] = ($lotUseByLotId[$allocLotId] ?? 0) + $allocFt;
+                        }
+                        foreach ($lotUseByLotId as $allocLotId => $useFt) {
+                            if (!isset($lotIndexById[$allocLotId])) {
+                                $redirectWith('error', 'Lot ' . $allocLotId . ' does not exist anymore. Please revise allocations.');
+                            }
+                            $lotIdx = $lotIndexById[$allocLotId];
+                            $lotRemaining = max(0, (float) ($entry['lots'][$lotIdx]['remaining_length_ft'] ?? 0));
+                            if ($useFt > $lotRemaining + 0.00001) {
+                                $redirectWith('error', 'Lot ' . $allocLotId . ' does not have sufficient remaining length. Please revise allocations.');
+                            }
+                            $entry['lots'][$lotIdx]['remaining_length_ft'] = round($lotRemaining - $useFt, 4);
+                            $consume['lot_consumption'][] = ['lot_id' => $allocLotId, 'used_ft' => round($useFt, 4)];
+                        }
+                        $consume['lots'] = (array) ($entry['lots'] ?? []);
+                    } elseif ($plannedCuts !== []) {
                         $planned = documents_inventory_consume_planned_lot_cuts((array) ($entry['lots'] ?? []), $plannedCuts);
                         $consume = [
                             'lots' => (array) ($planned['lots'] ?? []),
@@ -449,7 +585,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $consumedFt += max(0, (float) ($consumeLine['used_ft'] ?? 0));
                     }
                     $shortFt = max(0, $needFt - $consumedFt);
-                    if ($shortFt > 0.00001) {
+                    if ($shortFt > 0.00001 && $cutPlanMode !== 'manual') {
                         $entry['lots'][] = [
                             'lot_id' => 'NEG-' . date('YmdHis') . '-' . bin2hex(random_bytes(2)),
                             'remaining_length_ft' => -round($shortFt, 4),
@@ -459,6 +595,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     $tx['length_ft'] = $needFt;
                     $tx['lot_consumption'] = (array) ($consume['lot_consumption'] ?? []);
+                    $tx['allow_negative'] = $cutPlanMode !== 'manual';
                 } else {
                     $needQty = max(0, (float) ($line['qty'] ?? 0));
                     if ($needQty <= 0) { continue; }
@@ -762,7 +899,10 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <input type="number" step="1" min="0" name="line_pieces[]" class="pieces-input" value="<?= htmlspecialchars((string) ((int) ($line['pieces'] ?? 0)), ENT_QUOTES) ?>" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>>
 <input type="hidden" name="line_selected_lot_ids[]" class="line-selected-lot-ids" value="<?= htmlspecialchars(json_encode((array) ($line['selected_lot_ids'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
 <input type="hidden" name="line_lot_cuts[]" class="line-lot-cuts-input" value="<?= htmlspecialchars(json_encode((array) ($line['lot_cuts'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
+<input type="hidden" name="line_cut_plan_mode[]" class="line-cut-plan-mode" value="<?= htmlspecialchars((string) ($line['cut_plan_mode'] ?? 'suggested'), ENT_QUOTES) ?>">
+<input type="hidden" name="line_lot_allocations[]" class="line-lot-allocations-input" value="<?= htmlspecialchars(json_encode((array) ($line['lot_allocations'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
 <div class="line-lot-cuts" data-line-id="<?= htmlspecialchars((string) ($line['line_id'] ?? ''), ENT_QUOTES) ?>" data-lot-cuts='<?= htmlspecialchars(json_encode((array) ($line['lot_cuts'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>'></div>
+<?php if (!empty($line['stock_changed_warning'])): ?><div class="small" style="margin-top:6px;color:#b45309">Stock changed warning: one or more manual lot cuts may now exceed available lot length.</div><?php endif; ?>
 </td>
 <td><input type="number" step="0.01" min="0" name="line_length_ft[]" class="length-input" value="<?= htmlspecialchars((string) ((float) ($line['length_ft'] ?? 0)), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td>
 <td class="row-actions"><?php if ($editable): ?><button type="button" class="btn warn remove-line">×</button><?php endif; ?></td>
@@ -801,6 +941,14 @@ const buildCuttablePlan = (lots, pieces, cutLength) => {
   return Object.values(planMap);
 };
 
+const fmtFt = (n) => `${Number(n || 0).toFixed(2)} ft`;
+
+const getLotMeta = (lots) => {
+  const map = {};
+  (lots || []).forEach((l) => { map[l.lot_id] = l; });
+  return map;
+};
+
 const renderCuttablePanel = (tr) => {
   const panel = tr.querySelector('.cuttable-panel');
   if (!panel) return;
@@ -815,23 +963,109 @@ const renderCuttablePanel = (tr) => {
   const total = Number(bucket.total_remaining_ft || 0);
   const cutsInput = tr.querySelector('.line-lot-cuts-input');
   const selectedLotsInput = tr.querySelector('.line-selected-lot-ids');
+  const modeInput = tr.querySelector('.line-cut-plan-mode');
+  const allocationsInput = tr.querySelector('.line-lot-allocations-input');
   const existingCuts = readJsonArray(cutsInput?.value || '[]');
+  const existingAllocations = readJsonArray(allocationsInput?.value || '[]');
+  const lotMeta = getLotMeta(lots);
+  const isVariantPending = !!(c.has_variants && !variant.value);
+  const pendingRequired = Math.max(0, pieces) * Math.max(0, cutLen);
   if (selectedLotsInput && !selectedLotsInput.value) {
     selectedLotsInput.value = JSON.stringify(existingCuts.map(cut => cut.lot_id));
   }
-  panel.innerHTML = `<div><strong>Available pieces</strong> · Total: ${total.toFixed(2)} ft</div>${lots.map(l => `<div>Lot ${l.lot_id} · ${Number(l.remaining_length_ft||0).toFixed(2)} ft · ${l.location_name || '-'}</div>`).join('') || '<div class="muted">No lots available.</div>'}<button type="button" class="btn secondary suggest-cuts" style="margin-top:6px">Suggest from stock</button><div class="small suggested-cuts" style="margin-top:6px"></div>`;
+  panel.innerHTML = `
+    <div><strong>Available pieces</strong> · Total: ${fmtFt(total)}</div>
+    ${(lots.map(l => `<div>Lot ${l.lot_id} · ${fmtFt(l.remaining_length_ft)} · ${l.location_name || '-'}</div>`).join('')) || '<div class="muted">No lots available.</div>'}
+    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+      <button type="button" class="btn secondary suggest-cuts">Suggest from stock</button>
+      <button type="button" class="btn secondary manual-toggle">Manual lot cutting</button>
+    </div>
+    <div class="small suggested-cuts" style="margin-top:6px"></div>
+    <div class="small manual-wrap" style="margin-top:8px"></div>
+  `;
   const suggestBtn = panel.querySelector('.suggest-cuts');
+  const manualToggle = panel.querySelector('.manual-toggle');
   const suggested = panel.querySelector('.suggested-cuts');
+  const manualWrap = panel.querySelector('.manual-wrap');
   const drawCuts = (cuts) => {
     if (cutsInput) cutsInput.value = JSON.stringify(cuts);
     if (selectedLotsInput) selectedLotsInput.value = JSON.stringify(cuts.map(cut => cut.lot_id));
     suggested.textContent = cuts.length ? cuts.map(cut => `${cut.lot_id}: ${cut.count} × ${Number(cut.cut_length_ft).toFixed(2)}ft`).join(' | ') : 'No lot cuts selected.';
   };
+  const drawManual = (allocs) => {
+    if (!allocationsInput) return;
+    const clean = allocs.filter(a => a && a.lot_id);
+    allocationsInput.value = JSON.stringify(clean);
+    if (selectedLotsInput) {
+      selectedLotsInput.value = JSON.stringify([...new Set(clean.map(a => a.lot_id))]);
+    }
+    if (modeInput && modeInput.value === 'manual') {
+      const totalSel = clean.reduce((sum, a) => sum + Number(a.cut_length_ft || 0), 0);
+      let html = `<div><strong>Pending required:</strong> ${fmtFt(pendingRequired)} · <strong>Total selected length:</strong> ${fmtFt(totalSel)}</div>`;
+      if (isVariantPending) {
+        manualWrap.innerHTML = '<div style="color:#b91c1c">Select variant first to use manual lot cutting.</div>';
+        return;
+      }
+      html += `<table style="margin-top:6px"><thead><tr><th>Lot</th><th>Available remaining ft</th><th>Cut length (ft)</th><th></th></tr></thead><tbody>`;
+      clean.forEach((a, i) => {
+        const rem = Number((lotMeta[a.lot_id] || {}).remaining_length_ft || 0);
+        const err = Number(a.cut_length_ft || 0) <= 0 || Number(a.cut_length_ft || 0) > rem;
+        html += `<tr data-idx="${i}"><td><select class="manual-lot-id"><option value="">Select</option>${lots.map(l => `<option value="${l.lot_id}" ${l.lot_id===a.lot_id?'selected':''}>${l.lot_id} (rem: ${fmtFt(l.remaining_length_ft)}, loc: ${l.location_name || '-'})</option>`).join('')}</select></td><td>${fmtFt(rem)}</td><td><input type="number" min="0" step="0.01" class="manual-cut-ft" value="${Number(a.cut_length_ft||0)}"></td><td><button type="button" class="btn warn manual-remove">×</button></td></tr>${err?`<tr><td colspan="4" style="color:#b91c1c">Cut length must be > 0 and ≤ lot remaining length.</td></tr>`:''}`;
+      });
+      html += `</tbody></table><div style="margin-top:6px;display:flex;gap:6px"><button type="button" class="btn secondary manual-add">+ Add lot allocation</button><button type="button" class="btn secondary manual-autofill">Auto-fill remaining requirement</button></div>`;
+      manualWrap.innerHTML = html;
+      manualWrap.querySelectorAll('.manual-remove').forEach((btn) => btn.addEventListener('click', (e) => {
+        const idx = Number(e.target.closest('tr')?.dataset?.idx || -1);
+        const next = clean.filter((_, i) => i !== idx);
+        drawManual(next);
+      }));
+      manualWrap.querySelectorAll('.manual-lot-id').forEach((sel) => sel.addEventListener('change', () => {
+        const idx = Number(sel.closest('tr')?.dataset?.idx || -1);
+        if (idx < 0) return;
+        clean[idx].lot_id = sel.value;
+        clean[idx].location_id_snapshot = (lotMeta[sel.value] || {}).location_id || '';
+        drawManual(clean);
+      }));
+      manualWrap.querySelectorAll('.manual-cut-ft').forEach((inp) => inp.addEventListener('input', () => {
+        const idx = Number(inp.closest('tr')?.dataset?.idx || -1);
+        if (idx < 0) return;
+        clean[idx].cut_length_ft = Number(inp.value || 0);
+        drawManual(clean);
+      }));
+      manualWrap.querySelector('.manual-add')?.addEventListener('click', () => drawManual([...clean, {lot_id: '', variant_id: variant.value || '', cut_length_ft: 0, cut_pieces: 1, location_id_snapshot: ''}]));
+      manualWrap.querySelector('.manual-autofill')?.addEventListener('click', () => {
+        let remaining = Math.max(0, pendingRequired - totalSel);
+        if (remaining <= 0) return;
+        const next = [...clean];
+        lots.forEach((l) => {
+          if (remaining <= 0) return;
+          const used = Math.min(remaining, Number(l.remaining_length_ft || 0));
+          if (used > 0) {
+            next.push({lot_id: l.lot_id, variant_id: variant.value || '', cut_length_ft: Number(used.toFixed(4)), cut_pieces: 1, location_id_snapshot: l.location_id || ''});
+            remaining -= used;
+          }
+        });
+        drawManual(next);
+      });
+      return;
+    }
+    manualWrap.innerHTML = '';
+  };
   drawCuts(existingCuts);
+  drawManual(existingAllocations);
   suggestBtn?.addEventListener('click', () => {
     const plan = buildCuttablePlan(lots, Math.max(0, Math.floor(pieces)), Math.max(0, cutLen));
+    if (modeInput) modeInput.value = 'suggested';
     drawCuts(plan);
+    drawManual(existingAllocations);
   });
+  manualToggle?.addEventListener('click', () => {
+    if (!modeInput) return;
+    modeInput.value = modeInput.value === 'manual' ? 'suggested' : 'manual';
+    manualToggle.textContent = modeInput.value === 'manual' ? 'Use suggested cutting' : 'Manual lot cutting';
+    renderCuttablePanel(tr);
+  });
+  manualToggle.textContent = (modeInput?.value || 'suggested') === 'manual' ? 'Use suggested cutting' : 'Manual lot cutting';
 };
 
 const wireRow = (tr) => {
@@ -899,7 +1133,7 @@ if (editable) {
   const createLine = () => {
     const tr = document.createElement('tr');
     tr.className = 'dc-line-row';
-    tr.innerHTML = `<td class="sr-col"></td><td><input type="hidden" name="line_id[]" value="line_${Math.random().toString(16).slice(2)}"><input type="hidden" name="line_origin[]" class="line-origin" value="extra"><input type="hidden" name="line_packing_line_id[]" class="line-packing-line-id" value=""><select name="line_component_id[]" class="component-select">${componentOptions}</select><select name="line_variant_id[]" class="variant-select" style="margin-top:6px"><option value="">N/A</option></select><input name="line_notes[]" placeholder="Description / notes" style="margin-top:6px"><div class="small muted stock-hint" style="margin-top:6px"></div><div class="small" style="margin-top:6px;color:#b91c1c"></div><div class="cuttable-panel small" style="margin-top:6px"></div></td><td class="mono"><input class="hsn-display" readonly></td><td><input type="number" step="0.01" min="0" name="line_qty[]" class="qty-input" value="0"><input type="number" step="1" min="0" name="line_pieces[]" class="pieces-input" value="0" style="margin-top:6px"><input type="hidden" name="line_selected_lot_ids[]" class="line-selected-lot-ids" value="[]"><input type="hidden" name="line_lot_cuts[]" class="line-lot-cuts-input" value="[]"></td><td><input type="number" step="0.01" min="0" name="line_length_ft[]" class="length-input" value="0"></td><td class="row-actions"><button type="button" class="btn warn remove-line">×</button></td>`;
+    tr.innerHTML = `<td class="sr-col"></td><td><input type="hidden" name="line_id[]" value="line_${Math.random().toString(16).slice(2)}"><input type="hidden" name="line_origin[]" class="line-origin" value="extra"><input type="hidden" name="line_packing_line_id[]" class="line-packing-line-id" value=""><select name="line_component_id[]" class="component-select">${componentOptions}</select><select name="line_variant_id[]" class="variant-select" style="margin-top:6px"><option value="">N/A</option></select><input name="line_notes[]" placeholder="Description / notes" style="margin-top:6px"><div class="small muted stock-hint" style="margin-top:6px"></div><div class="small" style="margin-top:6px;color:#b91c1c"></div><div class="cuttable-panel small" style="margin-top:6px"></div></td><td class="mono"><input class="hsn-display" readonly></td><td><input type="number" step="0.01" min="0" name="line_qty[]" class="qty-input" value="0"><input type="number" step="1" min="0" name="line_pieces[]" class="pieces-input" value="0" style="margin-top:6px"><input type="hidden" name="line_selected_lot_ids[]" class="line-selected-lot-ids" value="[]"><input type="hidden" name="line_lot_cuts[]" class="line-lot-cuts-input" value="[]"><input type="hidden" name="line_cut_plan_mode[]" class="line-cut-plan-mode" value="suggested"><input type="hidden" name="line_lot_allocations[]" class="line-lot-allocations-input" value="[]"></td><td><input type="number" step="0.01" min="0" name="line_length_ft[]" class="length-input" value="0"></td><td class="row-actions"><button type="button" class="btn warn remove-line">×</button></td>`;
     return tr;
   };
 
@@ -928,6 +1162,33 @@ if (editable) {
       const stock = Number(el.getAttribute('data-stock') || '0');
       el.style.display = (only && stock <= 0) ? 'none' : '';
     });
+  });
+
+  document.querySelector('form.card')?.addEventListener('submit', (e) => {
+    let blocked = false;
+    document.querySelectorAll('.dc-line-row').forEach((tr) => {
+      const comp = tr.querySelector('.component-select');
+      const c = COMPONENTS[comp?.value || ''] || null;
+      if (!c || !c.is_cuttable) return;
+      const mode = tr.querySelector('.line-cut-plan-mode')?.value || 'suggested';
+      if (mode !== 'manual') return;
+      const variant = tr.querySelector('.variant-select');
+      const bucket = CUTTABLE_STOCK[stockKey(comp?.value || '', c.has_variants ? (variant?.value || '') : '')] || { lots: [] };
+      const lotMeta = getLotMeta(bucket.lots || []);
+      const allocations = readJsonArray(tr.querySelector('.line-lot-allocations-input')?.value || '[]');
+      allocations.forEach((a) => {
+        const rem = Number((lotMeta[a.lot_id] || {}).remaining_length_ft || 0);
+        const val = Number(a.cut_length_ft || 0);
+        if (!a.lot_id || val <= 0 || val > rem) {
+          blocked = true;
+        }
+      });
+      if (allocations.length === 0) blocked = true;
+    });
+    if (blocked) {
+      e.preventDefault();
+      alert('Manual lot cuts have invalid values. Ensure each cut length is > 0 and <= that lot remaining length.');
+    }
   });
 } else {
   document.querySelectorAll('.dc-line-row').forEach(wireRow);
