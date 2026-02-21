@@ -129,8 +129,10 @@ foreach (documents_inventory_component_variants(true) as $variant) {
     $variantStockById[$variantId] = $varStock;
 }
 
+$activeInventoryLocations = get_active_locations();
+$allInventoryLocations = documents_inventory_locations(true);
 $locationsMap = [];
-foreach (documents_inventory_locations(true) as $locationRow) {
+foreach ($allInventoryLocations as $locationRow) {
     if (!is_array($locationRow)) {
         continue;
     }
@@ -272,6 +274,77 @@ if (is_array($packingList)) {
             'hint' => $mode === 'rule_fulfillment' ? 'Select variants to reach Wp.' : '',
         ];
     }
+}
+
+
+$kitReferencePanels = [];
+$kitReferenceChanged = [];
+$kitIds = [];
+if (is_array($quote)) {
+    $quoteItems = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
+    foreach ($quoteItems as $quoteItem) {
+        if (!is_array($quoteItem) || (string) ($quoteItem['type'] ?? '') !== 'kit') {
+            continue;
+        }
+        $kitId = safe_text((string) ($quoteItem['kit_id'] ?? ''));
+        if ($kitId !== '') {
+            $kitIds[$kitId] = true;
+        }
+    }
+}
+if ($kitIds === [] && is_array($packingList)) {
+    foreach ((array) ($packingList['required_items'] ?? []) as $requiredLine) {
+        if (!is_array($requiredLine)) { continue; }
+        $kitId = safe_text((string) ($requiredLine['source_kit_id'] ?? ''));
+        if ($kitId !== '') {
+            $kitIds[$kitId] = true;
+        }
+    }
+}
+foreach (array_keys($kitIds) as $kitId) {
+    $kit = documents_inventory_get_kit($kitId);
+    if (!is_array($kit)) {
+        continue;
+    }
+    $componentRows = [];
+    $kitComponentIds = [];
+    foreach ((array) ($kit['items'] ?? []) as $kitLine) {
+        if (!is_array($kitLine)) { continue; }
+        $componentId = safe_text((string) ($kitLine['component_id'] ?? ''));
+        if ($componentId === '') { continue; }
+        $component = documents_inventory_get_component($componentId);
+        if (!is_array($component) || !empty($component['archived_flag'])) {
+            continue;
+        }
+        $kitComponentIds[$componentId] = true;
+        $componentRows[] = [
+            'id' => $componentId,
+            'name' => (string) ($component['name'] ?? $componentId),
+        ];
+    }
+
+    $packingComponentIds = [];
+    if (is_array($packingList)) {
+        foreach ((array) ($packingList['required_items'] ?? []) as $requiredLine) {
+            if (!is_array($requiredLine)) { continue; }
+            if ((string) ($requiredLine['source_kit_id'] ?? '') !== $kitId) { continue; }
+            $componentId = safe_text((string) ($requiredLine['component_id'] ?? ''));
+            if ($componentId !== '') {
+                $packingComponentIds[$componentId] = true;
+            }
+        }
+    }
+    $added = count(array_diff(array_keys($kitComponentIds), array_keys($packingComponentIds)));
+    $removed = count(array_diff(array_keys($packingComponentIds), array_keys($kitComponentIds)));
+    $kitReferenceChanged[$kitId] = ($added > 0 || $removed > 0)
+        ? ['added' => $added, 'removed' => $removed]
+        : null;
+
+    $kitReferencePanels[] = [
+        'id' => $kitId,
+        'name' => (string) ($kit['name'] ?? $kitId),
+        'components' => $componentRows,
+    ];
 }
 
 $redirectWith = static function (string $status, string $message) use ($id): void {
@@ -980,6 +1053,24 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <?php if ($quotationGroups === []): ?><p class="muted">No quotation packing list items available.</p><?php endif; ?>
 </div>
 
+<h3>Kit Reference (current definition)</h3>
+<div>
+<?php foreach ($kitReferencePanels as $kitRef): ?>
+  <div class="tree-item">
+    <div><strong>Kit: <?= htmlspecialchars((string) ($kitRef['name'] ?? ''), ENT_QUOTES) ?></strong> <span class="small muted">(<?= htmlspecialchars((string) ($kitRef['id'] ?? ''), ENT_QUOTES) ?>)</span></div>
+    <?php $delta = $kitReferenceChanged[(string) ($kitRef['id'] ?? '')] ?? null; ?>
+    <?php if (is_array($delta)): ?><div class="small" style="color:#92400e;margin-top:4px;">Kit definition has changed since acceptance. Packing list remains based on accepted quotation. (+<?= (int) ($delta['added'] ?? 0) ?> / -<?= (int) ($delta['removed'] ?? 0) ?>)</div><?php endif; ?>
+    <ul class="small" style="margin:6px 0 0 16px;">
+      <?php foreach ((array) ($kitRef['components'] ?? []) as $cmp): ?>
+        <li><?= htmlspecialchars((string) ($cmp['name'] ?? ''), ENT_QUOTES) ?> <span class="muted">(<?= htmlspecialchars((string) ($cmp['id'] ?? ''), ENT_QUOTES) ?>)</span></li>
+      <?php endforeach; ?>
+      <?php if ((array) ($kitRef['components'] ?? []) === []): ?><li class="muted">No active components currently in this kit.</li><?php endif; ?>
+    </ul>
+  </div>
+<?php endforeach; ?>
+<?php if ($kitReferencePanels === []): ?><p class="muted">No kits linked to this quotation/packing list.</p><?php endif; ?>
+</div>
+
 <h3>Extra items not present in quotation</h3>
 <?php if ($editable): ?><p><button type="button" id="add-extra-line" class="btn secondary">+ Add Line</button></p><?php endif; ?>
 
@@ -1004,7 +1095,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <td>
 <input type="number" step="0.01" min="0" name="line_qty[]" class="qty-input" value="<?= htmlspecialchars((string) ((float) ($line['qty'] ?? 0)), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>>
 <input type="number" step="1" min="0" name="line_pieces[]" class="pieces-input" value="<?= htmlspecialchars((string) ((int) ($line['pieces'] ?? 0)), ENT_QUOTES) ?>" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>>
-<select name="line_source_location_id[]" class="source-location-select" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>><option value="">Consume from location</option><?php foreach ($activeInventoryLocations ?? documents_inventory_locations(false) as $loc): if (!is_array($loc)) { continue; } ?><option value="<?= htmlspecialchars((string) ($loc['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($loc['id'] ?? '')) === (string) ($line['source_location_id'] ?? '') ? 'selected' : '' ?>><?= htmlspecialchars((string) ($loc['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select>
+<select name="line_source_location_id[]" class="source-location-select" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>><option value="">Consume from location</option><?php foreach ($activeInventoryLocations as $loc): if (!is_array($loc)) { continue; } ?><option value="<?= htmlspecialchars((string) ($loc['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($loc['id'] ?? '')) === (string) ($line['source_location_id'] ?? '') ? 'selected' : '' ?>><?= htmlspecialchars((string) ($loc['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?><?php $selectedSourceLocationId = (string) ($line['source_location_id'] ?? ''); if ($selectedSourceLocationId !== ''): $selectedSourceLocation = null; foreach ($allInventoryLocations as $locRow) { if (is_array($locRow) && (string) ($locRow['id'] ?? '') === $selectedSourceLocationId) { $selectedSourceLocation = $locRow; break; } } if (is_array($selectedSourceLocation) && !empty($selectedSourceLocation['archived_flag'])): ?><option value="<?= htmlspecialchars($selectedSourceLocationId, ENT_QUOTES) ?>" selected><?= htmlspecialchars((string) ($selectedSourceLocation['name'] ?? $selectedSourceLocationId), ENT_QUOTES) ?> (archived)</option><?php endif; endif; ?></select>
 <input type="hidden" name="line_selected_lot_ids[]" class="line-selected-lot-ids" value="<?= htmlspecialchars(json_encode((array) ($line['selected_lot_ids'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
 <input type="hidden" name="line_lot_cuts[]" class="line-lot-cuts-input" value="<?= htmlspecialchars(json_encode((array) ($line['lot_cuts'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
 <input type="hidden" name="line_cut_plan_mode[]" class="line-cut-plan-mode" value="<?= htmlspecialchars((string) ($line['cut_plan_mode'] ?? 'suggested'), ENT_QUOTES) ?>">
