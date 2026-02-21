@@ -4293,6 +4293,8 @@ function documents_inventory_build_usage_index(array $transactions): array
     $variantBlocked = [];
     $lotBlocked = [];
     $batchBlocked = [];
+    $lotActiveTxnIds = [];
+    $batchActiveTxnIds = [];
 
     foreach ($transactions as $tx) {
         if (!is_array($tx)) {
@@ -4326,6 +4328,7 @@ function documents_inventory_build_usage_index(array $transactions): array
                 continue;
             }
             $lotBlocked[$lotId] = $type === 'MOVE' ? 'Lot moved in transaction.' : 'Lot consumed in transaction.';
+            $lotActiveTxnIds[$lotId][] = (string) ($row['id'] ?? '');
         }
 
         foreach ((array) ($row['batch_consumption'] ?? []) as $consumed) {
@@ -4337,6 +4340,7 @@ function documents_inventory_build_usage_index(array $transactions): array
                 continue;
             }
             $batchBlocked[$batchId] = 'Batch moved/consumed in transaction.';
+            $batchActiveTxnIds[$batchId][] = (string) ($row['id'] ?? '');
         }
         foreach ((array) ($row['batch_ids'] ?? []) as $batchId) {
             $batchId = (string) $batchId;
@@ -4344,7 +4348,15 @@ function documents_inventory_build_usage_index(array $transactions): array
                 continue;
             }
             $batchBlocked[$batchId] = 'Batch moved/consumed in transaction.';
+            $batchActiveTxnIds[$batchId][] = (string) ($row['id'] ?? '');
         }
+    }
+
+    foreach ($lotActiveTxnIds as $lotId => $txnIds) {
+        $lotActiveTxnIds[$lotId] = array_values(array_unique(array_filter(array_map('strval', $txnIds), static fn(string $id): bool => $id !== '')));
+    }
+    foreach ($batchActiveTxnIds as $batchId => $txnIds) {
+        $batchActiveTxnIds[$batchId] = array_values(array_unique(array_filter(array_map('strval', $txnIds), static fn(string $id): bool => $id !== '')));
     }
 
     return [
@@ -4352,6 +4364,8 @@ function documents_inventory_build_usage_index(array $transactions): array
         'variant_blocked' => $variantBlocked,
         'lot_blocked' => $lotBlocked,
         'batch_blocked' => $batchBlocked,
+        'lot_active_txn_ids' => $lotActiveTxnIds,
+        'batch_active_txn_ids' => $batchActiveTxnIds,
     ];
 }
 
@@ -4370,13 +4384,137 @@ function is_lot_editable(array $lot, array $transactionsIndex = []): array
     if (isset($blocked[$lotId])) {
         return ['editable' => false, 'reason' => (string) $blocked[$lotId]];
     }
-    if (!empty((array) ($lot['cuts_history'] ?? []))) {
-        return ['editable' => false, 'reason' => 'Lot has cut history.'];
+    return ['editable' => true, 'reason' => ''];
+}
+
+function is_batch_editable(array $batch, array $transactionsIndex = []): array
+{
+    $batchId = (string) ($batch['batch_id'] ?? '');
+    if ($batchId === '') {
+        return ['editable' => false, 'reason' => 'Missing batch id.'];
     }
-    if (!empty((array) ($lot['consumed_by_txn_ids'] ?? []))) {
-        return ['editable' => false, 'reason' => 'Lot has consumption reference.'];
+    $blocked = (array) ($transactionsIndex['batch_blocked'] ?? []);
+    if (isset($blocked[$batchId])) {
+        return ['editable' => false, 'reason' => (string) $blocked[$batchId]];
     }
     return ['editable' => true, 'reason' => ''];
+}
+
+function documents_inventory_cleanup_dc_usage_locks(array $stock, array $transactions, string $challanId, array $sourceTxnIds = []): array
+{
+    $challanId = safe_text($challanId);
+    $sourceTxnIds = array_values(array_filter(array_map(static fn($id): string => safe_text((string) $id), $sourceTxnIds), static fn(string $id): bool => $id !== ''));
+    $sourceTxnLookup = array_fill_keys($sourceTxnIds, true);
+    $usageIndex = documents_inventory_build_usage_index($transactions);
+    $lotActiveTxnIds = (array) ($usageIndex['lot_active_txn_ids'] ?? []);
+    $batchActiveTxnIds = (array) ($usageIndex['batch_active_txn_ids'] ?? []);
+
+    $clearBooleanMarkers = static function (array &$row): void {
+        foreach (['used_flag', 'moved_flag', 'cut_flag'] as $flagKey) {
+            if (array_key_exists($flagKey, $row)) {
+                $row[$flagKey] = false;
+            }
+        }
+        foreach (['last_used_at', 'last_moved_at'] as $atKey) {
+            if (array_key_exists($atKey, $row)) {
+                $row[$atKey] = '';
+            }
+        }
+    };
+
+    $cleanupTxnArray = static function (array $ids, array $activeLookup, array $sourceLookup): array {
+        $clean = [];
+        foreach ($ids as $id) {
+            $id = safe_text((string) $id);
+            if ($id === '' || isset($sourceLookup[$id])) {
+                continue;
+            }
+            if (!isset($activeLookup[$id])) {
+                continue;
+            }
+            $clean[] = $id;
+        }
+        return array_values(array_unique($clean));
+    };
+
+    foreach ((array) ($stock['stock_by_component_id'] ?? []) as $componentId => $componentStock) {
+        if (!is_array($componentStock)) {
+            continue;
+        }
+        $variantBuckets = (array) ($componentStock['stock_by_variant_id'] ?? []);
+        foreach ($variantBuckets as $bucketKey => $bucketEntry) {
+            if (!is_array($bucketEntry)) {
+                continue;
+            }
+            $entry = array_merge(documents_inventory_component_entry_defaults(), $bucketEntry);
+
+            $lots = is_array($entry['lots'] ?? null) ? $entry['lots'] : [];
+            foreach ($lots as $lotIdx => $lot) {
+                if (!is_array($lot)) {
+                    continue;
+                }
+                $lotId = (string) ($lot['lot_id'] ?? '');
+                $activeTxnIds = array_fill_keys((array) ($lotActiveTxnIds[$lotId] ?? []), true);
+
+                $consumedIds = $cleanupTxnArray((array) ($lot['consumed_by_txn_ids'] ?? []), $activeTxnIds, $sourceTxnLookup);
+                $lot['consumed_by_txn_ids'] = $consumedIds;
+                if (array_key_exists('used_in_dc_ids', $lot)) {
+                    $dcIds = [];
+                    foreach ((array) ($lot['used_in_dc_ids'] ?? []) as $dcId) {
+                        $dcId = safe_text((string) $dcId);
+                        if ($dcId === '' || ($challanId !== '' && $dcId === $challanId)) {
+                            continue;
+                        }
+                        $dcIds[] = $dcId;
+                    }
+                    $lot['used_in_dc_ids'] = array_values(array_unique($dcIds));
+                }
+
+                if ($lotId !== '' && abs(((float) ($lot['remaining_length_ft'] ?? 0)) - ((float) ($lot['original_length_ft'] ?? 0))) <= 0.00001 && $activeTxnIds === []) {
+                    $lot['cuts_history'] = [];
+                    $lot['consumed_by_txn_ids'] = [];
+                    if (array_key_exists('used_in_dc_ids', $lot)) {
+                        $lot['used_in_dc_ids'] = [];
+                    }
+                    $clearBooleanMarkers($lot);
+                }
+                $lots[$lotIdx] = $lot;
+            }
+            $entry['lots'] = $lots;
+
+            $batches = is_array($entry['batches'] ?? null) ? $entry['batches'] : [];
+            foreach ($batches as $batchIdx => $batch) {
+                if (!is_array($batch)) {
+                    continue;
+                }
+                $batchId = (string) ($batch['batch_id'] ?? '');
+                $activeTxnIds = array_fill_keys((array) ($batchActiveTxnIds[$batchId] ?? []), true);
+                if (array_key_exists('consumed_by_txn_ids', $batch)) {
+                    $batch['consumed_by_txn_ids'] = $cleanupTxnArray((array) ($batch['consumed_by_txn_ids'] ?? []), $activeTxnIds, $sourceTxnLookup);
+                }
+                if (array_key_exists('used_in_dc_ids', $batch)) {
+                    $dcIds = [];
+                    foreach ((array) ($batch['used_in_dc_ids'] ?? []) as $dcId) {
+                        $dcId = safe_text((string) $dcId);
+                        if ($dcId === '' || ($challanId !== '' && $dcId === $challanId)) {
+                            continue;
+                        }
+                        $dcIds[] = $dcId;
+                    }
+                    $batch['used_in_dc_ids'] = array_values(array_unique($dcIds));
+                }
+                if ($activeTxnIds === []) {
+                    $clearBooleanMarkers($batch);
+                }
+                $batches[$batchIdx] = $batch;
+            }
+            $entry['batches'] = $batches;
+
+            $stock['stock_by_component_id'][$componentId]['stock_by_variant_id'][$bucketKey] = $entry;
+        }
+    }
+
+    return $stock;
 }
 
 function documents_reverse_dispatch_from_packing_list(array $packingList, string $challanId): array
