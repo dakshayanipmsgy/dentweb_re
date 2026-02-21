@@ -44,6 +44,7 @@ if ($viewerType === 'employee' && ((string) ($challan['created_by']['role'] ?? $
 }
 
 $quote = documents_get_quote((string) ($challan['quote_id'] ?: $challan['linked_quote_id']));
+$challan['lines'] = documents_migrate_challan_items_to_lines($challan);
 $packingList = null;
 $packingListId = safe_text((string) ($challan['packing_list_id'] ?? ''));
 if ($packingListId !== '') {
@@ -216,8 +217,96 @@ foreach ($componentMap as $componentId => $component) {
     }
 }
 
+$quoteItems = is_array($quote)
+    ? documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : [])
+    : [];
+$quoteDirectComponentIds = [];
+$kitIds = [];
+foreach ($quoteItems as $quoteItem) {
+    if (!is_array($quoteItem)) {
+        continue;
+    }
+    if ((string) ($quoteItem['type'] ?? '') === 'kit') {
+        $kitId = safe_text((string) ($quoteItem['kit_id'] ?? ''));
+        if ($kitId !== '') {
+            $kitIds[$kitId] = true;
+        }
+        continue;
+    }
+    if ((string) ($quoteItem['type'] ?? '') === 'component') {
+        $componentId = safe_text((string) ($quoteItem['component_id'] ?? ''));
+        if ($componentId !== '') {
+            $quoteDirectComponentIds[$componentId] = true;
+        }
+    }
+}
+
+if ($kitIds === [] && is_array($packingList)) {
+    foreach ((array) ($packingList['required_items'] ?? []) as $requiredLine) {
+        if (!is_array($requiredLine)) { continue; }
+        $kitId = safe_text((string) ($requiredLine['source_kit_id'] ?? ''));
+        if ($kitId !== '') {
+            $kitIds[$kitId] = true;
+        }
+    }
+}
+
+$currentKitComponentIdsByKit = [];
+$currentKitComponentIds = [];
+$kitReferencePanels = [];
+$kitReferenceChanged = [];
+foreach (array_keys($kitIds) as $kitId) {
+    $kit = documents_inventory_get_kit($kitId);
+    if (!is_array($kit)) {
+        continue;
+    }
+    $componentRows = [];
+    $kitComponentIds = [];
+    foreach ((array) ($kit['items'] ?? []) as $kitLine) {
+        if (!is_array($kitLine)) { continue; }
+        $componentId = safe_text((string) ($kitLine['component_id'] ?? ''));
+        if ($componentId === '') { continue; }
+        $component = documents_inventory_get_component($componentId);
+        if (!is_array($component) || !empty($component['archived_flag'])) {
+            continue;
+        }
+        $kitComponentIds[$componentId] = true;
+        $currentKitComponentIds[$componentId] = true;
+        $componentRows[] = [
+            'id' => $componentId,
+            'name' => (string) ($component['name'] ?? $componentId),
+        ];
+    }
+    $currentKitComponentIdsByKit[$kitId] = $kitComponentIds;
+
+    $packingComponentIds = [];
+    if (is_array($packingList)) {
+        foreach ((array) ($packingList['required_items'] ?? []) as $requiredLine) {
+            if (!is_array($requiredLine)) { continue; }
+            if ((string) ($requiredLine['source_kit_id'] ?? '') !== $kitId) { continue; }
+            $componentId = safe_text((string) ($requiredLine['component_id'] ?? ''));
+            if ($componentId !== '') {
+                $packingComponentIds[$componentId] = true;
+            }
+        }
+    }
+    $added = count(array_diff(array_keys($kitComponentIds), array_keys($packingComponentIds)));
+    $removed = count(array_diff(array_keys($packingComponentIds), array_keys($kitComponentIds)));
+    $kitReferenceChanged[$kitId] = ($added > 0 || $removed > 0)
+        ? ['added' => $added, 'removed' => $removed]
+        : null;
+
+    $kitReferencePanels[] = [
+        'id' => $kitId,
+        'name' => (string) ($kit['name'] ?? $kitId),
+        'components' => $componentRows,
+    ];
+}
+
 $packByLineId = [];
 $quotationGroups = [];
+$validQuotationPackingLineIds = [];
+$validQuotationComponentIds = [];
 if (is_array($packingList)) {
     foreach ((array) ($packingList['required_items'] ?? []) as $requiredLine) {
         if (!is_array($requiredLine)) { continue; }
@@ -227,6 +316,23 @@ if (is_array($packingList)) {
 
         $componentId = (string) ($requiredLine['component_id'] ?? '');
         if ($componentId === '') { continue; }
+        if (!isset($componentMap[$componentId])) { continue; }
+
+        $sourceKitId = safe_text((string) ($requiredLine['source_kit_id'] ?? ''));
+        if ($sourceKitId !== '') {
+            $kitComponentIds = $currentKitComponentIdsByKit[$sourceKitId] ?? [];
+            if (!isset($kitComponentIds[$componentId])) {
+                continue;
+            }
+        } elseif ($quoteItems !== [] && !isset($quoteDirectComponentIds[$componentId])) {
+            continue;
+        }
+
+        if ($lineId !== '') {
+            $validQuotationPackingLineIds[$lineId] = true;
+        }
+        $validQuotationComponentIds[$componentId] = true;
+
         $mode = (string) ($requiredLine['mode'] ?? 'fixed_qty');
         $pendingQty = max(0, (float) ($requiredLine['pending_qty'] ?? 0));
         $pendingFt = max(0, (float) ($requiredLine['pending_ft'] ?? 0));
@@ -235,7 +341,7 @@ if (is_array($packingList)) {
             ? ($pendingQty <= 0.00001 && $pendingFt <= 0.00001)
             : ((bool) ($requiredLine['fulfilled_flag'] ?? false));
 
-        $groupKey = safe_text((string) ($requiredLine['source_kit_id'] ?? ''));
+        $groupKey = $sourceKitId;
         $groupName = safe_text((string) ($requiredLine['source_kit_name_snapshot'] ?? ''));
         if ($groupKey === '') {
             $groupKey = 'direct_components';
@@ -276,76 +382,39 @@ if (is_array($packingList)) {
     }
 }
 
-
-$kitReferencePanels = [];
-$kitReferenceChanged = [];
-$kitIds = [];
-if (is_array($quote)) {
-    $quoteItems = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
-    foreach ($quoteItems as $quoteItem) {
-        if (!is_array($quoteItem) || (string) ($quoteItem['type'] ?? '') !== 'kit') {
-            continue;
-        }
-        $kitId = safe_text((string) ($quoteItem['kit_id'] ?? ''));
-        if ($kitId !== '') {
-            $kitIds[$kitId] = true;
-        }
-    }
-}
-if ($kitIds === [] && is_array($packingList)) {
-    foreach ((array) ($packingList['required_items'] ?? []) as $requiredLine) {
-        if (!is_array($requiredLine)) { continue; }
-        $kitId = safe_text((string) ($requiredLine['source_kit_id'] ?? ''));
-        if ($kitId !== '') {
-            $kitIds[$kitId] = true;
-        }
-    }
-}
-foreach (array_keys($kitIds) as $kitId) {
-    $kit = documents_inventory_get_kit($kitId);
-    if (!is_array($kit)) {
+$legacyLines = [];
+$activeLines = [];
+foreach ((array) ($challan['lines'] ?? []) as $line) {
+    if (!is_array($line)) {
         continue;
     }
-    $componentRows = [];
-    $kitComponentIds = [];
-    foreach ((array) ($kit['items'] ?? []) as $kitLine) {
-        if (!is_array($kitLine)) { continue; }
-        $componentId = safe_text((string) ($kitLine['component_id'] ?? ''));
-        if ($componentId === '') { continue; }
-        $component = documents_inventory_get_component($componentId);
-        if (!is_array($component) || !empty($component['archived_flag'])) {
-            continue;
-        }
-        $kitComponentIds[$componentId] = true;
-        $componentRows[] = [
-            'id' => $componentId,
-            'name' => (string) ($component['name'] ?? $componentId),
-        ];
+    $isQuotationOrigin = (string) ($line['line_origin'] ?? 'extra') === 'quotation';
+    if (!$isQuotationOrigin) {
+        $activeLines[] = $line;
+        continue;
+    }
+    $lineComponentId = safe_text((string) ($line['component_id'] ?? ''));
+    $linePackingId = safe_text((string) ($line['packing_line_id'] ?? ''));
+    $isStillValid = $linePackingId !== ''
+        ? isset($validQuotationPackingLineIds[$linePackingId])
+        : isset($validQuotationComponentIds[$lineComponentId]);
+    if ($isStillValid) {
+        $activeLines[] = $line;
+        continue;
     }
 
-    $packingComponentIds = [];
-    if (is_array($packingList)) {
-        foreach ((array) ($packingList['required_items'] ?? []) as $requiredLine) {
-            if (!is_array($requiredLine)) { continue; }
-            if ((string) ($requiredLine['source_kit_id'] ?? '') !== $kitId) { continue; }
-            $componentId = safe_text((string) ($requiredLine['component_id'] ?? ''));
-            if ($componentId !== '') {
-                $packingComponentIds[$componentId] = true;
-            }
-        }
+    $qty = max(0, (float) ($line['qty'] ?? 0));
+    $lengthFt = max(0, (float) ($line['length_ft'] ?? 0));
+    $totalLengthFt = max(0, (float) ($line['total_length_ft'] ?? 0));
+    $hasLotData = !empty((array) ($line['lot_allocations'] ?? [])) || !empty((array) ($line['selected_lot_ids'] ?? [])) || !empty((array) ($line['lot_ids'] ?? []));
+    $isUnused = $qty <= 0.00001 && $lengthFt <= 0.00001 && $totalLengthFt <= 0.00001 && !$hasLotData;
+    if ($isUnused) {
+        continue;
     }
-    $added = count(array_diff(array_keys($kitComponentIds), array_keys($packingComponentIds)));
-    $removed = count(array_diff(array_keys($packingComponentIds), array_keys($kitComponentIds)));
-    $kitReferenceChanged[$kitId] = ($added > 0 || $removed > 0)
-        ? ['added' => $added, 'removed' => $removed]
-        : null;
-
-    $kitReferencePanels[] = [
-        'id' => $kitId,
-        'name' => (string) ($kit['name'] ?? $kitId),
-        'components' => $componentRows,
-    ];
+    $line['legacy_reason'] = 'Item removed from current kit definition';
+    $legacyLines[] = $line;
 }
+$challan['lines'] = $activeLines;
 
 $redirectWith = static function (string $status, string $message) use ($id): void {
     header('Location: challan-view.php?id=' . urlencode($id) . '&status=' . urlencode($status) . '&message=' . urlencode($message));
@@ -1108,6 +1177,18 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 </tr>
 <?php endforeach; ?>
 </tbody></table>
+
+<?php if ($legacyLines !== []): ?>
+<div class="card" style="margin-top:12px;background:#fff7ed;border-color:#fed7aa;">
+  <h3 style="margin:0 0 8px">Legacy lines (item removed from kit)</h3>
+  <p class="small muted" style="margin:0 0 8px">These lines are retained because they have usage/allocation data and cannot be auto-removed safely.</p>
+  <ul class="small" style="margin:0 0 0 16px;">
+    <?php foreach ($legacyLines as $legacyLine): if (!is_array($legacyLine)) { continue; } ?>
+      <li><?= htmlspecialchars((string) ($legacyLine['component_name_snapshot'] ?? $legacyLine['component_id'] ?? ''), ENT_QUOTES) ?> — Qty <?= htmlspecialchars((string) ((float) ($legacyLine['qty'] ?? 0)), ENT_QUOTES) ?>, Ft <?= htmlspecialchars((string) ((float) ($legacyLine['length_ft'] ?? 0)), ENT_QUOTES) ?></li>
+    <?php endforeach; ?>
+  </ul>
+</div>
+<?php endif; ?>
 
 <div class="row-actions" style="margin-top:12px"><?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="finalize">Finalize DC</button><?php endif; ?><?php if ((string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php endif; ?></div>
 </form>
