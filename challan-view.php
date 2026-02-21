@@ -395,6 +395,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $tx = [
                     'id' => $txId,
                     'type' => 'OUT',
+                    'purpose' => 'customer_dispatch',
                     'component_id' => $componentId,
                     'variant_id' => $variantId,
                     'variant_name_snapshot' => (string) ($line['variant_name_snapshot'] ?? ''),
@@ -405,6 +406,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'location_consumption' => [],
                     'ref_type' => 'delivery_challan',
                     'ref_id' => (string) ($challan['id'] ?? ''),
+                    'quote_id' => (string) ($challan['quotation_id'] ?? ''),
+                    'customer_mobile' => (string) ($challan['customer_mobile'] ?? ''),
                     'reason' => 'DC Finalized',
                     'notes' => (string) ($line['notes'] ?? ''),
                     'created_at' => date('c'),

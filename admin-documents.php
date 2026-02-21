@@ -2348,6 +2348,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $reason = safe_text((string) ($_POST['reason'] ?? ''));
             $refType = safe_text((string) ($_POST['ref_type'] ?? 'manual'));
             $refId = safe_text((string) ($_POST['ref_id'] ?? ''));
+            $purposeInput = safe_text((string) ($_POST['purpose'] ?? ''));
             $locationId = safe_text((string) ($_POST['location_id'] ?? ''));
             $consumeLocationId = safe_text((string) ($_POST['consume_location_id'] ?? ''));
             $fromLocationId = safe_text((string) ($_POST['from_location_id'] ?? ''));
@@ -2591,6 +2592,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pieceCount = trim((string) ($_POST['cut_piece_count'] ?? $_POST['piece_count'] ?? ''));
             $pieceLengthFt = trim((string) ($_POST['cut_piece_length_ft'] ?? $_POST['piece_length_ft'] ?? ''));
 
+            $purpose = documents_inventory_normalize_tx_purpose($purposeInput);
+            if ($purpose === '') {
+                if ($txType === 'IN') {
+                    $purpose = 'procurement_in';
+                } elseif ($txType === 'MOVE') {
+                    $purpose = 'internal_transfer';
+                } elseif ($txType === 'ADJUST') {
+                    $purpose = 'manual_adjustment';
+                } elseif ($txType === 'OUT') {
+                    $purpose = 'manual_adjustment';
+                }
+            }
+            if ($txType === 'MOVE') {
+                $refType = 'inventory_move';
+                $purpose = 'internal_transfer';
+            }
+
             $txPayloadInput = [
                 'type' => $txType,
                 'qty' => max(0, (float) ($_POST['qty'] ?? 0)),
@@ -2629,6 +2647,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'variant_name_snapshot' => $variantNameSnapshot,
                     'ref_type' => $refType === '' ? 'manual' : $refType,
                     'ref_id' => $refId,
+                    'purpose' => $purpose,
                     'reason' => $reason,
                     'notes' => $notes,
                     'updated_at' => $now,
@@ -2668,6 +2687,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'variant_name_snapshot' => $variantNameSnapshot,
                 'ref_type' => $refType === '' ? 'manual' : $refType,
                 'ref_id' => $refId,
+                'purpose' => $purpose,
                 'reason' => $reason,
                 'notes' => $notes,
                 'created_at' => $now,
@@ -3806,6 +3826,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <div data-non-cuttable-wrap="1"><label>Qty</label><input type="number" step="0.01" min="0" name="qty" /></div>
               <div data-cuttable-wrap="1"><label>Length (ft for cuttable)</label><input type="number" step="0.01" min="0" name="length_ft" /></div>
               <div><label>Consume from location (optional)</label><select name="consume_location_id"><option value="">Auto</option><?php foreach ($activeInventoryLocations as $location): ?><option value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
+              <div><label>Purpose</label><select name="purpose"><option value="manual_adjustment" selected>Internal Consumption (not for customer)</option><option value="customer_dispatch">Customer Dispatch (without DC)</option></select></div>
               <div><label>Notes</label><input name="notes" /></div>
               <button class="btn secondary" type="submit">Create OUT</button>
             </form>
