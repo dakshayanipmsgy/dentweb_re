@@ -124,7 +124,7 @@ foreach ($componentMap as $componentId => $component) {
         $variantId = (string) ($variantEntry['id'] ?? '');
         $entry = documents_inventory_component_stock($stockSnapshot, $componentId, $variantId);
         $lotsOut = [];
-        $totalFt = 0.0;
+        $totalFt = documents_inventory_compute_on_hand($stockSnapshot, $componentId, $variantId, true);
         foreach ((array) ($entry['lots'] ?? []) as $lot) {
             if (!is_array($lot)) {
                 continue;
@@ -141,7 +141,6 @@ foreach ($componentMap as $componentId => $component) {
                 'location_id' => $locationId,
                 'location_name' => $locationsMap[$locationId] ?? $locationId,
             ];
-            $totalFt += $remainingFt;
         }
         $cuttableStockByComponentVariant[$componentId . '|' . $variantId] = [
             'lots' => $lotsOut,
@@ -297,22 +296,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $selectedLotIds = array_values(array_filter(array_map(static fn($lotId): string => safe_text((string) $lotId), $selectedLotIdsRaw), static fn(string $lotId): bool => $lotId !== ''));
                 $lotCuts = [];
+                $manualLotCuts = [];
                 $lineLotCutsRaw = $lineLotCuts[$idx] ?? [];
                 if (!is_array($lineLotCutsRaw)) {
                     $decodedCuts = json_decode((string) $lineLotCutsRaw, true);
                     $lineLotCutsRaw = is_array($decodedCuts) ? $decodedCuts : [];
                 }
+                $lineRequiredFt = $isCuttable ? max(0, $lengthFt * $pieceCount) : 0;
+                $lineAllocatedFt = 0.0;
                 foreach ($lineLotCutsRaw as $cut) {
                     if (!is_array($cut)) {
                         continue;
                     }
                     $lotId = safe_text((string) ($cut['lot_id'] ?? ''));
-                    $cutCount = max(0, (int) ($cut['count'] ?? 0));
-                    $cutLength = max(0, (float) ($cut['cut_length_ft'] ?? 0));
-                    if ($lotId === '' || $cutCount <= 0 || $cutLength <= 0) {
+                    $manualCutFt = max(0, (float) ($cut['cut_ft'] ?? 0));
+                    if ($manualCutFt <= 0) {
+                        $cutCount = max(0, (int) ($cut['count'] ?? 0));
+                        $cutLength = max(0, (float) ($cut['cut_length_ft'] ?? 0));
+                        $manualCutFt = $cutCount > 0 && $cutLength > 0 ? ($cutCount * $cutLength) : 0;
+                    }
+                    if ($lotId === '' || $manualCutFt <= 0) {
                         continue;
                     }
-                    $lotCuts[] = ['lot_id' => $lotId, 'count' => $cutCount, 'cut_length_ft' => $cutLength];
+                    $manualCutFt = round($manualCutFt, 4);
+                    $lineAllocatedFt += $manualCutFt;
+                    $manualLotCuts[] = ['lot_id' => $lotId, 'cut_ft' => $manualCutFt];
+                    $lotCuts[] = ['lot_id' => $lotId, 'count' => 1, 'cut_length_ft' => $manualCutFt, 'cut_ft' => $manualCutFt];
+                }
+                if ($isCuttable && $manualLotCuts !== [] && abs($lineAllocatedFt - $lineRequiredFt) > 0.0001) {
+                    $lineErrors[] = 'Manual lot allocation must equal required total ft.';
                 }
 
                 $variantName = $variantId !== '' ? (string) (($variantMap[$variantId]['display_name'] ?? $variantId)) : '';
@@ -333,6 +345,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'selected_lot_ids' => $selectedLotIds,
                     'lot_ids' => $selectedLotIds,
                     'lot_cuts' => $lotCuts,
+                    'manual_lot_cuts' => $manualLotCuts,
                     'line_errors' => $lineErrors,
                     'unit_snapshot' => (string) ($component['unit'] ?? ($isCuttable ? 'ft' : 'Nos')),
                     'hsn_snapshot' => (string) ($component['hsn'] ?? ''),
@@ -380,6 +393,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stock = documents_inventory_load_stock();
             $txnIds = [];
             $dispatchRows = [];
+            $inventoryConsumption = [];
+            $packingDeltas = [];
 
             foreach ((array) ($challan['lines'] ?? []) as $line) {
                 if (!is_array($line)) { continue; }
@@ -413,12 +428,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ];
 
                 if (!empty($line['is_cuttable_snapshot'])) {
-                    $needFt = max(0, (float) ($line['length_ft'] ?? 0));
+                    $needFt = max(0, ((float) ($line['length_ft'] ?? 0)) * max(1, (int) ($line['pieces'] ?? 1))); 
                     if ($needFt <= 0) { continue; }
                     $availableFt = documents_inventory_total_remaining_ft($entry);
+                    $manualCuts = is_array($line['manual_lot_cuts'] ?? null) ? $line['manual_lot_cuts'] : [];
                     $plannedCuts = is_array($line['lot_cuts'] ?? null) ? $line['lot_cuts'] : [];
                     $consume = ['lots' => (array) ($entry['lots'] ?? []), 'lot_consumption' => []];
-                    if ($plannedCuts !== []) {
+                    if ($manualCuts !== []) {
+                        $manualPlan = [];
+                        foreach ($manualCuts as $manualCut) {
+                            if (!is_array($manualCut)) { continue; }
+                            $lotId = safe_text((string) ($manualCut['lot_id'] ?? ''));
+                            $cutFt = max(0, (float) ($manualCut['cut_ft'] ?? 0));
+                            if ($lotId === '' || $cutFt <= 0) { continue; }
+                            $manualPlan[] = ['lot_id' => $lotId, 'count' => 1, 'cut_length_ft' => $cutFt];
+                        }
+                        $planned = documents_inventory_consume_planned_lot_cuts((array) ($entry['lots'] ?? []), $manualPlan);
+                        $consume = [
+                            'lots' => (array) ($planned['lots'] ?? []),
+                            'lot_consumption' => (array) ($planned['lot_consumption'] ?? []),
+                        ];
+                    } elseif ($plannedCuts !== []) {
                         $planned = documents_inventory_consume_planned_lot_cuts((array) ($entry['lots'] ?? []), $plannedCuts);
                         $consume = [
                             'lots' => (array) ($planned['lots'] ?? []),
@@ -479,6 +509,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 documents_inventory_append_transaction($tx);
                 $txnIds[] = $txId;
 
+
+                if (!empty($line['is_cuttable_snapshot'])) {
+                    foreach ((array) ($tx['lot_consumption'] ?? []) as $consumedLot) {
+                        if (!is_array($consumedLot)) { continue; }
+                        $lotId = safe_text((string) ($consumedLot['lot_id'] ?? ''));
+                        $usedFt = max(0, (float) ($consumedLot['used_ft'] ?? 0));
+                        if ($lotId === '' || $usedFt <= 0) { continue; }
+                        $inventoryConsumption[] = ['line_id' => (string) ($line['line_id'] ?? ''), 'component_id' => $componentId, 'variant_id' => $variantId, 'lot_id' => $lotId, 'used_ft' => $usedFt];
+                    }
+                } else {
+                    $inventoryConsumption[] = ['line_id' => (string) ($line['line_id'] ?? ''), 'component_id' => $componentId, 'variant_id' => $variantId, 'qty' => max(0, (float) ($tx['qty'] ?? 0))];
+                }
+
                 if ((string) ($line['line_origin'] ?? 'extra') === 'quotation') {
                     $packingLineId = (string) ($line['packing_line_id'] ?? '');
                     $packingRef = $packingLineId !== '' ? ($packByLineId[$packingLineId] ?? null) : null;
@@ -498,6 +541,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'variant_id' => $variantId,
                         'variant_name_snapshot' => (string) ($line['variant_name_snapshot'] ?? ''),
                         'wattage_wp' => (float) ($variantMap[$variantId]['wattage_wp'] ?? 0),
+                    ];
+                    $packingDeltas[] = [
+                        'packing_line_id' => $packingLineId,
+                        'component_id' => $componentId,
+                        'variant_id' => $variantId,
+                        'dispatch_qty' => (float) ($line['qty'] ?? 0),
+                        'dispatch_ft' => (float) ($line['length_ft'] ?? 0),
+                        'dispatch_wp' => $dispatchWp,
                     ];
                 }
             }
@@ -520,6 +571,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 documents_inventory_sync_verification_log($transactions, true);
             }
             $challan['inventory_txn_ids'] = $txnIds;
+            $challan['finalized_inventory_consumption'] = $inventoryConsumption;
+            $challan['finalized_packing_deltas'] = $packingDeltas;
             $challan['status'] = 'final';
         }
 
@@ -541,7 +594,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $reversalTxnIds = [];
+                $consumptionRows = is_array($challan['finalized_inventory_consumption'] ?? null) ? $challan['finalized_inventory_consumption'] : [];
+                $usedStoredConsumption = false;
+                if ($consumptionRows !== []) {
+                    foreach ($consumptionRows as $consumptionRow) {
+                        if (!is_array($consumptionRow)) { continue; }
+                        $componentId = safe_text((string) ($consumptionRow['component_id'] ?? ''));
+                        $variantId = safe_text((string) ($consumptionRow['variant_id'] ?? ''));
+                        if ($componentId === '') { continue; }
+                        $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
+                        $lotId = safe_text((string) ($consumptionRow['lot_id'] ?? ''));
+                        $usedFt = max(0, (float) ($consumptionRow['used_ft'] ?? 0));
+                        $qty = max(0, (float) ($consumptionRow['qty'] ?? 0));
+                        if ($lotId !== '' && $usedFt > 0) {
+                            $matched = false;
+                            foreach ((array) ($entry['lots'] ?? []) as $lotIdx => $lot) {
+                                if (!is_array($lot) || (string) ($lot['lot_id'] ?? '') !== $lotId) { continue; }
+                                $entry['lots'][$lotIdx]['remaining_length_ft'] = round((float) ($lot['remaining_length_ft'] ?? 0) + $usedFt, 4);
+                                $matched = true;
+                                break;
+                            }
+                            if (!$matched) {
+                                $entry['lots'][] = ['lot_id' => $lotId, 'original_length_ft' => $usedFt, 'remaining_length_ft' => $usedFt, 'location_id' => '', 'created_at' => date('c'), 'created_by' => ['role' => 'system', 'id' => '', 'name' => 'DC archive reversal']];
+                            }
+                            $usedStoredConsumption = true;
+                        } elseif ($qty > 0) {
+                            $entry = documents_inventory_add_to_location_breakdown($entry, $qty, '');
+                            $entry['batches'][] = documents_inventory_create_batch('', $qty, ['role' => 'system', 'id' => '', 'name' => 'DC archive reversal'], (string) ($challan['id'] ?? ''));
+                            $usedStoredConsumption = true;
+                        }
+                        $entry['updated_at'] = date('c');
+                        documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
+                    }
+                }
                 $sourceTxnIds = array_values(array_filter(array_map(static fn($id): string => safe_text((string) $id), (array) ($challan['inventory_txn_ids'] ?? [])), static fn(string $id): bool => $id !== ''));
+                if (!$usedStoredConsumption) {
                 foreach ($sourceTxnIds as $sourceTxnId) {
                     if (!isset($transactionsById[$sourceTxnId])) {
                         continue;
@@ -655,6 +742,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
+                }
+
                 $savedStock = documents_inventory_save_stock($stock);
                 if (!($savedStock['ok'] ?? false)) {
                     $redirectWith('error', 'Failed to reverse inventory while archiving DC.');
@@ -752,7 +841,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 </select>
 <select name="line_variant_id[]" class="variant-select" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>><option value="">N/A</option><?php foreach ((array) ($variantsByComponent[$componentId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variant['id'] ?? ''))===$variantId?'selected':'' ?>><?= htmlspecialchars((string) ($variant['name'] ?? ''), ENT_QUOTES) ?><?= !empty($variant['archived']) ? ' (archived)' : '' ?> — Stock: <?= htmlspecialchars((string) round((float) ($variant['stock'] ?? 0), 2), ENT_QUOTES) ?></option><?php endforeach; ?></select>
 <input name="line_notes[]" placeholder="Description / notes" value="<?= htmlspecialchars((string) ($line['notes'] ?? ''), ENT_QUOTES) ?>" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>>
-<div class="small muted stock-hint" style="margin-top:6px">Stock: <?= htmlspecialchars((string) round($lineStock, 2), ENT_QUOTES) ?><?= $isCuttable ? ' ft' : '' ?><?= $lineStock <= 0 ? ' (will go negative)' : '' ?></div>
+<div class="small muted stock-hint" style="margin-top:6px">Stock: <?= htmlspecialchars((string) round($lineStock, 2), ENT_QUOTES) ?><?= $isCuttable ? ' ft' : '' ?></div>
 <div class="small" style="margin-top:6px;color:#b91c1c"><?php foreach ((array) ($line['line_errors'] ?? []) as $lineError): ?><div><?= htmlspecialchars((string) $lineError, ENT_QUOTES) ?></div><?php endforeach; ?></div>
 <div class="cuttable-panel small" style="margin-top:6px"></div>
 </td>
@@ -816,20 +905,70 @@ const renderCuttablePanel = (tr) => {
   const cutsInput = tr.querySelector('.line-lot-cuts-input');
   const selectedLotsInput = tr.querySelector('.line-selected-lot-ids');
   const existingCuts = readJsonArray(cutsInput?.value || '[]');
-  if (selectedLotsInput && !selectedLotsInput.value) {
-    selectedLotsInput.value = JSON.stringify(existingCuts.map(cut => cut.lot_id));
-  }
-  panel.innerHTML = `<div><strong>Available pieces</strong> · Total: ${total.toFixed(2)} ft</div>${lots.map(l => `<div>Lot ${l.lot_id} · ${Number(l.remaining_length_ft||0).toFixed(2)} ft · ${l.location_name || '-'}</div>`).join('') || '<div class="muted">No lots available.</div>'}<button type="button" class="btn secondary suggest-cuts" style="margin-top:6px">Suggest from stock</button><div class="small suggested-cuts" style="margin-top:6px"></div>`;
+  const requiredFt = Math.max(0, pieces) * Math.max(0, cutLen);
+  const allocatedFt = existingCuts.reduce((sum, cut) => sum + Number(cut.cut_ft || (Number(cut.count || 0) * Number(cut.cut_length_ft || 0)) || 0), 0);
+
+  panel.innerHTML = `<div><strong>Available pieces</strong> · Total: ${total.toFixed(2)} ft</div>${lots.map(l => `<div>Lot ${l.lot_id} · ${Number(l.remaining_length_ft||0).toFixed(2)} ft · ${l.location_name || '-'}</div>`).join('') || '<div class="muted">No lots available.</div>'}<label style="display:block;margin-top:6px"><input type="checkbox" class="manual-cut-toggle"> Manual lot cutting</label><button type="button" class="btn secondary suggest-cuts" style="margin-top:6px">Suggested cutting</button><div class="small suggested-cuts" style="margin-top:6px"></div><div class="manual-cut-wrap" style="margin-top:8px;display:none"></div><div class="small muted alloc-indicator" style="margin-top:6px"></div>`;
   const suggestBtn = panel.querySelector('.suggest-cuts');
   const suggested = panel.querySelector('.suggested-cuts');
+  const manualToggle = panel.querySelector('.manual-cut-toggle');
+  const manualWrap = panel.querySelector('.manual-cut-wrap');
+  const allocIndicator = panel.querySelector('.alloc-indicator');
+
   const drawCuts = (cuts) => {
     if (cutsInput) cutsInput.value = JSON.stringify(cuts);
     if (selectedLotsInput) selectedLotsInput.value = JSON.stringify(cuts.map(cut => cut.lot_id));
-    suggested.textContent = cuts.length ? cuts.map(cut => `${cut.lot_id}: ${cut.count} × ${Number(cut.cut_length_ft).toFixed(2)}ft`).join(' | ') : 'No lot cuts selected.';
+    suggested.textContent = cuts.length ? cuts.map(cut => `${cut.lot_id}: ${Number(cut.cut_ft || (Number(cut.count || 0) * Number(cut.cut_length_ft || 0))).toFixed(2)}ft`).join(' | ') : 'No lot cuts selected.';
+    const allocated = cuts.reduce((sum, cut) => sum + Number(cut.cut_ft || (Number(cut.count || 0) * Number(cut.cut_length_ft || 0)) || 0), 0);
+    allocIndicator.textContent = `Allocated ${allocated.toFixed(2)} ft / Required ${requiredFt.toFixed(2)} ft`;
   };
+
+  const renderManualRows = (cuts) => {
+    manualWrap.innerHTML = `<div class="small">Add lot allocations (ft). Total must match required.</div>${cuts.map((cut, idx) => `<div style="display:flex;gap:6px;margin-top:4px"><select class="manual-lot" data-idx="${idx}"><option value="">Lot</option>${lots.map(l => `<option value="${l.lot_id}" ${l.lot_id===cut.lot_id?'selected':''}>${l.lot_id} (${Number(l.remaining_length_ft||0).toFixed(2)} ft)</option>`).join('')}</select><input type="number" step="0.01" min="0" class="manual-ft" data-idx="${idx}" value="${Number(cut.cut_ft || 0).toFixed(2)}"><button type="button" class="btn warn manual-del" data-idx="${idx}">×</button></div>`).join('')}<button type="button" class="btn secondary manual-add" style="margin-top:6px">+ Add allocation</button>`;
+    manualWrap.querySelectorAll('.manual-add').forEach(btn => btn.addEventListener('click', () => {
+      const next = [...cuts, { lot_id: '', cut_ft: 0 }];
+      renderManualRows(next);
+      drawCuts(next.filter(cut => cut.lot_id && Number(cut.cut_ft) > 0).map(cut => ({ lot_id: cut.lot_id, cut_ft: Number(cut.cut_ft), count: 1, cut_length_ft: Number(cut.cut_ft) })));
+    }));
+    manualWrap.querySelectorAll('.manual-del').forEach(btn => btn.addEventListener('click', () => {
+      const idx = Number(btn.getAttribute('data-idx') || -1);
+      if (idx < 0) return;
+      const next = cuts.filter((_, i) => i !== idx);
+      renderManualRows(next);
+      drawCuts(next.filter(cut => cut.lot_id && Number(cut.cut_ft) > 0).map(cut => ({ lot_id: cut.lot_id, cut_ft: Number(cut.cut_ft), count: 1, cut_length_ft: Number(cut.cut_ft) })));
+    }));
+    const update = () => {
+      const next = [];
+      manualWrap.querySelectorAll('.manual-lot').forEach(sel => {
+        const idx = Number(sel.getAttribute('data-idx') || -1);
+        if (idx < 0) return;
+        const ftInput = manualWrap.querySelector(`.manual-ft[data-idx="${idx}"]`);
+        next[idx] = { lot_id: sel.value || '', cut_ft: Number(ftInput?.value || 0) };
+      });
+      const normalized = next.filter(Boolean);
+      renderManualRows(normalized);
+      drawCuts(normalized.filter(cut => cut.lot_id && Number(cut.cut_ft) > 0).map(cut => ({ lot_id: cut.lot_id, cut_ft: Number(cut.cut_ft), count: 1, cut_length_ft: Number(cut.cut_ft) })));
+    };
+    manualWrap.querySelectorAll('.manual-lot,.manual-ft').forEach(el => el.addEventListener('change', update));
+  };
+
+  const hasManual = existingCuts.some(cut => Number(cut.cut_ft || 0) > 0);
+  manualToggle.checked = hasManual;
+  manualWrap.style.display = hasManual ? '' : 'none';
+  if (hasManual) {
+    renderManualRows(existingCuts.map(cut => ({ lot_id: cut.lot_id || '', cut_ft: Number(cut.cut_ft || (Number(cut.count||0)*Number(cut.cut_length_ft||0)) || 0) })));
+  }
   drawCuts(existingCuts);
+  manualToggle?.addEventListener('change', () => {
+    const enabled = !!manualToggle.checked;
+    manualWrap.style.display = enabled ? '' : 'none';
+    if (enabled) {
+      const seed = existingCuts.length ? existingCuts : [{ lot_id: '', cut_ft: 0 }];
+      renderManualRows(seed.map(cut => ({ lot_id: cut.lot_id || '', cut_ft: Number(cut.cut_ft || 0) })));
+    }
+  });
   suggestBtn?.addEventListener('click', () => {
-    const plan = buildCuttablePlan(lots, Math.max(0, Math.floor(pieces)), Math.max(0, cutLen));
+    const plan = buildCuttablePlan(lots, Math.max(0, Math.floor(pieces)), Math.max(0, cutLen)).map(cut => ({ ...cut, cut_ft: Number(cut.count || 0) * Number(cut.cut_length_ft || 0) }));
     drawCuts(plan);
   });
 };
@@ -882,7 +1021,7 @@ const wireRow = (tr) => {
     if (!c.has_variants && c.is_cuttable) {
       stock = Number((CUTTABLE_STOCK[stockKey(cid, '')] || {}).total_remaining_ft || 0);
     }
-    stockHint.textContent = `Stock: ${stock.toFixed(2)}${c.is_cuttable ? ' ft' : ''}${stock <= 0 ? ' (will go negative)' : ''}`;
+    stockHint.textContent = `Stock: ${stock.toFixed(2)}${c.is_cuttable ? ' ft' : ''}`;
     renderCuttablePanel(tr);
   };
 

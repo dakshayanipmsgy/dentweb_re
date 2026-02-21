@@ -1451,6 +1451,8 @@ function documents_challan_defaults(): array
         'created_by_id' => '',
         'created_by_name' => '',
         'inventory_txn_ids' => [],
+        'finalized_inventory_consumption' => [],
+        'finalized_packing_deltas' => [],
         'archived_flag' => false,
         'created_at' => '',
         'updated_at' => '',
@@ -1500,6 +1502,7 @@ function documents_challan_line_defaults(): array
         'lot_ids' => [],
         'selected_lot_ids' => [],
         'lot_cuts' => [],
+        'manual_lot_cuts' => [],
         'line_errors' => [],
         'unit_snapshot' => '',
         'hsn_snapshot' => '',
@@ -1539,17 +1542,36 @@ function documents_normalize_challan_lines(array $lines): array
         }
         $lotCutsRaw = is_array($row['lot_cuts'] ?? null) ? $row['lot_cuts'] : [];
         $row['lot_cuts'] = [];
+        $row['manual_lot_cuts'] = [];
         foreach ($lotCutsRaw as $cut) {
             if (!is_array($cut)) {
                 continue;
             }
             $lotId = safe_text((string) ($cut['lot_id'] ?? ''));
-            $count = max(0, (int) ($cut['count'] ?? 0));
+            $countRaw = (float) ($cut['count'] ?? 0);
+            $count = max(0, (int) $countRaw);
             $cutLength = max(0, (float) ($cut['cut_length_ft'] ?? 0));
-            if ($lotId === '' || $count <= 0 || $cutLength <= 0) {
+            $manualCutFt = max(0, (float) ($cut['cut_ft'] ?? 0));
+            if ($manualCutFt <= 0 && $count > 0 && $cutLength > 0) {
+                $manualCutFt = $count * $cutLength;
+            }
+            if ($lotId === '' || $manualCutFt <= 0) {
                 continue;
             }
-            $row['lot_cuts'][] = ['lot_id' => $lotId, 'count' => $count, 'cut_length_ft' => $cutLength];
+            if ($count <= 0) {
+                $count = 1;
+            }
+            if ($cutLength <= 0) {
+                $cutLength = $manualCutFt;
+            }
+            $normalized = [
+                'lot_id' => $lotId,
+                'count' => $count,
+                'cut_length_ft' => $cutLength,
+                'cut_ft' => $manualCutFt,
+            ];
+            $row['lot_cuts'][] = $normalized;
+            $row['manual_lot_cuts'][] = ['lot_id' => $lotId, 'cut_ft' => $manualCutFt];
         }
         $row['line_errors'] = array_values(array_filter(array_map(static fn($error): string => safe_text((string) $error), is_array($row['line_errors'] ?? null) ? $row['line_errors'] : []), static fn(string $error): bool => $error !== ''));
         $row['unit_snapshot'] = safe_text((string) ($row['unit_snapshot'] ?? ''));
@@ -4149,11 +4171,30 @@ function documents_inventory_load_stock(): array
             $legacyEntry = array_merge(documents_inventory_component_entry_defaults(), $componentEntry);
             $componentEntry = ['stock_by_variant_id' => [documents_inventory_stock_bucket_key('') => $legacyEntry]];
         }
+        if (!isset($componentEntry['variants']) || !is_array($componentEntry['variants'])) {
+            $componentEntry['variants'] = [];
+        }
+        foreach ($componentEntry['variants'] as $variantKey => $variantEntry) {
+            if (!is_array($variantEntry)) {
+                continue;
+            }
+            $componentEntry['stock_by_variant_id'][documents_inventory_stock_bucket_key((string) $variantKey)] = array_merge(
+                documents_inventory_component_entry_defaults(),
+                $variantEntry
+            );
+        }
         foreach ($componentEntry['stock_by_variant_id'] as $bucketKey => $bucketEntry) {
             $componentEntry['stock_by_variant_id'][$bucketKey] = array_merge(
                 documents_inventory_component_entry_defaults(),
                 is_array($bucketEntry) ? $bucketEntry : []
             );
+        }
+        $componentEntry['variants'] = [];
+        foreach ($componentEntry['stock_by_variant_id'] as $bucketKey => $bucketEntry) {
+            if ((string) $bucketKey === documents_inventory_stock_bucket_key('')) {
+                continue;
+            }
+            $componentEntry['variants'][(string) $bucketKey] = $bucketEntry;
         }
         $stock['stock_by_component_id'][$componentId] = $componentEntry;
     }
@@ -4578,6 +4619,8 @@ function documents_inventory_stock_entry_raw(array $stock, string $componentId, 
     if (is_array($componentEntry)) {
         if (isset($componentEntry['stock_by_variant_id']) && is_array($componentEntry['stock_by_variant_id'])) {
             $entry = $componentEntry['stock_by_variant_id'][documents_inventory_stock_bucket_key($variantId)] ?? [];
+        } elseif ($variantId !== '' && isset($componentEntry['variants']) && is_array($componentEntry['variants'])) {
+            $entry = $componentEntry['variants'][$variantId] ?? $componentEntry['variants'][documents_inventory_stock_bucket_key($variantId)] ?? [];
         } else {
             $entry = $componentEntry;
         }
@@ -4612,6 +4655,16 @@ function documents_inventory_component_variant_entries(array $stock, string $com
             }
             if (is_array($bucketEntry)) {
                 $entries[] = $bucketEntry;
+            }
+        }
+    }
+    if ($entries === [] && is_array($componentEntry) && isset($componentEntry['variants']) && is_array($componentEntry['variants'])) {
+        foreach ($componentEntry['variants'] as $variantKey => $variantEntry) {
+            if ((string) $variantKey === documents_inventory_stock_bucket_key('')) {
+                continue;
+            }
+            if (is_array($variantEntry)) {
+                $entries[] = $variantEntry;
             }
         }
     }
@@ -4730,6 +4783,12 @@ function documents_inventory_set_component_stock(array &$stock, string $componen
 
     $bucketKey = documents_inventory_stock_bucket_key($variantId);
     $stock['stock_by_component_id'][$componentId]['stock_by_variant_id'][$bucketKey] = array_merge(documents_inventory_component_entry_defaults(), $entry);
+    if (!isset($stock['stock_by_component_id'][$componentId]['variants']) || !is_array($stock['stock_by_component_id'][$componentId]['variants'])) {
+        $stock['stock_by_component_id'][$componentId]['variants'] = [];
+    }
+    if ($variantId !== '') {
+        $stock['stock_by_component_id'][$componentId]['variants'][$variantId] = $stock['stock_by_component_id'][$componentId]['stock_by_variant_id'][$bucketKey];
+    }
 }
 
 function documents_inventory_total_remaining_ft(array $entry): float
