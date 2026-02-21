@@ -2205,9 +2205,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $errors[] = 'Invalid location for batch ' . $batchId . '.';
                     continue;
                 }
-                $batchEligibility = is_batch_editable(['batch_id' => $batchId], $usageIndex);
-                if (empty($batchEligibility['editable'])) {
-                    $errors[] = 'Batch ' . $batchId . ' cannot be edited. ' . (string) ($batchEligibility['reason'] ?? '');
+                if (isset($batchBlocked[$batchId])) {
+                    $errors[] = 'Batch ' . $batchId . ' has already been moved/consumed and cannot be edited.';
                     continue;
                 }
                 $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
