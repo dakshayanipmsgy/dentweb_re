@@ -1322,6 +1322,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'original_length_ft' => $pieceLength,
                                 'remaining_length_ft' => $pieceLength,
                                 'location_id' => $locationId,
+                                'variant_id' => $variantId,
+                                'variant_name_snapshot' => (string) ((documents_inventory_get_component_variant($variantId)['display_name'] ?? '') ?: ''),
                                 'notes' => safe_text((string) ($row['notes'] ?? '')),
                                 'created_at' => date('c'),
                                 'created_by' => documents_inventory_actor($user ?? []),
@@ -1330,6 +1332,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } else {
                         $qty = max(0, (float) ($row['qty'] ?? 0));
                         $batch = documents_inventory_create_batch($locationId, $qty, documents_inventory_actor($user ?? []), '');
+                        $batch['variant_id'] = $variantId;
+                        $batch['variant_name_snapshot'] = (string) ((documents_inventory_get_component_variant($variantId)['display_name'] ?? '') ?: '');
                         $batches = is_array($entry['batches'] ?? null) ? $entry['batches'] : [];
                         $batches[] = $batch;
                         $entry['batches'] = $batches;
@@ -2026,6 +2030,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $bulkApplied = 0;
             $bulkSkipped = [];
 
+            if ($bulkAction === 'change_variant' && $bulkLotIds !== []) {
+                $selectedBulkComponents = [];
+                foreach ((array) ($stock['stock_by_component_id'] ?? []) as $bulkComponentId => $componentStock) {
+                    if (!is_array($componentStock) || !is_array($componentStock['stock_by_variant_id'] ?? null)) {
+                        continue;
+                    }
+                    foreach ((array) $componentStock['stock_by_variant_id'] as $bucketEntry) {
+                        $entryLots = is_array($bucketEntry['lots'] ?? null) ? $bucketEntry['lots'] : [];
+                        foreach ($entryLots as $entryLot) {
+                            $entryLotId = safe_text((string) ($entryLot['lot_id'] ?? ''));
+                            if ($entryLotId !== '' && in_array($entryLotId, $bulkLotIds, true)) {
+                                $selectedBulkComponents[(string) $bulkComponentId] = true;
+                            }
+                        }
+                    }
+                }
+                if (count($selectedBulkComponents) > 1) {
+                    $errors[] = 'Bulk variant change requires lots from the same component.';
+                    $bulkAction = '';
+                }
+            }
+
             if ($bulkAction !== '' && $bulkLotIds !== []) {
                 foreach ($stock['stock_by_component_id'] as $bulkComponentId => $componentStock) {
                     if (!is_array($componentStock) || !is_array($componentStock['stock_by_variant_id'] ?? null)) {
@@ -2069,12 +2095,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     continue;
                                 }
                                 $variantRow = documents_inventory_get_component_variant($bulkVariantId);
-                                if (!is_array($variantRow) || (string) ($variantRow['component_id'] ?? '') !== (string) $bulkComponentId) {
+                                if (!is_array($variantRow) || (string) ($variantRow['component_id'] ?? '') !== (string) $bulkComponentId || !empty($variantRow['archived_flag'])) {
                                     $bulkSkipped[] = 'Lot ' . $lotId . ': invalid variant.';
                                     continue;
                                 }
                                 $targetEntry = documents_inventory_component_stock($stock, (string) $bulkComponentId, $bulkVariantId);
                                 $lotMoved = $lots[$lotIdx];
+                                $lotMoved['variant_id'] = $bulkVariantId;
+                                $lotMoved['variant_name_snapshot'] = (string) ($variantRow['display_name'] ?? '');
                                 unset($lots[$lotIdx]);
                                 $targetLots = is_array($targetEntry['lots'] ?? null) ? $targetEntry['lots'] : [];
                                 $targetLots[] = $lotMoved;
@@ -2085,7 +2113,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             if ($bulkNotes !== '') {
                                 $lots[$lotIdx]['notes'] = $bulkNotes;
                             }
-                            $changed[] = ['entity_type' => 'lot', 'entity_id' => $lotId, 'field' => 'bulk_edit', 'from' => $before, 'to' => $lots[$lotIdx] ?? ['moved_to_variant' => $bulkVariantId], 'bulk_action' => $bulkAction];
+                            $changed[] = $bulkAction === 'change_variant'
+                                ? ['action' => 'change_variant', 'entity_type' => 'lot', 'entity_id' => $lotId, 'component_id' => (string) $bulkComponentId, 'from_variant_id' => (string) ($before['variant_id'] ?? $entryVariantId), 'to_variant_id' => $bulkVariantId, 'field' => 'bulk_edit', 'from' => $before, 'to' => $lots[$lotIdx] ?? ['moved_to_variant' => $bulkVariantId]]
+                                : ['entity_type' => 'lot', 'entity_id' => $lotId, 'field' => 'bulk_edit', 'from' => $before, 'to' => $lots[$lotIdx] ?? ['moved_to_variant' => $bulkVariantId], 'bulk_action' => $bulkAction];
                             $entryChanged = true;
                             $bulkApplied++;
                         }
@@ -2160,19 +2190,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'to' => ['location_id' => $newLocationId, 'remaining_length_ft' => $newRemainingFt, 'original_length_ft' => $newOriginalFt, 'notes' => $newNotes],
                     ];
 
-                    if ($newVariantId !== '' && $newVariantId !== $variantId) {
-                        $variant = documents_inventory_get_component_variant($newVariantId);
-                        if (!is_array($variant) || (string) ($variant['component_id'] ?? '') !== $componentId) {
-                            $errors[] = 'Invalid variant for lot ' . $lotId . '.';
-                            continue 2;
+                    if ($newVariantId !== $variantId) {
+                        if ($newVariantId !== '') {
+                            $variant = documents_inventory_get_component_variant($newVariantId);
+                            if (!is_array($variant) || (string) ($variant['component_id'] ?? '') !== $componentId || !empty($variant['archived_flag'])) {
+                                $errors[] = 'Invalid variant for lot ' . $lotId . '.';
+                                continue 2;
+                            }
+                            $lot['variant_id'] = $newVariantId;
+                            $lot['variant_name_snapshot'] = (string) ($variant['display_name'] ?? '');
+                            $targetEntry = documents_inventory_component_stock($stock, $componentId, $newVariantId);
+                            $targetLots = is_array($targetEntry['lots'] ?? null) ? $targetEntry['lots'] : [];
+                            $targetLots[] = $lot;
+                            unset($lots[$lotIdx]);
+                            $targetEntry['lots'] = array_values($targetLots);
+                            $targetEntry['updated_at'] = date('c');
+                            documents_inventory_set_component_stock($stock, $componentId, $newVariantId, $targetEntry);
+                        } else {
+                            $lot['variant_id'] = '';
+                            $lot['variant_name_snapshot'] = '';
+                            $targetEntry = documents_inventory_component_stock($stock, $componentId, '');
+                            $targetLots = is_array($targetEntry['lots'] ?? null) ? $targetEntry['lots'] : [];
+                            $targetLots[] = $lot;
+                            unset($lots[$lotIdx]);
+                            $targetEntry['lots'] = array_values($targetLots);
+                            $targetEntry['updated_at'] = date('c');
+                            documents_inventory_set_component_stock($stock, $componentId, '', $targetEntry);
                         }
-                        $targetEntry = documents_inventory_component_stock($stock, $componentId, $newVariantId);
-                        $targetLots = is_array($targetEntry['lots'] ?? null) ? $targetEntry['lots'] : [];
-                        $targetLots[] = $lot;
-                        unset($lots[$lotIdx]);
-                        $targetEntry['lots'] = array_values($targetLots);
-                        $targetEntry['updated_at'] = date('c');
-                        documents_inventory_set_component_stock($stock, $componentId, $newVariantId, $targetEntry);
+                        $changed[] = ['action' => 'change_variant', 'entity_type' => 'lot', 'entity_id' => $lotId, 'component_id' => $componentId, 'from_variant_id' => $variantId, 'to_variant_id' => $newVariantId];
                     } else {
                         $lots[$lotIdx] = $lot;
                     }
@@ -2198,6 +2243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $variantId = safe_text((string) ($payload['variant_id'] ?? ''));
                 $batchId = safe_text((string) ($payload['batch_id'] ?? ''));
                 $newLocationId = safe_text((string) ($payload['location_id'] ?? ''));
+                $newVariantId = safe_text((string) ($payload['variant_id_new'] ?? $variantId));
                 if ($componentId === '' || $batchId === '') {
                     continue;
                 }
@@ -2205,19 +2251,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $errors[] = 'Invalid location for batch ' . $batchId . '.';
                     continue;
                 }
-                $batchEligibility = is_batch_editable(['batch_id' => $batchId], $usageIndex);
-                if (empty($batchEligibility['editable'])) {
-                    $errors[] = 'Batch ' . $batchId . ' cannot be edited. ' . (string) ($batchEligibility['reason'] ?? '');
-                    continue;
-                }
                 $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
                 $batches = is_array($entry['batches'] ?? null) ? $entry['batches'] : [];
                 $found = false;
-                foreach ($batches as &$batch) {
+                foreach ($batches as $batchIdx => &$batch) {
                     if (!is_array($batch) || (string) ($batch['batch_id'] ?? '') !== $batchId) {
                         continue;
                     }
                     $found = true;
+                    $batchEligibility = is_batch_editable((array) $batch, $usageIndex);
+                    if (empty($batchEligibility['editable'])) {
+                        $errors[] = 'Batch ' . $batchId . ' cannot be edited. ' . (string) ($batchEligibility['reason'] ?? '');
+                        continue 2;
+                    }
                     if (!$isAdmin) {
                         $owner = is_array($batch['created_by'] ?? null) ? $batch['created_by'] : [];
                         if ((string) ($owner['role'] ?? '') !== 'employee' || (string) ($owner['id'] ?? '') !== (string) ($user['id'] ?? '')) {
@@ -2226,6 +2272,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                     $oldLocationId = (string) ($batch['location_id'] ?? '');
+                    $oldVariantId = (string) ($batch['variant_id'] ?? $variantId);
+                    if ($newVariantId !== $oldVariantId) {
+                        if ($newVariantId !== '') {
+                            $variant = documents_inventory_get_component_variant($newVariantId);
+                            if (!is_array($variant) || (string) ($variant['component_id'] ?? '') !== $componentId || !empty($variant['archived_flag'])) {
+                                $errors[] = 'Invalid variant for batch ' . $batchId . '.';
+                                continue 2;
+                            }
+                            $batch['variant_id'] = $newVariantId;
+                            $batch['variant_name_snapshot'] = (string) ($variant['display_name'] ?? '');
+                            $targetEntry = documents_inventory_component_stock($stock, $componentId, $newVariantId);
+                            $targetBatches = is_array($targetEntry['batches'] ?? null) ? $targetEntry['batches'] : [];
+                            $targetBatches[] = $batch;
+                            unset($batches[$batchIdx]);
+                            $targetEntry['batches'] = array_values($targetBatches);
+                            $targetEntry['updated_at'] = date('c');
+                            documents_inventory_set_component_stock($stock, $componentId, $newVariantId, $targetEntry);
+                        } else {
+                            $batch['variant_id'] = '';
+                            $batch['variant_name_snapshot'] = '';
+                            $targetEntry = documents_inventory_component_stock($stock, $componentId, '');
+                            $targetBatches = is_array($targetEntry['batches'] ?? null) ? $targetEntry['batches'] : [];
+                            $targetBatches[] = $batch;
+                            unset($batches[$batchIdx]);
+                            $targetEntry['batches'] = array_values($targetBatches);
+                            $targetEntry['updated_at'] = date('c');
+                            documents_inventory_set_component_stock($stock, $componentId, '', $targetEntry);
+                        }
+                        $changed[] = ['action' => 'change_variant', 'entity_type' => 'batch', 'entity_id' => $batchId, 'component_id' => $componentId, 'from_variant_id' => $oldVariantId, 'to_variant_id' => $newVariantId];
+                        break;
+                    }
                     if ($oldLocationId === $newLocationId) {
                         break;
                     }
@@ -2403,6 +2480,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'original_length_ft' => $pieceLength,
                                 'remaining_length_ft' => $pieceLength,
                                 'location_id' => $txLocationId,
+                                'variant_id' => $variant,
+                                'variant_name_snapshot' => (string) ($txRow['variant_name_snapshot'] ?? ''),
                                 'notes' => (string) ($txRow['notes'] ?? ''),
                                 'created_at' => date('c'),
                                 'created_by' => is_array($txRow['actor'] ?? null) ? $txRow['actor'] : ['role' => 'admin', 'id' => '', 'name' => 'Unknown'],
@@ -2419,7 +2498,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($qty <= 0) {
                         return ['ok' => false, 'error' => 'Quantity must be greater than zero.'];
                     }
-                    $batch = documents_inventory_create_batch($txLocationId, $qty, is_array($txRow['actor'] ?? null) ? $txRow['actor'] : ['role' => 'admin', 'id' => '', 'name' => 'Unknown'], (string) ($txRow['source_txn_id'] ?? ''));
+$batch = documents_inventory_create_batch($txLocationId, $qty, is_array($txRow['actor'] ?? null) ? $txRow['actor'] : ['role' => 'admin', 'id' => '', 'name' => 'Unknown'], (string) ($txRow['source_txn_id'] ?? ''));
+                    $batch['variant_id'] = $variant;
+                    $batch['variant_name_snapshot'] = (string) ($txRow['variant_name_snapshot'] ?? '');
                     $entryBatches = is_array($entry['batches'] ?? null) ? $entry['batches'] : [];
                     $entryBatches[] = $batch;
                     $entry['batches'] = $entryBatches;
@@ -3886,7 +3967,40 @@ usort($archivedRows, static function (array $a, array $b): int {
             <input type="text" id="inventorySummarySearch" placeholder="Component or variant name" />
           </div>
           <table id="inventorySummaryTable"><thead><tr><th>Component</th><th>Type</th><th>Summary</th></tr></thead><tbody>
-            <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag'])) { continue; } $componentId=(string) ($component['id'] ?? ''); $isCuttable=!empty($component['is_cuttable']); $hasVariants=!empty($component['has_variants']); $componentEntry = documents_inventory_component_stock($inventoryStock, $componentId, ''); $lots = is_array($componentEntry['lots'] ?? null) ? $componentEntry['lots'] : []; usort($lots, static function ($a, $b): int { return strcmp((string) (($a['received_at'] ?? '')), (string) (($b['received_at'] ?? ''))); }); $totalFt = documents_inventory_compute_on_hand($inventoryStock, $componentId, '', true); $variantRows = (array) ($variantsByComponent[$componentId] ?? []); $variantTotalQty = documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false); $summaryText = $isCuttable ? (rtrim(rtrim((string) $totalFt, '0'), '.') . ' ft') : ($hasVariants ? (rtrim(rtrim((string) $variantTotalQty, '0'), '.') . ' qty total') : (rtrim(rtrim((string) documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false), '0'), '.') . ' ' . (string) ($component['default_unit'] ?? 'qty'))); $searchHaystack = strtolower(trim((string) ($component['name'] ?? '') . ' ' . implode(' ', array_map(static function ($vr): string { return (string) ($vr['display_name'] ?? ''); }, $variantRows)))); $locationBreakdownText = array_map(static function (array $row) use ($component): string { return documents_inventory_resolve_location_name((string) ($row['location_id'] ?? '')) . ': ' . rtrim(rtrim((string) ((float) ($row['qty'] ?? 0)), '0'), '.') . ' ' . (string) ($component['default_unit'] ?? 'qty'); }, (array) ($componentEntry['location_breakdown'] ?? [])); $componentEditable = !isset($inventoryComponentBlocked[$componentId]); ?>
+            <?php foreach ($inventoryComponents as $component):
+                if (!is_array($component) || !empty($component['archived_flag'])) { continue; }
+                $componentId=(string) ($component['id'] ?? '');
+                $isCuttable=!empty($component['is_cuttable']);
+                $hasVariants=!empty($component['has_variants']);
+                $componentEntry = documents_inventory_component_stock($inventoryStock, $componentId, '');
+                $variantRows = (array) ($variantsByComponent[$componentId] ?? []);
+                $lots = [];
+                if ($isCuttable) {
+                    $variantCandidates = [''];
+                    foreach ($variantRows as $variantRow) {
+                        $variantCandidates[] = (string) ($variantRow['id'] ?? '');
+                    }
+                    foreach (array_values(array_unique($variantCandidates)) as $lotVariantId) {
+                        $lotEntry = documents_inventory_component_stock($inventoryStock, $componentId, (string) $lotVariantId);
+                        foreach ((array) ($lotEntry['lots'] ?? []) as $lotRow) {
+                            if (!is_array($lotRow)) {
+                                continue;
+                            }
+                            if (!array_key_exists('variant_id', $lotRow) || safe_text((string) ($lotRow['variant_id'] ?? '')) === '') {
+                                $lotRow['variant_id'] = (string) $lotVariantId;
+                            }
+                            $lots[] = $lotRow;
+                        }
+                    }
+                }
+                usort($lots, static function ($a, $b): int { return strcmp((string) (($a['received_at'] ?? '')), (string) (($b['received_at'] ?? ''))); });
+                $totalFt = documents_inventory_compute_on_hand($inventoryStock, $componentId, '', true);
+                $variantTotalQty = documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false);
+                $summaryText = $isCuttable ? (rtrim(rtrim((string) $totalFt, '0'), '.') . ' ft') : ($hasVariants ? (rtrim(rtrim((string) $variantTotalQty, '0'), '.') . ' qty total') : (rtrim(rtrim((string) documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false), '0'), '.') . ' ' . (string) ($component['default_unit'] ?? 'qty')));
+                $searchHaystack = strtolower(trim((string) ($component['name'] ?? '') . ' ' . implode(' ', array_map(static function ($vr): string { return (string) ($vr['display_name'] ?? ''); }, $variantRows))));
+                $locationBreakdownText = array_map(static function (array $row) use ($component): string { return documents_inventory_resolve_location_name((string) ($row['location_id'] ?? '')) . ': ' . rtrim(rtrim((string) ((float) ($row['qty'] ?? 0)), '0'), '.') . ' ' . (string) ($component['default_unit'] ?? 'qty'); }, (array) ($componentEntry['location_breakdown'] ?? []));
+                $componentEditable = !isset($inventoryComponentBlocked[$componentId]);
+            ?>
               <tr class="inventory-summary-group" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>"><td><strong><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></strong></td><td><?php if ($isCuttable): ?><span class="pill">Cuttable (ft)</span><?php endif; ?><?php if ($hasVariants): ?><span class="pill">Variants</span><?php endif; ?><?php if (!$isCuttable && !$hasVariants): ?><span class="muted">Plain</span><?php endif; ?></td><td><?= htmlspecialchars($summaryText, ENT_QUOTES) ?><?php if (!$isCuttable && !$hasVariants): ?><br><span class="muted"><?= htmlspecialchars(implode(' | ', $locationBreakdownText !== [] ? $locationBreakdownText : ['Unassigned: 0']), ENT_QUOTES) ?></span><?php endif; ?><?php if ($inventoryEditMode && !$isCuttable && !$hasVariants && !$componentEditable): ?><br><span class="muted">Used stock cannot be edited.</span><?php endif; ?></td></tr>
               <?php if ($isCuttable): ?>
                 <tr class="inventory-summary-detail" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>">
@@ -3919,8 +4033,9 @@ usort($archivedRows, static function (array $a, array $b): int {
                               <td><?= htmlspecialchars((string) (($lot['lot_id'] ?? '') !== '' ? (string) ($lot['lot_id'] ?? '') : ('Piece #' . ($ix + 1))), ENT_QUOTES) ?><?php if ($inventoryEditMode && !$lotEditable): ?><br><span class="muted"><?= htmlspecialchars((string) ($lotEligibility['reason'] ?? 'Used stock cannot be edited.'), ENT_QUOTES) ?></span><?php endif; ?></td>
                               <td><?= htmlspecialchars((string) (float) ($lot['remaining_length_ft'] ?? 0), ENT_QUOTES) ?></td>
                               <td><?= htmlspecialchars((string) (float) ($lot['original_length_ft'] ?? 0), ENT_QUOTES) ?></td>
-                              <td><?php if ($inventoryEditMode && $lotEditable): ?><input type="hidden" name="lot_edits[<?= htmlspecialchars($componentId . '|' . $lotId, ENT_QUOTES) ?>][component_id]" value="<?= htmlspecialchars($componentId, ENT_QUOTES) ?>" /><input type="hidden" name="lot_edits[<?= htmlspecialchars($componentId . '|' . $lotId, ENT_QUOTES) ?>][variant_id]" value="" /><input type="hidden" name="lot_edits[<?= htmlspecialchars($componentId . '|' . $lotId, ENT_QUOTES) ?>][lot_id]" value="<?= htmlspecialchars($lotId, ENT_QUOTES) ?>" /><select name="lot_edits[<?= htmlspecialchars($componentId . '|' . $lotId, ENT_QUOTES) ?>][location_id]"><option value="">Unassigned</option><?php foreach ($activeInventoryLocations as $location): ?><option value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($lot['location_id'] ?? '') === (string) ($location['id'] ?? '')) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select><?php else: ?><?= htmlspecialchars(documents_inventory_resolve_location_name((string) ($lot['location_id'] ?? '')), ENT_QUOTES) ?><?php endif; ?></td>
-                              <td><?php if ($inventoryEditMode && $lotEditable && $hasVariants): ?><select name="lot_edits[<?= htmlspecialchars($componentId . '|' . $lotId, ENT_QUOTES) ?>][variant_id]"><option value="">Keep current</option><?php foreach ($variantRows as $variantRow): ?><option value="<?= htmlspecialchars((string) ($variantRow['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($variantRow['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select><?php else: ?>-<?php endif; ?></td>
+                              <?php $lotVariantId = safe_text((string) ($lot['variant_id'] ?? '')); $lotVariantLabel = $lotVariantId !== '' ? (string) (($variantMap[$lotVariantId]['display_name'] ?? '') ?: ($lot['variant_name_snapshot'] ?? '')) : 'Unassigned'; ?>
+                              <td><?php if ($inventoryEditMode && $lotEditable): ?><input type="hidden" name="lot_edits[<?= htmlspecialchars($componentId . '|' . $lotId, ENT_QUOTES) ?>][component_id]" value="<?= htmlspecialchars($componentId, ENT_QUOTES) ?>" /><input type="hidden" name="lot_edits[<?= htmlspecialchars($componentId . '|' . $lotId, ENT_QUOTES) ?>][variant_id]" value="<?= htmlspecialchars($lotVariantId, ENT_QUOTES) ?>" /><input type="hidden" name="lot_edits[<?= htmlspecialchars($componentId . '|' . $lotId, ENT_QUOTES) ?>][lot_id]" value="<?= htmlspecialchars($lotId, ENT_QUOTES) ?>" /><select name="lot_edits[<?= htmlspecialchars($componentId . '|' . $lotId, ENT_QUOTES) ?>][location_id]"><option value="">Unassigned</option><?php foreach ($activeInventoryLocations as $location): ?><option value="<?= htmlspecialchars((string) ($location['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($lot['location_id'] ?? '') === (string) ($location['id'] ?? '')) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($location['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select><?php else: ?><?= htmlspecialchars(documents_inventory_resolve_location_name((string) ($lot['location_id'] ?? '')), ENT_QUOTES) ?><?php endif; ?></td>
+                              <td><?php if ($inventoryEditMode && $lotEditable && $hasVariants): ?><select name="lot_edits[<?= htmlspecialchars($componentId . '|' . $lotId, ENT_QUOTES) ?>][variant_id]"><option value="<?= htmlspecialchars($lotVariantId, ENT_QUOTES) ?>">Keep current (<?= htmlspecialchars($lotVariantLabel, ENT_QUOTES) ?>)</option><option value="">Unassigned</option><?php foreach ($variantRows as $variantRow): ?><option value="<?= htmlspecialchars((string) ($variantRow['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variantRow['id'] ?? '') === $lotVariantId) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($variantRow['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select><?php else: ?><?= htmlspecialchars($hasVariants ? $lotVariantLabel : '-', ENT_QUOTES) ?><?php endif; ?></td>
                               <td><?php if ($inventoryEditMode && $lotEditable): ?><input type="text" name="lot_edits[<?= htmlspecialchars($componentId . '|' . $lotId, ENT_QUOTES) ?>][notes]" value="<?= htmlspecialchars((string) ($lot['notes'] ?? ''), ENT_QUOTES) ?>" /><?php else: ?><?= htmlspecialchars((string) ($lot['notes'] ?? ''), ENT_QUOTES) ?><?php endif; ?></td>
                               <td><?= htmlspecialchars((string) ($lot['received_at'] ?? ''), ENT_QUOTES) ?></td>
                               <input type="hidden" name="lot_edits[<?= htmlspecialchars($componentId . '|' . $lotId, ENT_QUOTES) ?>][remaining_length_ft]" value="<?= htmlspecialchars((string) ((float) ($lot['remaining_length_ft'] ?? 0)), ENT_QUOTES) ?>" />
