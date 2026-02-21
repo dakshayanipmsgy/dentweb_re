@@ -236,54 +236,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $challan['driver_name'] = safe_text($_POST['driver_name'] ?? $challan['driver_name']);
             $challan['delivery_notes'] = safe_text($_POST['delivery_notes'] ?? $challan['delivery_notes']);
 
-            $postedLines = is_array($_POST['lines'] ?? null) ? $_POST['lines'] : [];
-            if ($postedLines === []) {
-                $lineIds = is_array($_POST['line_id'] ?? null) ? $_POST['line_id'] : [];
-                $componentIds = is_array($_POST['line_component_id'] ?? null) ? $_POST['line_component_id'] : [];
-                $variantIds = is_array($_POST['line_variant_id'] ?? null) ? $_POST['line_variant_id'] : [];
-                $qtys = is_array($_POST['line_qty'] ?? null) ? $_POST['line_qty'] : [];
-                $lengths = is_array($_POST['line_length_ft'] ?? null) ? $_POST['line_length_ft'] : [];
-                $pieces = is_array($_POST['line_pieces'] ?? null) ? $_POST['line_pieces'] : [];
-                $notes = is_array($_POST['line_notes'] ?? null) ? $_POST['line_notes'] : [];
-                $origins = is_array($_POST['line_origin'] ?? null) ? $_POST['line_origin'] : [];
-                $packingLineIds = is_array($_POST['line_packing_line_id'] ?? null) ? $_POST['line_packing_line_id'] : [];
-                $lineCutPlanModes = is_array($_POST['line_cut_plan_mode'] ?? null) ? $_POST['line_cut_plan_mode'] : [];
-                $lineSelectedLotIds = is_array($_POST['line_selected_lot_ids'] ?? null) ? $_POST['line_selected_lot_ids'] : [];
-                $lineLotCuts = is_array($_POST['line_lot_cuts'] ?? null) ? $_POST['line_lot_cuts'] : [];
-                $lineLotAllocations = is_array($_POST['line_lot_allocations'] ?? null) ? $_POST['line_lot_allocations'] : [];
-                foreach ($componentIds as $idx => $componentIdRaw) {
-                    $legacyLineId = safe_text((string) ($lineIds[$idx] ?? '')) ?: ('line_' . bin2hex(random_bytes(4)));
-                    $postedLines[$legacyLineId] = [
-                        'line_id' => $legacyLineId,
-                        'component_id' => $componentIdRaw,
-                        'variant_id' => $variantIds[$idx] ?? '',
-                        'qty' => $qtys[$idx] ?? '',
-                        'cut_length_ft' => $lengths[$idx] ?? '',
-                        'pieces' => $pieces[$idx] ?? '',
-                        'notes' => $notes[$idx] ?? '',
-                        'line_origin' => $origins[$idx] ?? 'extra',
-                        'packing_line_id' => $packingLineIds[$idx] ?? '',
-                        'cut_plan_mode' => $lineCutPlanModes[$idx] ?? 'suggested',
-                        'selected_lot_ids' => $lineSelectedLotIds[$idx] ?? [],
-                        'lot_cuts' => $lineLotCuts[$idx] ?? [],
-                        'lot_allocations' => $lineLotAllocations[$idx] ?? [],
-                    ];
-                }
-            }
+            $lineIds = is_array($_POST['line_id'] ?? null) ? $_POST['line_id'] : [];
+            $componentIds = is_array($_POST['line_component_id'] ?? null) ? $_POST['line_component_id'] : [];
+            $variantIds = is_array($_POST['line_variant_id'] ?? null) ? $_POST['line_variant_id'] : [];
+            $qtys = is_array($_POST['line_qty'] ?? null) ? $_POST['line_qty'] : [];
+            $lengths = is_array($_POST['line_length_ft'] ?? null) ? $_POST['line_length_ft'] : [];
+            $pieces = is_array($_POST['line_pieces'] ?? null) ? $_POST['line_pieces'] : [];
+            $notes = is_array($_POST['line_notes'] ?? null) ? $_POST['line_notes'] : [];
+            $origins = is_array($_POST['line_origin'] ?? null) ? $_POST['line_origin'] : [];
+            $packingLineIds = is_array($_POST['line_packing_line_id'] ?? null) ? $_POST['line_packing_line_id'] : [];
+            $lineCutPlanModes = is_array($_POST['line_cut_plan_mode'] ?? null) ? $_POST['line_cut_plan_mode'] : [];
+            $lineSelectedLotIds = is_array($_POST['line_selected_lot_ids'] ?? null) ? $_POST['line_selected_lot_ids'] : [];
+            $lineLotCuts = is_array($_POST['line_lot_cuts'] ?? null) ? $_POST['line_lot_cuts'] : [];
+            $lineLotAllocations = is_array($_POST['line_lot_allocations'] ?? null) ? $_POST['line_lot_allocations'] : [];
 
             $lines = [];
-            $lineDisplayNo = 0;
-            foreach ($postedLines as $lineKey => $linePostRaw) {
-                if (!is_array($linePostRaw)) {
-                    continue;
-                }
-                $lineDisplayNo++;
-                $componentId = safe_text((string) ($linePostRaw['component_id'] ?? ''));
-                $lineId = safe_text((string) ($linePostRaw['line_id'] ?? $lineKey));
-                if ($lineId === '') {
-                    $lineId = 'line_' . bin2hex(random_bytes(4));
-                }
-                $origin = strtolower(safe_text((string) ($linePostRaw['line_origin'] ?? 'extra')));
+            foreach ($componentIds as $idx => $componentIdRaw) {
+                $componentId = safe_text((string) $componentIdRaw);
+                $lineId = safe_text((string) ($lineIds[$idx] ?? '')) ?: ('line_' . bin2hex(random_bytes(4)));
+                $origin = strtolower(safe_text((string) ($origins[$idx] ?? 'extra')));
                 $origin = $origin === 'quotation' ? 'quotation' : 'extra';
                 if ($componentId === '') {
                     continue;
@@ -292,40 +263,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!is_array($component)) {
                     $redirectWith('error', 'Invalid component selected.');
                 }
-
-                $componentLabel = (string) ($component['name'] ?? $componentId);
-                $linePrefix = 'Line ' . $lineDisplayNo . ' (' . $componentLabel . '): ';
                 $hasVariants = !empty($component['has_variants']);
-                $variantId = safe_text((string) ($linePostRaw['variant_id'] ?? ''));
+                $variantId = safe_text((string) ($variantIds[$idx] ?? ''));
                 $lineErrors = [];
                 if ($hasVariants) {
                     if ($variantId === '') {
-                        $lineErrors[] = $linePrefix . 'Variant is required for this component.';
+                        $lineErrors[] = 'Variant is required for this component.';
                     } else {
                         $variant = $variantMap[$variantId] ?? null;
                         if (!is_array($variant) || (string) ($variant['component_id'] ?? '') !== $componentId) {
-                            $lineErrors[] = $linePrefix . 'Variant must belong to selected component.';
+                            $lineErrors[] = 'Variant must belong to selected component.';
                         }
                     }
                 }
 
                 $isCuttable = !empty($component['is_cuttable']);
-                $qtyRaw = trim((string) ($linePostRaw['qty'] ?? ''));
-                $lengthRaw = trim((string) ($linePostRaw['cut_length_ft'] ?? ''));
-                $piecesRaw = trim((string) ($linePostRaw['pieces'] ?? ''));
-                $qty = ($qtyRaw !== '' && is_numeric($qtyRaw)) ? max(0, (float) $qtyRaw) : 0.0;
-                $lengthFt = ($lengthRaw !== '' && is_numeric($lengthRaw)) ? max(0, (float) $lengthRaw) : 0.0;
-                $pieceCount = ($piecesRaw !== '' && is_numeric($piecesRaw)) ? max(0, (int) $piecesRaw) : 0;
+                $qty = max(0, (float) ($qtys[$idx] ?? 0));
+                $lengthFt = max(0, (float) ($lengths[$idx] ?? 0));
+                $pieceCount = max(0, (int) ($pieces[$idx] ?? 0));
+                if ($isCuttable) {
+                    if ($lengthFt <= 0) {
+                        $lineErrors[] = 'Cut length (ft) is required for cuttable items.';
+                    }
+                    if ($pieceCount <= 0) {
+                        $lineErrors[] = 'Pieces are required for cuttable items.';
+                    }
+                } elseif ($qty <= 0) {
+                    $lineErrors[] = 'Quantity is required.';
+                }
 
-                $selectedLotIdsRaw = $linePostRaw['selected_lot_ids'] ?? [];
+                $selectedLotIdsRaw = $lineSelectedLotIds[$idx] ?? [];
                 if (!is_array($selectedLotIdsRaw)) {
                     $decodedSelected = json_decode((string) $selectedLotIdsRaw, true);
                     $selectedLotIdsRaw = is_array($decodedSelected) ? $decodedSelected : (preg_split('/,/', (string) $selectedLotIdsRaw) ?: []);
                 }
                 $selectedLotIds = array_values(array_filter(array_map(static fn($lotId): string => safe_text((string) $lotId), $selectedLotIdsRaw), static fn(string $lotId): bool => $lotId !== ''));
-
                 $lotCuts = [];
-                $lineLotCutsRaw = $linePostRaw['lot_cuts'] ?? [];
+                $lineLotCutsRaw = $lineLotCuts[$idx] ?? [];
                 if (!is_array($lineLotCutsRaw)) {
                     $decodedCuts = json_decode((string) $lineLotCutsRaw, true);
                     $lineLotCutsRaw = is_array($decodedCuts) ? $decodedCuts : [];
@@ -342,10 +316,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     $lotCuts[] = ['lot_id' => $lotId, 'count' => $cutCount, 'cut_length_ft' => $cutLength];
                 }
-
-                $cutPlanMode = strtolower(safe_text((string) ($linePostRaw['cut_plan_mode'] ?? 'suggested')));
+                $cutPlanMode = strtolower(safe_text((string) ($lineCutPlanModes[$idx] ?? 'suggested')));
                 $cutPlanMode = in_array($cutPlanMode, ['suggested', 'manual'], true) ? $cutPlanMode : 'suggested';
-                $lotAllocationsRaw = $linePostRaw['lot_allocations'] ?? [];
+                $lotAllocationsRaw = $lineLotAllocations[$idx] ?? [];
                 if (!is_array($lotAllocationsRaw)) {
                     $decodedAlloc = json_decode((string) $lotAllocationsRaw, true);
                     $lotAllocationsRaw = is_array($decodedAlloc) ? $decodedAlloc : [];
@@ -358,8 +331,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     $allocLotId = safe_text((string) ($allocationRaw['lot_id'] ?? ''));
                     $allocVariantId = safe_text((string) ($allocationRaw['variant_id'] ?? $variantId));
-                    $allocLengthRaw = trim((string) ($allocationRaw['cut_length_ft'] ?? ''));
-                    $allocLength = ($allocLengthRaw !== '' && is_numeric($allocLengthRaw)) ? max(0, (float) $allocLengthRaw) : 0.0;
+                    $allocLength = max(0, (float) ($allocationRaw['cut_length_ft'] ?? 0));
                     $allocPieces = max(1, (int) ($allocationRaw['cut_pieces'] ?? 1));
                     $allocLocation = safe_text((string) ($allocationRaw['location_id_snapshot'] ?? ''));
                     if ($allocLotId === '' || $allocLength <= 0) {
@@ -375,33 +347,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $lineTotalLengthFt += $allocLength;
                 }
 
-                if ($isCuttable) {
-                    if ($lotAllocations !== []) {
-                        foreach ($lotAllocations as $allocation) {
-                            $allocLotId = (string) ($allocation['lot_id'] ?? '');
-                            $allocLength = (float) ($allocation['cut_length_ft'] ?? 0);
-                            if ($allocLotId === '' || $allocLength <= 0) {
-                                $lineErrors[] = $linePrefix . 'Each lot allocation must include lot and cut length (> 0).';
-                                break;
-                            }
-                        }
-                        $lengthFt = $lineTotalLengthFt;
-                    } else {
-                        if ($piecesRaw === '' || !is_numeric($piecesRaw) || $pieceCount <= 0) {
-                            $lineErrors[] = $linePrefix . 'Pieces are required for cuttable items.';
-                        }
-                        if ($lengthRaw === '' || !is_numeric($lengthRaw) || $lengthFt <= 0) {
-                            $lineErrors[] = $linePrefix . 'Cut length (ft) is required for cuttable items.';
-                        }
+                if ($isCuttable && $cutPlanMode === 'manual') {
+                    if ($lotAllocations === []) {
+                        $lineErrors[] = 'Add at least one lot allocation in manual cutting mode.';
                     }
-                } elseif ($qtyRaw === '' || !is_numeric($qtyRaw) || $qty <= 0) {
-                    $lineErrors[] = $linePrefix . 'Quantity is required.';
-                }
-
-                if ($isCuttable && $cutPlanMode === 'manual' && $lotAllocations !== []) {
                     $stockEntryForLine = documents_inventory_component_stock($stockSnapshot, $componentId, $hasVariants ? $variantId : '');
+                    $lotBucket = ['lots' => (array) ($stockEntryForLine['lots'] ?? [])];
                     $lotMeta = [];
-                    foreach ((array) ($stockEntryForLine['lots'] ?? []) as $lotEntry) {
+                    foreach ((array) ($lotBucket['lots'] ?? []) as $lotEntry) {
                         if (!is_array($lotEntry)) {
                             continue;
                         }
@@ -413,27 +366,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     foreach ($lotAllocations as &$allocation) {
                         $allocLotId = (string) ($allocation['lot_id'] ?? '');
                         if (!isset($lotMeta[$allocLotId])) {
-                            $lineErrors[] = $linePrefix . 'Selected lot ' . $allocLotId . ' is not valid for this component/variant.';
+                            $lineErrors[] = 'Selected lot ' . $allocLotId . ' is not valid for this component/variant.';
                             continue;
                         }
                         if ($hasVariants && (string) ($allocation['variant_id'] ?? '') !== $variantId) {
-                            $lineErrors[] = $linePrefix . 'Lot ' . $allocLotId . ' allocation variant mismatch.';
+                            $lineErrors[] = 'Lot ' . $allocLotId . ' allocation variant mismatch.';
                         }
                         $allocation['location_id_snapshot'] = (string) ($lotMeta[$allocLotId]['location_id'] ?? '');
                         if ($action === 'finalize' && (float) ($allocation['cut_length_ft'] ?? 0) > ((float) ($lotMeta[$allocLotId]['remaining'] ?? 0) + 0.00001)) {
-                            $lineErrors[] = $linePrefix . 'Lot ' . $allocLotId . ' does not have sufficient remaining length. Please revise allocations.';
+                            $lineErrors[] = 'Lot ' . $allocLotId . ' does not have sufficient remaining length. Please revise allocations.';
                         }
                     }
                     unset($allocation);
+                    if ($lineTotalLengthFt > 0) {
+                        $lengthFt = $lineTotalLengthFt;
+                    }
                 }
 
                 $variantName = $variantId !== '' ? (string) (($variantMap[$variantId]['display_name'] ?? $variantId)) : '';
+
                 $lines[] = [
                     'line_id' => $lineId,
                     'line_origin' => $origin,
-                    'packing_line_id' => safe_text((string) ($linePostRaw['packing_line_id'] ?? '')),
+                    'packing_line_id' => safe_text((string) ($packingLineIds[$idx] ?? '')),
                     'component_id' => $componentId,
-                    'component_name_snapshot' => $componentLabel,
+                    'component_name_snapshot' => (string) ($component['name'] ?? $componentId),
                     'has_variants_snapshot' => $hasVariants,
                     'variant_id' => $variantId,
                     'variant_name_snapshot' => $variantName,
@@ -451,7 +408,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'line_errors' => $lineErrors,
                     'unit_snapshot' => (string) ($component['unit'] ?? ($isCuttable ? 'ft' : 'Nos')),
                     'hsn_snapshot' => (string) ($component['hsn'] ?? ''),
-                    'notes' => safe_text((string) ($linePostRaw['notes'] ?? '')),
+                    'notes' => safe_text((string) ($notes[$idx] ?? '')),
                 ];
             }
 
@@ -460,7 +417,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $redirectWith('error', 'Add at least one line.');
             }
             $lineErrorsFound = false;
-            $firstLineError = '';
             foreach ($challan['lines'] as &$line) {
                 if (!empty($line['is_cuttable_snapshot']) && (string) ($line['cut_plan_mode'] ?? 'suggested') === 'manual') {
                     $componentId = (string) ($line['component_id'] ?? '');
@@ -489,13 +445,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 if (!empty($line['line_errors'])) {
                     $lineErrorsFound = true;
-                    $firstLineError = (string) ((array_values((array) $line['line_errors'])[0] ?? ''));
                     break;
                 }
             }
             unset($line);
             if ($action === 'finalize' && $lineErrorsFound) {
-                $redirectWith('error', $firstLineError !== '' ? $firstLineError : 'Resolve line errors before finalizing. Save draft to keep your edits.');
+                $redirectWith('error', 'Resolve line errors before finalizing. Save draft to keep your edits.');
             }
 
             $challan['items'] = array_map(static function (array $line): array {
@@ -561,13 +516,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $availableFt = documents_inventory_total_remaining_ft($entry);
                     $cutPlanMode = (string) ($line['cut_plan_mode'] ?? 'suggested');
                     $lotAllocations = is_array($line['lot_allocations'] ?? null) ? $line['lot_allocations'] : [];
-                    $manualWithAllocations = ($cutPlanMode === 'manual' && $lotAllocations !== []);
-                    if ($manualWithAllocations) {
+                    if ($cutPlanMode === 'manual' && $lotAllocations !== []) {
                         $needFt = max(0, (float) ($line['total_length_ft'] ?? 0));
                     }
                     $plannedCuts = is_array($line['lot_cuts'] ?? null) ? $line['lot_cuts'] : [];
                     $consume = ['lots' => (array) ($entry['lots'] ?? []), 'lot_consumption' => []];
-                    if ($manualWithAllocations) {
+                    if ($cutPlanMode === 'manual') {
                         $lotIndexById = [];
                         foreach ((array) ($entry['lots'] ?? []) as $lotIdx => $lotRow) {
                             if (!is_array($lotRow)) {
@@ -631,7 +585,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $consumedFt += max(0, (float) ($consumeLine['used_ft'] ?? 0));
                     }
                     $shortFt = max(0, $needFt - $consumedFt);
-                    if ($shortFt > 0.00001 && !$manualWithAllocations) {
+                    if ($shortFt > 0.00001 && $cutPlanMode !== 'manual') {
                         $entry['lots'][] = [
                             'lot_id' => 'NEG-' . date('YmdHis') . '-' . bin2hex(random_bytes(2)),
                             'remaining_length_ft' => -round($shortFt, 4),
@@ -641,7 +595,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     $tx['length_ft'] = $needFt;
                     $tx['lot_consumption'] = (array) ($consume['lot_consumption'] ?? []);
-                    $tx['allow_negative'] = !$manualWithAllocations;
+                    $tx['allow_negative'] = $cutPlanMode !== 'manual';
                 } else {
                     $needQty = max(0, (float) ($line['qty'] ?? 0));
                     if ($needQty <= 0) { continue; }
@@ -927,30 +881,30 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <tr class="dc-line-row">
 <td class="sr-col"></td>
 <td>
-<input type="hidden" name="" data-field="line_id" value="<?= htmlspecialchars((string) ($line['line_id'] ?? ''), ENT_QUOTES) ?>" />
-<input type="hidden" name="" data-field="line_origin" class="line-origin" value="<?= htmlspecialchars((string) ($line['line_origin'] ?? 'extra'), ENT_QUOTES) ?>" />
-<input type="hidden" name="" data-field="packing_line_id" class="line-packing-line-id" value="<?= htmlspecialchars((string) ($line['packing_line_id'] ?? ''), ENT_QUOTES) ?>" />
-<select name="" data-field="component_id" class="component-select" <?= $editable ? '' : 'disabled' ?>>
+<input type="hidden" name="line_id[]" value="<?= htmlspecialchars((string) ($line['line_id'] ?? ''), ENT_QUOTES) ?>" />
+<input type="hidden" name="line_origin[]" class="line-origin" value="<?= htmlspecialchars((string) ($line['line_origin'] ?? 'extra'), ENT_QUOTES) ?>" />
+<input type="hidden" name="line_packing_line_id[]" class="line-packing-line-id" value="<?= htmlspecialchars((string) ($line['packing_line_id'] ?? ''), ENT_QUOTES) ?>" />
+<select name="line_component_id[]" class="component-select" <?= $editable ? '' : 'disabled' ?>>
 <option value="">Select</option><?php foreach ($componentClientMap as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($component['id'] ?? ''))===$componentId?'selected':'' ?>><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?>
 </select>
-<select name="" data-field="variant_id" class="variant-select" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>><option value="">N/A</option><?php foreach ((array) ($variantsByComponent[$componentId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variant['id'] ?? ''))===$variantId?'selected':'' ?>><?= htmlspecialchars((string) ($variant['name'] ?? ''), ENT_QUOTES) ?><?= !empty($variant['archived']) ? ' (archived)' : '' ?> — Stock: <?= htmlspecialchars((string) round((float) ($variant['stock'] ?? 0), 2), ENT_QUOTES) ?></option><?php endforeach; ?></select>
-<input name="" data-field="notes" placeholder="Description / notes" value="<?= htmlspecialchars((string) ($line['notes'] ?? ''), ENT_QUOTES) ?>" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>>
+<select name="line_variant_id[]" class="variant-select" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>><option value="">N/A</option><?php foreach ((array) ($variantsByComponent[$componentId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variant['id'] ?? ''))===$variantId?'selected':'' ?>><?= htmlspecialchars((string) ($variant['name'] ?? ''), ENT_QUOTES) ?><?= !empty($variant['archived']) ? ' (archived)' : '' ?> — Stock: <?= htmlspecialchars((string) round((float) ($variant['stock'] ?? 0), 2), ENT_QUOTES) ?></option><?php endforeach; ?></select>
+<input name="line_notes[]" placeholder="Description / notes" value="<?= htmlspecialchars((string) ($line['notes'] ?? ''), ENT_QUOTES) ?>" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>>
 <div class="small muted stock-hint" style="margin-top:6px">Stock: <?= htmlspecialchars((string) round($lineStock, 2), ENT_QUOTES) ?><?= $isCuttable ? ' ft' : '' ?><?= $lineStock <= 0 ? ' (will go negative)' : '' ?></div>
 <div class="small" style="margin-top:6px;color:#b91c1c"><?php foreach ((array) ($line['line_errors'] ?? []) as $lineError): ?><div><?= htmlspecialchars((string) $lineError, ENT_QUOTES) ?></div><?php endforeach; ?></div>
 <div class="cuttable-panel small" style="margin-top:6px"></div>
 </td>
 <td class="mono"><input value="<?= htmlspecialchars((string) ($line['hsn_snapshot'] ?? ''), ENT_QUOTES) ?>" class="hsn-display" readonly></td>
 <td>
-<input type="number" step="0.01" min="0" name="" data-field="qty" class="qty-input" value="<?= htmlspecialchars((string) ((float) ($line['qty'] ?? 0)), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>>
-<input type="number" step="1" min="0" name="" data-field="pieces" class="pieces-input" value="<?= htmlspecialchars((string) ((int) ($line['pieces'] ?? 0)), ENT_QUOTES) ?>" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>>
-<input type="hidden" name="" data-field="selected_lot_ids" class="line-selected-lot-ids" value="<?= htmlspecialchars(json_encode((array) ($line['selected_lot_ids'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
-<input type="hidden" name="" data-field="lot_cuts" class="line-lot-cuts-input" value="<?= htmlspecialchars(json_encode((array) ($line['lot_cuts'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
-<input type="hidden" name="" data-field="cut_plan_mode" class="line-cut-plan-mode" value="<?= htmlspecialchars((string) ($line['cut_plan_mode'] ?? 'suggested'), ENT_QUOTES) ?>">
-<input type="hidden" name="" data-field="lot_allocations" class="line-lot-allocations-input" value="<?= htmlspecialchars(json_encode((array) ($line['lot_allocations'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
+<input type="number" step="0.01" min="0" name="line_qty[]" class="qty-input" value="<?= htmlspecialchars((string) ((float) ($line['qty'] ?? 0)), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>>
+<input type="number" step="1" min="0" name="line_pieces[]" class="pieces-input" value="<?= htmlspecialchars((string) ((int) ($line['pieces'] ?? 0)), ENT_QUOTES) ?>" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>>
+<input type="hidden" name="line_selected_lot_ids[]" class="line-selected-lot-ids" value="<?= htmlspecialchars(json_encode((array) ($line['selected_lot_ids'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
+<input type="hidden" name="line_lot_cuts[]" class="line-lot-cuts-input" value="<?= htmlspecialchars(json_encode((array) ($line['lot_cuts'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
+<input type="hidden" name="line_cut_plan_mode[]" class="line-cut-plan-mode" value="<?= htmlspecialchars((string) ($line['cut_plan_mode'] ?? 'suggested'), ENT_QUOTES) ?>">
+<input type="hidden" name="line_lot_allocations[]" class="line-lot-allocations-input" value="<?= htmlspecialchars(json_encode((array) ($line['lot_allocations'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
 <div class="line-lot-cuts" data-line-id="<?= htmlspecialchars((string) ($line['line_id'] ?? ''), ENT_QUOTES) ?>" data-lot-cuts='<?= htmlspecialchars(json_encode((array) ($line['lot_cuts'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>'></div>
 <?php if (!empty($line['stock_changed_warning'])): ?><div class="small" style="margin-top:6px;color:#b45309">Stock changed warning: one or more manual lot cuts may now exceed available lot length.</div><?php endif; ?>
 </td>
-<td><input type="number" step="0.01" min="0" name="" data-field="cut_length_ft" class="length-input" value="<?= htmlspecialchars((string) ((float) ($line['length_ft'] ?? 0)), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td>
+<td><input type="number" step="0.01" min="0" name="line_length_ft[]" class="length-input" value="<?= htmlspecialchars((string) ((float) ($line['length_ft'] ?? 0)), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td>
 <td class="row-actions"><?php if ($editable): ?><button type="button" class="btn warn remove-line">×</button><?php endif; ?></td>
 </tr>
 <?php endforeach; ?>
@@ -969,27 +923,6 @@ const componentOptions = `<option value="">Select</option>${Object.values(COMPON
 const refreshSr = () => document.querySelectorAll('#dc-lines tbody tr').forEach((tr, idx) => { const el=tr.querySelector('.sr-col'); if (el) el.textContent = String(idx+1); });
 const stockKey = (componentId, variantId) => `${componentId || ''}|${variantId || ''}`;
 const readJsonArray = (raw) => { try { const val = JSON.parse(raw || '[]'); return Array.isArray(val) ? val : []; } catch { return []; } };
-
-const ensureLineId = (tr) => {
-  const idInput = tr.querySelector('[data-field="line_id"]');
-  if (!idInput) return '';
-  let lineId = (idInput.value || '').trim();
-  if (!lineId) {
-    lineId = `line_${Math.random().toString(16).slice(2)}`;
-    idInput.value = lineId;
-  }
-  return lineId;
-};
-
-const syncRowNames = (tr) => {
-  const lineId = ensureLineId(tr);
-  if (!lineId) return;
-  tr.querySelectorAll('[data-field]').forEach((el) => {
-    const field = el.getAttribute('data-field');
-    if (!field) return;
-    el.name = `lines[${lineId}][${field}]`;
-  });
-};
 
 const buildCuttablePlan = (lots, pieces, cutLength) => {
   const sorted = [...lots].map(l => ({...l, remaining: Number(l.remaining_length_ft || 0)})).sort((a,b) => a.remaining - b.remaining);
@@ -1162,11 +1095,11 @@ const wireRow = (tr) => {
       if (currentVariant) variant.value = currentVariant;
     } else {
       variant.value = '';
-      variant.disabled = false;
+      variant.disabled = true;
     }
-    qty.style.display = isCuttable ? 'none' : '';
-    length.style.display = isCuttable ? '' : 'none';
-    pieces.style.display = isCuttable ? '' : 'none';
+    qty.disabled = isCuttable;
+    length.disabled = !isCuttable;
+    pieces.disabled = !isCuttable;
     hsn.value = c ? (c.hsn || '') : '';
     renderCuttablePanel(tr);
   };
@@ -1192,7 +1125,6 @@ const wireRow = (tr) => {
   pieces.addEventListener('input', () => renderCuttablePanel(tr));
   length.addEventListener('input', () => renderCuttablePanel(tr));
   tr.querySelector('.remove-line')?.addEventListener('click', () => { tr.remove(); refreshSr(); });
-  syncRowNames(tr);
   refresh(); refreshStock(); refreshSr();
 };
 
@@ -1201,7 +1133,7 @@ if (editable) {
   const createLine = () => {
     const tr = document.createElement('tr');
     tr.className = 'dc-line-row';
-    tr.innerHTML = `<td class="sr-col"></td><td><input type="hidden" name="" data-field="line_id" value="line_${Math.random().toString(16).slice(2)}"><input type="hidden" name="" data-field="line_origin" class="line-origin" value="extra"><input type="hidden" name="" data-field="packing_line_id" class="line-packing-line-id" value=""><select name="" data-field="component_id" class="component-select">${componentOptions}</select><select name="" data-field="variant_id" class="variant-select" style="margin-top:6px"><option value="">N/A</option></select><input name="" data-field="notes" placeholder="Description / notes" style="margin-top:6px"><div class="small muted stock-hint" style="margin-top:6px"></div><div class="small" style="margin-top:6px;color:#b91c1c"></div><div class="cuttable-panel small" style="margin-top:6px"></div></td><td class="mono"><input class="hsn-display" readonly></td><td><input type="number" step="0.01" min="0" name="" data-field="qty" class="qty-input" value="0"><input type="number" step="1" min="0" name="" data-field="pieces" class="pieces-input" value="0" style="margin-top:6px"><input type="hidden" name="" data-field="selected_lot_ids" class="line-selected-lot-ids" value="[]"><input type="hidden" name="" data-field="lot_cuts" class="line-lot-cuts-input" value="[]"><input type="hidden" name="" data-field="cut_plan_mode" class="line-cut-plan-mode" value="suggested"><input type="hidden" name="" data-field="lot_allocations" class="line-lot-allocations-input" value="[]"></td><td><input type="number" step="0.01" min="0" name="" data-field="cut_length_ft" class="length-input" value="0"></td><td class="row-actions"><button type="button" class="btn warn remove-line">×</button></td>`;
+    tr.innerHTML = `<td class="sr-col"></td><td><input type="hidden" name="line_id[]" value="line_${Math.random().toString(16).slice(2)}"><input type="hidden" name="line_origin[]" class="line-origin" value="extra"><input type="hidden" name="line_packing_line_id[]" class="line-packing-line-id" value=""><select name="line_component_id[]" class="component-select">${componentOptions}</select><select name="line_variant_id[]" class="variant-select" style="margin-top:6px"><option value="">N/A</option></select><input name="line_notes[]" placeholder="Description / notes" style="margin-top:6px"><div class="small muted stock-hint" style="margin-top:6px"></div><div class="small" style="margin-top:6px;color:#b91c1c"></div><div class="cuttable-panel small" style="margin-top:6px"></div></td><td class="mono"><input class="hsn-display" readonly></td><td><input type="number" step="0.01" min="0" name="line_qty[]" class="qty-input" value="0"><input type="number" step="1" min="0" name="line_pieces[]" class="pieces-input" value="0" style="margin-top:6px"><input type="hidden" name="line_selected_lot_ids[]" class="line-selected-lot-ids" value="[]"><input type="hidden" name="line_lot_cuts[]" class="line-lot-cuts-input" value="[]"><input type="hidden" name="line_cut_plan_mode[]" class="line-cut-plan-mode" value="suggested"><input type="hidden" name="line_lot_allocations[]" class="line-lot-allocations-input" value="[]"></td><td><input type="number" step="0.01" min="0" name="line_length_ft[]" class="length-input" value="0"></td><td class="row-actions"><button type="button" class="btn warn remove-line">×</button></td>`;
     return tr;
   };
 
@@ -1233,7 +1165,6 @@ if (editable) {
   });
 
   document.querySelector('form.card')?.addEventListener('submit', (e) => {
-    document.querySelectorAll('.dc-line-row').forEach(syncRowNames);
     let blocked = false;
     document.querySelectorAll('.dc-line-row').forEach((tr) => {
       const comp = tr.querySelector('.component-select');
@@ -1262,7 +1193,6 @@ if (editable) {
 } else {
   document.querySelectorAll('.dc-line-row').forEach(wireRow);
 }
-document.querySelectorAll('.dc-line-row').forEach(syncRowNames);
 refreshSr();
 </script>
 </body></html>
