@@ -1435,7 +1435,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             unset($component);
             $result = documents_inventory_save_components($components);
-            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? 'Component archive state updated.' : 'Failed to update component.', ['items_subtab' => 'components']);
+            if (($result['ok'] ?? false) && $archiveState === 'archive') {
+                $kits = documents_inventory_kits(true);
+                foreach ($kits as &$kit) {
+                    $kitItems = is_array($kit['items'] ?? null) ? $kit['items'] : [];
+                    $kit['items'] = array_values(array_filter($kitItems, static fn(array $item): bool => (string) ($item['component_id'] ?? '') !== $componentId));
+                    $kit['updated_at'] = date('c');
+                }
+                unset($kit);
+                documents_inventory_save_kits($kits);
+            }
+            $redirectDocuments('items', $result['ok'] ? 'success' : 'error', $result['ok'] ? 'Component archive state updated.' : 'Failed to update component.', ['items_subtab' => $archiveState === 'archive' ? 'components' : 'archived']);
         }
 
         if (in_array($action, ['save_kit_create', 'save_kit_edit'], true)) {
@@ -2724,7 +2734,7 @@ $includeArchivedPack = isset($_GET['include_archived_pack']) && $_GET['include_a
 $archiveTypeFilter = safe_text($_GET['archive_type'] ?? 'all');
 $archiveSearch = strtolower(trim(safe_text($_GET['archive_q'] ?? '')));
 $itemsSubtab = safe_text($_GET['items_subtab'] ?? ($_GET['sub'] ?? 'components'));
-if (!in_array($itemsSubtab, ['components', 'kits', 'tax_profiles', 'variants', 'locations', 'inventory', 'inventory_verification', 'transactions', 'csv_import'], true)) {
+if (!in_array($itemsSubtab, ['components', 'kits', 'tax_profiles', 'variants', 'locations', 'archived', 'inventory', 'inventory_verification', 'transactions', 'csv_import'], true)) {
     $itemsSubtab = 'components';
 }
 
@@ -2875,14 +2885,19 @@ $salesReceipts = documents_list_sales_documents('receipt');
 $salesChallans = documents_list_sales_documents('delivery_challan');
 $salesProformas = documents_list_sales_documents('proforma');
 $salesInvoices = documents_list_sales_documents('invoice');
-$inventoryComponents = documents_inventory_components(true);
-$inventoryKits = documents_inventory_kits(true);
-$inventoryTaxProfiles = documents_inventory_tax_profiles(true);
+$inventoryComponents = documents_inventory_components(false);
+$inventoryKits = documents_inventory_kits(false);
+$inventoryTaxProfiles = documents_inventory_tax_profiles(false);
 $activeTaxProfiles = documents_inventory_tax_profiles(false);
-$inventoryVariants = documents_inventory_component_variants(true);
+$inventoryVariants = documents_inventory_component_variants(false);
 $activeInventoryVariants = documents_inventory_component_variants(false);
-$inventoryLocations = documents_inventory_locations(true);
+$inventoryLocations = documents_inventory_locations(false);
 $activeInventoryLocations = documents_inventory_locations(false);
+$archivedComponents = array_values(array_filter(documents_inventory_components(true), static fn(array $row): bool => !empty($row['archived_flag'])));
+$archivedKits = array_values(array_filter(documents_inventory_kits(true), static fn(array $row): bool => !empty($row['archived_flag'])));
+$archivedTaxProfiles = array_values(array_filter(documents_inventory_tax_profiles(true), static fn(array $row): bool => !empty($row['archived_flag'])));
+$archivedVariants = array_values(array_filter(documents_inventory_component_variants(true), static fn(array $row): bool => !empty($row['archived_flag'])));
+$archivedLocations = array_values(array_filter(documents_inventory_locations(true), static fn(array $row): bool => !empty($row['archived_flag'])));
 $inventoryLocationMap = [];
 foreach ($inventoryLocations as $locationRow) {
     if (!is_array($locationRow)) {
@@ -3558,13 +3573,24 @@ usort($archivedRows, static function (array $a, array $b): int {
           <a class="tab <?= $itemsSubtab === 'tax_profiles' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'tax_profiles']), ENT_QUOTES) ?>">Tax Profiles</a>
           <a class="tab <?= $itemsSubtab === 'variants' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'variants']), ENT_QUOTES) ?>">Variants</a>
           <a class="tab <?= $itemsSubtab === 'locations' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'locations']), ENT_QUOTES) ?>">Locations</a>
+          <a class="tab <?= $itemsSubtab === 'archived' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'archived']), ENT_QUOTES) ?>">Archived</a>
           <a class="tab <?= $itemsSubtab === 'inventory' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'inventory']), ENT_QUOTES) ?>">Inventory</a>
           <?php if ($isAdmin): ?><a class="tab <?= $itemsSubtab === 'inventory_verification' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'inventory_verification']), ENT_QUOTES) ?>">Inventory Verification</a><?php endif; ?>
           <a class="tab <?= $itemsSubtab === 'transactions' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'transactions']), ENT_QUOTES) ?>">Transactions</a>
           <a class="tab <?= $itemsSubtab === 'csv_import' ? 'active' : '' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'csv_import']), ENT_QUOTES) ?>">CSV Import</a>
         </nav>
 
-        <?php if ($itemsSubtab === 'components'): ?>
+        <?php if ($itemsSubtab === 'archived'): ?>
+          <h3>Archived Library</h3>
+          <table><thead><tr><th>Type</th><th>ID</th><th>Name</th><th>Action</th></tr></thead><tbody>
+            <?php foreach ($archivedComponents as $row): ?><tr><td>Component</td><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($row['name'] ?? ''), ENT_QUOTES) ?></td><td><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_component_archive" /><input type="hidden" name="component_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="unarchive" /><button class="btn secondary" type="submit">Unarchive</button></form></td></tr><?php endforeach; ?>
+            <?php foreach ($archivedKits as $row): ?><tr><td>Kit</td><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($row['name'] ?? ''), ENT_QUOTES) ?></td><td><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_kit_archive" /><input type="hidden" name="kit_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="unarchive" /><button class="btn secondary" type="submit">Unarchive</button></form></td></tr><?php endforeach; ?>
+            <?php foreach ($archivedTaxProfiles as $row): ?><tr><td>Tax Profile</td><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($row['name'] ?? ''), ENT_QUOTES) ?></td><td><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_tax_profile_archive" /><input type="hidden" name="tax_profile_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="unarchive" /><button class="btn secondary" type="submit">Unarchive</button></form></td></tr><?php endforeach; ?>
+            <?php foreach ($archivedVariants as $row): ?><tr><td>Variant</td><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($row['display_name'] ?? ''), ENT_QUOTES) ?></td><td><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_variant_archive" /><input type="hidden" name="variant_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="unarchive" /><button class="btn secondary" type="submit">Unarchive</button></form></td></tr><?php endforeach; ?>
+            <?php foreach ($archivedLocations as $row): ?><tr><td>Location</td><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($row['name'] ?? ''), ENT_QUOTES) ?></td><td><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="toggle_location_archive" /><input type="hidden" name="location_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="unarchive" /><button class="btn secondary" type="submit">Unarchive</button></form></td></tr><?php endforeach; ?>
+            <?php if ($archivedComponents===[] && $archivedKits===[] && $archivedTaxProfiles===[] && $archivedVariants===[] && $archivedLocations===[]): ?><tr><td colspan="4" class="muted">No archived records.</td></tr><?php endif; ?>
+          </tbody></table>
+        <?php elseif ($itemsSubtab === 'components'): ?>
           <h3>Components</h3>
           <?php if ($isAdmin): ?>
             <?php $componentForm = is_array($editingComponent) ? $editingComponent : documents_inventory_component_defaults(); ?>
