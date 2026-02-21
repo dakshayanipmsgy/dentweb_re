@@ -303,87 +303,120 @@ foreach (array_keys($kitIds) as $kitId) {
     ];
 }
 
-$packByLineId = [];
 $quotationGroups = [];
-$validQuotationPackingLineIds = [];
-$validQuotationComponentIds = [];
-if (is_array($packingList)) {
-    foreach ((array) ($packingList['required_items'] ?? []) as $requiredLine) {
-        if (!is_array($requiredLine)) { continue; }
-        $requiredLine = array_merge(documents_packing_required_line_defaults(), $requiredLine);
-        $lineId = (string) ($requiredLine['line_id'] ?? '');
-        if ($lineId !== '') { $packByLineId[$lineId] = $requiredLine; }
-
-        $componentId = (string) ($requiredLine['component_id'] ?? '');
-        if ($componentId === '') { continue; }
-        if (!isset($componentMap[$componentId])) { continue; }
-
-        $sourceKitId = safe_text((string) ($requiredLine['source_kit_id'] ?? ''));
-        if ($sourceKitId !== '') {
-            $kitComponentIds = $currentKitComponentIdsByKit[$sourceKitId] ?? [];
-            if (!isset($kitComponentIds[$componentId])) {
-                continue;
-            }
-        } elseif ($quoteItems !== [] && !isset($quoteDirectComponentIds[$componentId])) {
+$quotationItemsFlat = [];
+$quotationSeenComponentIds = [];
+foreach ($quoteItems as $quoteItem) {
+    if (!is_array($quoteItem)) {
+        continue;
+    }
+    $itemType = (string) ($quoteItem['type'] ?? '');
+    if ($itemType === 'kit') {
+        $kitId = safe_text((string) ($quoteItem['kit_id'] ?? ''));
+        if ($kitId === '') {
             continue;
         }
-
-        if ($lineId !== '') {
-            $validQuotationPackingLineIds[$lineId] = true;
+        $kit = documents_inventory_get_kit($kitId);
+        if (!is_array($kit)) {
+            continue;
         }
-        $validQuotationComponentIds[$componentId] = true;
-
-        $mode = (string) ($requiredLine['mode'] ?? 'fixed_qty');
-        $pendingQty = max(0, (float) ($requiredLine['pending_qty'] ?? 0));
-        $pendingFt = max(0, (float) ($requiredLine['pending_ft'] ?? 0));
-        $pendingWp = max(0, (float) ($requiredLine['target_wp'] ?? 0) - (float) ($requiredLine['dispatched_wp'] ?? 0));
-        $fulfilled = in_array($mode, ['fixed_qty', 'capacity_qty'], true)
-            ? ($pendingQty <= 0.00001 && $pendingFt <= 0.00001)
-            : ((bool) ($requiredLine['fulfilled_flag'] ?? false));
-
-        $groupKey = $sourceKitId;
-        $groupName = safe_text((string) ($requiredLine['source_kit_name_snapshot'] ?? ''));
-        if ($groupKey === '') {
-            $groupKey = 'direct_components';
-            $groupName = '📦 Components (direct in quotation)';
-        } else {
-            $groupName = '🧩 Kit: ' . ($groupName ?: $groupKey);
-        }
-
+        $groupKey = 'kit_' . $kitId;
         if (!isset($quotationGroups[$groupKey])) {
-            $quotationGroups[$groupKey] = ['name' => $groupName, 'items' => []];
+            $quotationGroups[$groupKey] = [
+                'name' => '🧩 Kit: ' . ((string) ($kit['name'] ?? $kitId)),
+                'items' => [],
+            ];
         }
+        foreach ((array) ($kit['items'] ?? []) as $kitLine) {
+            if (!is_array($kitLine)) {
+                continue;
+            }
+            $componentId = safe_text((string) ($kitLine['component_id'] ?? ''));
+            if ($componentId === '' || isset($quotationSeenComponentIds[$componentId])) {
+                continue;
+            }
+            $component = $componentMap[$componentId] ?? null;
+            if (!is_array($component) || !empty($component['archived_flag'])) {
+                continue;
+            }
+            $quotationSeenComponentIds[$componentId] = true;
+            $isCuttable = !empty($component['is_cuttable']);
+            $onHand = documents_inventory_compute_on_hand($stockSnapshot, $componentId, '', $isCuttable);
+            $item = [
+                'packing_line_id' => '',
+                'component_id' => $componentId,
+                'component_name' => (string) ($component['name'] ?? $componentId),
+                'notes' => '',
+                'mode' => 'fixed_qty',
+                'pending_qty' => 0,
+                'pending_ft' => 0,
+                'pending_wp' => 0,
+                'fulfilled' => false,
+                'status' => $onHand > 0 ? 'Ready (in stock)' : 'Low/0 stock',
+                'on_hand' => $onHand,
+                'has_variants' => !empty($component['has_variants']),
+                'is_cuttable' => $isCuttable,
+                'pending_text' => $isCuttable ? 'Current kit component (length by lot)' : 'Current kit component',
+                'hint' => '',
+            ];
+            $quotationGroups[$groupKey]['items'][] = $item;
+            $quotationItemsFlat[] = $item;
+        }
+        continue;
+    }
 
-        $component = $componentMap[$componentId] ?? [];
-        $isCuttable = !empty($component['is_cuttable']);
-        $onHand = documents_inventory_compute_on_hand($stockSnapshot, $componentId, '', $isCuttable);
-        $status = $fulfilled ? 'Fulfilled' : (($onHand > 0) ? 'Ready (in stock)' : 'Low/0 stock');
-        $pendingText = $mode === 'rule_fulfillment'
-            ? ('Pending ' . round($pendingWp, 2) . ' Wp')
-            : ($isCuttable ? ('Pending ' . round($pendingFt, 2) . ' ft') : ('Pending ' . round($pendingQty, 2)));
-
-        $quotationGroups[$groupKey]['items'][] = [
-            'packing_line_id' => (string) ($requiredLine['line_id'] ?? ''),
-            'component_id' => $componentId,
-            'component_name' => (string) ($requiredLine['component_name_snapshot'] ?? ($component['name'] ?? $componentId)),
-            'notes' => (string) ($requiredLine['remarks'] ?? ''),
-            'mode' => $mode,
-            'pending_qty' => $pendingQty,
-            'pending_ft' => $pendingFt,
-            'pending_wp' => $pendingWp,
-            'fulfilled' => $fulfilled,
-            'status' => $status,
-            'on_hand' => $onHand,
-            'has_variants' => !empty($component['has_variants']),
-            'is_cuttable' => $isCuttable,
-            'pending_text' => $pendingText,
-            'hint' => $mode === 'rule_fulfillment' ? 'Select variants to reach Wp.' : '',
-        ];
+    if ($itemType !== 'component') {
+        continue;
+    }
+    $componentId = safe_text((string) ($quoteItem['component_id'] ?? ''));
+    if ($componentId === '' || isset($quotationSeenComponentIds[$componentId])) {
+        continue;
+    }
+    $component = $componentMap[$componentId] ?? null;
+    if (!is_array($component) || !empty($component['archived_flag'])) {
+        continue;
+    }
+    $groupKey = 'direct_components';
+    if (!isset($quotationGroups[$groupKey])) {
+        $quotationGroups[$groupKey] = ['name' => '📦 Components (direct in quotation)', 'items' => []];
+    }
+    $quotationSeenComponentIds[$componentId] = true;
+    $isCuttable = !empty($component['is_cuttable']);
+    $onHand = documents_inventory_compute_on_hand($stockSnapshot, $componentId, '', $isCuttable);
+    $item = [
+        'packing_line_id' => '',
+        'component_id' => $componentId,
+        'component_name' => (string) ($component['name'] ?? $componentId),
+        'notes' => '',
+        'mode' => 'fixed_qty',
+        'pending_qty' => 0,
+        'pending_ft' => 0,
+        'pending_wp' => 0,
+        'fulfilled' => false,
+        'status' => $onHand > 0 ? 'Ready (in stock)' : 'Low/0 stock',
+        'on_hand' => $onHand,
+        'has_variants' => !empty($component['has_variants']),
+        'is_cuttable' => $isCuttable,
+        'pending_text' => 'Direct quotation component',
+        'hint' => '',
+    ];
+    $quotationGroups[$groupKey]['items'][] = $item;
+    $quotationItemsFlat[] = $item;
+}
+$validQuotationPackingLineIds = [];
+$validQuotationComponentIds = [];
+foreach ($quotationItemsFlat as $quotationItem) {
+    $componentId = safe_text((string) ($quotationItem['component_id'] ?? ''));
+    if ($componentId !== '') {
+        $validQuotationComponentIds[$componentId] = true;
     }
 }
 
+$isDraftChallan = (string) ($challan['status'] ?? 'draft') === 'draft';
 $legacyLines = [];
 $activeLines = [];
+$quotationUserLinesByComponent = [];
+$quotationPlaceholderByComponent = [];
 foreach ((array) ($challan['lines'] ?? []) as $line) {
     if (!is_array($line)) {
         continue;
@@ -395,26 +428,94 @@ foreach ((array) ($challan['lines'] ?? []) as $line) {
     }
     $lineComponentId = safe_text((string) ($line['component_id'] ?? ''));
     $linePackingId = safe_text((string) ($line['packing_line_id'] ?? ''));
-    $isStillValid = $linePackingId !== ''
-        ? isset($validQuotationPackingLineIds[$linePackingId])
-        : isset($validQuotationComponentIds[$lineComponentId]);
-    if ($isStillValid) {
-        $activeLines[] = $line;
-        continue;
-    }
-
     $qty = max(0, (float) ($line['qty'] ?? 0));
     $lengthFt = max(0, (float) ($line['length_ft'] ?? 0));
     $totalLengthFt = max(0, (float) ($line['total_length_ft'] ?? 0));
     $hasLotData = !empty((array) ($line['lot_allocations'] ?? [])) || !empty((array) ($line['selected_lot_ids'] ?? [])) || !empty((array) ($line['lot_ids'] ?? []));
-    $isUnused = $qty <= 0.00001 && $lengthFt <= 0.00001 && $totalLengthFt <= 0.00001 && !$hasLotData;
-    if ($isUnused) {
+    $hasVariantData = safe_text((string) ($line['variant_id'] ?? '')) !== '';
+    $hasUserData = $qty > 0.00001 || $lengthFt > 0.00001 || $totalLengthFt > 0.00001 || $hasLotData || $hasVariantData;
+    $isStillValid = isset($validQuotationComponentIds[$lineComponentId]) || ($linePackingId !== '' && isset($validQuotationPackingLineIds[$linePackingId]));
+
+    if (!$isDraftChallan) {
+        if ($isStillValid) {
+            $activeLines[] = $line;
+        } elseif ($hasUserData) {
+            $line['legacy_reason'] = 'Item removed from current kit definition';
+            $legacyLines[] = $line;
+        }
         continue;
     }
-    $line['legacy_reason'] = 'Item removed from current kit definition';
-    $legacyLines[] = $line;
+
+    if (!$isStillValid) {
+        if ($hasUserData) {
+            $line['legacy_reason'] = 'Item removed from current kit definition';
+            $legacyLines[] = $line;
+        }
+        continue;
+    }
+
+    if ($hasUserData) {
+        $quotationUserLinesByComponent[$lineComponentId][] = $line;
+        continue;
+    }
+
+    if (!isset($quotationPlaceholderByComponent[$lineComponentId])) {
+        $quotationPlaceholderByComponent[$lineComponentId] = $line;
+    }
+}
+
+if ($isDraftChallan) {
+    foreach ($quotationItemsFlat as $quotationItem) {
+        $componentId = safe_text((string) ($quotationItem['component_id'] ?? ''));
+        if ($componentId === '') {
+            continue;
+        }
+        foreach ((array) ($quotationUserLinesByComponent[$componentId] ?? []) as $userLine) {
+            $activeLines[] = $userLine;
+        }
+        if (isset($quotationPlaceholderByComponent[$componentId])) {
+            $placeholderLine = $quotationPlaceholderByComponent[$componentId];
+            $placeholderLine['line_origin'] = 'quotation';
+            $activeLines[] = $placeholderLine;
+            continue;
+        }
+        $component = $componentMap[$componentId] ?? [];
+        $activeLines[] = [
+            'line_id' => 'line_' . bin2hex(random_bytes(4)),
+            'line_origin' => 'quotation',
+            'packing_line_id' => '',
+            'component_id' => $componentId,
+            'component_name_snapshot' => (string) ($component['name'] ?? $componentId),
+            'variant_id' => '',
+            'qty' => 0,
+            'length_ft' => 0,
+            'total_length_ft' => 0,
+            'pieces' => 0,
+            'notes' => '',
+            'selected_lot_ids' => [],
+            'lot_cuts' => [],
+            'lot_allocations' => [],
+            'cut_plan_mode' => 'suggested',
+            'is_cuttable_snapshot' => !empty($component['is_cuttable']),
+            'has_variants_snapshot' => !empty($component['has_variants']),
+            'hsn_snapshot' => (string) ($component['hsn'] ?? ''),
+            'source_location_id' => '',
+        ];
+    }
 }
 $challan['lines'] = $activeLines;
+$quotationBuilderLines = [];
+$extraBuilderLines = [];
+foreach ((array) ($challan['lines'] ?? []) as $line) {
+    if (!is_array($line)) {
+        continue;
+    }
+    if ((string) ($line['line_origin'] ?? 'extra') === 'quotation') {
+        $quotationBuilderLines[] = $line;
+        continue;
+    }
+    $extraBuilderLines[] = $line;
+}
 
 $redirectWith = static function (string $status, string $message) use ($id): void {
     header('Location: challan-view.php?id=' . urlencode($id) . '&status=' . urlencode($status) . '&message=' . urlencode($message));
@@ -1140,11 +1241,48 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <?php if ($kitReferencePanels === []): ?><p class="muted">No kits linked to this quotation/packing list.</p><?php endif; ?>
 </div>
 
+<h3>Quotation Items (Builder)</h3>
+
+<table id="dc-lines-quotation"><thead><tr><th style="width:5%">Sr.</th><th style="width:44%">Components</th><th style="width:10%">HSN</th><th style="width:16%">Quantity / pieces</th><th style="width:15%">length</th><th style="width:10%">Actions</th></tr></thead><tbody>
+<?php foreach ((array) $quotationBuilderLines as $line): if (!is_array($line)) { continue; } $componentId=(string)($line['component_id']??''); $variantId=(string)($line['variant_id']??''); $isCuttable=!empty($line['is_cuttable_snapshot']); $lineStock=documents_inventory_compute_on_hand($stockSnapshot,$componentId,$variantId,$isCuttable); ?>
+<tr class="dc-line-row">
+<td class="sr-col"></td>
+<td>
+<input type="hidden" name="line_id[]" value="<?= htmlspecialchars((string) ($line['line_id'] ?? ''), ENT_QUOTES) ?>" />
+<input type="hidden" name="line_origin[]" class="line-origin" value="<?= htmlspecialchars((string) ($line['line_origin'] ?? 'extra'), ENT_QUOTES) ?>" />
+<input type="hidden" name="line_packing_line_id[]" class="line-packing-line-id" value="<?= htmlspecialchars((string) ($line['packing_line_id'] ?? ''), ENT_QUOTES) ?>" />
+<select name="line_component_id[]" class="component-select" <?= $editable ? '' : 'disabled' ?>>
+<option value="">Select</option><?php foreach ($componentClientMap as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($component['id'] ?? ''))===$componentId?'selected':'' ?>><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?>
+</select>
+<select name="line_variant_id[]" class="variant-select" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>><option value="">N/A</option><?php foreach ((array) ($variantsByComponent[$componentId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variant['id'] ?? ''))===$variantId?'selected':'' ?>><?= htmlspecialchars((string) ($variant['name'] ?? ''), ENT_QUOTES) ?><?= !empty($variant['archived']) ? ' (archived)' : '' ?> — Stock: <?= htmlspecialchars((string) round((float) ($variant['stock'] ?? 0), 2), ENT_QUOTES) ?></option><?php endforeach; ?></select>
+<input name="line_notes[]" placeholder="Description / notes" value="<?= htmlspecialchars((string) ($line['notes'] ?? ''), ENT_QUOTES) ?>" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>>
+<div class="small muted stock-hint" style="margin-top:6px">Stock: <?= htmlspecialchars((string) round($lineStock, 2), ENT_QUOTES) ?><?= $isCuttable ? ' ft' : '' ?><?= $lineStock <= 0 ? ' (will go negative)' : '' ?></div>
+<div class="small" style="margin-top:6px;color:#b91c1c"><?php foreach ((array) ($line['line_errors'] ?? []) as $lineError): ?><div><?= htmlspecialchars((string) $lineError, ENT_QUOTES) ?></div><?php endforeach; ?></div>
+<div class="cuttable-panel small" style="margin-top:6px"></div>
+</td>
+<td class="mono"><input value="<?= htmlspecialchars((string) ($line['hsn_snapshot'] ?? ''), ENT_QUOTES) ?>" class="hsn-display" readonly></td>
+<td>
+<input type="number" step="0.01" min="0" name="line_qty[]" class="qty-input" value="<?= htmlspecialchars((string) ((float) ($line['qty'] ?? 0)), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>>
+<input type="number" step="1" min="0" name="line_pieces[]" class="pieces-input" value="<?= htmlspecialchars((string) ((int) ($line['pieces'] ?? 0)), ENT_QUOTES) ?>" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>>
+<select name="line_source_location_id[]" class="source-location-select" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>><option value="">Consume from location</option><?php foreach ($activeInventoryLocations as $loc): if (!is_array($loc)) { continue; } ?><option value="<?= htmlspecialchars((string) ($loc['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($loc['id'] ?? '')) === (string) ($line['source_location_id'] ?? '') ? 'selected' : '' ?>><?= htmlspecialchars((string) ($loc['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?><?php $selectedSourceLocationId = (string) ($line['source_location_id'] ?? ''); if ($selectedSourceLocationId !== ''): $selectedSourceLocation = null; foreach ($allInventoryLocations as $locRow) { if (is_array($locRow) && (string) ($locRow['id'] ?? '') === $selectedSourceLocationId) { $selectedSourceLocation = $locRow; break; } } if (is_array($selectedSourceLocation) && !empty($selectedSourceLocation['archived_flag'])): ?><option value="<?= htmlspecialchars($selectedSourceLocationId, ENT_QUOTES) ?>" selected><?= htmlspecialchars((string) ($selectedSourceLocation['name'] ?? $selectedSourceLocationId), ENT_QUOTES) ?> (archived)</option><?php endif; endif; ?></select>
+<input type="hidden" name="line_selected_lot_ids[]" class="line-selected-lot-ids" value="<?= htmlspecialchars(json_encode((array) ($line['selected_lot_ids'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
+<input type="hidden" name="line_lot_cuts[]" class="line-lot-cuts-input" value="<?= htmlspecialchars(json_encode((array) ($line['lot_cuts'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
+<input type="hidden" name="line_cut_plan_mode[]" class="line-cut-plan-mode" value="<?= htmlspecialchars((string) ($line['cut_plan_mode'] ?? 'suggested'), ENT_QUOTES) ?>">
+<input type="hidden" name="line_lot_allocations[]" class="line-lot-allocations-input" value="<?= htmlspecialchars(json_encode((array) ($line['lot_allocations'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
+<div class="line-lot-cuts" data-line-id="<?= htmlspecialchars((string) ($line['line_id'] ?? ''), ENT_QUOTES) ?>" data-lot-cuts='<?= htmlspecialchars(json_encode((array) ($line['lot_cuts'] ?? []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>'></div>
+<?php if (!empty($line['stock_changed_warning'])): ?><div class="small" style="margin-top:6px;color:#b45309">Stock changed warning: one or more manual lot cuts may now exceed available lot length.</div><?php endif; ?>
+</td>
+<td><input type="number" step="0.01" min="0" name="line_length_ft[]" class="length-input" value="<?= htmlspecialchars((string) ((float) ($line['length_ft'] ?? 0)), ENT_QUOTES) ?>" <?= $editable ? '' : 'disabled' ?>></td>
+<td class="row-actions"><?php if ($editable): ?><button type="button" class="btn warn remove-line">×</button><?php endif; ?></td>
+</tr>
+<?php endforeach; ?>
+</tbody></table>
+
 <h3>Extra items not present in quotation</h3>
 <?php if ($editable): ?><p><button type="button" id="add-extra-line" class="btn secondary">+ Add Line</button></p><?php endif; ?>
 
-<table id="dc-lines"><thead><tr><th style="width:5%">Sr.</th><th style="width:44%">Components</th><th style="width:10%">HSN</th><th style="width:16%">Quantity / pieces</th><th style="width:15%">length</th><th style="width:10%">Actions</th></tr></thead><tbody>
-<?php foreach ((array) ($challan['lines'] ?? []) as $line): if (!is_array($line)) { continue; } $componentId=(string)($line['component_id']??''); $variantId=(string)($line['variant_id']??''); $isCuttable=!empty($line['is_cuttable_snapshot']); $lineStock=documents_inventory_compute_on_hand($stockSnapshot,$componentId,$variantId,$isCuttable); ?>
+<table id="dc-lines-extra"><thead><tr><th style="width:5%">Sr.</th><th style="width:44%">Components</th><th style="width:10%">HSN</th><th style="width:16%">Quantity / pieces</th><th style="width:15%">length</th><th style="width:10%">Actions</th></tr></thead><tbody>
+<?php foreach ((array) $extraBuilderLines as $line): if (!is_array($line)) { continue; } $componentId=(string)($line['component_id']??''); $variantId=(string)($line['variant_id']??''); $isCuttable=!empty($line['is_cuttable_snapshot']); $lineStock=documents_inventory_compute_on_hand($stockSnapshot,$componentId,$variantId,$isCuttable); ?>
 <tr class="dc-line-row">
 <td class="sr-col"></td>
 <td>
@@ -1202,7 +1340,10 @@ const editable = <?= $editable ? 'true' : 'false' ?>;
 
 const componentOptions = `<option value="">Select</option>${Object.values(COMPONENTS).map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}`;
 const LOCATION_OPTIONS = <?= json_encode(array_map(static fn($l): array => ['id' => (string) ($l['id'] ?? ''), 'name' => (string) ($l['name'] ?? '')], documents_inventory_locations(false)), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-const refreshSr = () => document.querySelectorAll('#dc-lines tbody tr').forEach((tr, idx) => { const el=tr.querySelector('.sr-col'); if (el) el.textContent = String(idx+1); });
+const refreshSr = () => {
+  document.querySelectorAll('#dc-lines-quotation tbody tr').forEach((tr, idx) => { const el=tr.querySelector('.sr-col'); if (el) el.textContent = String(idx+1); });
+  document.querySelectorAll('#dc-lines-extra tbody tr').forEach((tr, idx) => { const el=tr.querySelector('.sr-col'); if (el) el.textContent = String(idx+1); });
+};
 const stockKey = (componentId, variantId) => `${componentId || ''}|${variantId || ''}`;
 const readJsonArray = (raw) => { try { const val = JSON.parse(raw || '[]'); return Array.isArray(val) ? val : []; } catch { return []; } };
 
@@ -1423,7 +1564,8 @@ const wireRow = (tr) => {
 };
 
 if (editable) {
-  const tbody = document.querySelector('#dc-lines tbody');
+  const quotationTbody = document.querySelector('#dc-lines-quotation tbody');
+  const extraTbody = document.querySelector('#dc-lines-extra tbody');
   const createLine = () => {
     const tr = document.createElement('tr');
     tr.className = 'dc-line-row';
@@ -1432,12 +1574,29 @@ if (editable) {
   };
 
   document.querySelectorAll('.dc-line-row').forEach(wireRow);
-  document.getElementById('add-extra-line')?.addEventListener('click', () => { const row=createLine(); tbody.appendChild(row); wireRow(row); });
+  document.getElementById('add-extra-line')?.addEventListener('click', () => { const row=createLine(); extraTbody.appendChild(row); wireRow(row); });
 
   document.querySelectorAll('.add-quotation-line').forEach(btn => btn.addEventListener('click', () => {
     const payload = JSON.parse(btn.dataset.payload || '{}');
+    const existingRows = Array.from(document.querySelectorAll('#dc-lines-quotation tbody .dc-line-row'));
+    const reusable = existingRows.find((row) => {
+      const cid = row.querySelector('.component-select')?.value || '';
+      const qty = Number(row.querySelector('.qty-input')?.value || 0);
+      const len = Number(row.querySelector('.length-input')?.value || 0);
+      const pcs = Number(row.querySelector('.pieces-input')?.value || 0);
+      const alloc = readJsonArray(row.querySelector('.line-lot-allocations-input')?.value || '[]');
+      const variant = row.querySelector('.variant-select')?.value || '';
+      const isPlaceholder = qty <= 0.00001 && len <= 0.00001 && pcs <= 0 && alloc.length === 0 && variant === '';
+      return cid === (payload.component_id || '') && isPlaceholder;
+    });
+    if (reusable) {
+      reusable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      reusable.style.outline = '2px solid #0b57d0';
+      setTimeout(() => { reusable.style.outline = ''; }, 1200);
+      return;
+    }
     const row = createLine();
-    tbody.appendChild(row);
+    quotationTbody.appendChild(row);
     row.querySelector('.line-origin').value = 'quotation';
     row.querySelector('.line-packing-line-id').value = payload.packing_line_id || '';
     const comp = row.querySelector('.component-select');
