@@ -4191,10 +4191,35 @@ function documents_inventory_load_stock(): array
             $componentEntry = ['stock_by_variant_id' => [documents_inventory_stock_bucket_key('') => $legacyEntry]];
         }
         foreach ($componentEntry['stock_by_variant_id'] as $bucketKey => $bucketEntry) {
-            $componentEntry['stock_by_variant_id'][$bucketKey] = array_merge(
+            $entry = array_merge(
                 documents_inventory_component_entry_defaults(),
                 is_array($bucketEntry) ? $bucketEntry : []
             );
+
+            $lots = is_array($entry['lots'] ?? null) ? $entry['lots'] : [];
+            foreach ($lots as $idx => $lot) {
+                if (!is_array($lot)) {
+                    continue;
+                }
+                $lot['variant_id'] = safe_text((string) ($lot['variant_id'] ?? ''));
+                $lot['variant_name_snapshot'] = safe_text((string) ($lot['variant_name_snapshot'] ?? ''));
+                $lots[$idx] = $lot;
+            }
+            $entry['lots'] = array_values($lots);
+
+            $batches = is_array($entry['batches'] ?? null) ? $entry['batches'] : [];
+            foreach ($batches as $idx => $batch) {
+                if (!is_array($batch)) {
+                    continue;
+                }
+                $batch['variant_id'] = safe_text((string) ($batch['variant_id'] ?? ''));
+                $batch['variant_name_snapshot'] = safe_text((string) ($batch['variant_name_snapshot'] ?? ''));
+                $remainingQty = max(0, (float) ($batch['qty_remaining'] ?? 0));
+                $batch['qty_original'] = max(0, (float) ($batch['qty_original'] ?? $remainingQty));
+                $batches[$idx] = $batch;
+            }
+            $entry['batches'] = array_values($batches);
+            $componentEntry['stock_by_variant_id'][$bucketKey] = $entry;
         }
         $stock['stock_by_component_id'][$componentId] = $componentEntry;
     }
@@ -4460,6 +4485,11 @@ function is_batch_editable(array $batch, array $transactionsIndex = []): array
     $blocked = (array) ($transactionsIndex['batch_blocked'] ?? []);
     if (isset($blocked[$batchId])) {
         return ['editable' => false, 'reason' => (string) $blocked[$batchId]];
+    }
+    $remainingQty = max(0, (float) ($batch['qty_remaining'] ?? 0));
+    $originalQty = max(0, (float) ($batch['qty_original'] ?? $remainingQty));
+    if (abs($remainingQty - $originalQty) > 0.00001) {
+        return ['editable' => false, 'reason' => 'Batch is partially used.'];
     }
     return ['editable' => true, 'reason' => ''];
 }
@@ -5013,10 +5043,14 @@ function documents_inventory_add_to_location_breakdown(array $entry, float $qty,
 
 function documents_inventory_create_batch(string $locationId, float $qty, array $actor, string $sourceTxnId = ''): array
 {
+    $qty = max(0, $qty);
     return [
         'batch_id' => 'BATCH-' . date('YmdHis') . '-' . bin2hex(random_bytes(2)),
         'location_id' => trim($locationId),
-        'qty_remaining' => max(0, $qty),
+        'qty_remaining' => $qty,
+        'qty_original' => $qty,
+        'variant_id' => '',
+        'variant_name_snapshot' => '',
         'created_by' => $actor,
         'created_at' => date('c'),
         'source_txn_id' => $sourceTxnId,
