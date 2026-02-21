@@ -1499,9 +1499,7 @@ function documents_challan_line_defaults(): array
         'pieces' => 0,
         'lot_ids' => [],
         'selected_lot_ids' => [],
-        'cut_plan_mode' => 'auto',
         'lot_cuts' => [],
-        'lot_cuts_snapshot' => [],
         'line_errors' => [],
         'unit_snapshot' => '',
         'hsn_snapshot' => '',
@@ -1539,8 +1537,6 @@ function documents_normalize_challan_lines(array $lines): array
         if ($row['selected_lot_ids'] === [] && $row['lot_ids'] !== []) {
             $row['selected_lot_ids'] = $row['lot_ids'];
         }
-        $planMode = strtolower(safe_text((string) ($row['cut_plan_mode'] ?? 'auto')));
-        $row['cut_plan_mode'] = $planMode === 'manual' ? 'manual' : 'auto';
         $lotCutsRaw = is_array($row['lot_cuts'] ?? null) ? $row['lot_cuts'] : [];
         $row['lot_cuts'] = [];
         foreach ($lotCutsRaw as $cut) {
@@ -1548,35 +1544,12 @@ function documents_normalize_challan_lines(array $lines): array
                 continue;
             }
             $lotId = safe_text((string) ($cut['lot_id'] ?? ''));
-            $useFt = max(0, (float) ($cut['use_ft'] ?? 0));
-            if ($useFt <= 0) {
-                $count = max(0, (int) ($cut['count'] ?? 0));
-                $cutLength = max(0, (float) ($cut['cut_length_ft'] ?? 0));
-                $useFt = $count > 0 && $cutLength > 0 ? ($count * $cutLength) : 0;
-            }
-            if ($lotId === '' || $useFt <= 0) {
+            $count = max(0, (int) ($cut['count'] ?? 0));
+            $cutLength = max(0, (float) ($cut['cut_length_ft'] ?? 0));
+            if ($lotId === '' || $count <= 0 || $cutLength <= 0) {
                 continue;
             }
-            $row['lot_cuts'][] = ['lot_id' => $lotId, 'use_ft' => round($useFt, 4)];
-        }
-        $lotCutsSnapshotRaw = is_array($row['lot_cuts_snapshot'] ?? null) ? $row['lot_cuts_snapshot'] : [];
-        $row['lot_cuts_snapshot'] = [];
-        foreach ($lotCutsSnapshotRaw as $snapshot) {
-            if (!is_array($snapshot)) {
-                continue;
-            }
-            $lotId = safe_text((string) ($snapshot['lot_id'] ?? ''));
-            if ($lotId === '') {
-                continue;
-            }
-            $row['lot_cuts_snapshot'][] = [
-                'lot_id' => $lotId,
-                'location_id' => safe_text((string) ($snapshot['location_id'] ?? '')),
-                'location_name' => safe_text((string) ($snapshot['location_name'] ?? '')),
-                'before_ft' => round(max(0, (float) ($snapshot['before_ft'] ?? 0)), 4),
-                'after_ft' => round((float) ($snapshot['after_ft'] ?? 0), 4),
-                'used_ft' => round(max(0, (float) ($snapshot['used_ft'] ?? 0)), 4),
-            ];
+            $row['lot_cuts'][] = ['lot_id' => $lotId, 'count' => $count, 'cut_length_ft' => $cutLength];
         }
         $row['line_errors'] = array_values(array_filter(array_map(static fn($error): string => safe_text((string) $error), is_array($row['line_errors'] ?? null) ? $row['line_errors'] : []), static fn(string $error): bool => $error !== ''));
         $row['unit_snapshot'] = safe_text((string) ($row['unit_snapshot'] ?? ''));
@@ -5781,16 +5754,12 @@ function documents_inventory_consume_planned_lot_cuts(array $lots, array $lotCut
             continue;
         }
         $lotId = (string) ($cut['lot_id'] ?? '');
-        $useFt = max(0, (float) ($cut['use_ft'] ?? 0));
-        if ($useFt <= 0) {
-            $count = max(0, (int) ($cut['count'] ?? 0));
-            $cutLength = max(0, (float) ($cut['cut_length_ft'] ?? 0));
-            $useFt = $count > 0 && $cutLength > 0 ? ($count * $cutLength) : 0;
-        }
-        if ($lotId === '' || $useFt <= 0) {
+        $count = max(0, (int) ($cut['count'] ?? 0));
+        $cutLength = max(0, (float) ($cut['cut_length_ft'] ?? 0));
+        if ($lotId === '' || $count <= 0 || $cutLength <= 0) {
             continue;
         }
-        $remainingNeed = $useFt;
+        $remainingNeed = $count * $cutLength;
         foreach ($lots as $idx => $lot) {
             if (!is_array($lot) || (string) ($lot['lot_id'] ?? '') !== $lotId || $remainingNeed <= 0) {
                 continue;
