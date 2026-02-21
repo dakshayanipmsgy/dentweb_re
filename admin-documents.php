@@ -465,11 +465,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $packForQuote = documents_get_packing_list_for_quote((string) ($quote['id'] ?? ''), false);
             if ($packForQuote !== null) {
                 $challan['packing_list_id'] = (string) ($packForQuote['id'] ?? '');
+                $quoteItems = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
+                $directQuoteComponentIds = [];
+                $activeKitComponentsByKit = [];
+                foreach ($quoteItems as $quoteItem) {
+                    if (!is_array($quoteItem)) {
+                        continue;
+                    }
+                    if ((string) ($quoteItem['type'] ?? '') === 'kit') {
+                        $kitId = safe_text((string) ($quoteItem['kit_id'] ?? ''));
+                        if ($kitId === '') {
+                            continue;
+                        }
+                        $kit = documents_inventory_get_kit($kitId);
+                        if (!is_array($kit)) {
+                            continue;
+                        }
+                        $activeKitComponentsByKit[$kitId] = [];
+                        foreach ((array) ($kit['items'] ?? []) as $kitLine) {
+                            if (!is_array($kitLine)) {
+                                continue;
+                            }
+                            $componentId = safe_text((string) ($kitLine['component_id'] ?? ''));
+                            if ($componentId === '') {
+                                continue;
+                            }
+                            $component = documents_inventory_get_component($componentId);
+                            if (!is_array($component) || !empty($component['archived_flag'])) {
+                                continue;
+                            }
+                            $activeKitComponentsByKit[$kitId][$componentId] = true;
+                        }
+                        continue;
+                    }
+                    if ((string) ($quoteItem['type'] ?? '') === 'component') {
+                        $componentId = safe_text((string) ($quoteItem['component_id'] ?? ''));
+                        if ($componentId !== '') {
+                            $directQuoteComponentIds[$componentId] = true;
+                        }
+                    }
+                }
+
                 $prefillItems = [];
                 foreach ((array) ($packForQuote['required_items'] ?? []) as $line) {
                     if (!is_array($line)) {
                         continue;
                     }
+                    $componentId = safe_text((string) ($line['component_id'] ?? ''));
+                    if ($componentId === '') {
+                        continue;
+                    }
+                    $component = documents_inventory_get_component($componentId);
+                    if (!is_array($component) || !empty($component['archived_flag'])) {
+                        continue;
+                    }
+                    $sourceKitId = safe_text((string) ($line['source_kit_id'] ?? ''));
+                    if ($sourceKitId !== '') {
+                        $activeIds = $activeKitComponentsByKit[$sourceKitId] ?? [];
+                        if (!isset($activeIds[$componentId])) {
+                            continue;
+                        }
+                    } elseif ($quoteItems !== [] && !isset($directQuoteComponentIds[$componentId])) {
+                        continue;
+                    }
+
                     $mode = (string) ($line['mode'] ?? 'fixed_qty');
                     $pendingQty = max(0, (float) ($line['pending_qty'] ?? 0));
                     $pendingFt = max(0, (float) ($line['pending_ft'] ?? 0));
@@ -482,7 +541,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'unit' => (string) ($line['unit'] ?? (($pendingFt > 0) ? 'ft' : 'Nos')),
                         'qty' => in_array($mode, ['fixed_qty', 'capacity_qty'], true) ? ($pendingFt > 0 ? $pendingFt : $pendingQty) : 0,
                         'remarks' => '',
-                        'component_id' => (string) ($line['component_id'] ?? ''),
+                        'component_id' => $componentId,
                         'line_id' => (string) ($line['line_id'] ?? ''),
                         'mode' => $mode,
                         'dispatch_qty' => 0,
