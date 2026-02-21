@@ -1503,6 +1503,7 @@ function documents_challan_line_defaults(): array
         'cut_plan_mode' => 'suggested',
         'lot_allocations' => [],
         'total_length_ft' => 0,
+        'source_location_id' => '',
         'stock_changed_warning' => false,
         'line_errors' => [],
         'unit_snapshot' => '',
@@ -1596,6 +1597,7 @@ function documents_normalize_challan_lines(array $lines): array
             $totalLengthFt += max(0, (float) ($allocation['cut_length_ft'] ?? 0));
         }
         $row['total_length_ft'] = round($totalLengthFt, 4);
+        $row['source_location_id'] = safe_text((string) ($row['source_location_id'] ?? $row['consume_location_id'] ?? ''));
         $row['stock_changed_warning'] = !empty($row['stock_changed_warning']);
         $row['line_errors'] = array_values(array_filter(array_map(static fn($error): string => safe_text((string) $error), is_array($row['line_errors'] ?? null) ? $row['line_errors'] : []), static fn(string $error): bool => $error !== ''));
         $row['unit_snapshot'] = safe_text((string) ($row['unit_snapshot'] ?? ''));
@@ -5563,8 +5565,19 @@ function documents_apply_dispatch_to_packing_list(array $packingList, string $ch
     return $packingList;
 }
 
-function documents_inventory_consume_fifo_lots(array $lots, float $requiredFt): array
+function documents_inventory_consume_fifo_lots(array $lots, float $requiredFt, string $preferredLocationId = ''): array
 {
+    $preferredLocationId = trim($preferredLocationId);
+    if ($preferredLocationId !== '') {
+        usort($lots, static function (array $a, array $b) use ($preferredLocationId): int {
+            $aPref = ((string) ($a['location_id'] ?? '') === $preferredLocationId) ? 0 : 1;
+            $bPref = ((string) ($b['location_id'] ?? '') === $preferredLocationId) ? 0 : 1;
+            if ($aPref !== $bPref) {
+                return $aPref <=> $bPref;
+            }
+            return strcmp((string) ($a['lot_id'] ?? ''), (string) ($b['lot_id'] ?? ''));
+        });
+    }
     $remaining = $requiredFt;
     $consumed = [];
     foreach ($lots as $idx => $lot) {
