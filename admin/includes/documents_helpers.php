@@ -1500,6 +1500,10 @@ function documents_challan_line_defaults(): array
         'lot_ids' => [],
         'selected_lot_ids' => [],
         'lot_cuts' => [],
+        'cut_plan_mode' => 'suggested',
+        'lot_allocations' => [],
+        'total_length_ft' => 0,
+        'stock_changed_warning' => false,
         'line_errors' => [],
         'unit_snapshot' => '',
         'hsn_snapshot' => '',
@@ -1551,6 +1555,48 @@ function documents_normalize_challan_lines(array $lines): array
             }
             $row['lot_cuts'][] = ['lot_id' => $lotId, 'count' => $count, 'cut_length_ft' => $cutLength];
         }
+        $cutPlanMode = strtolower(safe_text((string) ($row['cut_plan_mode'] ?? 'suggested')));
+        $row['cut_plan_mode'] = in_array($cutPlanMode, ['suggested', 'manual'], true) ? $cutPlanMode : 'suggested';
+        $allocationsRaw = is_array($row['lot_allocations'] ?? null) ? $row['lot_allocations'] : [];
+        $allocations = [];
+        foreach ($allocationsRaw as $allocation) {
+            if (!is_array($allocation)) {
+                continue;
+            }
+            $lotId = safe_text((string) ($allocation['lot_id'] ?? ''));
+            $variantId = safe_text((string) ($allocation['variant_id'] ?? $row['variant_id'] ?? ''));
+            $cutLength = max(0, (float) ($allocation['cut_length_ft'] ?? 0));
+            $cutPieces = max(1, (int) ($allocation['cut_pieces'] ?? $allocation['count'] ?? 1));
+            $locationSnapshot = safe_text((string) ($allocation['location_id_snapshot'] ?? ''));
+            if ($lotId === '' || $cutLength <= 0) {
+                continue;
+            }
+            $allocations[] = [
+                'lot_id' => $lotId,
+                'variant_id' => $variantId,
+                'cut_length_ft' => $cutLength,
+                'cut_pieces' => $cutPieces,
+                'location_id_snapshot' => $locationSnapshot,
+            ];
+        }
+        if ($allocations === [] && $row['lot_cuts'] !== []) {
+            foreach ($row['lot_cuts'] as $cut) {
+                $allocations[] = [
+                    'lot_id' => (string) ($cut['lot_id'] ?? ''),
+                    'variant_id' => (string) ($row['variant_id'] ?? ''),
+                    'cut_length_ft' => max(0, (float) ($cut['cut_length_ft'] ?? 0)) * max(1, (int) ($cut['count'] ?? 1)),
+                    'cut_pieces' => max(1, (int) ($cut['count'] ?? 1)),
+                    'location_id_snapshot' => '',
+                ];
+            }
+        }
+        $row['lot_allocations'] = $allocations;
+        $totalLengthFt = 0.0;
+        foreach ($row['lot_allocations'] as $allocation) {
+            $totalLengthFt += max(0, (float) ($allocation['cut_length_ft'] ?? 0));
+        }
+        $row['total_length_ft'] = round($totalLengthFt, 4);
+        $row['stock_changed_warning'] = !empty($row['stock_changed_warning']);
         $row['line_errors'] = array_values(array_filter(array_map(static fn($error): string => safe_text((string) $error), is_array($row['line_errors'] ?? null) ? $row['line_errors'] : []), static fn(string $error): bool => $error !== ''));
         $row['unit_snapshot'] = safe_text((string) ($row['unit_snapshot'] ?? ''));
         $row['hsn_snapshot'] = safe_text((string) ($row['hsn_snapshot'] ?? ''));

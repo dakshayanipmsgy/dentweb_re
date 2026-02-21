@@ -50,11 +50,30 @@ $renderRows = static function (array $rows): void {
         $isCuttable = !empty($line['is_cuttable_snapshot']);
         $qtyOrPieces = $isCuttable ? ((int) ($line['pieces'] ?? 0)) : ((float) ($line['qty'] ?? 0));
         $length = $isCuttable ? (float) ($line['length_ft'] ?? 0) : '';
+        $lotAllocations = is_array($line['lot_allocations'] ?? null) ? $line['lot_allocations'] : [];
         echo '<tr>';
         echo '<td>' . ($idx + 1) . '</td>';
         echo '<td><div><strong>' . htmlspecialchars($component, ENT_QUOTES) . '</strong></div>';
         echo '<div class="muted">' . htmlspecialchars($variant, ENT_QUOTES) . '</div>';
-        echo '<div class="muted">' . nl2br(htmlspecialchars($notes, ENT_QUOTES)) . '</div></td>';
+        echo '<div class="muted">' . nl2br(htmlspecialchars($notes, ENT_QUOTES)) . '</div>';
+        if ($isCuttable && $lotAllocations !== []) {
+            $parts = [];
+            foreach ($lotAllocations as $allocation) {
+                if (!is_array($allocation)) {
+                    continue;
+                }
+                $lotId = (string) ($allocation['lot_id'] ?? '');
+                $usedFt = max(0, (float) ($allocation['cut_length_ft'] ?? 0));
+                if ($lotId === '' || $usedFt <= 0) {
+                    continue;
+                }
+                $parts[] = $lotId . ': ' . round($usedFt, 2) . ' ft';
+            }
+            if ($parts !== []) {
+                echo '<div class="muted">Lots: ' . htmlspecialchars(implode(', ', $parts), ENT_QUOTES) . '</div>';
+            }
+        }
+        echo '</td>';
         echo '<td>' . htmlspecialchars((string) ($line['hsn_snapshot'] ?? ''), ENT_QUOTES) . '</td>';
         echo '<td>' . htmlspecialchars((string) $qtyOrPieces, ENT_QUOTES) . '</td>';
         echo '<td>' . htmlspecialchars((string) $length, ENT_QUOTES) . '</td>';
