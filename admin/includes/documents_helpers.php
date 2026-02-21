@@ -1497,6 +1497,8 @@ function documents_challan_line_defaults(): array
         'qty' => 0,
         'length_ft' => 0,
         'pieces' => 0,
+        'piece_length_ft' => 0,
+        'source_location_id' => '',
         'lot_ids' => [],
         'selected_lot_ids' => [],
         'lot_cuts' => [],
@@ -1535,7 +1537,9 @@ function documents_normalize_challan_lines(array $lines): array
         $lengthAlias = $row['length_ft'] ?? $row['piece_length_ft'] ?? 0;
         $piecesAlias = $row['pieces'] ?? $row['piece_count'] ?? 0;
         $row['length_ft'] = max(0, (float) $lengthAlias);
+        $row['piece_length_ft'] = max(0, (float) ($row['piece_length_ft'] ?? $row['length_ft'] ?? 0));
         $row['pieces'] = max(0, (int) $piecesAlias);
+        $row['source_location_id'] = safe_text((string) ($row['source_location_id'] ?? ''));
         $row['lot_ids'] = array_values(array_filter(array_map(static fn($lotId): string => safe_text((string) $lotId), is_array($row['lot_ids'] ?? null) ? $row['lot_ids'] : []), static fn(string $lotId): bool => $lotId !== ''));
         $row['selected_lot_ids'] = array_values(array_filter(array_map(static fn($lotId): string => safe_text((string) $lotId), is_array($row['selected_lot_ids'] ?? null) ? $row['selected_lot_ids'] : []), static fn(string $lotId): bool => $lotId !== ''));
         if ($row['selected_lot_ids'] === [] && $row['lot_ids'] !== []) {
@@ -4150,6 +4154,50 @@ function documents_inventory_kits(bool $includeArchived = true): array
     }
     usort($list, static fn(array $a, array $b): int => strcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? '')));
     return $list;
+}
+
+
+function documents_inventory_kit_active_items(array $kit): array
+{
+    $items = is_array($kit['items'] ?? null) ? $kit['items'] : [];
+    $active = [];
+    foreach ($items as $line) {
+        if (!is_array($line)) {
+            continue;
+        }
+        $componentId = safe_text((string) ($line['component_id'] ?? ''));
+        if ($componentId === '') {
+            continue;
+        }
+        $component = documents_inventory_get_component($componentId);
+        if (!is_array($component) || !empty($component['archived_flag'])) {
+            continue;
+        }
+        $active[] = $line;
+    }
+    return $active;
+}
+
+function documents_inventory_cleanup_archived_kit_components(array $kits): array
+{
+    $changed = false;
+    foreach ($kits as $idx => $kit) {
+        if (!is_array($kit)) {
+            continue;
+        }
+        $mergedKit = array_merge(documents_inventory_kit_defaults(), $kit);
+        $cleanItems = documents_inventory_kit_active_items($mergedKit);
+        if (count($cleanItems) !== count((array) ($mergedKit['items'] ?? []))) {
+            $mergedKit['items'] = array_values($cleanItems);
+            $mergedKit['updated_at'] = date('c');
+            $kits[$idx] = $mergedKit;
+            $changed = true;
+        }
+    }
+    if ($changed) {
+        documents_inventory_save_kits($kits);
+    }
+    return $kits;
 }
 
 function documents_inventory_get_component(string $id): ?array
