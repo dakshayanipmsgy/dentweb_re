@@ -1569,27 +1569,32 @@ function documents_normalize_challan_lines(array $lines): array
             }
             $lotId = safe_text((string) ($allocation['lot_id'] ?? ''));
             $variantId = safe_text((string) ($allocation['variant_id'] ?? $row['variant_id'] ?? ''));
-            $cutLength = max(0, (float) ($allocation['cut_length_ft'] ?? 0));
-            $cutPieces = max(1, (int) ($allocation['cut_pieces'] ?? $allocation['count'] ?? 1));
+            $pieceLength = max(0, (float) ($allocation['piece_length_ft'] ?? $allocation['cut_length_ft'] ?? 0));
+            $pieces = max(1, (int) ($allocation['pieces'] ?? $allocation['cut_pieces'] ?? $allocation['count'] ?? 1));
+            $cutLength = round($pieceLength * $pieces, 4);
             $locationSnapshot = safe_text((string) ($allocation['location_id_snapshot'] ?? ''));
-            if ($lotId === '' || $cutLength <= 0) {
+            if ($lotId === '' || $pieceLength <= 0 || $cutLength <= 0) {
                 continue;
             }
             $allocations[] = [
                 'lot_id' => $lotId,
                 'variant_id' => $variantId,
+                'piece_length_ft' => $pieceLength,
+                'pieces' => $pieces,
                 'cut_length_ft' => $cutLength,
-                'cut_pieces' => $cutPieces,
                 'location_id_snapshot' => $locationSnapshot,
             ];
         }
         if ($allocations === [] && $row['lot_cuts'] !== []) {
             foreach ($row['lot_cuts'] as $cut) {
+                $pieceLength = max(0, (float) ($cut['cut_length_ft'] ?? 0));
+                $pieces = max(1, (int) ($cut['count'] ?? 1));
                 $allocations[] = [
                     'lot_id' => (string) ($cut['lot_id'] ?? ''),
                     'variant_id' => (string) ($row['variant_id'] ?? ''),
-                    'cut_length_ft' => max(0, (float) ($cut['cut_length_ft'] ?? 0)) * max(1, (int) ($cut['count'] ?? 1)),
-                    'cut_pieces' => max(1, (int) ($cut['count'] ?? 1)),
+                    'piece_length_ft' => $pieceLength,
+                    'pieces' => $pieces,
+                    'cut_length_ft' => round($pieceLength * $pieces, 4),
                     'location_id_snapshot' => '',
                 ];
             }
