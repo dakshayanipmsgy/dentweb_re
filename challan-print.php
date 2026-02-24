@@ -38,7 +38,17 @@ foreach ($lines as $line) {
     if ((string) ($line['line_origin'] ?? 'extra') === 'quotation') { $quotationLines[] = $line; }
     else { $extraLines[] = $line; }
 }
-$renderRows = static function (array $rows): void {
+
+$formatLengthFt = static function (float $value): string {
+    if ($value <= 0) {
+        return '0 ft';
+    }
+    $rounded = round($value, 2);
+    $text = rtrim(rtrim(sprintf('%.2f', $rounded), '0'), '.');
+    return $text . ' ft';
+};
+
+$renderRows = static function (array $rows) use ($formatLengthFt): void {
     if ($rows === []) {
         echo '<tr><td colspan="5">No lines.</td></tr>';
         return;
@@ -48,8 +58,28 @@ $renderRows = static function (array $rows): void {
         $variant = (string) ($line['variant_name_snapshot'] ?? '');
         $notes = (string) ($line['notes'] ?? '');
         $isCuttable = !empty($line['is_cuttable_snapshot']);
-        $qtyOrPieces = $isCuttable ? ((int) ($line['pieces'] ?? 0)) : ((float) ($line['qty'] ?? 0));
-        $length = $isCuttable ? (float) ($line['length_ft'] ?? 0) : '';
+        $lineMetrics = $isCuttable ? documents_challan_cuttable_display_metrics($line) : null;
+        $qtyOrPieces = $isCuttable ? ((int) ($lineMetrics['pieces'] ?? 0)) : ((float) ($line['qty'] ?? 0));
+        $length = '';
+        if ($isCuttable) {
+            if (!empty($lineMetrics['is_mixed'])) {
+                $breakdownParts = [];
+                foreach ((array) ($lineMetrics['length_breakdown'] ?? []) as $bucket) {
+                    if (!is_array($bucket)) {
+                        continue;
+                    }
+                    $bucketFt = max(0, (float) ($bucket['length_ft'] ?? 0));
+                    $bucketPieces = max(0, (int) ($bucket['pieces'] ?? 0));
+                    if ($bucketFt <= 0 || $bucketPieces <= 0) {
+                        continue;
+                    }
+                    $breakdownParts[] = $formatLengthFt($bucketFt) . ' × ' . $bucketPieces;
+                }
+                $length = $breakdownParts === [] ? 'Mixed' : ('Mixed (' . implode(', ', $breakdownParts) . ')');
+            } else {
+                $length = $formatLengthFt((float) ($lineMetrics['piece_length_ft'] ?? 0));
+            }
+        }
         $lotAllocations = is_array($line['lot_allocations'] ?? null) ? $line['lot_allocations'] : [];
         echo '<tr>';
         echo '<td>' . ($idx + 1) . '</td>';
@@ -67,7 +97,7 @@ $renderRows = static function (array $rows): void {
                 if ($lotId === '' || $usedFt <= 0) {
                     continue;
                 }
-                $parts[] = $lotId . ': ' . round($usedFt, 2) . ' ft';
+                $parts[] = $lotId . ': ' . $formatLengthFt($usedFt);
             }
             if ($parts !== []) {
                 echo '<div class="muted">Lots: ' . htmlspecialchars(implode(', ', $parts), ENT_QUOTES) . '</div>';
