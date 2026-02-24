@@ -195,6 +195,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'save_quote') {
         $quoteId = safe_text($_POST['quote_id'] ?? '');
+        $validationErrors = [];
         $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         if ($existing !== null) {
             if (documents_quote_is_locked($existing)) {
@@ -215,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         if ($selectedTemplate === null) {
-            $redirectWith('error', 'Please select a template set.');
+            $validationErrors['template_set_id'] = 'Please select a template set.';
         }
 
         $partyType = safe_text($_POST['party_type'] ?? 'lead');
@@ -223,13 +224,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $customerName = safe_text($_POST['customer_name'] ?? '');
         $customerRecord = $partyType === 'customer' ? documents_find_customer_by_mobile($mobile) : null;
 
-        if ($mobile === '' || $customerName === '') {
-            $redirectWith('error', 'Customer mobile and name are required.');
+        if ($mobile === '') {
+            $validationErrors['customer_mobile'] = 'Customer mobile is required.';
+        }
+        if ($customerName === '') {
+            $validationErrors['customer_name'] = 'Customer name is required.';
         }
 
         $capacity = safe_text($_POST['capacity_kwp'] ?? '');
         if ($capacity === '') {
-            $redirectWith('error', 'Capacity kWp is required.');
+            $validationErrors['capacity_kwp'] = 'Capacity kWp is required.';
         }
 
 
@@ -485,7 +489,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($structuredItems === []) {
-            $redirectWith('error', 'Add at least one kit/component from Items Master.');
+            $validationErrors['quote_items'] = 'Add at least one kit/component from Items Master.';
         }
 
         foreach ($itemSummaryRows as &$summaryRow) {
@@ -517,11 +521,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $discountRs = (float) ($_POST['discount_rs'] ?? 0);
         $discountNote = safe_text((string) ($_POST['discount_note'] ?? ''));
         if ($discountRs < 0) {
-            $redirectWith('error', 'Discount cannot be negative.');
+            $validationErrors['discount_rs'] = 'Discount cannot be negative.';
         }
         $grossPayableBeforeDiscount = max(0, $systemTotalInclGstRs) + max(0, $transportationRs);
         if ($discountRs > $grossPayableBeforeDiscount) {
-            $redirectWith('error', 'Discount cannot exceed Gross Payable (System + Transportation).');
+            $validationErrors['discount_rs'] = 'Discount cannot exceed Gross Payable (System + Transportation).';
         }
         $quote['discount_rs'] = $discountRs;
         $quote['discount_note'] = $discountNote;
@@ -544,6 +548,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['finance_inputs']['loan']['tenure_years'] = safe_text($_POST['loan_tenure_years'] ?? '');
         $quote['finance_inputs']['loan']['margin_pct'] = safe_text($_POST['loan_margin_pct'] ?? '');
         $quote['finance_inputs']['loan']['loan_amount'] = safe_text($_POST['loan_amount'] ?? '');
+        if (isset($_POST['reset_customer_savings_defaults'])) {
+            $quote['customer_savings_inputs'] = [];
+            $quote['finance_inputs']['monthly_bill_rs'] = '';
+            $quote['finance_inputs']['unit_rate_rs_per_kwh'] = '';
+            $quote['finance_inputs']['annual_generation_per_kw'] = '';
+            $quote['finance_inputs']['loan']['interest_pct'] = '';
+            $quote['finance_inputs']['loan']['tenure_years'] = '';
+            $quote['finance_inputs']['loan']['margin_pct'] = '';
+            $quote['finance_inputs']['loan']['loan_amount'] = '';
+        }
         $quote = documents_quote_apply_customer_savings_inputs($quote, $_POST, $quoteDefaults);
         $quote['finance_inputs']['subsidy_expected_rs'] = (string) $subsidyExpectedRs;
         $quote['finance_inputs']['transportation_rs'] = (string) $transportationRs;
@@ -557,6 +571,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['style_overrides']['watermark']['opacity'] = safe_text($_POST['watermark_opacity'] ?? '');
         $quote['style_overrides']['watermark']['image_path'] = safe_text($_POST['watermark_image_path'] ?? '');
         $quote['updated_at'] = date('c');
+
+        if ($validationErrors !== []) {
+            $_SESSION['quote_form_old'] = $_POST;
+            $_SESSION['quote_form_errors'] = $validationErrors;
+            $redirectParams = ['tab' => 'create'];
+            if ($quoteId !== '') {
+                $redirectParams['edit'] = $quoteId;
+            }
+            header('Location: admin-quotations.php?' . http_build_query($redirectParams));
+            exit;
+        }
 
         $saved = documents_save_quote($quote);
         if (!$saved['ok']) {
@@ -833,6 +858,53 @@ if ($editing['id'] === '' && $fromLeadId !== '') {
 }
 
 $status = safe_text($_GET['status'] ?? '');
+$quoteFormErrors = [];
+$quoteFormOld = [];
+if (isset($_SESSION['quote_form_old']) && is_array($_SESSION['quote_form_old'])) {
+    $quoteFormOld = $_SESSION['quote_form_old'];
+    unset($_SESSION['quote_form_old']);
+}
+if (isset($_SESSION['quote_form_errors']) && is_array($_SESSION['quote_form_errors'])) {
+    $quoteFormErrors = $_SESSION['quote_form_errors'];
+    unset($_SESSION['quote_form_errors']);
+}
+if ($quoteFormOld !== []) {
+    $editing['template_set_id'] = safe_text((string) ($quoteFormOld['template_set_id'] ?? ($editing['template_set_id'] ?? '')));
+    $editing['party_type'] = safe_text((string) ($quoteFormOld['party_type'] ?? ($editing['party_type'] ?? 'lead')));
+    $editing['customer_mobile'] = safe_text((string) ($quoteFormOld['customer_mobile'] ?? ($editing['customer_mobile'] ?? '')));
+    $editing['customer_name'] = safe_text((string) ($quoteFormOld['customer_name'] ?? ($editing['customer_name'] ?? '')));
+    $editing['capacity_kwp'] = safe_text((string) ($quoteFormOld['capacity_kwp'] ?? ($editing['capacity_kwp'] ?? '')));
+    $editing['cover_note_text'] = (string) ($quoteFormOld['cover_note_text'] ?? ($editing['cover_note_text'] ?? ''));
+    $editing['special_requests_text'] = (string) ($quoteFormOld['special_requests_text'] ?? ($editing['special_requests_text'] ?? ''));
+    $editing['pricing_mode'] = safe_text((string) ($quoteFormOld['pricing_mode'] ?? ($editing['pricing_mode'] ?? 'solar_split_70_30')));
+    $editing['input_total_gst_inclusive'] = (float) ($quoteFormOld['system_total_incl_gst_rs'] ?? ($editing['input_total_gst_inclusive'] ?? 0));
+    $editing['finance_inputs']['monthly_bill_rs'] = (string) ($quoteFormOld['monthly_bill_rs'] ?? ($editing['finance_inputs']['monthly_bill_rs'] ?? ''));
+    $editing['finance_inputs']['unit_rate_rs_per_kwh'] = (string) ($quoteFormOld['unit_rate_rs_per_kwh'] ?? ($editing['finance_inputs']['unit_rate_rs_per_kwh'] ?? ''));
+    $editing['finance_inputs']['annual_generation_per_kw'] = (string) ($quoteFormOld['annual_generation_per_kw'] ?? ($editing['finance_inputs']['annual_generation_per_kw'] ?? ''));
+    $editing['finance_inputs']['loan']['interest_pct'] = (string) ($quoteFormOld['loan_interest_pct'] ?? ($editing['finance_inputs']['loan']['interest_pct'] ?? ''));
+    $editing['finance_inputs']['loan']['tenure_years'] = (string) ($quoteFormOld['loan_tenure_years'] ?? ($editing['finance_inputs']['loan']['tenure_years'] ?? ''));
+    $editing['finance_inputs']['loan']['margin_pct'] = (string) ($quoteFormOld['loan_margin_pct'] ?? ($editing['finance_inputs']['loan']['margin_pct'] ?? ''));
+    $editing['finance_inputs']['loan']['loan_amount'] = (string) ($quoteFormOld['loan_amount'] ?? ($editing['finance_inputs']['loan']['loan_amount'] ?? ''));
+    $editing['finance_inputs']['loan']['enabled'] = isset($quoteFormOld['loan_enabled']);
+    $editing['finance_inputs']['subsidy_expected_rs'] = (string) ($quoteFormOld['subsidy_expected_rs'] ?? ($editing['finance_inputs']['subsidy_expected_rs'] ?? ''));
+    $editing['finance_inputs']['transportation_rs'] = (string) ($quoteFormOld['transportation_rs'] ?? ($editing['finance_inputs']['transportation_rs'] ?? ''));
+    $editing['finance_inputs']['discount_rs'] = (string) ($quoteFormOld['discount_rs'] ?? ($editing['finance_inputs']['discount_rs'] ?? '0'));
+    $editing['finance_inputs']['discount_note'] = (string) ($quoteFormOld['discount_note'] ?? ($editing['finance_inputs']['discount_note'] ?? ''));
+    $postedItems = [];
+    foreach ((array) ($quoteFormOld['quote_item_type'] ?? []) as $ix => $type) {
+        $postedItems[] = [
+            'type' => safe_text((string) $type),
+            'kit_id' => safe_text((string) (($quoteFormOld['quote_item_kit_id'][$ix] ?? ''))),
+            'component_id' => safe_text((string) (($quoteFormOld['quote_item_component_id'][$ix] ?? ''))),
+            'variant_id' => safe_text((string) (($quoteFormOld['quote_item_variant_id'][$ix] ?? ''))),
+            'qty' => (float) (($quoteFormOld['quote_item_qty'][$ix] ?? 0)),
+            'unit' => safe_text((string) (($quoteFormOld['quote_item_unit'][$ix] ?? ''))),
+            'custom_description' => safe_text((string) (($quoteFormOld['quote_item_custom_description'][$ix] ?? ''))),
+        ];
+    }
+    $editing['quote_items'] = documents_normalize_quote_structured_items($postedItems);
+    $editing = documents_quote_apply_customer_savings_inputs($editing, $quoteFormOld, $quoteDefaults);
+}
 $editingQuoteItems = documents_normalize_quote_structured_items(is_array($editing['quote_items'] ?? null) ? $editing['quote_items'] : []);
 $message = safe_text($_GET['message'] ?? '');
 $lookupMobile = safe_text($_GET['lookup_mobile'] ?? '');
@@ -863,6 +935,7 @@ if ($lookup !== null) {
 <div class="card"><h1>Quotations</h1><a class="btn secondary" href="admin-documents.php">Back to Documents</a> <a class="btn secondary" href="admin-quotations.php?tab=quotations">Quotations</a> <a class="btn secondary" href="admin-quotations.php?tab=archived">Archived</a> <a class="btn" href="admin-quotations.php?tab=settings">Settings</a> <a class="btn" href="admin-quotations.php?tab=quotations">Create New</a></div>
 <?php if ($message !== ''): ?><div class="alert <?= $status === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
 <?php if ($prefillMessage !== ''): ?><div class="alert ok"><?= htmlspecialchars($prefillMessage, ENT_QUOTES) ?></div><?php endif; ?>
+<?php if ($quoteFormErrors !== []): ?><div class="alert err"><strong>Please fix the following:</strong><ul><?php foreach ($quoteFormErrors as $err): ?><li><?= htmlspecialchars((string)$err, ENT_QUOTES) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
 <div class="card">
 <h2><?= $editing['id'] === '' ? 'Create Quotation' : 'Edit Quotation' ?></h2>
 <form method="get" style="margin-bottom:10px">
@@ -882,15 +955,15 @@ if ($lookup !== null) {
 <input type="hidden" name="source_lead_id" value="<?= htmlspecialchars((string) ($editing['source']['lead_id'] ?? ($lookupResult['source']['lead_id'] ?? '')), ENT_QUOTES) ?>">
 <input type="hidden" name="source_lead_mobile" value="<?= htmlspecialchars((string) ($editing['source']['lead_mobile'] ?? ($lookupResult['source']['lead_mobile'] ?? '')), ENT_QUOTES) ?>">
 <div class="grid">
-<div><label>Template Set</label><select name="template_set_id" required><?php foreach ($templates as $tpl): ?><option value="<?= htmlspecialchars((string)$tpl['id'], ENT_QUOTES) ?>" data-segment="<?= htmlspecialchars((string)($tpl['segment'] ?? 'RES'), ENT_QUOTES) ?>" <?= ((string)$editing['template_set_id']===(string)$tpl['id'])?'selected':'' ?>><?= htmlspecialchars((string)$tpl['name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$tpl['segment'], ENT_QUOTES) ?>)</option><?php endforeach; ?></select></div>
+<div><label>Template Set</label><select name="template_set_id" required><?php foreach ($templates as $tpl): ?><option value="<?= htmlspecialchars((string)$tpl['id'], ENT_QUOTES) ?>" data-segment="<?= htmlspecialchars((string)($tpl['segment'] ?? 'RES'), ENT_QUOTES) ?>" <?= ((string)$editing['template_set_id']===(string)$tpl['id'])?'selected':'' ?>><?= htmlspecialchars((string)$tpl['name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$tpl['segment'], ENT_QUOTES) ?>)</option><?php endforeach; ?></select><?php if (isset($quoteFormErrors['template_set_id'])): ?><div class="muted" style="color:#b91c1c"><?= htmlspecialchars((string)$quoteFormErrors['template_set_id'], ENT_QUOTES) ?></div><?php endif; ?></div>
 <div><label>Party Type</label><select name="party_type"><option value="customer" <?= $editing['party_type']==='customer'?'selected':'' ?>>Customer</option><option value="lead" <?= $editing['party_type']!=='customer'?'selected':'' ?>>Lead</option></select></div>
-<div><label>Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string)(($lookup !== null) ? (string) ($lookup['mobile'] ?? $lookupMobile) : $editing['customer_mobile']), ENT_QUOTES) ?>"></div>
-<div><label>Name</label><input name="customer_name" required value="<?= htmlspecialchars((string)($quoteSnapshot['name'] ?? $editing['customer_name']), ENT_QUOTES) ?>"></div>
+<div><label>Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string)(($lookup !== null) ? (string) ($lookup['mobile'] ?? $lookupMobile) : $editing['customer_mobile']), ENT_QUOTES) ?>"><?php if (isset($quoteFormErrors['customer_mobile'])): ?><div class="muted" style="color:#b91c1c"><?= htmlspecialchars((string)$quoteFormErrors['customer_mobile'], ENT_QUOTES) ?></div><?php endif; ?></div>
+<div><label>Name</label><input name="customer_name" required value="<?= htmlspecialchars((string)($quoteSnapshot['name'] ?? $editing['customer_name']), ENT_QUOTES) ?>"><?php if (isset($quoteFormErrors['customer_name'])): ?><div class="muted" style="color:#b91c1c"><?= htmlspecialchars((string)$quoteFormErrors['customer_name'], ENT_QUOTES) ?></div><?php endif; ?></div>
 <div><label>Consumer Account No. (JBVNL)</label><input name="consumer_account_no" value="<?= htmlspecialchars((string)(($editing['consumer_account_no'] !== '') ? $editing['consumer_account_no'] : ($quoteSnapshot['consumer_account_no'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Meter Number</label><input name="meter_number" value="<?= htmlspecialchars((string)(($editing['meter_number'] !== '') ? $editing['meter_number'] : ($quoteSnapshot['meter_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Meter Serial Number</label><input name="meter_serial_number" value="<?= htmlspecialchars((string)(($editing['meter_serial_number'] !== '') ? $editing['meter_serial_number'] : ($quoteSnapshot['meter_serial_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>System Type</label><select name="system_type"><?php foreach (['Ongrid','Hybrid','Offgrid','Product'] as $t): ?><option value="<?= $t ?>" <?= $editing['system_type']===$t?'selected':'' ?>><?= $t ?></option><?php endforeach; ?></select></div>
-<div><label>Capacity kWp</label><input name="capacity_kwp" required value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>"></div>
+<div><label>Capacity kWp</label><input name="capacity_kwp" required value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>"><?php if (isset($quoteFormErrors['capacity_kwp'])): ?><div class="muted" style="color:#b91c1c"><?= htmlspecialchars((string)$quoteFormErrors['capacity_kwp'], ENT_QUOTES) ?></div><?php endif; ?></div>
 <div><label>Valid Until</label><input type="date" name="valid_until" value="<?= htmlspecialchars((string)$editing['valid_until'], ENT_QUOTES) ?>"></div>
 <div><label>Cover note paragraph</label><textarea name="cover_note_text"><?= htmlspecialchars((string)($editing['cover_note_text'] ?: ($quoteDefaults['defaults']['cover_note_template'] ?? '')), ENT_QUOTES) ?></textarea></div>
 <div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div><div><label>Total system price (including GST) ₹</label><input type="number" step="0.01" required name="system_total_incl_gst_rs" value="<?= htmlspecialchars((string)($editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
@@ -911,7 +984,7 @@ if ($lookup !== null) {
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
-<div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Add kits/components from Items Master. Name/description snapshots are captured automatically.</div><table id="structuredItemsTable"><thead><tr><th>Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Quotation-specific description / note</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?></div><?php $masterPreview = (string)($sItem['master_description_snapshot'] ?? ($sItem['description_snapshot'] ?? '')); if (trim($masterPreview) !== ''): ?><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars($masterPreview, ENT_QUOTES) ?></div><?php endif; ?><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"><?= htmlspecialchars((string)($sItem['custom_description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
+<div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Add kits/components from Items Master. Name/description snapshots are captured automatically.</div><table id="structuredItemsTable"><thead><tr><th>Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Quotation-specific description / note</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?></div><?php $masterPreview = (string)($sItem['master_description_snapshot'] ?? ($sItem['description_snapshot'] ?? '')); if (trim($masterPreview) !== ''): ?><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars($masterPreview, ENT_QUOTES) ?></div><?php endif; ?><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"><?= htmlspecialchars((string)($sItem['custom_description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button><?php if (isset($quoteFormErrors['quote_items'])): ?><div class="muted" style="color:#b91c1c;margin-top:6px"><?= htmlspecialchars((string)$quoteFormErrors['quote_items'], ENT_QUOTES) ?></div><?php endif; ?></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div><button type="submit" class="btn secondary" name="reset_customer_savings_defaults" value="1" style="margin-top:8px">Reset to default assumptions</button></div>
 <div><label>Monthly electricity bill (₹)</label><input type="number" step="0.01" name="monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted">Suggested bill based on generation & tariff. You can change it. <a href="#" id="resetMonthlySuggestion">Reset suggestion</a></div></div>
 <div><label>Unit rate (₹/kWh)</label><input type="number" step="0.01" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['finance_inputs']['unit_rate_rs_per_kwh'] ?: ($segmentDefaults['unit_rate_rs_per_kwh'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($editing['finance_inputs']['annual_generation_per_kw'] ?: ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? '')), ENT_QUOTES) ?>"></div>

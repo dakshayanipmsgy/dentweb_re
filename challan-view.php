@@ -37,10 +37,19 @@ if ($challan === null) {
     echo 'Challan not found.';
     exit;
 }
-if ($viewerType === 'employee' && ((string) ($challan['created_by']['role'] ?? $challan['created_by_type'] ?? '') !== 'employee' || (string) ($challan['created_by']['id'] ?? $challan['created_by_id'] ?? '') !== $viewerId)) {
-    http_response_code(403);
-    echo 'Access denied.';
-    exit;
+$employeeCanAccessAdminChallans = false;
+if ($viewerType === 'employee') {
+    $employeeRecord = $employeeStore->findById($viewerId);
+    $employeeCanAccessAdminChallans = !empty($employeeRecord['can_access_admin_created_dcs']);
+    $creatorRole = (string) ($challan['created_by']['role'] ?? $challan['created_by_type'] ?? '');
+    $creatorId = (string) ($challan['created_by']['id'] ?? $challan['created_by_id'] ?? '');
+    $isOwnEmployeeChallan = ($creatorRole === 'employee' && $creatorId === $viewerId);
+    $isAdminChallanVisible = ($creatorRole === 'admin' && $employeeCanAccessAdminChallans);
+    if (!$isOwnEmployeeChallan && !$isAdminChallanVisible) {
+        http_response_code(403);
+        echo 'Access denied.';
+        exit;
+    }
 }
 
 $quote = documents_get_quote((string) ($challan['quote_id'] ?: $challan['linked_quote_id']));
@@ -1199,7 +1208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $backLink = (is_array($user) && (($user['role_name'] ?? '') === 'admin')) ? 'admin-documents.php?tab=accepted_customers&view=' . urlencode((string) ($challan['quote_id'] ?? $challan['linked_quote_id'] ?? '')) : 'employee-challans.php';
 $statusParam = safe_text($_GET['status'] ?? '');
 $messageParam = safe_text($_GET['message'] ?? '');
-$editable = (string) ($challan['status'] ?? 'draft') === 'draft';
+$editable = (string) ($challan['status'] ?? 'draft') === 'draft' && !($viewerType === 'employee' && (string) ($challan['created_by']['role'] ?? $challan['created_by_type'] ?? '') === 'admin');
 ?>
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Delivery Challan Builder</title>
