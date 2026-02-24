@@ -48,8 +48,8 @@ $renderRows = static function (array $rows): void {
         $variant = (string) ($line['variant_name_snapshot'] ?? '');
         $notes = (string) ($line['notes'] ?? '');
         $isCuttable = !empty($line['is_cuttable_snapshot']);
-        $qtyOrPieces = $isCuttable ? ((int) ($line['pieces'] ?? 0)) : ((float) ($line['qty'] ?? 0));
-        $length = $isCuttable ? (float) ($line['length_ft'] ?? 0) : '';
+        $qtyOrPieces = $isCuttable ? documents_challan_line_cuttable_pieces($line) : ((float) ($line['qty'] ?? 0));
+        $length = $isCuttable ? documents_challan_line_cuttable_length_display($line) : '';
         $lotAllocations = is_array($line['lot_allocations'] ?? null) ? $line['lot_allocations'] : [];
         echo '<tr>';
         echo '<td>' . ($idx + 1) . '</td>';

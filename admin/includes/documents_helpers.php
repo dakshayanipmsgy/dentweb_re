@@ -1658,6 +1658,72 @@ function documents_migrate_challan_items_to_lines(array $challan): array
     return documents_normalize_challan_lines($migrated);
 }
 
+function documents_challan_line_cuttable_pieces(array $line): int
+{
+    $pieces = max(0, (int) ($line['pieces'] ?? 0));
+    if ($pieces > 0) {
+        return $pieces;
+    }
+
+    $allocations = is_array($line['lot_allocations'] ?? null) ? $line['lot_allocations'] : [];
+    $allocationPieces = 0;
+    foreach ($allocations as $allocation) {
+        if (!is_array($allocation)) {
+            continue;
+        }
+        $allocationPieces += max(1, (int) ($allocation['cut_pieces'] ?? 1));
+    }
+
+    return $allocationPieces;
+}
+
+function documents_challan_line_cuttable_length_display(array $line): string
+{
+    $pieceLengthFt = max(0, (float) ($line['piece_length_ft'] ?? 0));
+    if ($pieceLengthFt > 0) {
+        return rtrim(rtrim(number_format($pieceLengthFt, 2, '.', ''), '0'), '.') . ' ft';
+    }
+
+    $allocations = is_array($line['lot_allocations'] ?? null) ? $line['lot_allocations'] : [];
+    $lengthBuckets = [];
+    foreach ($allocations as $allocation) {
+        if (!is_array($allocation)) {
+            continue;
+        }
+        $cutLengthFt = max(0, (float) ($allocation['cut_length_ft'] ?? 0));
+        if ($cutLengthFt <= 0) {
+            continue;
+        }
+        $cutPieces = max(1, (int) ($allocation['cut_pieces'] ?? 1));
+        $lengthKey = (string) round($cutLengthFt, 4);
+        if (!isset($lengthBuckets[$lengthKey])) {
+            $lengthBuckets[$lengthKey] = ['length' => $cutLengthFt, 'pieces' => 0];
+        }
+        $lengthBuckets[$lengthKey]['pieces'] += $cutPieces;
+    }
+
+    if ($lengthBuckets === []) {
+        return '';
+    }
+
+    if (count($lengthBuckets) === 1) {
+        $first = array_values($lengthBuckets)[0];
+        return rtrim(rtrim(number_format((float) $first['length'], 2, '.', ''), '0'), '.') . ' ft';
+    }
+
+    usort($lengthBuckets, static function (array $a, array $b): int {
+        return (float) $b['length'] <=> (float) $a['length'];
+    });
+
+    $parts = [];
+    foreach ($lengthBuckets as $bucket) {
+        $parts[] = rtrim(rtrim(number_format((float) $bucket['length'], 2, '.', ''), '0'), '.')
+            . ' ft ×' . (int) $bucket['pieces'];
+    }
+
+    return implode(', ', $parts);
+}
+
 function documents_normalize_challan_items(array $items): array
 {
     $rows = [];
