@@ -1588,7 +1588,7 @@ function documents_normalize_challan_lines(array $lines): array
                 $allocations[] = [
                     'lot_id' => (string) ($cut['lot_id'] ?? ''),
                     'variant_id' => (string) ($row['variant_id'] ?? ''),
-                    'cut_length_ft' => max(0, (float) ($cut['cut_length_ft'] ?? 0)),
+                    'cut_length_ft' => max(0, (float) ($cut['cut_length_ft'] ?? 0)) * max(1, (int) ($cut['count'] ?? 1)),
                     'cut_pieces' => max(1, (int) ($cut['count'] ?? 1)),
                     'location_id_snapshot' => '',
                 ];
@@ -1597,19 +1597,9 @@ function documents_normalize_challan_lines(array $lines): array
         $row['lot_allocations'] = $allocations;
         $totalLengthFt = 0.0;
         foreach ($row['lot_allocations'] as $allocation) {
-            $allocLength = max(0, (float) ($allocation['cut_length_ft'] ?? 0));
-            $allocPieces = max(1, (int) ($allocation['cut_pieces'] ?? 1));
-            $totalLengthFt += ($allocLength * $allocPieces);
+            $totalLengthFt += max(0, (float) ($allocation['cut_length_ft'] ?? 0));
         }
         $row['total_length_ft'] = round($totalLengthFt, 4);
-        if ($row['is_cuttable_snapshot']) {
-            $displayMetrics = documents_challan_cuttable_display_metrics($row);
-            $row['pieces'] = $displayMetrics['pieces'];
-            $row['piece_length_ft'] = $displayMetrics['piece_length_ft'];
-            if ($row['length_ft'] <= 0 && $row['total_length_ft'] > 0) {
-                $row['length_ft'] = $row['total_length_ft'];
-            }
-        }
         $row['stock_changed_warning'] = !empty($row['stock_changed_warning']);
         $row['line_errors'] = array_values(array_filter(array_map(static fn($error): string => safe_text((string) $error), is_array($row['line_errors'] ?? null) ? $row['line_errors'] : []), static fn(string $error): bool => $error !== ''));
         $row['unit_snapshot'] = safe_text((string) ($row['unit_snapshot'] ?? ''));
@@ -1624,50 +1614,6 @@ function documents_normalize_challan_lines(array $lines): array
         $rows[] = $row;
     }
     return $rows;
-}
-
-function documents_challan_cuttable_display_metrics(array $line): array
-{
-    $pieces = max(0, (int) ($line['pieces'] ?? 0));
-    $pieceLengthFt = max(0, (float) ($line['piece_length_ft'] ?? $line['length_ft'] ?? 0));
-    $allocations = is_array($line['lot_allocations'] ?? null) ? $line['lot_allocations'] : [];
-    $hasAllocations = false;
-    $allocationPieces = 0;
-    $lengthBuckets = [];
-    foreach ($allocations as $allocation) {
-        if (!is_array($allocation)) {
-            continue;
-        }
-        $allocLength = max(0, (float) ($allocation['cut_length_ft'] ?? 0));
-        if ($allocLength <= 0) {
-            continue;
-        }
-        $hasAllocations = true;
-        $allocPieces = max(1, (int) ($allocation['cut_pieces'] ?? 1));
-        $allocationPieces += $allocPieces;
-        $bucketKey = (string) round($allocLength, 4);
-        if (!isset($lengthBuckets[$bucketKey])) {
-            $lengthBuckets[$bucketKey] = ['length_ft' => $allocLength, 'pieces' => 0];
-        }
-        $lengthBuckets[$bucketKey]['pieces'] += $allocPieces;
-    }
-
-    if ($hasAllocations) {
-        $pieces = $allocationPieces;
-        if (count($lengthBuckets) === 1) {
-            $single = reset($lengthBuckets);
-            if (is_array($single)) {
-                $pieceLengthFt = max(0, (float) ($single['length_ft'] ?? 0));
-            }
-        }
-    }
-
-    return [
-        'pieces' => $pieces,
-        'piece_length_ft' => $pieceLengthFt,
-        'is_mixed' => $hasAllocations && count($lengthBuckets) > 1,
-        'length_breakdown' => array_values($lengthBuckets),
-    ];
 }
 
 function documents_migrate_challan_items_to_lines(array $challan): array

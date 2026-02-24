@@ -648,7 +648,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'cut_pieces' => $allocPieces,
                         'location_id_snapshot' => $allocLocation,
                     ];
-                    $lineTotalLengthFt += ($allocLength * $allocPieces);
+                    $lineTotalLengthFt += $allocLength;
                 }
 
 
