@@ -48,9 +48,29 @@ $renderRows = static function (array $rows): void {
         $variant = (string) ($line['variant_name_snapshot'] ?? '');
         $notes = (string) ($line['notes'] ?? '');
         $isCuttable = !empty($line['is_cuttable_snapshot']);
-        $qtyOrPieces = $isCuttable ? ((int) ($line['pieces'] ?? 0)) : ((float) ($line['qty'] ?? 0));
-        $length = $isCuttable ? (float) ($line['length_ft'] ?? 0) : '';
         $lotAllocations = is_array($line['lot_allocations'] ?? null) ? $line['lot_allocations'] : [];
+        $qtyOrPieces = $isCuttable ? ((int) ($line['pieces'] ?? 0)) : ((float) ($line['qty'] ?? 0));
+        $length = $isCuttable ? (string) ((float) ($line['length_ft'] ?? 0)) : '';
+        if ($isCuttable && $lotAllocations !== []) {
+            $qtyOrPieces = 0;
+            $parts = [];
+            foreach ($lotAllocations as $allocation) {
+                if (!is_array($allocation)) {
+                    continue;
+                }
+                $pieceLength = max(0, (float) ($allocation['piece_length_ft'] ?? $allocation['cut_length_ft'] ?? 0));
+                $pieces = max(1, (int) ($allocation['pieces'] ?? $allocation['cut_pieces'] ?? 1));
+                $totalFt = round($pieceLength * $pieces, 4);
+                if ($pieceLength <= 0 || $totalFt <= 0) {
+                    continue;
+                }
+                $qtyOrPieces += $pieces;
+                $parts[] = rtrim(rtrim((string) round($pieceLength, 2), '0'), '.') . 'ft × ' . $pieces;
+            }
+            if ($parts !== []) {
+                $length = implode(', ', $parts);
+            }
+        }
         echo '<tr>';
         echo '<td>' . ($idx + 1) . '</td>';
         echo '<td><div><strong>' . htmlspecialchars($component, ENT_QUOTES) . '</strong></div>';
@@ -67,10 +87,10 @@ $renderRows = static function (array $rows): void {
                 if ($lotId === '' || $usedFt <= 0) {
                     continue;
                 }
-                $parts[] = $lotId . ': ' . round($usedFt, 2) . ' ft';
+                $parts[] = $lotId . ': ' . round($usedFt, 2) . 'ft';
             }
             if ($parts !== []) {
-                echo '<div class="muted">Lots: ' . htmlspecialchars(implode(', ', $parts), ENT_QUOTES) . '</div>';
+                echo '<div class="muted">From lot: ' . htmlspecialchars(implode(', ', $parts), ENT_QUOTES) . '</div>';
             }
         }
         echo '</td>';
