@@ -507,20 +507,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $challan['driver_name'] = safe_text($_POST['driver_name'] ?? $challan['driver_name']);
             $challan['delivery_notes'] = safe_text($_POST['delivery_notes'] ?? $challan['delivery_notes']);
 
-            $lineIds = is_array($_POST['line_id'] ?? null) ? $_POST['line_id'] : [];
-            $componentIds = is_array($_POST['line_component_id'] ?? null) ? $_POST['line_component_id'] : [];
-            $variantIds = is_array($_POST['line_variant_id'] ?? null) ? $_POST['line_variant_id'] : [];
-            $qtys = is_array($_POST['line_qty'] ?? null) ? $_POST['line_qty'] : [];
-            $lengths = is_array($_POST['line_length_ft'] ?? null) ? $_POST['line_length_ft'] : [];
-            $pieces = is_array($_POST['line_pieces'] ?? null) ? $_POST['line_pieces'] : [];
-            $notes = is_array($_POST['line_notes'] ?? null) ? $_POST['line_notes'] : [];
-            $origins = is_array($_POST['line_origin'] ?? null) ? $_POST['line_origin'] : [];
-            $packingLineIds = is_array($_POST['line_packing_line_id'] ?? null) ? $_POST['line_packing_line_id'] : [];
-            $lineCutPlanModes = is_array($_POST['line_cut_plan_mode'] ?? null) ? $_POST['line_cut_plan_mode'] : [];
-            $lineSelectedLotIds = is_array($_POST['line_selected_lot_ids'] ?? null) ? $_POST['line_selected_lot_ids'] : [];
-            $lineLotCuts = is_array($_POST['line_lot_cuts'] ?? null) ? $_POST['line_lot_cuts'] : [];
-            $lineLotAllocations = is_array($_POST['line_lot_allocations'] ?? null) ? $_POST['line_lot_allocations'] : [];
-            $lineSourceLocations = is_array($_POST['line_source_location_id'] ?? null) ? $_POST['line_source_location_id'] : [];
+            $structuredLines = is_array($_POST['lines'] ?? null) ? $_POST['lines'] : [];
+            if ($structuredLines !== []) {
+                $lineIds = [];
+                $componentIds = [];
+                $variantIds = [];
+                $qtys = [];
+                $lengths = [];
+                $pieces = [];
+                $notes = [];
+                $origins = [];
+                $packingLineIds = [];
+                $lineCutPlanModes = [];
+                $lineSelectedLotIds = [];
+                $lineLotCuts = [];
+                $lineLotAllocations = [];
+                $lineSourceLocations = [];
+                foreach ($structuredLines as $lineIdKey => $linePayload) {
+                    if (!is_array($linePayload)) {
+                        continue;
+                    }
+                    $lineIds[] = safe_text((string) $lineIdKey);
+                    $componentIds[] = (string) ($linePayload['component_id'] ?? '');
+                    $variantIds[] = (string) ($linePayload['variant_id'] ?? '');
+                    $qtys[] = (float) ($linePayload['qty'] ?? 0);
+                    $lengths[] = (float) ($linePayload['piece_length_ft'] ?? $linePayload['length_ft'] ?? 0);
+                    $pieces[] = (int) ($linePayload['pieces'] ?? 0);
+                    $notes[] = (string) ($linePayload['notes'] ?? '');
+                    $origins[] = (string) ($linePayload['line_origin'] ?? 'extra');
+                    $packingLineIds[] = (string) ($linePayload['packing_line_id'] ?? '');
+                    $lineCutPlanModes[] = (string) ($linePayload['cut_plan_mode'] ?? 'suggested');
+                    $lineSelectedLotIds[] = (array) ($linePayload['selected_lot_ids'] ?? []);
+                    $lineLotCuts[] = (array) ($linePayload['lot_cuts'] ?? []);
+                    $lineLotAllocations[] = (array) ($linePayload['lot_allocations'] ?? []);
+                    $lineSourceLocations[] = (string) ($linePayload['source_location_id'] ?? '');
+                }
+            } else {
+                $lineIds = is_array($_POST['line_id'] ?? null) ? $_POST['line_id'] : [];
+                $componentIds = is_array($_POST['line_component_id'] ?? null) ? $_POST['line_component_id'] : [];
+                $variantIds = is_array($_POST['line_variant_id'] ?? null) ? $_POST['line_variant_id'] : [];
+                $qtys = is_array($_POST['line_qty'] ?? null) ? $_POST['line_qty'] : [];
+                $lengths = is_array($_POST['line_length_ft'] ?? null) ? $_POST['line_length_ft'] : [];
+                $pieces = is_array($_POST['line_pieces'] ?? null) ? $_POST['line_pieces'] : [];
+                $notes = is_array($_POST['line_notes'] ?? null) ? $_POST['line_notes'] : [];
+                $origins = is_array($_POST['line_origin'] ?? null) ? $_POST['line_origin'] : [];
+                $packingLineIds = is_array($_POST['line_packing_line_id'] ?? null) ? $_POST['line_packing_line_id'] : [];
+                $lineCutPlanModes = is_array($_POST['line_cut_plan_mode'] ?? null) ? $_POST['line_cut_plan_mode'] : [];
+                $lineSelectedLotIds = is_array($_POST['line_selected_lot_ids'] ?? null) ? $_POST['line_selected_lot_ids'] : [];
+                $lineLotCuts = is_array($_POST['line_lot_cuts'] ?? null) ? $_POST['line_lot_cuts'] : [];
+                $lineLotAllocations = is_array($_POST['line_lot_allocations'] ?? null) ? $_POST['line_lot_allocations'] : [];
+                $lineSourceLocations = is_array($_POST['line_source_location_id'] ?? null) ? $_POST['line_source_location_id'] : [];
+            }
 
             $lines = [];
             foreach ($componentIds as $idx => $componentIdRaw) {
