@@ -275,10 +275,11 @@ $piPricingSnapshotFromQuote = static function (array $quote): array {
     ];
 };
 
-$buildPiItemsSnapshot = static function (array $quoteItems): array {
+$buildPiItemsSnapshot = static function (array $quoteItems) use ($resolveLineTaxSnapshot): array {
     $rows = [];
     $sr = 1;
     foreach (documents_normalize_quote_structured_items($quoteItems) as $item) {
+        $taxSnapshot = $resolveLineTaxSnapshot($item);
         $rows[] = [
             'sr_no' => $sr++,
             'item_name' => safe_text((string) ($item['name_snapshot'] ?? 'Item')),
@@ -286,12 +287,119 @@ $buildPiItemsSnapshot = static function (array $quoteItems): array {
             'hsn' => safe_text((string) ($item['hsn_snapshot'] ?? '')),
             'qty' => max(0, (float) ($item['qty'] ?? 0)),
             'unit' => safe_text((string) ($item['unit'] ?? 'Nos')),
+            'line_gross_incl_gst' => max(0, (float) ($item['line_gross_incl_gst'] ?? 0)),
+            'tax_profile_id_snapshot' => (string) ($taxSnapshot['tax_profile_id_snapshot'] ?? ''),
+            'tax_profile_name_snapshot' => (string) ($taxSnapshot['tax_profile_name_snapshot'] ?? ''),
+            'tax_slabs_snapshot' => (array) ($taxSnapshot['tax_slabs_snapshot'] ?? []),
+            'line_basic_total' => 0,
+            'line_gst_total' => 0,
+            'line_tax_breakdown_slabs' => [],
         ];
     }
     return $rows;
 };
 
-$preparePiDocument = static function (?array $row, array $quote = []) use ($piPricingSnapshotFromQuote, $buildPiItemsSnapshot): array {
+
+$resolveLineTaxSnapshot = static function (array $item): array {
+    $profileId = safe_text((string) ($item['tax_profile_id_snapshot'] ?? ''));
+    if ($profileId !== '') {
+        $profile = documents_inventory_get_tax_profile($profileId);
+        if (is_array($profile)) {
+            return [
+                'tax_profile_id_snapshot' => (string) ($profile['id'] ?? ''),
+                'tax_profile_name_snapshot' => (string) ($profile['name'] ?? ''),
+                'tax_slabs_snapshot' => array_values((array) ($profile['slabs'] ?? [])),
+            ];
+        }
+    }
+
+    $resolvedId = '';
+    if ((string) ($item['type'] ?? '') === 'kit') {
+        $kit = documents_inventory_get_kit((string) ($item['kit_id'] ?? ''));
+        $resolvedId = safe_text((string) ($kit['tax_profile_id'] ?? ''));
+    } else {
+        $component = documents_inventory_get_component((string) ($item['component_id'] ?? ''));
+        $resolvedId = safe_text((string) ($component['tax_profile_id'] ?? ''));
+        $variantId = safe_text((string) ($item['variant_id'] ?? ''));
+        if ($variantId !== '') {
+            $variant = documents_inventory_get_component_variant($variantId);
+            $override = safe_text((string) ($variant['tax_profile_id_override'] ?? ''));
+            if ($override !== '') {
+                $resolvedId = $override;
+            }
+        }
+    }
+
+    $profile = $resolvedId !== '' ? documents_inventory_get_tax_profile($resolvedId) : null;
+    if (!is_array($profile)) {
+        return ['tax_profile_id_snapshot' => '', 'tax_profile_name_snapshot' => '', 'tax_slabs_snapshot' => []];
+    }
+
+    return [
+        'tax_profile_id_snapshot' => (string) ($profile['id'] ?? ''),
+        'tax_profile_name_snapshot' => (string) ($profile['name'] ?? ''),
+        'tax_slabs_snapshot' => array_values((array) ($profile['slabs'] ?? [])),
+    ];
+};
+
+$calcLineBreakdownFromGross = static function (float $gross, array $slabs): array {
+    $profile = ['id' => 'snapshot', 'name' => 'snapshot', 'mode' => count($slabs) > 1 ? 'split' : 'single', 'slabs' => $slabs];
+    $calc = documents_calc_tax_breakdown_from_gross($gross, $profile);
+    return [
+        'line_gross_incl_gst' => (float) ($calc['gross_incl_gst'] ?? 0),
+        'line_basic_total' => (float) ($calc['basic_total'] ?? 0),
+        'gst_total' => (float) ($calc['gst_total'] ?? 0),
+        'slabs' => array_values((array) ($calc['slabs'] ?? [])),
+    ];
+};
+
+$recomputeDocumentTotals = static function (array &$items, float $transportation = 0.0, float $discount = 0.0) use ($calcLineBreakdownFromGross): array {
+    $basicTotal = 0.0;
+    $gstTotal = 0.0;
+    $grossTotal = 0.0;
+    $slabTotals = [];
+    foreach ($items as &$item) {
+        if (!is_array($item)) { continue; }
+        $gross = max(0, (float) ($item['line_gross_incl_gst'] ?? 0));
+        $slabs = is_array($item['tax_slabs_snapshot'] ?? null) ? array_values($item['tax_slabs_snapshot']) : [];
+        if ($gross <= 0 || $slabs === []) {
+            $item['line_basic_total'] = 0.0;
+            $item['line_gst_total'] = 0.0;
+            $item['line_tax_breakdown_slabs'] = [];
+            continue;
+        }
+        $line = $calcLineBreakdownFromGross($gross, $slabs);
+        $item['line_basic_total'] = (float) $line['line_basic_total'];
+        $item['line_gst_total'] = (float) $line['gst_total'];
+        $item['line_tax_breakdown_slabs'] = $line['slabs'];
+        $basicTotal += (float) $line['line_basic_total'];
+        $gstTotal += (float) $line['gst_total'];
+        $grossTotal += (float) $line['line_gross_incl_gst'];
+        foreach ($line['slabs'] as $slab) {
+            $rateKey = (string) ((float) ($slab['rate_pct'] ?? 0));
+            if (!isset($slabTotals[$rateKey])) {
+                $slabTotals[$rateKey] = ['rate_pct' => (float) ($slab['rate_pct'] ?? 0), 'basic' => 0.0, 'gst' => 0.0];
+            }
+            $slabTotals[$rateKey]['basic'] += (float) ($slab['base_amount'] ?? 0);
+            $slabTotals[$rateKey]['gst'] += (float) ($slab['gst_amount'] ?? 0);
+        }
+    }
+    unset($item);
+
+    usort($slabTotals, static fn(array $a, array $b): int => ((float) $a['rate_pct']) <=> ((float) $b['rate_pct']));
+    $netPayable = max(0, documents_money_round($grossTotal + $transportation - $discount));
+    return [
+        'basic_total' => documents_money_round($basicTotal),
+        'gst_total' => documents_money_round($gstTotal),
+        'gross_total' => documents_money_round($grossTotal),
+        'slab_totals' => array_values($slabTotals),
+        'transportation' => documents_money_round($transportation),
+        'discount' => documents_money_round($discount),
+        'net_payable' => $netPayable,
+    ];
+};
+
+$preparePiDocument = static function (?array $row, array $quote = []) use ($piPricingSnapshotFromQuote, $buildPiItemsSnapshot, $recomputeDocumentTotals): array {
     $base = documents_sales_document_defaults('proforma');
     $doc = array_merge($base, is_array($row) ? $row : []);
     $doc['pi_id'] = safe_text((string) ($doc['pi_id'] ?? $doc['id'] ?? ''));
@@ -311,6 +419,14 @@ $preparePiDocument = static function (?array $row, array $quote = []) use ($piPr
     $doc['pricing_snapshot'] = is_array($doc['pricing_snapshot'] ?? null) ? $doc['pricing_snapshot'] : [];
     $doc['created_by'] = is_array($doc['created_by'] ?? null) ? $doc['created_by'] : ['type' => '', 'id' => '', 'name' => ''];
     $doc['finalized_by'] = is_array($doc['finalized_by'] ?? null) ? $doc['finalized_by'] : ['type' => '', 'id' => '', 'name' => ''];
+
+    foreach ($doc['items_snapshot'] as $ix => $it) {
+        if (!is_array($it)) { continue; }
+        $doc['items_snapshot'][$ix]['line_gross_incl_gst'] = max(0, (float) ($it['line_gross_incl_gst'] ?? 0));
+        $doc['items_snapshot'][$ix]['tax_profile_id_snapshot'] = safe_text((string) ($it['tax_profile_id_snapshot'] ?? ''));
+        $doc['items_snapshot'][$ix]['tax_profile_name_snapshot'] = safe_text((string) ($it['tax_profile_name_snapshot'] ?? ''));
+        $doc['items_snapshot'][$ix]['tax_slabs_snapshot'] = is_array($it['tax_slabs_snapshot'] ?? null) ? array_values($it['tax_slabs_snapshot']) : [];
+    }
 
     if ($quote !== []) {
         $quote = documents_quote_prepare($quote);
@@ -340,8 +456,48 @@ $preparePiDocument = static function (?array $row, array $quote = []) use ($piPr
         }
     }
 
+    $transport = (float) ($doc['pricing_snapshot']['transportation'] ?? 0);
+    $discount = (float) ($doc['pricing_snapshot']['discount'] ?? 0);
+    $totals = $recomputeDocumentTotals($doc['items_snapshot'], $transport, $discount);
+    $doc['pricing_snapshot'] = array_merge((array) $doc['pricing_snapshot'], [
+        'basic_total' => (float) ($totals['basic_total'] ?? 0),
+        'gst_breakup_slabs' => (array) ($totals['slab_totals'] ?? []),
+        'gst_total' => (float) ($totals['gst_total'] ?? 0),
+        'system_gross_incl_gst' => (float) ($totals['gross_total'] ?? 0),
+        'gross_payable_after_discount' => (float) ($totals['net_payable'] ?? 0),
+        'transportation' => (float) ($totals['transportation'] ?? 0),
+        'discount' => (float) ($totals['discount'] ?? 0),
+    ]);
+
     return $doc;
 };
+
+if (($_GET['action'] ?? '') === 'view_invoice_html') {
+    $invoiceId = safe_text((string) ($_GET['invoice_id'] ?? ''));
+    $invoice = $invoiceId !== '' ? documents_get_sales_document('invoice', $invoiceId) : null;
+    if (!is_array($invoice)) { http_response_code(404); echo 'Invoice not found.'; exit; }
+    $company = load_company_profile();
+    $companyAddress = documents_company_vendor_address($company);
+    $companyPhone = safe_text((string) ($company['phone_primary'] ?? '')) ?: safe_text((string) ($company['phone_secondary'] ?? ''));
+    $lines = is_array($invoice['lines'] ?? null) ? $invoice['lines'] : [];
+    $totals = is_array($invoice['totals_snapshot'] ?? null) ? $invoice['totals_snapshot'] : [];
+    ?>
+<!doctype html><html><head><meta charset="utf-8"><title>Invoice <?= htmlspecialchars((string) ($invoice['invoice_number'] ?? $invoice['invoice_no'] ?? ''), ENT_QUOTES) ?></title>
+<style>body{font-family:Arial,sans-serif;color:#111;margin:0;padding:18px}.sheet{max-width:960px;margin:0 auto}table{width:100%;border-collapse:collapse}th,td{border:1px solid #d1d5db;padding:7px;vertical-align:top}th{background:#f3f4f6}.head{display:flex;justify-content:space-between;gap:12px}.muted{color:#6b7280}.logo{max-height:64px}.parent{background:#f9fafb;font-weight:700}.sub td{font-size:12px}.no-border td{border:none}.totals{margin-top:10px;margin-left:auto;max-width:420px}@media print{.no-print{display:none!important}body{padding:0}}</style>
+</head><body><div class="sheet">
+<div class="head"><div><?php if((string)($company['logo_path']??'')!==''): ?><img class="logo" src="<?= htmlspecialchars((string)$company['logo_path'], ENT_QUOTES) ?>" alt="logo"><?php endif; ?><h2 style="margin:6px 0 2px"><?= htmlspecialchars((string) ($company['company_name'] ?? ''), ENT_QUOTES) ?></h2><div class="muted"><?= nl2br(htmlspecialchars($companyAddress, ENT_QUOTES)) ?></div><div><?= htmlspecialchars($companyPhone, ENT_QUOTES) ?></div></div><div style="text-align:right"><h1 style="margin:0">TAX INVOICE</h1><div><strong>No:</strong> <?= htmlspecialchars((string) ($invoice['invoice_number'] ?? $invoice['invoice_no'] ?? ''), ENT_QUOTES) ?></div><div><strong>Date:</strong> <?= htmlspecialchars((string) ($invoice['issue_date'] ?? ''), ENT_QUOTES) ?></div></div></div>
+<table class="no-border"><tr><td style="width:50%"><strong>Bill To:</strong> <?= htmlspecialchars((string) ($invoice['customer_name_snapshot'] ?? ''), ENT_QUOTES) ?><br><strong>Mobile:</strong> <?= htmlspecialchars((string) ($invoice['customer_mobile'] ?? ''), ENT_QUOTES) ?><br><strong>Site:</strong><br><?= nl2br(htmlspecialchars((string) ($invoice['site_address_snapshot'] ?? ''), ENT_QUOTES)) ?></td><td><strong>Customer GSTIN:</strong> <?= htmlspecialchars((string) ($invoice['customer_gstin'] ?? ''), ENT_QUOTES) ?><br><strong>Place of Supply:</strong> <?= htmlspecialchars((string) ($invoice['place_of_supply_state'] ?? ''), ENT_QUOTES) ?><br><strong>Supply Type:</strong> <?= htmlspecialchars((string) ($invoice['supply_type'] ?? ''), ENT_QUOTES) ?></td></tr></table>
+<table><thead><tr><th>Sr</th><th>Item/Description</th><th>HSN</th><th>Qty</th><th>Unit</th><th>Taxable Value</th><th>GST</th><th>Line Total</th></tr></thead><tbody>
+<?php foreach($lines as $ix => $line): $slabs = (array)($line['line_tax_breakdown_slabs'] ?? []); ?><tr class="parent"><td><?= $ix+1 ?></td><td><?= htmlspecialchars((string)($line['item_name'] ?? ''), ENT_QUOTES) ?><br><?= nl2br(htmlspecialchars((string)($line['description'] ?? ''), ENT_QUOTES)) ?></td><td><?= htmlspecialchars((string)($line['hsn'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($line['qty'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($line['unit'] ?? ''), ENT_QUOTES) ?></td><td></td><td></td><td></td></tr>
+<?php foreach($slabs as $slab): $gst=(float)($slab['gst_amount']??0); $rate=(float)($slab['rate_pct']??0); ?><tr class="sub"><td></td><td>Portion <?= htmlspecialchars((string)($slab['share_pct'] ?? ''), ENT_QUOTES) ?>% @ <?= htmlspecialchars((string)$rate, ENT_QUOTES) ?>%</td><td></td><td></td><td></td><td style="text-align:right"><?= htmlspecialchars($inr((float)($slab['base_amount']??0)), ENT_QUOTES) ?></td><td style="text-align:right"><?php if(($invoice['supply_type'] ?? '')==='inter_state'): ?>IGST <?= htmlspecialchars($inr($gst), ENT_QUOTES) ?><?php else: ?>CGST <?= htmlspecialchars($inr($gst/2), ENT_QUOTES) ?> + SGST <?= htmlspecialchars($inr($gst/2), ENT_QUOTES) ?><?php endif; ?></td><td style="text-align:right"><?= htmlspecialchars($inr((float)($slab['base_amount']??0)+$gst), ENT_QUOTES) ?></td></tr><?php endforeach; ?>
+<?php endforeach; ?></tbody></table>
+<table class="totals"><tr><td>Basic Total</td><td style="text-align:right"><?= htmlspecialchars($inr((float)($totals['basic_total']??0)), ENT_QUOTES) ?></td></tr><tr><td>GST Total</td><td style="text-align:right"><?= htmlspecialchars($inr((float)($totals['gst_total']??0)), ENT_QUOTES) ?></td></tr><tr><td>Gross Total</td><td style="text-align:right"><?= htmlspecialchars($inr((float)($totals['gross_total']??0)), ENT_QUOTES) ?></td></tr><tr><td>Transportation</td><td style="text-align:right"><?= htmlspecialchars($inr((float)($totals['transportation']??0)), ENT_QUOTES) ?></td></tr><tr><td>Discount</td><td style="text-align:right">-<?= htmlspecialchars($inr((float)($totals['discount']??0)), ENT_QUOTES) ?></td></tr><tr><td><strong>Net Payable</strong></td><td style="text-align:right"><strong><?= htmlspecialchars($inr((float)($totals['net_payable']??0)), ENT_QUOTES) ?></strong></td></tr></table>
+<h3>Bank Details</h3><div><strong>Bank:</strong> <?= htmlspecialchars((string) ($company['bank_name'] ?? ''), ENT_QUOTES) ?>, <strong>A/C Name:</strong> <?= htmlspecialchars((string) ($company['bank_account_name'] ?? ''), ENT_QUOTES) ?>, <strong>A/C No:</strong> <?= htmlspecialchars((string) ($company['bank_account_no'] ?? ''), ENT_QUOTES) ?>, <strong>IFSC:</strong> <?= htmlspecialchars((string) ($company['bank_ifsc'] ?? ''), ENT_QUOTES) ?>, <strong>Branch:</strong> <?= htmlspecialchars((string) ($company['bank_branch'] ?? ''), ENT_QUOTES) ?>, <strong>UPI:</strong> <?= htmlspecialchars((string) ($company['upi_id'] ?? ''), ENT_QUOTES) ?></div>
+<div class="no-print" style="margin-top:8px"><button onclick="window.print()">Print</button></div>
+</div></body></html>
+<?php
+    exit;
+}
 
 if (($_GET['action'] ?? '') === 'view_pi_html') {
     $piId = safe_text((string) ($_GET['pi_id'] ?? ''));
@@ -361,15 +517,17 @@ if (($_GET['action'] ?? '') === 'view_pi_html') {
     $company = load_company_profile();
     $items = is_array($pi['items_snapshot'] ?? null) ? $pi['items_snapshot'] : [];
     $pricing = is_array($pi['pricing_snapshot'] ?? null) ? $pi['pricing_snapshot'] : [];
+    $companyAddress = documents_company_vendor_address($company);
+    $companyPhone = safe_text((string) ($company['phone_primary'] ?? '')) ?: safe_text((string) ($company['phone_secondary'] ?? ''));
     ?>
 <!doctype html><html><head><meta charset="utf-8"><title>Proforma Invoice <?= htmlspecialchars((string) ($pi['pi_number'] ?? ''), ENT_QUOTES) ?></title>
 <style>body{font-family:Arial,sans-serif;color:#111;margin:0;padding:20px} .sheet{max-width:900px;margin:0 auto} table{width:100%;border-collapse:collapse} th,td{border:1px solid #d1d5db;padding:8px;vertical-align:top} th{background:#f3f4f6;text-align:left}.head{display:flex;justify-content:space-between;gap:12px;margin-bottom:16px}.muted{color:#6b7280}.totals{margin-top:12px;margin-left:auto;max-width:420px}.totals td:first-child{font-weight:600}.no-border td{border:none;padding:2px 0}.logo{max-height:70px}@media print{.no-print{display:none!important}body{padding:0}.sheet{max-width:none}}</style>
 </head><body><div class="sheet">
-<div class="head"><div><?php if ((string)($company['logo_path'] ?? '')!==''): ?><img class="logo" src="<?= htmlspecialchars((string)$company['logo_path'], ENT_QUOTES) ?>" alt="logo"><?php endif; ?><h2 style="margin:6px 0 2px"><?= htmlspecialchars((string) ($company['company_name'] ?? 'Company'), ENT_QUOTES) ?></h2><div class="muted"><?= nl2br(htmlspecialchars((string) ($company['address'] ?? ''), ENT_QUOTES)) ?></div><div><?= htmlspecialchars((string) ($company['phone'] ?? ''), ENT_QUOTES) ?></div></div><div style="text-align:right"><h1 style="margin:0">PROFORMA INVOICE</h1><div><strong>No:</strong> <?= htmlspecialchars((string) ($pi['pi_number'] ?? ''), ENT_QUOTES) ?></div><div><strong>Date:</strong> <?= htmlspecialchars((string) ($pi['issue_date'] ?? ''), ENT_QUOTES) ?></div><div><strong>Status:</strong> <?= htmlspecialchars(strtoupper((string) ($pi['status'] ?? 'draft')), ENT_QUOTES) ?></div></div></div>
+<div class="head"><div><?php if ((string)($company['logo_path'] ?? '')!==''): ?><img class="logo" src="<?= htmlspecialchars((string)$company['logo_path'], ENT_QUOTES) ?>" alt="logo"><?php endif; ?><h2 style="margin:6px 0 2px"><?= htmlspecialchars((string) ($company['company_name'] ?? 'Company'), ENT_QUOTES) ?></h2><div class="muted"><?= nl2br(htmlspecialchars((string) ($companyAddress), ENT_QUOTES)) ?></div><div><?= htmlspecialchars((string) ($companyPhone), ENT_QUOTES) ?></div></div><div style="text-align:right"><h1 style="margin:0">PROFORMA INVOICE</h1><div><strong>No:</strong> <?= htmlspecialchars((string) ($pi['pi_number'] ?? ''), ENT_QUOTES) ?></div><div><strong>Date:</strong> <?= htmlspecialchars((string) ($pi['issue_date'] ?? ''), ENT_QUOTES) ?></div><div><strong>Status:</strong> <?= htmlspecialchars(strtoupper((string) ($pi['status'] ?? 'draft')), ENT_QUOTES) ?></div></div></div>
 <table class="no-border"><tr><td style="width:50%"><strong>Customer:</strong> <?= htmlspecialchars((string) ($pi['customer_name_snapshot'] ?? ''), ENT_QUOTES) ?><br><strong>Mobile:</strong> <?= htmlspecialchars((string) ($pi['customer_mobile'] ?? ''), ENT_QUOTES) ?><br><strong>Address:</strong><br><?= nl2br(htmlspecialchars((string) ($pi['site_address_snapshot'] ?? ''), ENT_QUOTES)) ?></td><td><strong>Place of Supply:</strong> <?= htmlspecialchars((string) ($pi['place_of_supply_state'] ?? ''), ENT_QUOTES) ?><br><strong>Customer GSTIN:</strong> <?= htmlspecialchars((string) ($pi['customer_gstin'] ?? ''), ENT_QUOTES) ?></td></tr></table>
 <table><thead><tr><th style="width:60px">Sr</th><th>Item + Description</th><th style="width:110px">HSN</th><th style="width:90px">Qty</th><th style="width:90px">Unit</th></tr></thead><tbody><?php foreach($items as $item): ?><tr><td><?= (int) ($item['sr_no'] ?? 0) ?></td><td><strong><?= htmlspecialchars((string) ($item['item_name'] ?? ''), ENT_QUOTES) ?></strong><br><?= nl2br(htmlspecialchars((string) ($item['description'] ?? ''), ENT_QUOTES)) ?></td><td><?= htmlspecialchars((string) ($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($item['qty'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table>
 <table class="totals"><tbody><tr><td>Basic Total</td><td style="text-align:right"><?= htmlspecialchars($inr((float) ($pricing['basic_total'] ?? 0)), ENT_QUOTES) ?></td></tr><?php foreach ((array)($pricing['gst_breakup_slabs'] ?? []) as $slab): ?><tr><td>GST <?= htmlspecialchars((string) ($slab['label'] ?? (($slab['rate'] ?? '').'%')), ENT_QUOTES) ?></td><td style="text-align:right"><?= htmlspecialchars($inr((float) ($slab['gst'] ?? 0)), ENT_QUOTES) ?></td></tr><?php endforeach; ?><tr><td>System Gross (incl GST)</td><td style="text-align:right"><?= htmlspecialchars($inr((float) ($pricing['system_gross_incl_gst'] ?? 0)), ENT_QUOTES) ?></td></tr><tr><td>Transportation</td><td style="text-align:right"><?= htmlspecialchars($inr((float) ($pricing['transportation'] ?? 0)), ENT_QUOTES) ?></td></tr><tr><td>Discount</td><td style="text-align:right">-<?= htmlspecialchars($inr((float) ($pricing['discount'] ?? 0)), ENT_QUOTES) ?></td></tr><tr><td><strong>Total Payable</strong></td><td style="text-align:right"><strong><?= htmlspecialchars($inr((float) ($pricing['gross_payable_after_discount'] ?? 0)), ENT_QUOTES) ?></strong></td></tr></tbody></table>
-<?php if ((string)($company['bank_name'] ?? '') !== '' || (string)($company['bank_account_no'] ?? '') !== ''): ?><h3>Bank Details</h3><div><strong>Bank:</strong> <?= htmlspecialchars((string) ($company['bank_name'] ?? ''), ENT_QUOTES) ?>, <strong>A/C:</strong> <?= htmlspecialchars((string) ($company['bank_account_no'] ?? ''), ENT_QUOTES) ?>, <strong>IFSC:</strong> <?= htmlspecialchars((string) ($company['ifsc_code'] ?? ''), ENT_QUOTES) ?></div><?php endif; ?>
+<?php if ((string)($company['bank_name'] ?? '') !== '' || (string)($company['bank_account_no'] ?? '') !== '' || (string)($company['upi_id'] ?? '') !== ''): ?><h3>Bank Details</h3><div><strong>Bank:</strong> <?= htmlspecialchars((string) ($company['bank_name'] ?? ''), ENT_QUOTES) ?><?php if ((string)($company['bank_branch'] ?? '') !== ''): ?> (<?= htmlspecialchars((string) ($company['bank_branch'] ?? ''), ENT_QUOTES) ?>)<?php endif; ?><br><strong>A/C Name:</strong> <?= htmlspecialchars((string) ($company['bank_account_name'] ?? ''), ENT_QUOTES) ?><br><strong>A/C No:</strong> <?= htmlspecialchars((string) ($company['bank_account_no'] ?? ''), ENT_QUOTES) ?><br><strong>IFSC:</strong> <?= htmlspecialchars((string) ($company['bank_ifsc'] ?? ''), ENT_QUOTES) ?><?php if ((string)($company['upi_id'] ?? '') !== ''): ?><br><strong>UPI:</strong> <?= htmlspecialchars((string) ($company['upi_id'] ?? ''), ENT_QUOTES) ?><?php endif; ?></div><?php endif; ?>
 <?php if ((string) ($pi['notes'] ?? '') !== ''): ?><p><strong>Notes:</strong><br><?= nl2br(htmlspecialchars((string) ($pi['notes'] ?? ''), ENT_QUOTES)) ?></p><?php endif; ?>
 <p class="muted" style="margin-top:24px">Generated by <?= htmlspecialchars((string) ($company['company_name'] ?? 'Company'), ENT_QUOTES) ?>. This is a computer generated proforma invoice.</p>
 <div class="no-print" style="margin-top:10px"><button onclick="window.print()">Print</button></div>
@@ -385,7 +543,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = safe_text($_POST['action'] ?? '');
 
-    $employeeAllowedActions = ['create_inventory_tx', 'edit_inventory_tx', 'save_inventory_edits', 'import_inventory_stock_in_csv', 'create_receipt', 'save_receipt_draft', 'finalize_receipt', 'create_agreement', 'create_delivery_challan', 'create_pi', 'create_invoice', 'save_pi_draft'];
+    $employeeAllowedActions = ['create_inventory_tx', 'edit_inventory_tx', 'save_inventory_edits', 'import_inventory_stock_in_csv', 'create_receipt', 'save_receipt_draft', 'finalize_receipt', 'create_agreement', 'create_delivery_challan', 'create_pi', 'create_invoice', 'save_pi_draft', 'save_invoice_draft'];
     if (!$isAdmin && !in_array($action, $employeeAllowedActions, true)) {
         $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
     }
@@ -684,49 +842,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($action === 'create_invoice') {
-            $existingId = safe_text((string) ($quote['workflow']['invoice_id'] ?? ''));
-            if ($existingId !== '') {
-                $existing = documents_get_sales_document('invoice', $existingId);
-                if ($existing !== null && !documents_is_archived($existing)) {
-                    header('Location: admin-invoices.php?id=' . urlencode($existingId));
-                    exit;
-                }
+            $segment = safe_text((string) ($quote['segment'] ?? 'RES')) ?: 'RES';
+            $number = documents_generate_invoice_public_number($segment);
+            if (!($number['ok'] ?? false)) {
+                $redirectDocuments($tab, 'error', (string) ($number['error'] ?? 'Unable to generate invoice number.'), ['view' => $view]);
             }
 
-            $created = documents_create_invoice_from_quote($quote);
-            if (!($created['ok'] ?? false)) {
-                $redirectDocuments($tab, 'error', (string) ($created['error'] ?? 'Unable to create invoice.'), ['view' => $view]);
-            }
-            $invoiceId = (string) ($created['invoice_id'] ?? '');
-            $invoiceDoc = $invoiceId !== '' ? documents_get_invoice($invoiceId) : null;
-            if ($invoiceDoc === null || $invoiceId === '') {
-                $redirectDocuments($tab, 'error', 'Invoice created but could not be loaded.', ['view' => $view]);
-            }
+            $invoiceId = 'inv_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+            $snapshotItems = $buildPiItemsSnapshot(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
+            $transport = 0.0;
+            $discount = 0.0;
+            $totals = $recomputeDocumentTotals($snapshotItems, $transport, $discount);
+            $place = safe_text((string) ($quote['state'] ?? 'Jharkhand')) ?: 'Jharkhand';
+            $company = load_company_profile();
+            $companyState = safe_text((string) ($company['state'] ?? 'Jharkhand')) ?: 'Jharkhand';
 
-            $salesInvoice = documents_sales_document_defaults('invoice');
-            $salesInvoice['id'] = $invoiceId;
-            $salesInvoice['quotation_id'] = (string) ($quote['id'] ?? '');
-            $salesInvoice['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
-            $salesInvoice['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
-            $salesInvoice['invoice_no'] = (string) ($invoiceDoc['invoice_no'] ?? '');
-            $salesInvoice['invoice_date'] = date('Y-m-d');
-            $salesInvoice['amount'] = (float) ($invoiceDoc['input_total_gst_inclusive'] ?? 0);
-            $salesInvoice['tax_profile_id'] = (string) ($quote['tax_profile_id'] ?? '');
-            $salesInvoice['tax_breakdown'] = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : (array) ($quote['calc']['tax_breakdown'] ?? []);
-            $salesInvoice['status'] = 'draft';
-            $salesInvoice['created_by'] = $viewer;
-            $salesInvoice['created_at'] = (string) ($invoiceDoc['created_at'] ?? date('c'));
-            $savedSalesInvoice = documents_save_sales_document('invoice', $salesInvoice);
+            $invoice = documents_sales_document_defaults('invoice');
+            $invoice['id'] = $invoiceId;
+            $invoice['invoice_id'] = $invoiceId;
+            $invoice['invoice_number'] = (string) ($number['invoice_no'] ?? '');
+            $invoice['invoice_no'] = $invoice['invoice_number'];
+            $invoice['quote_id'] = (string) ($quote['id'] ?? '');
+            $invoice['quotation_id'] = $invoice['quote_id'];
+            $invoice['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+            $invoice['customer_name_snapshot'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
+            $invoice['site_address_snapshot'] = safe_multiline_text((string) ($quote['site_address'] ?? $snapshot['address'] ?? ''));
+            $invoice['place_of_supply_state'] = $place;
+            $invoice['supply_type'] = strcasecmp($place, $companyState) === 0 ? 'intra_state' : 'inter_state';
+            $invoice['issue_date'] = date('Y-m-d');
+            $invoice['status'] = 'draft';
+            $invoice['lines'] = $snapshotItems;
+            $invoice['totals_snapshot'] = $totals;
+            $invoice['created_by'] = ['type' => (string) ($viewer['role'] ?? ''), 'id' => (string) ($viewer['id'] ?? ''), 'name' => (string) ($viewer['name'] ?? '')];
+            $invoice['created_at'] = date('c');
+            $invoice['updated_at'] = date('c');
+
+            $savedSalesInvoice = documents_save_sales_document('invoice', $invoice);
             if (!$savedSalesInvoice['ok']) {
-                $redirectDocuments($tab, 'error', 'Invoice created, but workflow update failed.', ['view' => $view]);
+                $redirectDocuments($tab, 'error', 'Unable to create invoice draft.', ['view' => $view]);
             }
             documents_append_document_action_log($viewer, 'create_draft', 'invoice', $invoiceId, $view, 'Invoice draft created from accepted customer pack.');
 
             documents_quote_link_workflow_doc($quote, 'invoice', $invoiceId);
             $quote['updated_at'] = date('c');
             documents_save_quote($quote);
-            header('Location: admin-invoices.php?id=' . urlencode($invoiceId));
-            exit;
+            $redirectDocuments($tab, 'success', 'Invoice draft created.', ['view' => $view, 'invoice_id' => $invoiceId, 'pack_action' => 'edit_invoice']);
         }
     }
 
@@ -1049,23 +1209,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pi['notes'] = safe_multiline_text((string) ($_POST['notes'] ?? $pi['notes'] ?? ''));
 
         $descriptions = is_array($_POST['item_description'] ?? null) ? (array) $_POST['item_description'] : [];
+        $lineGross = is_array($_POST['item_line_gross'] ?? null) ? (array) $_POST['item_line_gross'] : [];
         $items = is_array($pi['items_snapshot'] ?? null) ? array_values($pi['items_snapshot']) : [];
         foreach ($items as $ix => $row) {
             if (!is_array($row)) { continue; }
             $items[$ix]['description'] = safe_multiline_text((string) ($descriptions[(string) $ix] ?? $row['description'] ?? ''));
+            if (array_key_exists((string) $ix, $lineGross)) {
+                $items[$ix]['line_gross_incl_gst'] = max(0, (float) $lineGross[(string) $ix]);
+            }
+            if ((string) ($items[$ix]['tax_profile_id_snapshot'] ?? '') === '') {
+                $items[$ix] = array_merge($items[$ix], $resolveLineTaxSnapshot($items[$ix]));
+            }
         }
-        $pi['items_snapshot'] = $items;
 
-        if ($isAdmin) {
-            $pi['pricing_snapshot']['basic_total'] = (float) ($_POST['pricing_basic_total'] ?? ($pi['pricing_snapshot']['basic_total'] ?? 0));
-            $pi['pricing_snapshot']['system_gross_incl_gst'] = (float) ($_POST['pricing_system_gross_incl_gst'] ?? ($pi['pricing_snapshot']['system_gross_incl_gst'] ?? 0));
-            $pi['pricing_snapshot']['transportation'] = (float) ($_POST['pricing_transportation'] ?? ($pi['pricing_snapshot']['transportation'] ?? 0));
-            $pi['pricing_snapshot']['discount'] = (float) ($_POST['pricing_discount'] ?? ($pi['pricing_snapshot']['discount'] ?? 0));
-            $pi['pricing_snapshot']['gross_payable_after_discount'] = (float) ($_POST['pricing_gross_payable_after_discount'] ?? ($pi['pricing_snapshot']['gross_payable_after_discount'] ?? 0));
-        }
+        $transport = (float) ($_POST['pricing_transportation'] ?? ($pi['pricing_snapshot']['transportation'] ?? 0));
+        $discount = (float) ($_POST['pricing_discount'] ?? ($pi['pricing_snapshot']['discount'] ?? 0));
+        $totals = $recomputeDocumentTotals($items, $transport, $discount);
+        $pi['items_snapshot'] = $items;
+        $pi['pricing_snapshot'] = array_merge((array) ($pi['pricing_snapshot'] ?? []), [
+            'basic_total' => (float) ($totals['basic_total'] ?? 0),
+            'gst_total' => (float) ($totals['gst_total'] ?? 0),
+            'gst_breakup_slabs' => (array) ($totals['slab_totals'] ?? []),
+            'system_gross_incl_gst' => (float) ($totals['gross_total'] ?? 0),
+            'transportation' => (float) ($totals['transportation'] ?? 0),
+            'discount' => (float) ($totals['discount'] ?? 0),
+            'gross_payable_after_discount' => (float) ($totals['net_payable'] ?? 0),
+        ]);
 
         $actor = ['role' => $isAdmin ? 'admin' : 'employee', 'id' => (string) ($user['id'] ?? ''), 'name' => (string) ($user['full_name'] ?? ($isAdmin ? 'Admin' : 'Employee'))];
         if ($action === 'finalize_pi') {
+            foreach ((array) ($pi['items_snapshot'] ?? []) as $line) {
+                if ((string) ($line['tax_profile_id_snapshot'] ?? '') === '') {
+                    $itemName = (string) ($line['item_name'] ?? 'Item');
+                    $redirectDocuments($tab, 'error', 'Tax profile missing for item ' . $itemName . '. Set a tax profile in Items Master or choose one.', ['view' => $view, 'pi_id' => $piId, 'pack_action' => 'edit_pi']);
+                }
+            }
             $pi['status'] = 'final';
             $pi['finalized_at'] = date('c');
             $pi['finalized_by'] = ['type' => 'admin', 'id' => (string) ($actor['id'] ?? ''), 'name' => (string) ($actor['name'] ?? 'Admin')];
@@ -1103,6 +1281,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $redirectDocuments($tab, 'success', $action === 'finalize_pi' ? 'PI finalized.' : 'PI draft saved.', ['view' => $view, 'pi_id' => $piId, 'pack_action' => 'edit_pi']);
+    }
+
+
+    if (in_array($action, ['save_invoice_draft', 'finalize_invoice'], true)) {
+        $tab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
+        $view = safe_text($_POST['quotation_id'] ?? safe_text($_POST['return_view'] ?? ''));
+        $invoiceId = safe_text($_POST['invoice_id'] ?? '');
+        if ($view === '' || $invoiceId === '') {
+            $redirectDocuments($tab, 'error', 'Invoice context missing.', ['view' => $view]);
+        }
+        if ($action === 'finalize_invoice' && !$isAdmin) {
+            $redirectDocuments($tab, 'error', 'Only admin can finalize invoice.', ['view' => $view, 'invoice_id' => $invoiceId, 'pack_action' => 'edit_invoice']);
+        }
+        $invoice = documents_get_sales_document('invoice', $invoiceId);
+        if ($invoice === null || (string) ($invoice['quotation_id'] ?? $invoice['quote_id'] ?? '') !== $view) {
+            $redirectDocuments($tab, 'error', 'Invoice not found.', ['view' => $view]);
+        }
+        if ((string) ($invoice['status'] ?? 'draft') === 'final') {
+            $redirectDocuments($tab, 'error', 'Finalized invoice is locked.', ['view' => $view, 'invoice_id' => $invoiceId, 'pack_action' => 'edit_invoice']);
+        }
+
+        $invoice['issue_date'] = safe_text((string) ($_POST['issue_date'] ?? $invoice['issue_date'] ?? date('Y-m-d')));
+        $invoice['customer_gstin'] = strtoupper(safe_text((string) ($_POST['customer_gstin'] ?? $invoice['customer_gstin'] ?? '')));
+        $invoice['place_of_supply_state'] = safe_text((string) ($_POST['place_of_supply_state'] ?? $invoice['place_of_supply_state'] ?? ''));
+        $company = load_company_profile();
+        $companyState = safe_text((string) ($company['state'] ?? 'Jharkhand')) ?: 'Jharkhand';
+        $invoice['supply_type'] = strcasecmp((string) ($invoice['place_of_supply_state'] ?? ''), $companyState) === 0 ? 'intra_state' : 'inter_state';
+        $invoice['notes'] = safe_multiline_text((string) ($_POST['notes'] ?? $invoice['notes'] ?? ''));
+
+        $descriptions = is_array($_POST['item_description'] ?? null) ? (array) $_POST['item_description'] : [];
+        $lineGross = is_array($_POST['item_line_gross'] ?? null) ? (array) $_POST['item_line_gross'] : [];
+        $lines = is_array($invoice['lines'] ?? null) ? array_values($invoice['lines']) : [];
+        foreach ($lines as $ix => $line) {
+            if (!is_array($line)) { continue; }
+            $lines[$ix]['description'] = safe_multiline_text((string) ($descriptions[(string) $ix] ?? $line['description'] ?? ''));
+            if (array_key_exists((string) $ix, $lineGross)) {
+                $lines[$ix]['line_gross_incl_gst'] = max(0, (float) $lineGross[(string) $ix]);
+            }
+            if ((string) ($lines[$ix]['tax_profile_id_snapshot'] ?? '') === '') {
+                $lines[$ix] = array_merge($lines[$ix], $resolveLineTaxSnapshot($lines[$ix]));
+            }
+        }
+        $transport = (float) ($_POST['transportation_rs'] ?? ($invoice['totals_snapshot']['transportation'] ?? 0));
+        $discount = (float) ($_POST['discount_rs'] ?? ($invoice['totals_snapshot']['discount'] ?? 0));
+        $totals = $recomputeDocumentTotals($lines, $transport, $discount);
+        $invoice['lines'] = $lines;
+        $invoice['totals_snapshot'] = $totals;
+
+        if ($action === 'finalize_invoice') {
+            foreach ($lines as $line) {
+                if ((string) ($line['tax_profile_id_snapshot'] ?? '') === '') {
+                    $redirectDocuments($tab, 'error', 'Tax profile missing for item ' . (string) ($line['item_name'] ?? 'Item') . '. Set a tax profile in Items Master or choose one.', ['view' => $view, 'invoice_id' => $invoiceId, 'pack_action' => 'edit_invoice']);
+                }
+            }
+            $invoice['status'] = 'final';
+            $invoice['finalized_at'] = date('c');
+            $invoice['finalized_by'] = ['type' => 'admin', 'id' => (string) ($user['id'] ?? ''), 'name' => (string) ($user['full_name'] ?? 'Admin')];
+        } else {
+            $invoice['status'] = 'draft';
+        }
+
+        $saved = documents_save_sales_document('invoice', $invoice);
+        if (!($saved['ok'] ?? false)) {
+            $redirectDocuments($tab, 'error', 'Unable to save invoice.', ['view' => $view, 'invoice_id' => $invoiceId, 'pack_action' => 'edit_invoice']);
+        }
+        $actor = ['role' => $isAdmin ? 'admin' : 'employee', 'id' => (string) ($user['id'] ?? ''), 'name' => (string) ($user['full_name'] ?? ($isAdmin ? 'Admin' : 'Employee'))];
+        documents_append_document_action_log($actor, $action === 'finalize_invoice' ? 'finalize' : 'update_draft', 'invoice', $invoiceId, $view, $action === 'finalize_invoice' ? 'Invoice finalized.' : 'Invoice draft updated.');
+
+        $redirectDocuments($tab, 'success', $action === 'finalize_invoice' ? 'Invoice finalized.' : 'Invoice draft saved.', ['view' => $view, 'invoice_id' => $invoiceId, 'pack_action' => 'edit_invoice']);
     }
 
 
@@ -3405,11 +3652,19 @@ if ($packViewId !== '') {
 
 $packAction = safe_text((string) ($_GET['pack_action'] ?? ''));
 $packPiId = safe_text((string) ($_GET['pi_id'] ?? ''));
+$packInvoiceId = safe_text((string) ($_GET['invoice_id'] ?? ''));
 $editingPi = null;
+$editingInvoice = null;
 if ($packQuote !== null && $packPiId !== '') {
     $editingPiRow = documents_get_sales_document('proforma', $packPiId);
     if (is_array($editingPiRow) && (string) ($editingPiRow['quotation_id'] ?? $editingPiRow['quote_id'] ?? '') === (string) ($packQuote['id'] ?? '')) {
         $editingPi = $preparePiDocument($editingPiRow, $packQuote);
+    }
+}
+if ($packQuote !== null && $packInvoiceId !== '') {
+    $editingInvoiceRow = documents_get_sales_document('invoice', $packInvoiceId);
+    if (is_array($editingInvoiceRow) && (string) ($editingInvoiceRow['quotation_id'] ?? $editingInvoiceRow['quote_id'] ?? '') === (string) ($packQuote['id'] ?? '')) {
+        $editingInvoice = $editingInvoiceRow;
     }
 }
 
@@ -3893,18 +4148,18 @@ usort($documentVerificationQueue, static function (array $a, array $b): int {
                 </div>
                 <label>Site Address<textarea name="site_address_snapshot" rows="2" <?= $piLocked ? 'readonly' : '' ?>><?= htmlspecialchars((string) ($editingPi['site_address_snapshot'] ?? ''), ENT_QUOTES) ?></textarea></label>
 
-                <table><thead><tr><th>Sr</th><th>Item + Description</th><th>HSN</th><th>Qty</th><th>Unit</th></tr></thead><tbody>
+                <table><thead><tr><th>Sr</th><th>Item + Description</th><th>HSN</th><th>Qty</th><th>Unit</th><th>Line Amount (incl GST)</th></tr></thead><tbody>
                 <?php foreach ((array) ($editingPi['items_snapshot'] ?? []) as $ix => $item): ?>
-                  <tr><td><?= (int) ($item['sr_no'] ?? ($ix + 1)) ?></td><td><strong><?= htmlspecialchars((string) ($item['item_name'] ?? ''), ENT_QUOTES) ?></strong><br><textarea name="item_description[<?= (int) $ix ?>]" rows="2" <?= $piLocked ? 'readonly' : '' ?>><?= htmlspecialchars((string) ($item['description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><?= htmlspecialchars((string) ($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($item['qty'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr>
+                  <tr><td><?= (int) ($item['sr_no'] ?? ($ix + 1)) ?></td><td><strong><?= htmlspecialchars((string) ($item['item_name'] ?? ''), ENT_QUOTES) ?></strong><br><textarea name="item_description[<?= (int) $ix ?>]" rows="2" <?= $piLocked ? 'readonly' : '' ?>><?= htmlspecialchars((string) ($item['description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><?= htmlspecialchars((string) ($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($item['qty'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($item['unit'] ?? ''), ENT_QUOTES) ?></td><td><input type="number" step="0.01" class="js-line-gross" name="item_line_gross[<?= (int) $ix ?>]" value="<?= htmlspecialchars((string) ($item['line_gross_incl_gst'] ?? 0), ENT_QUOTES) ?>" <?= $piLocked ? 'readonly' : '' ?> /></td></tr>
                 <?php endforeach; ?>
                 </tbody></table>
 
                 <div class="grid cols-2" style="margin-top:8px;">
-                  <label>Basic Total<input type="number" step="0.01" name="pricing_basic_total" value="<?= htmlspecialchars((string) ($piPricing['basic_total'] ?? 0), ENT_QUOTES) ?>" <?= (!$isAdmin || $piLocked) ? 'readonly' : '' ?> /></label>
-                  <label>System Gross incl GST<input type="number" step="0.01" name="pricing_system_gross_incl_gst" value="<?= htmlspecialchars((string) ($piPricing['system_gross_incl_gst'] ?? 0), ENT_QUOTES) ?>" <?= (!$isAdmin || $piLocked) ? 'readonly' : '' ?> /></label>
-                  <label>Transportation<input type="number" step="0.01" name="pricing_transportation" value="<?= htmlspecialchars((string) ($piPricing['transportation'] ?? 0), ENT_QUOTES) ?>" <?= (!$isAdmin || $piLocked) ? 'readonly' : '' ?> /></label>
-                  <label>Discount<input type="number" step="0.01" name="pricing_discount" value="<?= htmlspecialchars((string) ($piPricing['discount'] ?? 0), ENT_QUOTES) ?>" <?= (!$isAdmin || $piLocked) ? 'readonly' : '' ?> /></label>
-                  <label>Total Payable<input type="number" step="0.01" name="pricing_gross_payable_after_discount" value="<?= htmlspecialchars((string) ($piPricing['gross_payable_after_discount'] ?? 0), ENT_QUOTES) ?>" <?= (!$isAdmin || $piLocked) ? 'readonly' : '' ?> /></label>
+                  <label>Basic Total<input id="pi_basic_total" type="number" step="0.01" name="pricing_basic_total" value="<?= htmlspecialchars((string) ($piPricing['basic_total'] ?? 0), ENT_QUOTES) ?>" <?= $piLocked ? 'readonly' : '' ?> /></label>
+                  <label>System Gross incl GST<input type="number" step="0.01" id="pi_gross_total" name="pricing_system_gross_incl_gst" value="<?= htmlspecialchars((string) ($piPricing['system_gross_incl_gst'] ?? 0), ENT_QUOTES) ?>" <?= $piLocked ? 'readonly' : '' ?> /></label>
+                  <label>Transportation<input type="number" step="0.01" id="pi_transportation" name="pricing_transportation" value="<?= htmlspecialchars((string) ($piPricing['transportation'] ?? 0), ENT_QUOTES) ?>" <?= $piLocked ? 'readonly' : '' ?> /></label>
+                  <label>Discount<input type="number" step="0.01" id="pi_discount" name="pricing_discount" value="<?= htmlspecialchars((string) ($piPricing['discount'] ?? 0), ENT_QUOTES) ?>" <?= $piLocked ? 'readonly' : '' ?> /></label>
+                  <label>Total Payable<input type="number" step="0.01" id="pi_net_total" name="pricing_gross_payable_after_discount" value="<?= htmlspecialchars((string) ($piPricing['gross_payable_after_discount'] ?? 0), ENT_QUOTES) ?>" <?= $piLocked ? 'readonly' : '' ?> /></label>
                 </div>
                 <label>Notes<textarea name="notes" rows="3" <?= $piLocked ? 'readonly' : '' ?>><?= htmlspecialchars((string) ($editingPi['notes'] ?? ''), ENT_QUOTES) ?></textarea></label>
                 <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -3922,7 +4177,9 @@ usort($documentVerificationQueue, static function (array $a, array $b): int {
           </tbody></table>
 
           <h3>F) Invoice</h3>
+          <?php $latestInvoice = $packInvoices !== [] ? (array) $packInvoices[0] : null; ?>
           <?php if ($isEmployee): ?><p class="muted">Finalize Invoice is admin-only.</p><?php endif; ?>
+          <?php if ($latestInvoice === null): ?>
           <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
             <input type="hidden" name="action" value="create_invoice" />
@@ -3931,9 +4188,44 @@ usort($documentVerificationQueue, static function (array $a, array $b): int {
             <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
             <button class="btn" type="submit">Create Invoice</button>
           </form>
-          <table><thead><tr><th>ID</th><th>Date</th><th>Actions</th></tr></thead><tbody>
-          <?php foreach ($packInvoices as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['invoice_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="admin-invoices.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="invoice" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
-          <?php if ($packInvoices === []): ?><tr><td colspan="3" class="muted">No invoice found.</td></tr><?php endif; ?>
+          <?php endif; ?>
+
+          <?php if ($editingInvoice !== null && $packAction === 'edit_invoice'): $invoiceLocked = (string) ($editingInvoice['status'] ?? 'draft') === 'final'; $invoiceTotals = (array) ($editingInvoice['totals_snapshot'] ?? []); ?>
+            <div class="card" style="margin-bottom:10px;">
+              <h4 style="margin:0 0 8px;">Invoice Editor: <?= htmlspecialchars((string) ($editingInvoice['invoice_number'] ?? $editingInvoice['invoice_no'] ?? ''), ENT_QUOTES) ?></h4>
+              <form method="post" id="invoice-editor-form">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+                <input type="hidden" name="return_tab" value="accepted_customers" />
+                <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+                <input type="hidden" name="invoice_id" value="<?= htmlspecialchars((string) ($editingInvoice['invoice_id'] ?? $editingInvoice['id'] ?? ''), ENT_QUOTES) ?>" />
+                <div class="grid cols-2">
+                  <label>Issue Date<input type="date" name="issue_date" value="<?= htmlspecialchars((string) ($editingInvoice['issue_date'] ?? date('Y-m-d')), ENT_QUOTES) ?>" <?= $invoiceLocked ? 'readonly' : '' ?> /></label>
+                  <label>Customer GSTIN<input type="text" name="customer_gstin" value="<?= htmlspecialchars((string) ($editingInvoice['customer_gstin'] ?? ''), ENT_QUOTES) ?>" <?= $invoiceLocked ? 'readonly' : '' ?> /></label>
+                  <label>Place of Supply State<select name="place_of_supply_state" <?= $invoiceLocked ? 'disabled' : '' ?>><?php foreach ($indianStates as $st): ?><option value="<?= htmlspecialchars($st, ENT_QUOTES) ?>" <?= strcasecmp($st, (string) ($editingInvoice['place_of_supply_state'] ?? '')) === 0 ? 'selected' : '' ?>><?= htmlspecialchars($st, ENT_QUOTES) ?></option><?php endforeach; ?></select></label>
+                  <label>Supply Type<input type="text" value="<?= htmlspecialchars((string) ($editingInvoice['supply_type'] ?? ''), ENT_QUOTES) ?>" readonly /></label>
+                </div>
+                <table><thead><tr><th>Sr</th><th>Item + Description</th><th>HSN</th><th>Qty</th><th>Unit</th><th>Amount (incl GST)</th></tr></thead><tbody>
+                <?php foreach ((array) ($editingInvoice['lines'] ?? []) as $ix => $item): ?>
+                  <tr><td><?= (int) ($item['sr_no'] ?? ($ix + 1)) ?></td><td><strong><?= htmlspecialchars((string) ($item['item_name'] ?? ''), ENT_QUOTES) ?></strong><br><textarea name="item_description[<?= (int) $ix ?>]" rows="2" <?= $invoiceLocked ? 'readonly' : '' ?>><?= htmlspecialchars((string) ($item['description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><?= htmlspecialchars((string) ($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($item['qty'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($item['unit'] ?? ''), ENT_QUOTES) ?></td><td><input type="number" class="js-line-gross" step="0.01" name="item_line_gross[<?= (int) $ix ?>]" value="<?= htmlspecialchars((string) ($item['line_gross_incl_gst'] ?? 0), ENT_QUOTES) ?>" <?= $invoiceLocked ? 'readonly' : '' ?> /></td></tr>
+                <?php endforeach; ?>
+                </tbody></table>
+                <div class="grid cols-2">
+                  <label>Transportation<input type="number" step="0.01" name="transportation_rs" value="<?= htmlspecialchars((string) ($invoiceTotals['transportation'] ?? 0), ENT_QUOTES) ?>" <?= $invoiceLocked ? 'readonly' : '' ?> /></label>
+                  <label>Discount<input type="number" step="0.01" name="discount_rs" value="<?= htmlspecialchars((string) ($invoiceTotals['discount'] ?? 0), ENT_QUOTES) ?>" <?= $invoiceLocked ? 'readonly' : '' ?> /></label>
+                </div>
+                <div class="muted" id="invoice-totals-preview">Basic: <?= htmlspecialchars($inr((float) ($invoiceTotals['basic_total'] ?? 0)), ENT_QUOTES) ?> | GST: <?= htmlspecialchars($inr((float) ($invoiceTotals['gst_total'] ?? 0)), ENT_QUOTES) ?> | Net: <?= htmlspecialchars($inr((float) ($invoiceTotals['net_payable'] ?? 0)), ENT_QUOTES) ?></div>
+                <label>Notes<textarea name="notes" rows="3" <?= $invoiceLocked ? 'readonly' : '' ?>><?= htmlspecialchars((string) ($editingInvoice['notes'] ?? ''), ENT_QUOTES) ?></textarea></label>
+                <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+                  <?php if (!$invoiceLocked): ?><button class="btn secondary" type="submit" name="action" value="save_invoice_draft">Save Draft</button><?php if ($isAdmin): ?><button class="btn" type="submit" name="action" value="finalize_invoice">Finalize</button><?php endif; ?><?php else: ?><span class="pill" style="background:#dcfce7;color:#166534">Finalized (Locked)</span><?php endif; ?>
+                  <a class="btn secondary" href="admin-documents.php?action=view_invoice_html&invoice_id=<?= urlencode((string) ($editingInvoice['invoice_id'] ?? $editingInvoice['id'] ?? '')) ?>" target="_blank" rel="noopener">View Invoice (HTML)</a>
+                </div>
+              </form>
+            </div>
+          <?php endif; ?>
+          <table><thead><tr><th>Number</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+          <?php foreach ($packInvoices as $row): ?><tr><td><?= htmlspecialchars((string) ($row['invoice_number'] ?? $row['invoice_no'] ?? $row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['issue_date'] ?? $row['invoice_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($row['status'] ?? 'draft'), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="admin-documents.php?action=view_invoice_html&invoice_id=<?= urlencode((string) ($row['invoice_id'] ?? $row['id'] ?? '')) ?>" target="_blank" rel="noopener">View HTML</a><?php if ((string) ($row['status'] ?? 'draft') === 'draft'): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => $packQuoteId, 'pack_action' => 'edit_invoice', 'invoice_id' => (string) ($row['invoice_id'] ?? $row['id'] ?? ''), 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">Edit</a><?php endif; ?><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="invoice" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
+          <?php if ($packInvoices === []): ?><tr><td colspan="4" class="muted">No invoice found.</td></tr><?php endif; ?>
           </tbody></table>
         <?php else: ?>
           <h2 style="margin-top:0;">Accepted Customers</h2>
@@ -4916,6 +5208,34 @@ document.querySelectorAll('form[data-inventory-form="1"]').forEach(function (for
     });
   }
 });
+
+
+function bindLineGrossAutoTotals(scopeSelector, opts) {
+  const scope = document.querySelector(scopeSelector);
+  if (!scope) return;
+  const lines = scope.querySelectorAll('.js-line-gross');
+  const basicEl = document.getElementById(opts.basicId);
+  const grossEl = document.getElementById(opts.grossId);
+  const transportEl = document.getElementById(opts.transportId);
+  const discountEl = document.getElementById(opts.discountId);
+  const netEl = document.getElementById(opts.netId);
+  function recalc() {
+    let gross = 0;
+    lines.forEach(function(el){ gross += parseFloat(el.value || '0') || 0; });
+    const transport = parseFloat((transportEl && transportEl.value) || '0') || 0;
+    const discount = parseFloat((discountEl && discountEl.value) || '0') || 0;
+    if (grossEl) grossEl.value = gross.toFixed(2);
+    if (basicEl) basicEl.value = gross.toFixed(2);
+    if (netEl) netEl.value = Math.max(0, gross + transport - discount).toFixed(2);
+  }
+  lines.forEach(function(el){ el.addEventListener('input', recalc); });
+  if (transportEl) transportEl.addEventListener('input', recalc);
+  if (discountEl) discountEl.addEventListener('input', recalc);
+  recalc();
+}
+
+bindLineGrossAutoTotals('#invoice-editor-form', {basicId:'', grossId:'', transportId:'', discountId:'', netId:''});
+bindLineGrossAutoTotals('form[action=""]', {basicId:'pi_basic_total', grossId:'pi_gross_total', transportId:'pi_transportation', discountId:'pi_discount', netId:'pi_net_total'});
 
 </script>
 </body>
