@@ -1679,9 +1679,30 @@ function documents_challan_line_cuttable_pieces(array $line): int
 
 function documents_challan_line_cuttable_length_display(array $line): string
 {
+    $formatFt = static function (float $lengthFt): string {
+        return rtrim(rtrim(number_format($lengthFt, 2, '.', ''), '0'), '.') . 'ft';
+    };
+
+    $pieces = max(0, (int) ($line['pieces'] ?? 0));
     $pieceLengthFt = max(0, (float) ($line['piece_length_ft'] ?? 0));
-    if ($pieceLengthFt > 0) {
-        return rtrim(rtrim(number_format($pieceLengthFt, 2, '.', ''), '0'), '.') . ' ft';
+
+    if ($pieces > 0 && $pieceLengthFt > 0) {
+        return $pieces === 1
+            ? $formatFt($pieceLengthFt)
+            : ($formatFt($pieceLengthFt) . ' ×' . $pieces);
+    }
+
+    if ($pieces > 0 && $pieceLengthFt <= 0) {
+        $totalLengthFt = max(0, (float) ($line['total_length_ft'] ?? $line['length_ft'] ?? 0));
+        if ($totalLengthFt > 0) {
+            $derivedPieceLengthFt = $totalLengthFt / $pieces;
+            $rebuiltTotalFt = $derivedPieceLengthFt * $pieces;
+            if (abs($rebuiltTotalFt - $totalLengthFt) <= 0.01) {
+                return $pieces === 1
+                    ? $formatFt($derivedPieceLengthFt)
+                    : ($formatFt($derivedPieceLengthFt) . ' ×' . $pieces);
+            }
+        }
     }
 
     $allocations = is_array($line['lot_allocations'] ?? null) ? $line['lot_allocations'] : [];
@@ -1708,7 +1729,7 @@ function documents_challan_line_cuttable_length_display(array $line): string
 
     if (count($lengthBuckets) === 1) {
         $first = array_values($lengthBuckets)[0];
-        return rtrim(rtrim(number_format((float) $first['length'], 2, '.', ''), '0'), '.') . ' ft';
+        return $formatFt((float) $first['length']) . ' ×' . (int) $first['pieces'];
     }
 
     usort($lengthBuckets, static function (array $a, array $b): int {
@@ -1717,8 +1738,7 @@ function documents_challan_line_cuttable_length_display(array $line): string
 
     $parts = [];
     foreach ($lengthBuckets as $bucket) {
-        $parts[] = rtrim(rtrim(number_format((float) $bucket['length'], 2, '.', ''), '0'), '.')
-            . ' ft ×' . (int) $bucket['pieces'];
+        $parts[] = $formatFt((float) $bucket['length']) . ' ×' . (int) $bucket['pieces'];
     }
 
     return implode(', ', $parts);
