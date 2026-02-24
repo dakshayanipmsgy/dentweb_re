@@ -159,17 +159,22 @@ function documents_sales_proforma_store_path(): string
 
 function documents_sales_invoice_store_path(): string
 {
-    return documents_sales_documents_dir() . '/invoices/invoices.json';
+    $preferred = documents_base_dir() . '/invoices.json';
+    $legacy = documents_sales_documents_dir() . '/invoices/invoices.json';
+    if (!is_file($preferred) && is_file($legacy)) {
+        @copy($legacy, $preferred);
+    }
+    return $preferred;
 }
 
 function documents_document_actions_log_path(): string
 {
-    return documents_sales_documents_dir() . '/document_actions_log.json';
+    return documents_base_dir() . '/document_actions_log.json';
 }
 
 function documents_document_verification_path(): string
 {
-    return documents_sales_documents_dir() . '/document_verification.json';
+    return documents_base_dir() . '/document_verification.json';
 }
 
 function documents_proformas_dir(): string
