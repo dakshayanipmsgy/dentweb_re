@@ -65,7 +65,7 @@ $renderRows = static function (array $rows): void {
                     continue;
                 }
                 $qtyOrPieces += $pieces;
-                $parts[] = rtrim(rtrim((string) round($pieceLength, 2), '0'), '.') . 'ft × ' . $pieces;
+                $parts[] = documents_inventory_format_number($pieceLength, 2) . 'ft × ' . $pieces;
             }
             if ($parts !== []) {
                 $length = implode(', ', $parts);
@@ -87,7 +87,7 @@ $renderRows = static function (array $rows): void {
                 if ($lotId === '' || $usedFt <= 0) {
                     continue;
                 }
-                $parts[] = $lotId . ': ' . round($usedFt, 2) . 'ft';
+                $parts[] = $lotId . ': ' . documents_inventory_format_number($usedFt, 2) . 'ft';
             }
             if ($parts !== []) {
                 echo '<div class="muted">From lot: ' . htmlspecialchars(implode(', ', $parts), ENT_QUOTES) . '</div>';

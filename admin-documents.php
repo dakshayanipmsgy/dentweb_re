@@ -465,90 +465,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $packForQuote = documents_get_packing_list_for_quote((string) ($quote['id'] ?? ''), false);
             if ($packForQuote !== null) {
                 $challan['packing_list_id'] = (string) ($packForQuote['id'] ?? '');
-                $quoteItems = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
-                $directQuoteComponentIds = [];
-                $activeKitComponentsByKit = [];
-                foreach ($quoteItems as $quoteItem) {
-                    if (!is_array($quoteItem)) {
-                        continue;
-                    }
-                    if ((string) ($quoteItem['type'] ?? '') === 'kit') {
-                        $kitId = safe_text((string) ($quoteItem['kit_id'] ?? ''));
-                        if ($kitId === '') {
-                            continue;
-                        }
-                        $kit = documents_inventory_get_kit($kitId);
-                        if (!is_array($kit)) {
-                            continue;
-                        }
-                        $activeKitComponentsByKit[$kitId] = [];
-                        foreach ((array) ($kit['items'] ?? []) as $kitLine) {
-                            if (!is_array($kitLine)) {
-                                continue;
-                            }
-                            $componentId = safe_text((string) ($kitLine['component_id'] ?? ''));
-                            if ($componentId === '') {
-                                continue;
-                            }
-                            $component = documents_inventory_get_component($componentId);
-                            if (!is_array($component) || !empty($component['archived_flag'])) {
-                                continue;
-                            }
-                            $activeKitComponentsByKit[$kitId][$componentId] = true;
-                        }
-                        continue;
-                    }
-                    if ((string) ($quoteItem['type'] ?? '') === 'component') {
-                        $componentId = safe_text((string) ($quoteItem['component_id'] ?? ''));
-                        if ($componentId !== '') {
-                            $directQuoteComponentIds[$componentId] = true;
-                        }
-                    }
-                }
-
-                $prefillItems = [];
-                foreach ((array) ($packForQuote['required_items'] ?? []) as $line) {
-                    if (!is_array($line)) {
-                        continue;
-                    }
-                    $componentId = safe_text((string) ($line['component_id'] ?? ''));
-                    if ($componentId === '') {
-                        continue;
-                    }
-                    $component = documents_inventory_get_component($componentId);
-                    if (!is_array($component) || !empty($component['archived_flag'])) {
-                        continue;
-                    }
-                    $sourceKitId = safe_text((string) ($line['source_kit_id'] ?? ''));
-                    if ($sourceKitId !== '') {
-                        $activeIds = $activeKitComponentsByKit[$sourceKitId] ?? [];
-                        if (!isset($activeIds[$componentId])) {
-                            continue;
-                        }
-                    } elseif ($quoteItems !== [] && !isset($directQuoteComponentIds[$componentId])) {
-                        continue;
-                    }
-
-                    $mode = (string) ($line['mode'] ?? 'fixed_qty');
-                    $pendingQty = max(0, (float) ($line['pending_qty'] ?? 0));
-                    $pendingFt = max(0, (float) ($line['pending_ft'] ?? 0));
-                    if (in_array($mode, ['fixed_qty', 'capacity_qty'], true) && $pendingQty <= 0 && $pendingFt <= 0) {
-                        continue;
-                    }
-                    $prefillItems[] = [
-                        'name' => (string) ($line['component_name_snapshot'] ?? ''),
-                        'description' => 'From packing list',
-                        'unit' => (string) ($line['unit'] ?? (($pendingFt > 0) ? 'ft' : 'Nos')),
-                        'qty' => in_array($mode, ['fixed_qty', 'capacity_qty'], true) ? ($pendingFt > 0 ? $pendingFt : $pendingQty) : 0,
-                        'remarks' => '',
-                        'component_id' => $componentId,
-                        'line_id' => (string) ($line['line_id'] ?? ''),
-                        'mode' => $mode,
-                        'dispatch_qty' => 0,
-                        'dispatch_ft' => 0,
-                    ];
-                }
-                $challan['items'] = $prefillItems;
             }
             $challan['created_by_type'] = 'admin';
             $challan['created_by_id'] = $viewer['id'];
@@ -2829,6 +2745,10 @@ if ($activeTab === 'items' && $itemsSubtab === 'csv_import') {
 }
 
 $inventoryEditMode = ($isAdmin || $isEmployee) && $itemsSubtab === 'inventory' && safe_text((string) ($_GET['edit_mode'] ?? '')) === '1';
+$inventoryStockView = safe_text((string) ($_GET['inventory_view'] ?? 'active'));
+if (!in_array($inventoryStockView, ['active', 'finished'], true)) {
+    $inventoryStockView = 'active';
+}
 $itemsEditId = safe_text((string) ($_GET['edit'] ?? ''));
 $componentFilter = safe_text((string) ($_GET['component_filter'] ?? ''));
 $cloneId = safe_text((string) ($_GET['clone'] ?? ''));
@@ -3936,6 +3856,10 @@ usort($archivedRows, static function (array $a, array $b): int {
           </div>
 
           <h3>Inventory Summary</h3>
+          <div style="display:flex;gap:8px;align-items:center;margin:8px 0 12px">
+            <a class="btn <?= $inventoryStockView === 'active' ? '' : 'secondary' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'inventory', 'inventory_view' => 'active', 'edit_mode' => $inventoryEditMode ? '1' : '0']), ENT_QUOTES) ?>">Active Stock</a>
+            <a class="btn <?= $inventoryStockView === 'finished' ? '' : 'secondary' ?>" href="?<?= htmlspecialchars(http_build_query(['tab' => 'items', 'items_subtab' => 'inventory', 'inventory_view' => 'finished', 'edit_mode' => $inventoryEditMode ? '1' : '0']), ENT_QUOTES) ?>">Finished Stock</a>
+          </div>
           <?php if ($isAdmin || $isEmployee): ?>
             <div style="display:flex;gap:0.5rem;align-items:center;margin:0.75rem 0;">
               <?php if ($inventoryEditMode): ?>
@@ -3958,7 +3882,7 @@ usort($archivedRows, static function (array $a, array $b): int {
             <input type="text" id="inventorySummarySearch" placeholder="Component or variant name" />
           </div>
           <table id="inventorySummaryTable"><thead><tr><th>Component</th><th>Type</th><th>Summary</th></tr></thead><tbody>
-            <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag'])) { continue; } $componentId=(string) ($component['id'] ?? ''); $isCuttable=!empty($component['is_cuttable']); $hasVariants=!empty($component['has_variants']); $componentEntry = documents_inventory_component_stock($inventoryStock, $componentId, ''); $lots = is_array($componentEntry['lots'] ?? null) ? $componentEntry['lots'] : []; usort($lots, static function ($a, $b): int { return strcmp((string) (($a['received_at'] ?? '')), (string) (($b['received_at'] ?? ''))); }); $totalFt = documents_inventory_compute_on_hand($inventoryStock, $componentId, '', true); $variantRows = (array) ($variantsByComponent[$componentId] ?? []); $variantTotalQty = documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false); $variantCuttableStats = []; $variantCuttableTotalFt = 0.0; $variantCuttablePieces = 0; if ($isCuttable && $hasVariants) { foreach ($variantRows as $variantRow) { if (!is_array($variantRow) || !empty($variantRow['archived_flag'])) { continue; } $variantId=(string) ($variantRow['id'] ?? ''); if ($variantId === '') { continue; } $variantEntry = documents_inventory_component_stock($inventoryStock, $componentId, $variantId); $variantLots = is_array($variantEntry['lots'] ?? null) ? $variantEntry['lots'] : []; usort($variantLots, static function ($a, $b): int { return strcmp((string) (($a['received_at'] ?? '')), (string) (($b['received_at'] ?? ''))); }); $variantFt = documents_inventory_compute_on_hand($inventoryStock, $componentId, $variantId, true); $variantPieces = count($variantLots); $variantCuttableStats[] = ['variant' => $variantRow, 'variant_id' => $variantId, 'entry' => $variantEntry, 'lots' => $variantLots, 'ft' => $variantFt, 'pieces' => $variantPieces]; $variantCuttableTotalFt += $variantFt; $variantCuttablePieces += $variantPieces; } } $componentCuttableLots = ($isCuttable && $hasVariants) ? [] : $lots; $componentCuttablePieces = ($isCuttable && $hasVariants) ? $variantCuttablePieces : count($componentCuttableLots); $componentCuttableTotalFt = ($isCuttable && $hasVariants) ? $variantCuttableTotalFt : $totalFt; $summaryText = $isCuttable ? (documents_inventory_format_number($componentCuttableTotalFt, 4) . ' ft') : ($hasVariants ? (documents_inventory_format_number($variantTotalQty, 4) . ' qty total') : (documents_inventory_format_number(documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false), 4) . ' ' . (string) ($component['default_unit'] ?? 'qty'))); $searchHaystack = strtolower(trim((string) ($component['name'] ?? '') . ' ' . implode(' ', array_map(static function ($vr): string { return (string) ($vr['display_name'] ?? ''); }, $variantRows)))); $locationBreakdownText = array_map(static function (array $row) use ($component): string { return documents_inventory_resolve_location_name((string) ($row['location_id'] ?? '')) . ': ' . documents_inventory_format_number((float) ($row['qty'] ?? 0), 4) . ' ' . (string) ($component['default_unit'] ?? 'qty'); }, (array) ($componentEntry['location_breakdown'] ?? [])); $componentEditable = !isset($inventoryComponentBlocked[$componentId]); ?>
+            <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag'])) { continue; } $componentId=(string) ($component['id'] ?? ''); $isCuttable=!empty($component['is_cuttable']); $hasVariants=!empty($component['has_variants']); $componentEntry = documents_inventory_component_stock($inventoryStock, $componentId, ''); $lots = is_array($componentEntry['lots'] ?? null) ? $componentEntry['lots'] : []; usort($lots, static function ($a, $b): int { return strcmp((string) (($a['received_at'] ?? '')), (string) (($b['received_at'] ?? ''))); }); $totalFt = documents_inventory_compute_on_hand($inventoryStock, $componentId, '', true); $variantRows = (array) ($variantsByComponent[$componentId] ?? []); $variantTotalQty = documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false); $variantCuttableStats = []; $variantCuttableTotalFt = 0.0; $variantCuttablePieces = 0; if ($isCuttable && $hasVariants) { foreach ($variantRows as $variantRow) { if (!is_array($variantRow) || !empty($variantRow['archived_flag'])) { continue; } $variantId=(string) ($variantRow['id'] ?? ''); if ($variantId === '') { continue; } $variantEntry = documents_inventory_component_stock($inventoryStock, $componentId, $variantId); $variantLots = is_array($variantEntry['lots'] ?? null) ? $variantEntry['lots'] : []; usort($variantLots, static function ($a, $b): int { return strcmp((string) (($a['received_at'] ?? '')), (string) (($b['received_at'] ?? ''))); }); $variantFt = documents_inventory_compute_on_hand($inventoryStock, $componentId, $variantId, true); $variantPieces = count($variantLots); $variantCuttableStats[] = ['variant' => $variantRow, 'variant_id' => $variantId, 'entry' => $variantEntry, 'lots' => $variantLots, 'ft' => $variantFt, 'pieces' => $variantPieces]; $variantCuttableTotalFt += $variantFt; $variantCuttablePieces += $variantPieces; } } $componentCuttableLots = ($isCuttable && $hasVariants) ? [] : $lots; $componentCuttablePieces = ($isCuttable && $hasVariants) ? $variantCuttablePieces : count($componentCuttableLots); $componentCuttableTotalFt = ($isCuttable && $hasVariants) ? $variantCuttableTotalFt : $totalFt; $summaryText = $isCuttable ? (documents_inventory_format_number($componentCuttableTotalFt, 4) . ' ft') : ($hasVariants ? (documents_inventory_format_number($variantTotalQty, 4) . ' qty total') : (documents_inventory_format_number(documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false), 4) . ' ' . (string) ($component['default_unit'] ?? 'qty'))); $isActiveStock = false; if ($isCuttable) { $isActiveStock = $componentCuttableTotalFt > 0.00001 && $componentCuttablePieces > 0; } elseif ($hasVariants) { foreach ($variantRows as $variantRowForState) { if (!is_array($variantRowForState) || !empty($variantRowForState['archived_flag'])) { continue; } $variantIdForState=(string) ($variantRowForState['id'] ?? ''); if ($variantIdForState !== '' && abs((float) documents_inventory_compute_on_hand($inventoryStock, $componentId, $variantIdForState, false)) > 0.00001) { $isActiveStock = true; break; } } } else { $isActiveStock = abs((float) documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false)) > 0.00001; } if (($inventoryStockView === 'active' && !$isActiveStock) || ($inventoryStockView === 'finished' && $isActiveStock)) { continue; } $searchHaystack = strtolower(trim((string) ($component['name'] ?? '') . ' ' . implode(' ', array_map(static function ($vr): string { return (string) ($vr['display_name'] ?? ''); }, $variantRows)))); $locationBreakdownText = array_map(static function (array $row) use ($component): string { return documents_inventory_resolve_location_name((string) ($row['location_id'] ?? '')) . ': ' . documents_inventory_format_number((float) ($row['qty'] ?? 0), 4) . ' ' . (string) ($component['default_unit'] ?? 'qty'); }, (array) ($componentEntry['location_breakdown'] ?? [])); $componentEditable = !isset($inventoryComponentBlocked[$componentId]); ?>
               <tr class="inventory-summary-group" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>"><td><strong><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></strong></td><td><?php if ($isCuttable): ?><span class="pill">Cuttable (ft)</span><?php endif; ?><?php if ($hasVariants): ?><span class="pill">Variants</span><?php endif; ?><?php if (!$isCuttable && !$hasVariants): ?><span class="muted">Plain</span><?php endif; ?></td><td><?= htmlspecialchars($summaryText, ENT_QUOTES) ?><?php if (!$isCuttable && !$hasVariants): ?><br><span class="muted"><?= htmlspecialchars(implode(' | ', $locationBreakdownText !== [] ? $locationBreakdownText : ['Unassigned: 0']), ENT_QUOTES) ?></span><?php endif; ?><?php if ($inventoryEditMode && !$isCuttable && !$hasVariants && !$componentEditable): ?><br><span class="muted">Used stock cannot be edited.</span><?php endif; ?></td></tr>
               <?php if ($isCuttable): ?>
                 <tr class="inventory-summary-detail" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>">
