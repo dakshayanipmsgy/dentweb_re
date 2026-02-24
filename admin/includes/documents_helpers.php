@@ -159,7 +159,7 @@ function documents_sales_proforma_store_path(): string
 
 function documents_sales_invoice_store_path(): string
 {
-    return documents_sales_documents_dir() . '/invoices/invoices.json';
+    return documents_base_dir() . '/invoices.json';
 }
 
 function documents_document_actions_log_path(): string
@@ -316,6 +316,17 @@ function documents_ensure_structure(): void
             json_save($receiptsPath, is_array($legacyReceipts) ? $legacyReceipts : []);
         } else {
             json_save($receiptsPath, []);
+        }
+    }
+
+    $invoicePath = documents_sales_invoice_store_path();
+    $legacyInvoicePath = documents_sales_documents_dir() . '/invoices/invoices.json';
+    if (!is_file($invoicePath)) {
+        if (is_file($legacyInvoicePath)) {
+            $legacyInvoices = json_load($legacyInvoicePath, []);
+            json_save($invoicePath, is_array($legacyInvoices) ? $legacyInvoices : []);
+        } else {
+            json_save($invoicePath, []);
         }
     }
 
@@ -4009,6 +4020,99 @@ function documents_calc_tax_breakdown_from_gross(float $grossInclGst, array $tax
     ];
 }
 
+function documents_resolve_quote_item_tax_profile(array $item, array $quote): array
+{
+    $fallbackUsed = false;
+    $profile = null;
+    if ((string) ($item['type'] ?? '') === 'kit') {
+        $kit = documents_inventory_get_kit((string) ($item['kit_id'] ?? ''));
+        if (is_array($kit)) {
+            $profile = documents_inventory_get_tax_profile((string) ($kit['tax_profile_id'] ?? ''));
+        }
+    } else {
+        $variantId = safe_text((string) ($item['variant_id'] ?? ''));
+        if ($variantId !== '') {
+            $variant = documents_inventory_get_component_variant($variantId);
+            $overrideId = safe_text((string) ($variant['tax_profile_id_override'] ?? ''));
+            if ($overrideId !== '') {
+                $profile = documents_inventory_get_tax_profile($overrideId);
+            }
+        }
+        if ($profile === null) {
+            $component = documents_inventory_get_component((string) ($item['component_id'] ?? ''));
+            if (is_array($component)) {
+                $profile = documents_inventory_get_tax_profile((string) ($component['tax_profile_id'] ?? ''));
+            }
+        }
+    }
+    if ($profile === null) {
+        $fallbackUsed = true;
+        $profile = documents_inventory_get_tax_profile((string) ($quote['tax_profile_id'] ?? ''));
+    }
+    if ($profile === null) {
+        $profile = documents_default_tax_profile();
+    }
+    return ['profile' => $profile, 'fallback_used' => $fallbackUsed];
+}
+
+function documents_compute_items_tax_from_gross(array $quoteItems, array $quote, float $systemGrossInclGst): array
+{
+    $items = documents_normalize_quote_structured_items($quoteItems);
+    $sumLineGross = 0.0;
+    foreach ($items as $line) {
+        $sumLineGross += max(0, (float) ($line['line_total_incl_gst'] ?? 0));
+    }
+
+    $missingLineTotals = $sumLineGross <= 0;
+    $factor = $missingLineTotals ? max(1, count($items)) : $sumLineGross;
+    $rows = [];
+    $baseTotal = 0.0;
+    $gstTotal = 0.0;
+    $gstByRate = [];
+    foreach ($items as $idx => $line) {
+        $resolved = documents_resolve_quote_item_tax_profile($line, $quote);
+        $profile = (array) ($resolved['profile'] ?? documents_default_tax_profile());
+        $lineGross = max(0, (float) ($line['line_total_incl_gst'] ?? 0));
+        if ($missingLineTotals) {
+            $lineGross = documents_money_round(max(0, $systemGrossInclGst) * (max(0, (float) ($line['qty'] ?? 0)) / $factor));
+        }
+        $breakdown = documents_calc_tax_breakdown_from_gross($lineGross, $profile);
+        foreach ((array) ($breakdown['slabs'] ?? []) as $slab) {
+            $rateKey = (string) ((float) ($slab['rate_pct'] ?? 0));
+            if (!isset($gstByRate[$rateKey])) {
+                $gstByRate[$rateKey] = ['rate_pct' => (float) ($slab['rate_pct'] ?? 0), 'base' => 0.0, 'gst' => 0.0];
+            }
+            $gstByRate[$rateKey]['base'] = documents_money_round($gstByRate[$rateKey]['base'] + (float) ($slab['base_amount'] ?? 0));
+            $gstByRate[$rateKey]['gst'] = documents_money_round($gstByRate[$rateKey]['gst'] + (float) ($slab['gst_amount'] ?? 0));
+        }
+        $baseTotal = documents_money_round($baseTotal + (float) ($breakdown['basic_total'] ?? 0));
+        $gstTotal = documents_money_round($gstTotal + (float) ($breakdown['gst_total'] ?? 0));
+        $rows[] = [
+            'sr_no' => $idx + 1,
+            'type' => (string) ($line['type'] ?? 'component'),
+            'item_name' => (string) ($line['name_snapshot'] ?? ''),
+            'description' => (string) (($line['custom_description'] ?? '') !== '' ? $line['custom_description'] : ($line['master_description_snapshot'] ?? $line['description_snapshot'] ?? '')),
+            'hsn' => (string) ($line['hsn_snapshot'] ?? ''),
+            'qty' => (float) ($line['qty'] ?? 0),
+            'unit' => (string) ($line['unit'] ?? ''),
+            'line_total_incl_gst' => documents_money_round($lineGross),
+            'tax_profile_id_snapshot' => (string) ($profile['id'] ?? ''),
+            'tax_profile_name_snapshot' => (string) ($profile['name'] ?? ''),
+            'slabs_snapshot' => (array) ($profile['slabs'] ?? []),
+            'tax_breakdown' => $breakdown,
+            'tax_profile_fallback_note' => !empty($resolved['fallback_used']) ? 'quotation fallback used' : '',
+        ];
+    }
+
+    return [
+        'items_snapshot' => $rows,
+        'missing_line_totals' => $missingLineTotals,
+        'basic_total' => documents_money_round($baseTotal),
+        'gst_total' => documents_money_round($gstTotal),
+        'gst_by_rate' => array_values($gstByRate),
+    ];
+}
+
 function documents_calc_gross_from_base(float $baseTotal, array $taxProfile): array
 {
     $baseTotal = max(0, documents_money_round($baseTotal));
@@ -4172,6 +4276,7 @@ function documents_quote_structured_item_defaults(): array
         'qty' => 0,
         'unit' => '',
         'variant_id' => '',
+        'line_total_incl_gst' => 0,
         'variant_snapshot' => [],
         'meta' => [],
     ];
@@ -5482,6 +5587,7 @@ function documents_normalize_quote_structured_items(array $rows): array
         $item['hsn_snapshot'] = safe_text((string) ($item['hsn_snapshot'] ?? ''));
         $item['unit'] = safe_text((string) ($item['unit'] ?? ''));
         $item['variant_id'] = safe_text((string) ($item['variant_id'] ?? ''));
+        $item['line_total_incl_gst'] = documents_money_round(max(0, (float) ($item['line_total_incl_gst'] ?? 0)));
         $item['variant_snapshot'] = is_array($item['variant_snapshot'] ?? null) ? $item['variant_snapshot'] : [];
         $item['meta'] = is_array($item['meta'] ?? null) ? $item['meta'] : [];
         if ($item['qty'] <= 0) {
