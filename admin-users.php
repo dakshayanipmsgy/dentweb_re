@@ -381,6 +381,7 @@ if ($activeTab === 'employees') {
             'phone' => $_POST['phone'] ?? '',
             'designation' => $_POST['designation'] ?? '',
             'status' => $_POST['status'] ?? 'active',
+            'can_access_admin_created_dcs' => isset($_POST['can_access_admin_created_dcs']),
         ];
 
         $existingEmployee = null;
@@ -1097,6 +1098,10 @@ function admin_users_build_welcome_subject(array $customer): string
               <input id="customer_csv" class="users-input" type="file" name="csv_file" accept=".csv,text/csv" required />
               <p class="admin-muted" style="margin-top: 0.35rem;">Required headers: mobile, name, customer_type, address, city, district, pin_code, state, meter_number, meter_serial_number, jbvnl_account_number, application_id, complaints_raised, status, application_submitted_date, sanction_load_kwp, installed_pv_module_capacity_kwp, circle_name, division_name, sub_division_name, loan_taken, loan_application_date, solar_plant_installation_date, subsidy_amount_rs, subsidy_disbursed_date, password. Optional headers: serial_number, welcome_sent_via.</p>
             </div>
+
+            <div style="grid-column:1/-1">
+              <label><input type="checkbox" name="can_access_admin_created_dcs" value="1" /> Allow access to delivery challans created by admin</label>
+            </div>
             <div class="users-form-actions">
               <button class="btn btn-primary" type="submit">Upload and import</button>
             </div>
@@ -1297,6 +1302,10 @@ function admin_users_build_welcome_subject(array $customer): string
               </div>
             </div>
 
+
+            <div style="grid-column:1/-1">
+              <label><input type="checkbox" name="can_access_admin_created_dcs" value="1" <?= !empty($editingEmployee['can_access_admin_created_dcs']) ? 'checked' : '' ?> /> Allow access to delivery challans created by admin</label>
+            </div>
             <div class="users-form-actions">
               <button class="btn btn-primary" type="submit">Add customer</button>
             </div>
@@ -1674,6 +1683,7 @@ function admin_users_build_welcome_subject(array $customer): string
                   <th scope="col">ID</th>
                   <th scope="col">Title</th>
                   <th scope="col">Status</th>
+                <th scope="col">Admin DC access</th>
                   <th scope="col">Problem Category</th>
                   <th scope="col">Assignee</th>
                   <th scope="col">Created</th>
@@ -1893,6 +1903,9 @@ function admin_users_build_welcome_subject(array $customer): string
                 <option value="inactive">Inactive</option>
               </select>
             </div>
+            <div style="grid-column:1/-1">
+              <label><input type="checkbox" name="can_access_admin_created_dcs" value="1" /> Allow access to delivery challans created by admin</label>
+            </div>
             <div class="users-form-actions">
               <button class="btn btn-primary" type="submit">Add employee</button>
             </div>
@@ -1942,6 +1955,9 @@ function admin_users_build_welcome_subject(array $customer): string
                 <option value="inactive"<?= ($editingEmployee['status'] ?? '') === 'inactive' ? ' selected' : '' ?>>Inactive</option>
               </select>
             </div>
+            <div style="grid-column:1/-1">
+              <label><input type="checkbox" name="can_access_admin_created_dcs" value="1" <?= !empty($editingEmployee['can_access_admin_created_dcs']) ? 'checked' : '' ?> /> Allow access to delivery challans created by admin</label>
+            </div>
             <div class="users-form-actions">
               <button class="btn btn-primary" type="submit">Save changes</button>
             </div>
@@ -1957,13 +1973,14 @@ function admin_users_build_welcome_subject(array $customer): string
                 <th scope="col">Login ID</th>
                 <th scope="col">Designation</th>
                 <th scope="col">Status</th>
+                <th scope="col">Admin DC access</th>
                 <th scope="col" class="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               <?php if ($employees === []): ?>
               <tr>
-                <td colspan="5" class="text-center admin-muted">No employees found.</td>
+                <td colspan="6" class="text-center admin-muted">No employees found.</td>
               </tr>
               <?php else: ?>
               <?php foreach ($employees as $employee): ?>
@@ -1972,6 +1989,7 @@ function admin_users_build_welcome_subject(array $customer): string
                 <td><?= admin_users_safe($employee['login_id'] ?? '') ?></td>
                 <td><?= admin_users_safe($employee['designation'] ?? '') ?></td>
                 <td><span class="users-status"><?= ($employee['status'] ?? '') === 'inactive' ? 'Inactive' : 'Active' ?></span></td>
+                <td><?= !empty($employee['can_access_admin_created_dcs']) ? 'Allowed' : 'No' ?></td>
                 <td class="users-actions text-right"><a href="admin-users.php?tab=employees&amp;view=<?= urlencode((string) ($employee['id'] ?? '')) ?>">View / Edit</a></td>
               </tr>
               <?php endforeach; ?>

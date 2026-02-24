@@ -244,7 +244,16 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
         ];
     }
 
-    $coverNote = trim((string) ($quote['cover_note_text'] ?? '')) ?: trim((string) ($quoteDefaults['defaults']['cover_note_template'] ?? ''));
+    $templateCoverNote = '';
+    if ($templateSetId !== '') {
+        $templateEntry = $templateBlocks[$templateSetId] ?? null;
+        if (is_array($templateEntry) && is_array($templateEntry['blocks'] ?? null)) {
+            $templateCoverNote = trim((string) ($templateEntry['blocks']['quotation_cover_note_html'] ?? ''));
+        }
+    }
+    $coverNote = $templateCoverNote !== ''
+        ? $templateCoverNote
+        : (trim((string) ($quote['cover_note_text'] ?? '')) ?: trim((string) ($quoteDefaults['defaults']['cover_note_template'] ?? '')));
     $specialReq = trim((string) ($quote['special_requests_text'] ?? $quote['special_requests_inclusive'] ?? ''));
 
     $tokens = is_array($quoteDefaults['global']['ui_tokens'] ?? null) ? $quoteDefaults['global']['ui_tokens'] : [];

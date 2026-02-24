@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
+require_once __DIR__ . '/includes/employee_admin.php';
 
 require_login_any_role(['admin', 'employee']);
 
@@ -14,6 +15,14 @@ if (!$isAdmin && !$isEmployee) {
     http_response_code(403);
     echo 'Access denied.';
     exit;
+}
+
+
+$employeeDcAccessAllowed = false;
+if ($isEmployee) {
+    $employeeStore = new EmployeeFsStore();
+    $employeeRecord = $employeeStore->findById((string) ($user['id'] ?? ''));
+    $employeeDcAccessAllowed = !empty($employeeRecord['can_access_admin_created_dcs']);
 }
 
 $docTypes = ['quotation', 'proforma', 'agreement', 'challan', 'invoice_public', 'invoice_internal', 'receipt', 'sales_return'];
@@ -3404,7 +3413,7 @@ if ($packQuote !== null && $packPiId !== '') {
     }
 }
 
-$collectByQuote = static function (array $rows, string $quoteId, bool $includeArchived) use ($isArchivedRecord): array {
+$collectByQuote = static function (array $rows, string $quoteId, bool $includeArchived, bool $applyEmployeeDcFilter = false) use ($isArchivedRecord, $isEmployee, $user, $employeeDcAccessAllowed): array {
     $list = [];
     foreach ($rows as $row) {
         if (!is_array($row)) {
@@ -3412,6 +3421,15 @@ $collectByQuote = static function (array $rows, string $quoteId, bool $includeAr
         }
         if ((string) ($row['quotation_id'] ?? '') !== $quoteId) {
             continue;
+        }
+        if ($isEmployee && $applyEmployeeDcFilter) {
+            $creatorRole = (string) ($row['created_by']['role'] ?? $row['created_by_type'] ?? $row['created_by']['type'] ?? '');
+            $creatorId = (string) ($row['created_by']['id'] ?? $row['created_by_id'] ?? '');
+            $ownEmployeeDraft = ($creatorRole === 'employee' && $creatorId === (string) ($user['id'] ?? ''));
+            $adminCreatedVisible = ($creatorRole === 'admin' && $employeeDcAccessAllowed);
+            if (!$ownEmployeeDraft && !$adminCreatedVisible) {
+                continue;
+            }
         }
         if (!$includeArchived && $isArchivedRecord($row)) {
             continue;
@@ -3605,7 +3623,7 @@ usort($documentVerificationQueue, static function (array $a, array $b): int {
             $packQuoteId = (string) ($packQuote['id'] ?? '');
             $packAgreements = $collectByQuote($salesAgreements, $packQuoteId, $includeArchivedPack);
             $packReceipts = $collectByQuote($salesReceipts, $packQuoteId, $includeArchivedPack);
-            $packChallans = $collectByQuote($salesChallans, $packQuoteId, $includeArchivedPack);
+            $packChallans = $collectByQuote($salesChallans, $packQuoteId, $includeArchivedPack, true);
             $packProformas = $collectByQuote($salesProformas, $packQuoteId, $includeArchivedPack);
             $packInvoices = $collectByQuote($salesInvoices, $packQuoteId, $includeArchivedPack);
             $packReceiptsActive = array_values(array_filter($packReceipts, static fn(array $r): bool => !documents_is_archived($r)));
