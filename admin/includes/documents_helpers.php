@@ -162,6 +162,16 @@ function documents_sales_invoice_store_path(): string
     return documents_sales_documents_dir() . '/invoices/invoices.json';
 }
 
+function documents_document_actions_log_path(): string
+{
+    return documents_sales_documents_dir() . '/document_actions_log.json';
+}
+
+function documents_document_verification_path(): string
+{
+    return documents_sales_documents_dir() . '/document_verification.json';
+}
+
 function documents_proformas_dir(): string
 {
     return documents_base_dir() . '/proformas';
@@ -324,6 +334,8 @@ function documents_ensure_structure(): void
         documents_inventory_verification_log_path(),
         documents_inventory_edits_log_path(),
         documents_packing_lists_path(),
+        documents_document_actions_log_path(),
+        documents_document_verification_path(),
     ] as $storePath) {
         if (!is_file($storePath)) {
             json_save($storePath, []);
@@ -781,6 +793,115 @@ function documents_company_profile_defaults(): array
         'logo_path' => '',
         'updated_at' => '',
     ];
+}
+
+function documents_document_action_log_defaults(): array
+{
+    return [
+        'id' => '',
+        'at' => '',
+        'actor' => ['role' => '', 'id' => '', 'name' => ''],
+        'action' => '',
+        'doc_type' => '',
+        'doc_id' => '',
+        'quote_id' => '',
+        'notes' => '',
+    ];
+}
+
+function documents_document_verification_defaults(): array
+{
+    return [
+        'log_id' => '',
+        'status' => 'not_verified',
+        'admin_note' => '',
+        'verified_by' => ['role' => '', 'id' => '', 'name' => ''],
+        'verified_at' => '',
+    ];
+}
+
+function documents_load_document_actions_log(): array
+{
+    $rows = json_load(documents_document_actions_log_path(), []);
+    if (!is_array($rows)) {
+        return [];
+    }
+    $normalized = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $normalized[] = array_merge(documents_document_action_log_defaults(), $row);
+    }
+    return $normalized;
+}
+
+function documents_save_document_actions_log(array $rows): array
+{
+    return json_save(documents_document_actions_log_path(), array_values($rows));
+}
+
+function documents_load_document_verification(): array
+{
+    $rows = json_load(documents_document_verification_path(), []);
+    if (!is_array($rows)) {
+        return [];
+    }
+    $normalized = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $record = array_merge(documents_document_verification_defaults(), $row);
+        $record['status'] = in_array((string) ($record['status'] ?? ''), ['not_verified', 'verified', 'needs_clarification'], true)
+            ? (string) $record['status']
+            : 'not_verified';
+        $normalized[] = $record;
+    }
+    return $normalized;
+}
+
+function documents_save_document_verification(array $rows): array
+{
+    return json_save(documents_document_verification_path(), array_values($rows));
+}
+
+function documents_append_document_action_log(array $actor, string $action, string $docType, string $docId, string $quoteId, string $notes = ''): array
+{
+    $rows = documents_load_document_actions_log();
+    $record = array_merge(documents_document_action_log_defaults(), [
+        'id' => 'dlog_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)),
+        'at' => date('c'),
+        'actor' => [
+            'role' => safe_text((string) ($actor['role'] ?? '')),
+            'id' => safe_text((string) ($actor['id'] ?? '')),
+            'name' => safe_text((string) ($actor['name'] ?? '')),
+        ],
+        'action' => safe_text($action),
+        'doc_type' => safe_text($docType),
+        'doc_id' => safe_text($docId),
+        'quote_id' => safe_text($quoteId),
+        'notes' => safe_text($notes),
+    ]);
+    $rows[] = $record;
+    $saved = documents_save_document_actions_log($rows);
+    if (!($saved['ok'] ?? false)) {
+        return ['ok' => false, 'error' => 'Unable to save action log.', 'record' => $record];
+    }
+
+    if ((string) ($record['actor']['role'] ?? '') === 'employee') {
+        $verificationRows = documents_load_document_verification();
+        $verificationRows[] = array_merge(documents_document_verification_defaults(), [
+            'log_id' => (string) ($record['id'] ?? ''),
+            'status' => 'not_verified',
+        ]);
+        $savedVerification = documents_save_document_verification($verificationRows);
+        if (!($savedVerification['ok'] ?? false)) {
+            return ['ok' => false, 'error' => 'Action logged but verification queue update failed.', 'record' => $record];
+        }
+    }
+
+    return ['ok' => true, 'error' => '', 'record' => $record];
 }
 
 function documents_numbering_defaults(): array

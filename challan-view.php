@@ -1184,6 +1184,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             documents_log('Challan update failed for ' . (string) ($challan['id'] ?? '') . ': ' . (string) ($saved['error'] ?? 'Unknown error'));
             $redirectWith('error', 'Unable to save delivery challan.');
         }
+        documents_append_document_action_log(
+            ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
+            $action === 'finalize' ? 'finalize' : ($action === 'archive' ? 'archive' : 'update_draft'),
+            'dc',
+            (string) ($challan['id'] ?? ''),
+            (string) ($challan['quote_id'] ?? $challan['linked_quote_id'] ?? ''),
+            $action === 'finalize' ? 'Delivery challan finalized.' : ($action === 'archive' ? 'Delivery challan archived.' : 'Delivery challan draft updated.')
+        );
         $redirectWith('success', $action === 'finalize' ? 'DC finalized and inventory updated.' : ($action === 'save_draft' ? 'DC draft saved.' : 'DC archived.'));
     }
 }
