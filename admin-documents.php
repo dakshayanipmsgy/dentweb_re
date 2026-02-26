@@ -1406,7 +1406,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
 
-    if (in_array($action, ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive','save_location','save_location_edit','toggle_location_archive','create_inventory_tx','edit_inventory_tx','save_inventory_edits','inventory_verification_update','inventory_verification_bulk_update','reconcile_archived_dc_inventory','import_components_csv','import_variants_csv','import_locations_csv','import_kits_csv','import_inventory_stock_in_csv'], true)) {
+    if (in_array($action, ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive','save_location','save_location_edit','toggle_location_archive','create_inventory_tx','edit_inventory_tx','save_inventory_edits','inventory_verification_update','inventory_verification_bulk_update','import_components_csv','import_variants_csv','import_locations_csv','import_kits_csv','import_inventory_stock_in_csv'], true)) {
         $masterActions = ['save_component','save_component_edit','toggle_component_archive','save_kit_create','save_kit_edit','toggle_kit_archive','save_tax_profile','save_tax_profile_edit','toggle_tax_profile_archive','save_variant','save_variant_edit','toggle_variant_archive','save_location','save_location_edit','toggle_location_archive'];
         if (in_array($action, $masterActions, true) && !$isAdmin) {
             $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'components']);
@@ -2303,107 +2303,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $saved = documents_inventory_save_verification_log($verificationRows);
             $redirectDocuments('items', ($saved['ok'] ?? false) ? 'success' : 'error', ($saved['ok'] ?? false) ? ('Updated verification for ' . $updated . ' transaction(s).') : 'Failed to save bulk verification update.', ['items_subtab' => 'inventory_verification']);
-        }
-
-        if ($action === 'reconcile_archived_dc_inventory') {
-            if (!$isAdmin) {
-                $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
-            }
-            $challans = documents_list_challans();
-            $stock = documents_inventory_load_stock();
-            $transactions = documents_inventory_load_transactions();
-            $txById = [];
-            foreach ($transactions as $idx => $row) {
-                if (!is_array($row)) {
-                    continue;
-                }
-                $merged = array_merge(documents_inventory_transaction_defaults(), $row);
-                $txId = safe_text((string) ($merged['id'] ?? ''));
-                if ($txId === '') {
-                    continue;
-                }
-                $txById[$txId] = ['idx' => $idx, 'tx' => $merged];
-            }
-
-            $reconcileLog = json_load(documents_inventory_reconcile_log_path(), []);
-            if (!is_array($reconcileLog)) {
-                $reconcileLog = [];
-            }
-            $actor = ['role' => (string) ($viewer['role'] ?? 'admin'), 'id' => (string) ($viewer['id'] ?? ''), 'name' => (string) ($viewer['name'] ?? 'Admin')];
-            $reconciled = 0;
-            $reconciledTx = 0;
-            foreach ($challans as &$dc) {
-                if (!is_array($dc)) {
-                    continue;
-                }
-                if (strtolower((string) ($dc['status'] ?? '')) !== 'archived' || empty($dc['archived_flag']) || !empty($dc['rollback_applied'])) {
-                    continue;
-                }
-                $sourceTxnIds = array_values(array_filter(array_map(static fn($id): string => safe_text((string) $id), (array) ($dc['inventory_txn_ids'] ?? [])), static fn(string $id): bool => $id !== ''));
-                if ($sourceTxnIds === []) {
-                    continue;
-                }
-                $localReversalIds = [];
-                foreach ($sourceTxnIds as $sourceTxnId) {
-                    $sourceWrap = $txById[$sourceTxnId] ?? null;
-                    if (!is_array($sourceWrap)) {
-                        continue;
-                    }
-                    $sourceTx = (array) ($sourceWrap['tx'] ?? []);
-                    if (!empty($sourceTx['voided_flag']) || !empty($sourceTx['archived_flag']) || strtoupper((string) ($sourceTx['type'] ?? '')) !== 'OUT') {
-                        continue;
-                    }
-                    $restore = documents_inventory_restore_out_transaction($stock, $sourceTx, $actor, (string) ($dc['id'] ?? ''));
-                    if (!($restore['ok'] ?? false)) {
-                        continue;
-                    }
-                    $reversalTx = (array) ($restore['reversal_txn'] ?? []);
-                    $reversalId = safe_text((string) ($reversalTx['id'] ?? ''));
-                    if ($reversalId === '') {
-                        continue;
-                    }
-                    $transactions[] = $reversalTx;
-                    $localReversalIds[] = $reversalId;
-                    $reconciledTx++;
-
-                    $sourceIdx = (int) ($sourceWrap['idx'] ?? -1);
-                    if ($sourceIdx >= 0 && isset($transactions[$sourceIdx]) && is_array($transactions[$sourceIdx])) {
-                        $transactions[$sourceIdx] = array_merge(documents_inventory_transaction_defaults(), (array) $transactions[$sourceIdx], [
-                            'archived_flag' => true,
-                            'voided_flag' => true,
-                            'archived_at' => date('c'),
-                            'voided_at' => date('c'),
-                            'archived_by' => $actor,
-                            'voided_by' => $actor,
-                            'reversed_by_txn_id' => $reversalId,
-                        ]);
-                    }
-                }
-                if ($localReversalIds !== []) {
-                    $dc['reversal_txn_ids'] = array_values(array_unique(array_merge((array) ($dc['reversal_txn_ids'] ?? []), $localReversalIds)));
-                    $dc['rollback_applied'] = true;
-                    $dc['rollback_at'] = date('c');
-                    $dc['rollback_by'] = ['type' => (string) ($viewer['role'] ?? 'admin'), 'id' => (string) ($viewer['id'] ?? ''), 'name' => (string) ($viewer['name'] ?? 'Admin')];
-                    $reconciled++;
-                    $reconcileLog[] = [
-                        'at' => date('c'),
-                        'by' => $actor,
-                        'dc_id' => (string) ($dc['id'] ?? ''),
-                        'dc_no' => (string) ($dc['challan_no'] ?? ''),
-                        'restored_txn_ids' => $localReversalIds,
-                    ];
-                }
-            }
-            unset($dc);
-
-            $savedStock = documents_inventory_save_stock($stock);
-            $savedTx = documents_inventory_save_transactions($transactions);
-            $savedDc = json_save(documents_sales_delivery_challans_store_path(), array_values($challans));
-            $savedLog = json_save(documents_inventory_reconcile_log_path(), array_values($reconcileLog));
-            if (!($savedStock['ok'] ?? false) || !($savedTx['ok'] ?? false) || !($savedDc['ok'] ?? false) || !($savedLog['ok'] ?? false)) {
-                $redirectDocuments('items', 'error', 'Reconcile partially failed to save changes.', ['items_subtab' => 'inventory']);
-            }
-            $redirectDocuments('items', 'success', 'Reconciled ' . $reconciled . ' archived DC(s), restored ' . $reconciledTx . ' transaction(s).', ['items_subtab' => 'inventory']);
         }
 
         if ($action === 'save_inventory_edits') {
@@ -4475,13 +4374,6 @@ usort($documentVerificationQueue, static function (array $a, array $b): int {
 
         <?php elseif ($itemsSubtab === 'inventory'): ?>
           <h3>Inventory Transactions</h3>
-          <?php if ($isAdmin): ?>
-            <form method="post" style="margin:0 0 1rem 0;">
-              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
-              <input type="hidden" name="action" value="reconcile_archived_dc_inventory" />
-              <button class="btn secondary" type="submit" onclick="return confirm('Reconcile archived DC rollbacks now? This will restore missing stock only for DCs not yet marked rollback_applied.');">Reconcile DC Rollbacks</button>
-            </form>
-          <?php endif; ?>
           <div class="grid" style="margin-bottom:1rem;">
             <form method="post" data-inventory-form="1" data-tx-type="IN">
               <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
