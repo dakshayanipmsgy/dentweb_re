@@ -4877,6 +4877,9 @@ function documents_inventory_component_stock(array $stock, string $componentId, 
     if (isset($componentEntry['stock_by_variant_id']) && is_array($componentEntry['stock_by_variant_id'])) {
         $bucketKey = documents_inventory_stock_bucket_key($variantId);
         $entry = $componentEntry['stock_by_variant_id'][$bucketKey] ?? [];
+    } elseif (isset($componentEntry['variants']) && is_array($componentEntry['variants'])) {
+        $bucketKey = documents_inventory_stock_bucket_key($variantId);
+        $entry = $componentEntry['variants'][$bucketKey] ?? $componentEntry['variants'][$variantId] ?? [];
     } else {
         $entry = $componentEntry;
     }
