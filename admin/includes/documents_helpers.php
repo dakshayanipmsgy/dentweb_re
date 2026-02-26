@@ -1612,6 +1612,8 @@ function documents_challan_defaults(): array
         'created_by_id' => '',
         'created_by_name' => '',
         'inventory_txn_ids' => [],
+        'finalized_deltas' => [],
+        'reversal_txn_ids' => [],
         'archived_flag' => false,
         'created_at' => '',
         'updated_at' => '',
@@ -1901,6 +1903,8 @@ function documents_get_challan(string $id): ?array
         $challan['created_by'] = ['role' => (string) ($challan['created_by_type'] ?? ''), 'id' => (string) ($challan['created_by_id'] ?? ''), 'name' => (string) ($challan['created_by_name'] ?? '')];
     }
     $challan['inventory_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['inventory_txn_ids'] ?? null) ? $challan['inventory_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
+    $challan['finalized_deltas'] = is_array($challan['finalized_deltas'] ?? null) ? array_values($challan['finalized_deltas']) : [];
+    $challan['reversal_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['reversal_txn_ids'] ?? null) ? $challan['reversal_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
     $challan['status'] = in_array(strtolower((string) ($challan['status'] ?? 'draft')), ['draft', 'final', 'archived'], true) ? strtolower((string) $challan['status']) : 'draft';
     if ((string) ($row['status'] ?? '') === 'Draft') { $challan['status'] = 'draft'; }
     if ((string) ($row['status'] ?? '') === 'Issued') { $challan['status'] = 'final'; }
@@ -1936,6 +1940,8 @@ function documents_list_challans(): array
             $challan['created_by'] = ['role' => (string) ($challan['created_by_type'] ?? ''), 'id' => (string) ($challan['created_by_id'] ?? ''), 'name' => (string) ($challan['created_by_name'] ?? '')];
         }
         $challan['inventory_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['inventory_txn_ids'] ?? null) ? $challan['inventory_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
+        $challan['finalized_deltas'] = is_array($challan['finalized_deltas'] ?? null) ? array_values($challan['finalized_deltas']) : [];
+        $challan['reversal_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['reversal_txn_ids'] ?? null) ? $challan['reversal_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
         $challan['status'] = in_array(strtolower((string) ($challan['status'] ?? 'draft')), ['draft', 'final', 'archived'], true) ? strtolower((string) $challan['status']) : 'draft';
         if ((string) ($row['status'] ?? '') === 'Draft') { $challan['status'] = 'draft'; }
         if ((string) ($row['status'] ?? '') === 'Issued') { $challan['status'] = 'final'; }
@@ -5144,6 +5150,244 @@ function documents_inventory_set_component_stock(array &$stock, string $componen
     $bucketKey = documents_inventory_stock_bucket_key($variantId);
     $stock['stock_by_component_id'][$componentId]['stock_by_variant_id'][$bucketKey] = array_merge(documents_inventory_component_entry_defaults(), $entry);
     $stock['stock_by_component_id'][$componentId]['variants'] = $stock['stock_by_component_id'][$componentId]['stock_by_variant_id'];
+}
+
+function documents_inventory_apply_out(array &$stock, array $outPayload, bool $allowNegative = false): array
+{
+    $componentId = safe_text((string) ($outPayload['component_id'] ?? ''));
+    if ($componentId === '') {
+        return ['ok' => false, 'error' => 'Component is required for inventory OUT.'];
+    }
+    $variantId = safe_text((string) ($outPayload['variant_id'] ?? ''));
+    $isCuttable = !empty($outPayload['is_cuttable']);
+    $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
+    $sourceLocationId = safe_text((string) ($outPayload['source_location_id'] ?? ''));
+
+    if ($isCuttable) {
+        $requestedFt = max(0, (float) ($outPayload['ft'] ?? $outPayload['length_ft'] ?? 0));
+        if ($requestedFt <= 0) {
+            return ['ok' => false, 'error' => 'Length is required for cuttable OUT.'];
+        }
+        $lotConsumptionInput = is_array($outPayload['lot_consumption'] ?? null) ? $outPayload['lot_consumption'] : [];
+        $lots = (array) ($entry['lots'] ?? []);
+        $lotIndexById = [];
+        foreach ($lots as $lotIdx => $lot) {
+            if (!is_array($lot)) {
+                continue;
+            }
+            $lotId = safe_text((string) ($lot['lot_id'] ?? ''));
+            if ($lotId !== '') {
+                $lotIndexById[$lotId] = $lotIdx;
+            }
+        }
+
+        $appliedLotConsumption = [];
+        if ($lotConsumptionInput !== []) {
+            foreach ($lotConsumptionInput as $consumeRow) {
+                if (!is_array($consumeRow)) {
+                    continue;
+                }
+                $lotId = safe_text((string) ($consumeRow['lot_id'] ?? ''));
+                $usedFt = max(0, (float) ($consumeRow['used_ft'] ?? 0));
+                if ($lotId === '' || $usedFt <= 0) {
+                    continue;
+                }
+                if (!isset($lotIndexById[$lotId])) {
+                    return ['ok' => false, 'error' => 'Selected lot not found: ' . $lotId];
+                }
+                $lotIdx = (int) $lotIndexById[$lotId];
+                $remaining = max(0, (float) ($lots[$lotIdx]['remaining_length_ft'] ?? 0));
+                if (!$allowNegative && $usedFt > $remaining + 0.00001) {
+                    return ['ok' => false, 'error' => 'Insufficient lot balance for lot ' . $lotId];
+                }
+                $lots[$lotIdx]['remaining_length_ft'] = round($remaining - $usedFt, 4);
+                $appliedLotConsumption[] = ['lot_id' => $lotId, 'used_ft' => round($usedFt, 4)];
+            }
+        } else {
+            $consume = documents_inventory_consume_fifo_lots($lots, $requestedFt);
+            $lots = (array) ($consume['lots'] ?? $lots);
+            $appliedLotConsumption = (array) ($consume['lot_consumption'] ?? []);
+            $usedTotal = 0.0;
+            foreach ($appliedLotConsumption as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $usedTotal += max(0, (float) ($row['used_ft'] ?? 0));
+            }
+            if (!$allowNegative && $usedTotal + 0.00001 < $requestedFt) {
+                return ['ok' => false, 'error' => 'Insufficient lot balance.'];
+            }
+        }
+
+        $entry['lots'] = $lots;
+        $entry['updated_at'] = date('c');
+        documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
+
+        return [
+            'ok' => true,
+            'entry' => $entry,
+            'applied_delta' => [
+                'type' => 'OUT',
+                'mode' => 'cuttable',
+                'component_id' => $componentId,
+                'variant_id' => $variantId,
+                'source_location_id' => $sourceLocationId,
+                'ft_used' => round($requestedFt, 4),
+                'lot_consumption' => $appliedLotConsumption,
+            ],
+        ];
+    }
+
+    $requestedQty = max(0, (float) ($outPayload['qty'] ?? 0));
+    if ($requestedQty <= 0) {
+        return ['ok' => false, 'error' => 'Quantity is required for inventory OUT.'];
+    }
+    $consumed = ['ok' => false];
+    if ((array) ($entry['batches'] ?? []) !== []) {
+        $consumed = documents_inventory_consume_from_batches($entry, $requestedQty, $sourceLocationId);
+    }
+    if (!($consumed['ok'] ?? false)) {
+        $consumed = documents_inventory_consume_from_location_breakdown($entry, $requestedQty, $sourceLocationId);
+    }
+    if (!($consumed['ok'] ?? false)) {
+        if (!$allowNegative) {
+            return $consumed;
+        }
+        $entry['on_hand_qty'] = ((float) ($entry['on_hand_qty'] ?? 0)) - $requestedQty;
+        $entry['updated_at'] = date('c');
+        documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
+        return [
+            'ok' => true,
+            'entry' => $entry,
+            'applied_delta' => [
+                'type' => 'OUT',
+                'mode' => 'qty',
+                'component_id' => $componentId,
+                'variant_id' => $variantId,
+                'source_location_id' => $sourceLocationId,
+                'qty_used' => $requestedQty,
+                'batch_consumption' => [],
+                'location_consumption' => [],
+            ],
+        ];
+    }
+
+    $entry = (array) ($consumed['entry'] ?? $entry);
+    $entry['updated_at'] = date('c');
+    documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
+    return [
+        'ok' => true,
+        'entry' => $entry,
+        'applied_delta' => [
+            'type' => 'OUT',
+            'mode' => 'qty',
+            'component_id' => $componentId,
+            'variant_id' => $variantId,
+            'source_location_id' => $sourceLocationId,
+            'qty_used' => $requestedQty,
+            'batch_consumption' => (array) ($consumed['batch_consumption'] ?? []),
+            'location_consumption' => (array) ($consumed['location_consumption'] ?? []),
+        ],
+    ];
+}
+
+function documents_inventory_apply_in(array &$stock, array $inPayload): array
+{
+    $componentId = safe_text((string) ($inPayload['component_id'] ?? ''));
+    if ($componentId === '') {
+        return ['ok' => false, 'error' => 'Component is required for inventory IN.'];
+    }
+    $variantId = safe_text((string) ($inPayload['variant_id'] ?? ''));
+    $isCuttable = !empty($inPayload['is_cuttable']);
+    $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
+
+    if ($isCuttable) {
+        $lotConsumption = is_array($inPayload['lot_consumption'] ?? null) ? $inPayload['lot_consumption'] : [];
+        foreach ($lotConsumption as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $lotId = safe_text((string) ($row['lot_id'] ?? ''));
+            $usedFt = max(0, (float) ($row['used_ft'] ?? $row['ft'] ?? 0));
+            if ($lotId === '' || $usedFt <= 0) {
+                continue;
+            }
+            $matched = false;
+            foreach ((array) ($entry['lots'] ?? []) as $idx => $lot) {
+                if (!is_array($lot) || (string) ($lot['lot_id'] ?? '') !== $lotId) {
+                    continue;
+                }
+                $entry['lots'][$idx]['remaining_length_ft'] = round(max(0, (float) ($lot['remaining_length_ft'] ?? 0)) + $usedFt, 4);
+                $matched = true;
+                break;
+            }
+            if (!$matched) {
+                $entry['lots'][] = [
+                    'lot_id' => $lotId,
+                    'original_length_ft' => round($usedFt, 4),
+                    'remaining_length_ft' => round($usedFt, 4),
+                    'location_id' => safe_text((string) ($row['location_id'] ?? $inPayload['location_id'] ?? '')),
+                    'created_at' => date('c'),
+                    'created_by' => ['role' => 'system', 'id' => '', 'name' => 'Archive restore'],
+                    'restored_from_archive' => true,
+                ];
+            }
+        }
+    } else {
+        $locationConsumption = is_array($inPayload['location_consumption'] ?? null) ? $inPayload['location_consumption'] : [];
+        $addedTotal = 0.0;
+        if ($locationConsumption !== []) {
+            foreach ($locationConsumption as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $qty = max(0, (float) ($row['qty'] ?? 0));
+                if ($qty <= 0) {
+                    continue;
+                }
+                $locId = safe_text((string) ($row['location_id'] ?? ''));
+                $entry = documents_inventory_add_to_location_breakdown($entry, $qty, $locId);
+                $entry['batches'][] = documents_inventory_create_batch($locId, $qty, ['role' => 'system', 'id' => '', 'name' => 'Archive restore'], (string) ($inPayload['source_txn_id'] ?? ''));
+                $addedTotal += $qty;
+            }
+        }
+        if ($addedTotal <= 0) {
+            $qty = max(0, (float) ($inPayload['qty'] ?? 0));
+            if ($qty > 0) {
+                $locId = safe_text((string) ($inPayload['location_id'] ?? ''));
+                $entry = documents_inventory_add_to_location_breakdown($entry, $qty, $locId);
+                $entry['batches'][] = documents_inventory_create_batch($locId, $qty, ['role' => 'system', 'id' => '', 'name' => 'Archive restore'], (string) ($inPayload['source_txn_id'] ?? ''));
+            }
+        }
+    }
+
+    $entry['updated_at'] = date('c');
+    documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
+    return ['ok' => true, 'entry' => $entry];
+}
+
+function documents_inventory_reverse_delta(array &$stock, array $delta): array
+{
+    $mode = (string) ($delta['mode'] ?? 'qty');
+    if ($mode === 'cuttable') {
+        return documents_inventory_apply_in($stock, [
+            'component_id' => (string) ($delta['component_id'] ?? ''),
+            'variant_id' => (string) ($delta['variant_id'] ?? ''),
+            'is_cuttable' => true,
+            'lot_consumption' => (array) ($delta['lot_consumption'] ?? []),
+            'location_id' => (string) ($delta['source_location_id'] ?? ''),
+            'source_txn_id' => (string) ($delta['source_txn_id'] ?? ''),
+        ]);
+    }
+    return documents_inventory_apply_in($stock, [
+        'component_id' => (string) ($delta['component_id'] ?? ''),
+        'variant_id' => (string) ($delta['variant_id'] ?? ''),
+        'is_cuttable' => false,
+        'qty' => (float) ($delta['qty_used'] ?? 0),
+        'location_id' => (string) ($delta['source_location_id'] ?? ''),
+        'location_consumption' => (array) ($delta['location_consumption'] ?? []),
+        'source_txn_id' => (string) ($delta['source_txn_id'] ?? ''),
+    ]);
 }
 
 function documents_inventory_format_number(float $value, int $decimals = 2): string
