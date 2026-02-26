@@ -502,7 +502,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = safe_text($_POST['action'] ?? '');
     $isDraft = (string) ($challan['status'] ?? 'draft') === 'draft';
-    if (in_array($action, ['save_draft', 'finalize', 'archive', 'reapply_archive_restore'], true)) {
+    if (in_array($action, ['save_draft', 'finalize', 'archive'], true)) {
         if (!$isDraft && in_array($action, ['save_draft', 'finalize'], true)) {
             $redirectWith('error', 'Only draft DC can be edited/finalized.');
         }
@@ -820,25 +820,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }, $challan['lines']);
         }
 
-        $buildTxnDelta = static function (array $tx): array {
-            return [
-                'type' => 'OUT',
-                'component_id' => (string) ($tx['component_id'] ?? ''),
-                'variant_id' => (string) ($tx['variant_id'] ?? ''),
-                'source_location_id' => (string) ($tx['source_location_id'] ?? ''),
-                'qty_used' => max(0, (float) ($tx['qty'] ?? 0)),
-                'ft_used' => max(0, (float) ($tx['length_ft'] ?? 0)),
-                'lot_consumption' => (array) ($tx['lot_consumption'] ?? []),
-                'location_consumption' => (array) ($tx['location_consumption'] ?? []),
-                'batch_consumption' => (array) ($tx['batch_consumption'] ?? []),
-            ];
-        };
-
         if ($action === 'finalize') {
             $stock = documents_inventory_load_stock();
             $txnIds = [];
             $dispatchRows = [];
-            $finalizedDeltas = [];
 
             foreach ((array) ($challan['lines'] ?? []) as $line) {
                 if (!is_array($line)) { continue; }
@@ -961,48 +946,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
                     }
+                    $entry['lots'] = (array) ($consume['lots'] ?? []);
+                    $consumedFt = 0.0;
+                    foreach ((array) ($consume['lot_consumption'] ?? []) as $consumeLine) {
+                        if (!is_array($consumeLine)) {
+                            continue;
+                        }
+                        $consumedFt += max(0, (float) ($consumeLine['used_ft'] ?? 0));
+                    }
+                    $shortFt = max(0, $needFt - $consumedFt);
+                    if ($shortFt > 0.00001 && $cutPlanMode !== 'manual') {
+                        $entry['lots'][] = [
+                            'lot_id' => 'NEG-' . date('YmdHis') . '-' . bin2hex(random_bytes(2)),
+                            'remaining_length_ft' => -round($shortFt, 4),
+                            'location_id' => '',
+                            'note' => 'Negative stock via DC finalize',
+                        ];
+                    }
                     $tx['length_ft'] = $needFt;
                     $tx['lot_consumption'] = (array) ($consume['lot_consumption'] ?? []);
                     $tx['allow_negative'] = $cutPlanMode !== 'manual';
-                    $applied = documents_inventory_apply_out($stock, [
-                        'component_id' => $componentId,
-                        'variant_id' => $variantId,
-                        'is_cuttable' => true,
-                        'source_location_id' => (string) ($line['source_location_id'] ?? ''),
-                        'lot_consumption' => (array) ($tx['lot_consumption'] ?? []),
-                        'ft' => $needFt,
-                    ], $cutPlanMode !== 'manual');
-                    if (!($applied['ok'] ?? false)) {
-                        $redirectWith('error', (string) ($applied['error'] ?? 'Unable to consume cuttable stock.'));
-                    }
-                    $delta = (array) ($applied['applied_delta'] ?? []);
-                    $tx['lot_consumption'] = (array) ($delta['lot_consumption'] ?? []);
-                    $tx['length_ft'] = (float) ($delta['ft_used'] ?? $needFt);
                 } else {
                     $needQty = max(0, (float) ($line['qty'] ?? 0));
                     if ($needQty <= 0) { continue; }
+                    $availableQty = max(0, (float) ($entry['on_hand_qty'] ?? 0));
+                    $consumeQty = min($needQty, $availableQty);
                     $sourceLocationId = safe_text((string) ($line['source_location_id'] ?? ''));
-                    $applied = documents_inventory_apply_out($stock, [
-                        'component_id' => $componentId,
-                        'variant_id' => $variantId,
-                        'is_cuttable' => false,
-                        'source_location_id' => $sourceLocationId,
-                        'qty' => $needQty,
-                    ], true);
-                    if (!($applied['ok'] ?? false)) {
-                        $redirectWith('error', (string) ($applied['error'] ?? 'Unable to consume quantity stock.'));
+                    $consumed = $consumeQty > 0 ? documents_inventory_consume_from_location_breakdown($entry, $consumeQty, $sourceLocationId) : ['ok' => true, 'entry' => $entry, 'location_consumption' => []];
+                    if (!($consumed['ok'] ?? false)) {
+                        $consumed = ['ok' => true, 'entry' => $entry, 'location_consumption' => []];
                     }
-                    $delta = (array) ($applied['applied_delta'] ?? []);
-                    $tx['qty'] = (float) ($delta['qty_used'] ?? $needQty);
-                    $tx['location_consumption'] = (array) ($delta['location_consumption'] ?? []);
-                    $tx['batch_consumption'] = (array) ($delta['batch_consumption'] ?? []);
+                    $entry = (array) ($consumed['entry'] ?? $entry);
+                    $entry['on_hand_qty'] = ((float) ($entry['on_hand_qty'] ?? 0)) - ($needQty - $consumeQty);
+                    $tx['qty'] = $needQty;
+                    $tx['location_consumption'] = (array) ($consumed['location_consumption'] ?? []);
                 }
 
+                $entry['updated_at'] = date('c');
+                documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
                 documents_inventory_append_transaction($tx);
-                $deltaForStore = $buildTxnDelta($tx);
-                $deltaForStore['line_id'] = (string) ($line['line_id'] ?? '');
-                $deltaForStore['source_txn_id'] = (string) ($tx['id'] ?? '');
-                $finalizedDeltas[] = $deltaForStore;
                 $txnIds[] = $txId;
 
                 if ((string) ($line['line_origin'] ?? 'extra') === 'quotation') {
@@ -1046,25 +1028,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 documents_inventory_sync_verification_log($transactions, true);
             }
             $challan['inventory_txn_ids'] = $txnIds;
-            $challan['finalized_deltas'] = $finalizedDeltas;
             $challan['status'] = 'final';
         }
 
         if ($action === 'save_draft') {
             $challan['status'] = 'draft';
         }
-        if ($action === 'reapply_archive_restore') {
-            if ($viewerType !== 'admin') {
-                $redirectWith('error', 'Only admin can re-apply archived inventory restore.');
-            }
-            $challan['status'] = 'final';
-            $challan['reversal_txn_ids'] = [];
-            $action = 'archive';
-        }
-
         if ($action === 'archive') {
             $challanStatus = (string) ($challan['status'] ?? 'draft');
             if ($challanStatus === 'final') {
+                $stock = documents_inventory_load_stock();
                 $allTransactions = documents_inventory_load_transactions();
                 $transactionsById = [];
                 foreach ($allTransactions as $txIndex => $txRow) {
@@ -1075,81 +1048,128 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $transactionsById[(string) ($txMerged['id'] ?? '')] = ['idx' => $txIndex, 'tx' => $txMerged];
                 }
 
-                $reversalTxnIds = array_values(array_filter(array_map(static fn($id): string => safe_text((string) $id), (array) ($challan['reversal_txn_ids'] ?? [])), static fn(string $id): bool => $id !== ''));
-                if ($reversalTxnIds !== []) {
-                    $redirectWith('success', 'DC already archived and inventory reversal already applied.');
-                }
-
-                $deltas = [];
-                foreach ((array) ($challan['finalized_deltas'] ?? []) as $row) {
-                    if (is_array($row)) { $deltas[] = $row; }
-                }
-                if ($deltas === []) {
-                    $sourceTxnIds = array_values(array_filter(array_map(static fn($id): string => safe_text((string) $id), (array) ($challan['inventory_txn_ids'] ?? [])), static fn(string $id): bool => $id !== ''));
-                    foreach ($sourceTxnIds as $sourceTxnId) {
-                        if (!isset($transactionsById[$sourceTxnId])) { continue; }
-                        $source = $transactionsById[$sourceTxnId]['tx'];
-                        if (strtoupper((string) ($source['type'] ?? '')) !== 'OUT') { continue; }
-                        $delta = $buildTxnDelta((array) $source);
-                        $delta['source_txn_id'] = $sourceTxnId;
-                        $deltas[] = $delta;
+                $reversalTxnIds = [];
+                $sourceTxnIds = array_values(array_filter(array_map(static fn($id): string => safe_text((string) $id), (array) ($challan['inventory_txn_ids'] ?? [])), static fn(string $id): bool => $id !== ''));
+                foreach ($sourceTxnIds as $sourceTxnId) {
+                    if (!isset($transactionsById[$sourceTxnId])) {
+                        continue;
                     }
-                }
+                    $source = $transactionsById[$sourceTxnId]['tx'];
+                    if (!empty($source['archived_flag']) || !empty($source['voided_flag'])) {
+                        continue;
+                    }
+                    if (strtoupper((string) ($source['type'] ?? '')) !== 'OUT') {
+                        continue;
+                    }
 
-                if ($deltas !== []) {
-                    $stock = documents_inventory_load_stock();
-                    foreach ($deltas as $delta) {
-                        $result = documents_inventory_reverse_delta($stock, (array) $delta);
-                        if (!($result['ok'] ?? false)) {
-                            $redirectWith('error', (string) ($result['error'] ?? 'Failed to reverse inventory while archiving DC.'));
+                    $componentId = (string) ($source['component_id'] ?? '');
+                    $variantId = (string) ($source['variant_id'] ?? '');
+                    if ($componentId === '') {
+                        continue;
+                    }
+
+                    $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
+                    $lengthFt = max(0, (float) ($source['length_ft'] ?? 0));
+                    $qty = max(0, (float) ($source['qty'] ?? 0));
+                    if ($lengthFt > 0) {
+                        $lotConsumption = (array) ($source['lot_consumption'] ?? []);
+                        foreach ($lotConsumption as $consume) {
+                            if (!is_array($consume)) {
+                                continue;
+                            }
+                            $lotId = (string) ($consume['lot_id'] ?? '');
+                            $usedFt = max(0, (float) ($consume['used_ft'] ?? 0));
+                            if ($lotId === '' || $usedFt <= 0) {
+                                continue;
+                            }
+                            $matched = false;
+                            foreach ($entry['lots'] as $lotIdx => $lot) {
+                                if (!is_array($lot) || (string) ($lot['lot_id'] ?? '') !== $lotId) {
+                                    continue;
+                                }
+                                $currentRemaining = (float) ($lot['remaining_length_ft'] ?? 0);
+                                $entry['lots'][$lotIdx]['remaining_length_ft'] = round($currentRemaining + $usedFt, 4);
+                                $matched = true;
+                                break;
+                            }
+                            if (!$matched) {
+                                $entry['lots'][] = [
+                                    'lot_id' => $lotId,
+                                    'original_length_ft' => $usedFt,
+                                    'remaining_length_ft' => $usedFt,
+                                    'location_id' => (string) ($source['consume_location_id'] ?? $source['location_id'] ?? ''),
+                                    'created_at' => date('c'),
+                                    'created_by' => ['role' => 'system', 'id' => '', 'name' => 'DC archive reversal'],
+                                    'notes' => 'Recreated during DC archive reversal for txn ' . $sourceTxnId,
+                                ];
+                            }
                         }
-                        $sourceTxnId = (string) ($delta['source_txn_id'] ?? '');
-                        $componentId = (string) ($delta['component_id'] ?? '');
-                        $variantId = (string) ($delta['variant_id'] ?? '');
-                        $reversalTxnId = 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
-                        $reversalTx = array_merge(documents_inventory_transaction_defaults(), [
-                            'id' => $reversalTxnId,
-                            'type' => 'REVERSAL_IN',
-                            'component_id' => $componentId,
-                            'variant_id' => $variantId,
-                            'qty' => (float) ($delta['qty_used'] ?? 0),
-                            'length_ft' => (float) ($delta['ft_used'] ?? 0),
-                            'lot_consumption' => (array) ($delta['lot_consumption'] ?? []),
-                            'location_consumption' => (array) ($delta['location_consumption'] ?? []),
-                            'batch_consumption' => (array) ($delta['batch_consumption'] ?? []),
-                            'unit' => '',
-                            'ref_type' => 'delivery_challan_archive_reversal',
-                            'ref_id' => (string) ($challan['id'] ?? ''),
-                            'reverses_txn_id' => $sourceTxnId,
-                            'notes' => 'Reversal generated while archiving DC ' . (string) ($challan['challan_no'] ?? $challan['id'] ?? ''),
-                            'created_at' => date('c'),
-                            'created_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
+                    } elseif ($qty > 0) {
+                        $locationRows = is_array($source['location_consumption'] ?? null) ? $source['location_consumption'] : [];
+                        if ($locationRows !== []) {
+                            foreach ($locationRows as $locRow) {
+                                if (!is_array($locRow)) {
+                                    continue;
+                                }
+                                $consumeQty = max(0, (float) ($locRow['qty'] ?? 0));
+                                $locationId = safe_text((string) ($locRow['location_id'] ?? ''));
+                                if ($consumeQty <= 0) {
+                                    continue;
+                                }
+                                $entry = documents_inventory_add_to_location_breakdown($entry, $consumeQty, $locationId);
+                                $entry['batches'][] = documents_inventory_create_batch($locationId, $consumeQty, ['role' => 'system', 'id' => '', 'name' => 'DC archive reversal'], $sourceTxnId);
+                            }
+                        } else {
+                            $entry = documents_inventory_add_to_location_breakdown($entry, $qty, (string) ($source['consume_location_id'] ?? ''));
+                            $entry['batches'][] = documents_inventory_create_batch((string) ($source['consume_location_id'] ?? ''), $qty, ['role' => 'system', 'id' => '', 'name' => 'DC archive reversal'], $sourceTxnId);
+                        }
+                    }
+                    $entry['updated_at'] = date('c');
+                    documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
+
+                    $reversalTxnId = 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+                    $reversalTx = array_merge(documents_inventory_transaction_defaults(), [
+                        'id' => $reversalTxnId,
+                        'type' => 'REVERSAL_IN',
+                        'component_id' => $componentId,
+                        'variant_id' => $variantId,
+                        'variant_name_snapshot' => (string) ($source['variant_name_snapshot'] ?? ''),
+                        'qty' => $qty,
+                        'length_ft' => $lengthFt,
+                        'lot_consumption' => (array) ($source['lot_consumption'] ?? []),
+                        'location_consumption' => (array) ($source['location_consumption'] ?? []),
+                        'unit' => (string) ($source['unit'] ?? ''),
+                        'ref_type' => 'delivery_challan_archive_reversal',
+                        'ref_id' => (string) ($challan['id'] ?? ''),
+                        'reverses_txn_id' => $sourceTxnId,
+                        'notes' => 'Reversal generated while archiving DC ' . (string) ($challan['challan_no'] ?? $challan['id'] ?? ''),
+                        'created_at' => date('c'),
+                        'created_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
+                    ]);
+                    $allTransactions[] = $reversalTx;
+                    $reversalTxnIds[] = $reversalTxnId;
+
+                    $sourceIdx = (int) ($transactionsById[$sourceTxnId]['idx'] ?? -1);
+                    if ($sourceIdx >= 0 && isset($allTransactions[$sourceIdx]) && is_array($allTransactions[$sourceIdx])) {
+                        $allTransactions[$sourceIdx] = array_merge(documents_inventory_transaction_defaults(), (array) $allTransactions[$sourceIdx], [
+                            'archived_flag' => true,
+                            'voided_flag' => true,
+                            'archived_at' => date('c'),
+                            'voided_at' => date('c'),
+                            'archived_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
+                            'voided_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
+                            'reversed_by_txn_id' => $reversalTxnId,
                         ]);
-                        $allTransactions[] = $reversalTx;
-                        $reversalTxnIds[] = $reversalTxnId;
+                    }
+                }
 
-                        $sourceIdx = (int) ($transactionsById[$sourceTxnId]['idx'] ?? -1);
-                        if ($sourceIdx >= 0 && isset($allTransactions[$sourceIdx]) && is_array($allTransactions[$sourceIdx])) {
-                            $allTransactions[$sourceIdx] = array_merge(documents_inventory_transaction_defaults(), (array) $allTransactions[$sourceIdx], [
-                                'archived_flag' => true,
-                                'voided_flag' => true,
-                                'archived_at' => date('c'),
-                                'voided_at' => date('c'),
-                                'archived_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
-                                'voided_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
-                                'reversed_by_txn_id' => $reversalTxnId,
-                            ]);
-                        }
-                    }
-
-                    $savedStock = documents_inventory_save_stock($stock);
-                    if (!($savedStock['ok'] ?? false)) {
-                        $redirectWith('error', 'Failed to reverse inventory while archiving DC.');
-                    }
-                    $savedTx = documents_inventory_save_transactions($allTransactions);
-                    if (!($savedTx['ok'] ?? false)) {
-                        $redirectWith('error', 'Inventory stock was reversed, but transaction history update failed.');
-                    }
+                $savedStock = documents_inventory_save_stock($stock);
+                if (!($savedStock['ok'] ?? false)) {
+                    $redirectWith('error', 'Failed to reverse inventory while archiving DC.');
+                }
+                $savedTx = documents_inventory_save_transactions($allTransactions);
+                if (!($savedTx['ok'] ?? false)) {
+                    $redirectWith('error', 'Inventory stock was reversed, but transaction history update failed.');
                 }
 
                 if (is_array($packingList)) {
@@ -1337,42 +1357,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 </div>
 <?php endif; ?>
 
-
-<?php if ($viewerType === 'admin' && !empty($challan['archived_flag']) && is_array($challan['finalized_deltas'] ?? null)): ?>
-<?php
-$diagnosticByBucket = [];
-foreach ((array) ($challan['finalized_deltas'] ?? []) as $deltaRow) {
-    if (!is_array($deltaRow)) { continue; }
-    $componentId = (string) ($deltaRow['component_id'] ?? '');
-    if ($componentId === '') { continue; }
-    $variantId = (string) ($deltaRow['variant_id'] ?? '');
-    $key = $componentId . '|' . $variantId;
-    if (!isset($diagnosticByBucket[$key])) {
-        $diagnosticByBucket[$key] = ['component_id' => $componentId, 'variant_id' => $variantId, 'expected_qty' => 0.0, 'expected_ft' => 0.0];
-    }
-    $diagnosticByBucket[$key]['expected_qty'] += max(0, (float) ($deltaRow['qty_used'] ?? 0));
-    $diagnosticByBucket[$key]['expected_ft'] += max(0, (float) ($deltaRow['ft_used'] ?? 0));
-}
-$diagStock = documents_inventory_load_stock();
-?>
-<div class="card" style="margin-top:12px;padding:10px">
-  <strong>Archive Restore Diagnostic (admin)</strong>
-  <div class="muted">Expected restore delta vs current bucket stock.</div>
-  <ul class="compact-list" style="margin-top:8px">
-    <?php foreach ($diagnosticByBucket as $diag):
-      $diagComponentId = (string) ($diag['component_id'] ?? '');
-      $diagVariantId = (string) ($diag['variant_id'] ?? '');
-      $diagEntry = documents_inventory_component_stock($diagStock, $diagComponentId, $diagVariantId);
-      $actualQty = (float) ($diagEntry['on_hand_qty'] ?? 0);
-      $actualFt = documents_inventory_total_remaining_ft($diagEntry);
-    ?>
-    <li><?= htmlspecialchars($diagComponentId . ($diagVariantId !== '' ? ' / ' . $diagVariantId : ''), ENT_QUOTES) ?> — expected restore qty <?= htmlspecialchars(documents_inventory_format_number((float) ($diag['expected_qty'] ?? 0), 4), ENT_QUOTES) ?> / ft <?= htmlspecialchars(documents_inventory_format_number((float) ($diag['expected_ft'] ?? 0), 4), ENT_QUOTES) ?>; current qty <?= htmlspecialchars(documents_inventory_format_number($actualQty, 4), ENT_QUOTES) ?> / ft <?= htmlspecialchars(documents_inventory_format_number($actualFt, 4), ENT_QUOTES) ?></li>
-    <?php endforeach; ?>
-  </ul>
-</div>
-<?php endif; ?>
-
-<div class="row-actions" style="margin-top:12px"><?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="finalize">Finalize DC</button><?php endif; ?><?php if ((string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php elseif ($viewerType === 'admin' && (array) ($challan['reversal_txn_ids'] ?? []) === []): ?><button class="btn warn" type="submit" name="action" value="reapply_archive_restore" onclick="return confirm('Re-apply inventory restore for this archived DC?');">Re-apply inventory restore</button><?php endif; ?></div>
+<div class="row-actions" style="margin-top:12px"><?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="finalize">Finalize DC</button><?php endif; ?><?php if ((string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php endif; ?></div>
 </form>
 </main>
 <script>
