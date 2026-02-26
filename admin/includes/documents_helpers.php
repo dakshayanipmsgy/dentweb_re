@@ -87,6 +87,11 @@ function documents_inventory_edits_log_path(): string
     return documents_inventory_dir() . '/inventory_edits_log.json';
 }
 
+function documents_inventory_reconcile_log_path(): string
+{
+    return documents_inventory_dir() . '/reconcile_log.json';
+}
+
 function documents_packing_lists_path(): string
 {
     return documents_base_dir() . '/packing_lists.json';
@@ -344,6 +349,7 @@ function documents_ensure_structure(): void
         documents_inventory_transactions_path(),
         documents_inventory_verification_log_path(),
         documents_inventory_edits_log_path(),
+        documents_inventory_reconcile_log_path(),
         documents_packing_lists_path(),
         documents_document_actions_log_path(),
         documents_document_verification_path(),
@@ -1613,6 +1619,9 @@ function documents_challan_defaults(): array
         'created_by_name' => '',
         'inventory_txn_ids' => [],
         'archived_flag' => false,
+        'rollback_applied' => false,
+        'rollback_at' => '',
+        'rollback_by' => ['type' => '', 'id' => '', 'name' => ''],
         'created_at' => '',
         'updated_at' => '',
         'rendering' => [
@@ -4580,6 +4589,110 @@ function documents_inventory_append_transaction(array $tx): array
     $rows = documents_inventory_load_transactions();
     $rows[] = array_merge(documents_inventory_transaction_defaults(), $tx);
     return json_save(documents_inventory_transactions_path(), $rows);
+}
+
+function documents_inventory_restore_out_transaction(array &$stock, array $sourceTxn, array $actor, string $refId = ''): array
+{
+    $source = array_merge(documents_inventory_transaction_defaults(), $sourceTxn);
+    $componentId = safe_text((string) ($source['component_id'] ?? ''));
+    $variantId = safe_text((string) ($source['variant_id'] ?? ''));
+    if ($componentId === '') {
+        return ['ok' => false, 'error' => 'Missing component id in source transaction.'];
+    }
+
+    $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
+    $qty = max(0, (float) ($source['qty'] ?? 0));
+    $lengthFt = max(0, (float) ($source['length_ft'] ?? 0));
+    if ($lengthFt > 0) {
+        $lotConsumption = is_array($source['lot_consumption'] ?? null) ? $source['lot_consumption'] : [];
+        foreach ($lotConsumption as $consume) {
+            if (!is_array($consume)) {
+                continue;
+            }
+            $lotId = safe_text((string) ($consume['lot_id'] ?? ''));
+            $usedFt = max(0, (float) ($consume['used_ft'] ?? 0));
+            if ($lotId === '' || $usedFt <= 0) {
+                continue;
+            }
+            $matched = false;
+            foreach ($entry['lots'] as $lotIdx => $lot) {
+                if (!is_array($lot) || (string) ($lot['lot_id'] ?? '') !== $lotId) {
+                    continue;
+                }
+                $currentRemaining = (float) ($lot['remaining_length_ft'] ?? 0);
+                $originalLength = max(0, (float) ($lot['original_length_ft'] ?? 0));
+                $restoredRemaining = $currentRemaining + $usedFt;
+                $restoreWarning = '';
+                if ($originalLength > 0 && $restoredRemaining > $originalLength + 0.00001) {
+                    $restoreWarning = 'Capped lot restore at original length.';
+                    $restoredRemaining = $originalLength;
+                }
+                $entry['lots'][$lotIdx]['remaining_length_ft'] = round($restoredRemaining, 4);
+                if ($restoreWarning !== '') {
+                    $entry['lots'][$lotIdx]['restore_warning'] = $restoreWarning;
+                }
+                $matched = true;
+                break;
+            }
+            if (!$matched) {
+                $entry['lots'][] = [
+                    'lot_id' => $lotId,
+                    'original_length_ft' => $usedFt,
+                    'remaining_length_ft' => $usedFt,
+                    'location_id' => (string) ($source['consume_location_id'] ?? $source['location_id'] ?? ''),
+                    'created_at' => date('c'),
+                    'created_by' => ['role' => 'system', 'id' => '', 'name' => 'DC restore'],
+                    'notes' => 'Restored via reversal for txn ' . (string) ($source['id'] ?? ''),
+                    'restored_lot_flag' => true,
+                ];
+            }
+        }
+    } elseif ($qty > 0) {
+        $locationRows = is_array($source['location_consumption'] ?? null) ? $source['location_consumption'] : [];
+        if ($locationRows !== []) {
+            foreach ($locationRows as $locRow) {
+                if (!is_array($locRow)) {
+                    continue;
+                }
+                $consumeQty = max(0, (float) ($locRow['qty'] ?? 0));
+                $locationId = safe_text((string) ($locRow['location_id'] ?? ''));
+                if ($consumeQty <= 0) {
+                    continue;
+                }
+                $entry = documents_inventory_add_to_location_breakdown($entry, $consumeQty, $locationId);
+                $entry['batches'][] = documents_inventory_create_batch($locationId, $consumeQty, $actor, (string) ($source['id'] ?? ''));
+            }
+        } else {
+            $fallbackLocationId = safe_text((string) ($source['consume_location_id'] ?? $source['source_location_id'] ?? $source['location_id'] ?? ''));
+            $entry = documents_inventory_add_to_location_breakdown($entry, $qty, $fallbackLocationId);
+            $entry['batches'][] = documents_inventory_create_batch($fallbackLocationId, $qty, $actor, (string) ($source['id'] ?? ''));
+        }
+    }
+
+    $entry['updated_at'] = date('c');
+    documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
+
+    $reversalTxnId = 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+    $reversalTx = array_merge(documents_inventory_transaction_defaults(), [
+        'id' => $reversalTxnId,
+        'type' => 'REVERSAL_IN',
+        'component_id' => $componentId,
+        'variant_id' => $variantId,
+        'variant_name_snapshot' => (string) ($source['variant_name_snapshot'] ?? ''),
+        'qty' => $qty,
+        'length_ft' => $lengthFt,
+        'lot_consumption' => (array) ($source['lot_consumption'] ?? []),
+        'location_consumption' => (array) ($source['location_consumption'] ?? []),
+        'unit' => (string) ($source['unit'] ?? ''),
+        'ref_type' => 'delivery_challan_archive_reversal',
+        'ref_id' => $refId,
+        'reverses_txn_id' => (string) ($source['id'] ?? ''),
+        'notes' => 'Reversal generated while archiving/reconciling DC.',
+        'created_at' => date('c'),
+        'created_by' => $actor,
+    ]);
+
+    return ['ok' => true, 'reversal_txn' => $reversalTx, 'source_txn_id' => (string) ($source['id'] ?? '')];
 }
 
 function documents_inventory_save_transactions(array $transactions): array
