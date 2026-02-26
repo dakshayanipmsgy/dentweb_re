@@ -846,10 +846,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'qty' => 0,
                     'length_ft' => 0,
                     'lot_consumption' => [],
-                    'batch_consumption' => [],
                     'location_consumption' => [],
                     'source_location_id' => (string) ($line['source_location_id'] ?? ''),
-                    'consume_location_id' => (string) ($line['source_location_id'] ?? ''),
                     'ref_type' => 'delivery_challan',
                     'ref_id' => (string) ($challan['id'] ?? ''),
                     'reason' => 'DC Finalized',
@@ -971,32 +969,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $needQty = max(0, (float) ($line['qty'] ?? 0));
                     if ($needQty <= 0) { continue; }
-                    $sourceLocationId = safe_text((string) ($line['source_location_id'] ?? ''));
                     $availableQty = max(0, (float) ($entry['on_hand_qty'] ?? 0));
                     $consumeQty = min($needQty, $availableQty);
-
-                    if (!empty($entry['batches'])) {
-                        $consumed = $consumeQty > 0 ? documents_inventory_consume_from_batches($entry, $consumeQty, $sourceLocationId) : ['ok' => true, 'entry' => $entry, 'batch_consumption' => [], 'location_consumption' => []];
-                        if (!($consumed['ok'] ?? false)) {
-                            $consumed = ['ok' => true, 'entry' => $entry, 'batch_consumption' => [], 'location_consumption' => []];
-                        }
-                        $entry = (array) ($consumed['entry'] ?? $entry);
-                        $tx['batch_consumption'] = (array) ($consumed['batch_consumption'] ?? []);
-                        $tx['location_consumption'] = (array) ($consumed['location_consumption'] ?? []);
-                    } else {
-                        $consumed = $consumeQty > 0 ? documents_inventory_consume_from_location_breakdown($entry, $consumeQty, $sourceLocationId) : ['ok' => true, 'entry' => $entry, 'location_consumption' => []];
-                        if (!($consumed['ok'] ?? false)) {
-                            $consumed = ['ok' => true, 'entry' => $entry, 'location_consumption' => []];
-                        }
-                        $entry = (array) ($consumed['entry'] ?? $entry);
-                        $tx['location_consumption'] = (array) ($consumed['location_consumption'] ?? []);
+                    $sourceLocationId = safe_text((string) ($line['source_location_id'] ?? ''));
+                    $consumed = $consumeQty > 0 ? documents_inventory_consume_from_location_breakdown($entry, $consumeQty, $sourceLocationId) : ['ok' => true, 'entry' => $entry, 'location_consumption' => []];
+                    if (!($consumed['ok'] ?? false)) {
+                        $consumed = ['ok' => true, 'entry' => $entry, 'location_consumption' => []];
                     }
-
-                    $shortQty = max(0, $needQty - $consumeQty);
-                    if ($shortQty > 0.00001) {
-                        $entry['on_hand_qty'] = ((float) ($entry['on_hand_qty'] ?? 0)) - $shortQty;
-                    }
+                    $entry = (array) ($consumed['entry'] ?? $entry);
+                    $entry['on_hand_qty'] = ((float) ($entry['on_hand_qty'] ?? 0)) - ($needQty - $consumeQty);
                     $tx['qty'] = $needQty;
+                    $tx['location_consumption'] = (array) ($consumed['location_consumption'] ?? []);
                 }
 
                 $entry['updated_at'] = date('c');
@@ -1105,23 +1088,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     continue;
                                 }
                                 $currentRemaining = (float) ($lot['remaining_length_ft'] ?? 0);
-                                $originalLength = max($currentRemaining, (float) ($lot['original_length_ft'] ?? 0));
-                                $restoredRemaining = round($currentRemaining + $usedFt, 4);
-                                if ($originalLength > 0 && $restoredRemaining > $originalLength + 0.00001) {
-                                    documents_log('DC archive restore capped lot ' . $lotId . ' for txn ' . $sourceTxnId . ' from ' . (string) $restoredRemaining . ' to original ' . (string) $originalLength);
-                                    $restoredRemaining = $originalLength;
-                                }
-                                $entry['lots'][$lotIdx]['remaining_length_ft'] = $restoredRemaining;
+                                $entry['lots'][$lotIdx]['remaining_length_ft'] = round($currentRemaining + $usedFt, 4);
                                 $matched = true;
                                 break;
                             }
                             if (!$matched) {
-                                documents_log('DC archive restore skipped missing lot ' . $lotId . ' for txn ' . $sourceTxnId . ' (component=' . $componentId . ', variant=' . $variantId . ')');
+                                $entry['lots'][] = [
+                                    'lot_id' => $lotId,
+                                    'original_length_ft' => $usedFt,
+                                    'remaining_length_ft' => $usedFt,
+                                    'location_id' => (string) ($source['consume_location_id'] ?? $source['location_id'] ?? ''),
+                                    'created_at' => date('c'),
+                                    'created_by' => ['role' => 'system', 'id' => '', 'name' => 'DC archive reversal'],
+                                    'notes' => 'Recreated during DC archive reversal for txn ' . $sourceTxnId,
+                                ];
                             }
                         }
                     } elseif ($qty > 0) {
                         $locationRows = is_array($source['location_consumption'] ?? null) ? $source['location_consumption'] : [];
-                        $restoredQty = 0.0;
                         if ($locationRows !== []) {
                             foreach ($locationRows as $locRow) {
                                 if (!is_array($locRow)) {
@@ -1133,30 +1117,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     continue;
                                 }
                                 $entry = documents_inventory_add_to_location_breakdown($entry, $consumeQty, $locationId);
-                                $entry['batches'][] = [
-                                    'batch_id' => 'RESTORE-' . $sourceTxnId . '-' . substr(sha1($locationId . '|' . (string) $consumeQty), 0, 6),
-                                    'location_id' => $locationId,
-                                    'qty_remaining' => $consumeQty,
-                                    'created_by' => ['role' => 'system', 'id' => '', 'name' => 'DC archive reversal'],
-                                    'created_at' => date('c'),
-                                    'source_txn_id' => $sourceTxnId,
-                                ];
-                                $restoredQty += $consumeQty;
+                                $entry['batches'][] = documents_inventory_create_batch($locationId, $consumeQty, ['role' => 'system', 'id' => '', 'name' => 'DC archive reversal'], $sourceTxnId);
                             }
-                        }
-                        $untrackedQty = max(0, $qty - $restoredQty);
-                        if ($locationRows === [] || $untrackedQty > 0.00001) {
-                            $restoreLocationId = (string) ($source['consume_location_id'] ?? '');
-                            $restoreQty = $locationRows === [] ? $qty : $untrackedQty;
-                            $entry = documents_inventory_add_to_location_breakdown($entry, $restoreQty, $restoreLocationId);
-                            $entry['batches'][] = [
-                                'batch_id' => 'RESTORE-' . $sourceTxnId,
-                                'location_id' => $restoreLocationId,
-                                'qty_remaining' => $restoreQty,
-                                'created_by' => ['role' => 'system', 'id' => '', 'name' => 'DC archive reversal'],
-                                'created_at' => date('c'),
-                                'source_txn_id' => $sourceTxnId,
-                            ];
+                        } else {
+                            $entry = documents_inventory_add_to_location_breakdown($entry, $qty, (string) ($source['consume_location_id'] ?? ''));
+                            $entry['batches'][] = documents_inventory_create_batch((string) ($source['consume_location_id'] ?? ''), $qty, ['role' => 'system', 'id' => '', 'name' => 'DC archive reversal'], $sourceTxnId);
                         }
                     }
                     $entry['updated_at'] = date('c');
@@ -1193,7 +1158,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'voided_at' => date('c'),
                             'archived_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
                             'voided_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
-                            'void_reason' => 'DC archived',
                             'reversed_by_txn_id' => $reversalTxnId,
                         ]);
                     }
