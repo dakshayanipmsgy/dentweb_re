@@ -1612,6 +1612,13 @@ function documents_challan_defaults(): array
         'created_by_id' => '',
         'created_by_name' => '',
         'inventory_txn_ids' => [],
+        'finalized_inventory_applied' => false,
+        'inventory_applied_at' => '',
+        'inventory_applied_by' => ['role' => '', 'id' => '', 'name' => ''],
+        'inventory_repair_done' => false,
+        'inventory_repair_at' => '',
+        'inventory_repair_by' => ['role' => '', 'id' => '', 'name' => ''],
+        'inventory_repair_log' => [],
         'archive_restore_done' => false,
         'archive_restore_at' => '',
         'archive_restore_by' => ['role' => '', 'id' => '', 'name' => ''],
@@ -1905,6 +1912,11 @@ function documents_get_challan(string $id): ?array
         $challan['created_by'] = ['role' => (string) ($challan['created_by_type'] ?? ''), 'id' => (string) ($challan['created_by_id'] ?? ''), 'name' => (string) ($challan['created_by_name'] ?? '')];
     }
     $challan['inventory_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['inventory_txn_ids'] ?? null) ? $challan['inventory_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
+    $challan['finalized_inventory_applied'] = !empty($challan['finalized_inventory_applied']);
+    $challan['inventory_applied_by'] = array_merge(['role' => '', 'id' => '', 'name' => ''], is_array($challan['inventory_applied_by'] ?? null) ? $challan['inventory_applied_by'] : []);
+    $challan['inventory_repair_done'] = !empty($challan['inventory_repair_done']);
+    $challan['inventory_repair_by'] = array_merge(['role' => '', 'id' => '', 'name' => ''], is_array($challan['inventory_repair_by'] ?? null) ? $challan['inventory_repair_by'] : []);
+    $challan['inventory_repair_log'] = array_values(array_filter(is_array($challan['inventory_repair_log'] ?? null) ? $challan['inventory_repair_log'] : [], static fn($row): bool => is_array($row)));
     $challan['archive_restore_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['archive_restore_txn_ids'] ?? null) ? $challan['archive_restore_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
     $challan['archive_restore_by'] = array_merge(['role' => '', 'id' => '', 'name' => ''], is_array($challan['archive_restore_by'] ?? null) ? $challan['archive_restore_by'] : []);
     $challan['archive_restore_done'] = !empty($challan['archive_restore_done']);
@@ -1943,6 +1955,11 @@ function documents_list_challans(): array
             $challan['created_by'] = ['role' => (string) ($challan['created_by_type'] ?? ''), 'id' => (string) ($challan['created_by_id'] ?? ''), 'name' => (string) ($challan['created_by_name'] ?? '')];
         }
         $challan['inventory_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['inventory_txn_ids'] ?? null) ? $challan['inventory_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
+        $challan['finalized_inventory_applied'] = !empty($challan['finalized_inventory_applied']);
+        $challan['inventory_applied_by'] = array_merge(['role' => '', 'id' => '', 'name' => ''], is_array($challan['inventory_applied_by'] ?? null) ? $challan['inventory_applied_by'] : []);
+        $challan['inventory_repair_done'] = !empty($challan['inventory_repair_done']);
+        $challan['inventory_repair_by'] = array_merge(['role' => '', 'id' => '', 'name' => ''], is_array($challan['inventory_repair_by'] ?? null) ? $challan['inventory_repair_by'] : []);
+        $challan['inventory_repair_log'] = array_values(array_filter(is_array($challan['inventory_repair_log'] ?? null) ? $challan['inventory_repair_log'] : [], static fn($row): bool => is_array($row)));
         $challan['archive_restore_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['archive_restore_txn_ids'] ?? null) ? $challan['archive_restore_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
         $challan['archive_restore_by'] = array_merge(['role' => '', 'id' => '', 'name' => ''], is_array($challan['archive_restore_by'] ?? null) ? $challan['archive_restore_by'] : []);
         $challan['archive_restore_done'] = !empty($challan['archive_restore_done']);
@@ -5595,6 +5612,149 @@ function documents_inventory_consume_from_location_breakdown(array $entry, float
         'location_consumption' => $normalizedConsumption,
         'location_id' => $consumedLocationId,
     ];
+}
+
+
+function documents_inventory_apply_non_cuttable_out(array $entry, float $qty, string $sourceLocationId, bool $allowNegative = true): array
+{
+    $qty = max(0, $qty);
+    $sourceLocationId = safe_text($sourceLocationId);
+    if ($qty <= 0) {
+        return [
+            'ok' => false,
+            'error' => 'Quantity must be greater than zero.',
+            'entry' => $entry,
+            'batch_consumption' => [],
+            'location_consumption' => [],
+            'short_qty' => 0.0,
+        ];
+    }
+
+    $entry = array_merge(documents_inventory_component_entry_defaults(), $entry);
+    $batchConsumption = [];
+    $locationConsumption = [];
+    $shortQty = 0.0;
+
+    $hasBatches = is_array($entry['batches'] ?? null) && (array) ($entry['batches'] ?? []) !== [];
+    $hasLocationBreakdown = is_array($entry['location_breakdown'] ?? null) && (array) ($entry['location_breakdown'] ?? []) !== [];
+
+    if ($hasBatches) {
+        $consumed = documents_inventory_consume_from_batches($entry, $qty, $sourceLocationId);
+        if ($consumed['ok'] ?? false) {
+            $entry = (array) ($consumed['entry'] ?? $entry);
+            $batchConsumption = (array) ($consumed['batch_consumption'] ?? []);
+            $locationConsumption = (array) ($consumed['location_consumption'] ?? []);
+        } else {
+            $available = max(0, (float) ($entry['on_hand_qty'] ?? 0));
+            $consumeQty = min($qty, $available);
+            if ($consumeQty > 0) {
+                $partial = documents_inventory_consume_from_batches($entry, $consumeQty, $sourceLocationId);
+                if ($partial['ok'] ?? false) {
+                    $entry = (array) ($partial['entry'] ?? $entry);
+                    $batchConsumption = (array) ($partial['batch_consumption'] ?? []);
+                    $locationConsumption = (array) ($partial['location_consumption'] ?? []);
+                }
+            }
+            $shortQty = max(0, $qty - $consumeQty);
+        }
+    } elseif ($hasLocationBreakdown) {
+        $consumed = documents_inventory_consume_from_location_breakdown($entry, $qty, $sourceLocationId);
+        if ($consumed['ok'] ?? false) {
+            $entry = (array) ($consumed['entry'] ?? $entry);
+            $locationConsumption = (array) ($consumed['location_consumption'] ?? []);
+        } else {
+            $available = max(0, (float) ($entry['on_hand_qty'] ?? 0));
+            $consumeQty = min($qty, $available);
+            if ($consumeQty > 0) {
+                $partial = documents_inventory_consume_from_location_breakdown($entry, $consumeQty, $sourceLocationId);
+                if ($partial['ok'] ?? false) {
+                    $entry = (array) ($partial['entry'] ?? $entry);
+                    $locationConsumption = (array) ($partial['location_consumption'] ?? []);
+                }
+            }
+            $shortQty = max(0, $qty - $consumeQty);
+        }
+    } else {
+        $available = max(0, (float) ($entry['on_hand_qty'] ?? 0));
+        $consumeQty = min($qty, $available);
+        $entry['on_hand_qty'] = $available - $consumeQty;
+        if ($consumeQty > 0) {
+            $locationConsumption = [['location_id' => $sourceLocationId, 'qty' => $consumeQty]];
+        }
+        $shortQty = max(0, $qty - $consumeQty);
+    }
+
+    if ($shortQty > 0.00001) {
+        if (!$allowNegative) {
+            return [
+                'ok' => false,
+                'error' => 'Insufficient stock.',
+                'entry' => $entry,
+                'batch_consumption' => $batchConsumption,
+                'location_consumption' => documents_inventory_normalize_location_breakdown($locationConsumption),
+                'short_qty' => $shortQty,
+            ];
+        }
+        $locationConsumption[] = ['location_id' => $sourceLocationId, 'qty' => $shortQty];
+        $rows = array_values(array_filter((array) ($entry['location_breakdown'] ?? []), static fn($row): bool => is_array($row)));
+        $applied = false;
+        foreach ($rows as &$row) {
+            if ((string) ($row['location_id'] ?? '') === $sourceLocationId) {
+                $row['qty'] = (float) ($row['qty'] ?? 0) - $shortQty;
+                $applied = true;
+                break;
+            }
+        }
+        unset($row);
+        if (!$applied) {
+            $rows[] = ['location_id' => $sourceLocationId, 'qty' => -$shortQty];
+        }
+        usort($rows, static fn(array $a, array $b): int => strcmp((string) ($a['location_id'] ?? ''), (string) ($b['location_id'] ?? '')));
+        $entry['location_breakdown'] = $rows;
+        $sumQty = 0.0;
+        foreach ($rows as $row) {
+            $sumQty += (float) ($row['qty'] ?? 0);
+        }
+        $entry['on_hand_qty'] = $sumQty;
+    }
+
+    return [
+        'ok' => true,
+        'entry' => $entry,
+        'batch_consumption' => $batchConsumption,
+        'location_consumption' => documents_inventory_normalize_location_breakdown($locationConsumption),
+        'short_qty' => $shortQty,
+    ];
+}
+
+function documents_inventory_dc_variant_line_missing_out_txn(array $line, array $transactions, string $dcId): bool
+{
+    $componentId = safe_text((string) ($line['component_id'] ?? ''));
+    $variantId = safe_text((string) ($line['variant_id'] ?? ''));
+    $qty = max(0, (float) ($line['qty'] ?? 0));
+    if ($componentId === '' || $variantId === '' || $qty <= 0) {
+        return false;
+    }
+    foreach ($transactions as $txRow) {
+        if (!is_array($txRow)) {
+            continue;
+        }
+        $tx = array_merge(documents_inventory_transaction_defaults(), $txRow);
+        if (strtoupper((string) ($tx['type'] ?? '')) !== 'OUT') {
+            continue;
+        }
+        if ((string) ($tx['ref_type'] ?? '') !== 'delivery_challan' || (string) ($tx['ref_id'] ?? '') !== $dcId) {
+            continue;
+        }
+        if ((string) ($tx['component_id'] ?? '') !== $componentId || (string) ($tx['variant_id'] ?? '') !== $variantId) {
+            continue;
+        }
+        if (abs((float) ($tx['qty'] ?? 0) - $qty) > 0.00001) {
+            continue;
+        }
+        return false;
+    }
+    return true;
 }
 
 function documents_inventory_locations(bool $includeArchived = true): array
