@@ -252,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = safe_text($_POST['action'] ?? '');
 
-    $employeeAllowedActions = ['create_inventory_tx', 'edit_inventory_tx', 'save_inventory_edits', 'import_inventory_stock_in_csv', 'create_receipt', 'save_receipt_draft', 'finalize_receipt', 'create_agreement', 'create_delivery_challan', 'create_pi', 'create_invoice'];
+    $employeeAllowedActions = ['create_inventory_tx', 'edit_inventory_tx', 'save_inventory_edits', 'import_inventory_stock_in_csv', 'create_receipt', 'save_receipt_draft', 'finalize_receipt'];
     if (!$isAdmin && !in_array($action, $employeeAllowedActions, true)) {
         $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
     }
@@ -310,7 +310,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $snapshot = documents_quote_resolve_snapshot($quote);
         $companyProfile = load_company_profile();
         $viewer = [
-            'role' => $isAdmin ? 'admin' : 'employee',
+            'type' => $isAdmin ? 'admin' : 'employee',
             'id' => (string) ($user['id'] ?? ''),
             'name' => (string) ($user['full_name'] ?? ($isAdmin ? 'Admin' : 'Employee')),
         ];
@@ -358,7 +358,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $agreement['city'] = safe_text((string) ($quote['city'] ?? $snapshot['city'] ?? ''));
             $agreement['state'] = safe_text((string) ($quote['state'] ?? $snapshot['state'] ?? ''));
             $agreement['pin_code'] = safe_text((string) ($quote['pin'] ?? $snapshot['pin_code'] ?? ''));
-            $agreement['created_by_type'] = (string) ($viewer['role'] ?? 'admin');
+            $agreement['created_by_type'] = 'admin';
             $agreement['created_by_id'] = $viewer['id'];
             $agreement['created_by_name'] = $viewer['name'];
             $agreement['created_at'] = date('c');
@@ -368,7 +368,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$savedAgreement['ok']) {
                 $redirectDocuments($tab, 'error', 'Failed to create agreement draft.', ['view' => $view]);
             }
-            documents_append_document_action_log($viewer, 'create_draft', 'agreement', (string) ($agreement['id'] ?? ''), $view, 'Agreement created from accepted customer pack.');
 
             $renderedAgreementHtml = documents_render_agreement_body_html($agreement, $companyProfile);
 
@@ -421,7 +420,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $receipt['reference'] = '';
             $receipt['notes'] = '';
             $receipt['status'] = 'draft';
-            $receipt['created_by'] = ['role' => (string) ($viewer['role'] ?? ''), 'id' => (string) ($viewer['id'] ?? ''), 'name' => (string) ($viewer['name'] ?? '')];
+            $receipt['created_by'] = ['role' => (string) ($viewer['type'] ?? ''), 'id' => (string) ($viewer['id'] ?? ''), 'name' => (string) ($viewer['name'] ?? '')];
             $receipt['created_at'] = date('c');
             $receipt['updated_at'] = (string) $receipt['created_at'];
             $receipt['archived_flag'] = false;
@@ -432,7 +431,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$saved['ok']) {
                 $redirectDocuments($tab, 'error', 'Unable to create receipt draft.', ['view' => $view]);
             }
-            documents_append_document_action_log($viewer, 'create_draft', 'receipt', (string) ($receipt['id'] ?? ''), $view, 'Receipt draft created from accepted customer pack.');
             documents_quote_link_workflow_doc($quote, 'receipt', (string) $receipt['id']);
             $quote['updated_at'] = date('c');
             documents_save_quote($quote);
@@ -468,10 +466,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($packForQuote !== null) {
                 $challan['packing_list_id'] = (string) ($packForQuote['id'] ?? '');
             }
-            $challan['created_by_type'] = (string) ($viewer['role'] ?? 'admin');
+            $challan['created_by_type'] = 'admin';
             $challan['created_by_id'] = $viewer['id'];
             $challan['created_by_name'] = $viewer['name'];
-            $challan['created_by'] = ['role' => (string) ($viewer['role'] ?? ''), 'id' => (string) $viewer['id'], 'name' => (string) $viewer['name']];
+            $challan['created_by'] = ['role' => 'admin', 'id' => (string) $viewer['id'], 'name' => (string) $viewer['name']];
             $challan['created_at'] = date('c');
             $challan['updated_at'] = date('c');
 
@@ -495,7 +493,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$savedSales['ok']) {
                 $redirectDocuments($tab, 'error', 'Delivery challan created, but pack workflow update failed.', ['view' => $view]);
             }
-            documents_append_document_action_log($viewer, 'create_draft', 'dc', (string) ($challan['id'] ?? ''), $view, 'Delivery challan draft created from accepted customer pack.');
 
             documents_quote_link_workflow_doc($quote, 'delivery_challan', (string) $challan['id']);
             $quote['updated_at'] = date('c');
@@ -541,7 +538,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$savedSalesPi['ok']) {
                 $redirectDocuments($tab, 'error', 'PI created, but workflow update failed.', ['view' => $view]);
             }
-            documents_append_document_action_log($viewer, 'create_draft', 'pi', $piId, $view, 'Proforma draft created from accepted customer pack.');
 
             documents_quote_link_workflow_doc($quote, 'proforma', $piId);
             $quote['updated_at'] = date('c');
@@ -587,7 +583,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$savedSalesInvoice['ok']) {
                 $redirectDocuments($tab, 'error', 'Invoice created, but workflow update failed.', ['view' => $view]);
             }
-            documents_append_document_action_log($viewer, 'create_draft', 'invoice', $invoiceId, $view, 'Invoice draft created from accepted customer pack.');
 
             documents_quote_link_workflow_doc($quote, 'invoice', $invoiceId);
             $quote['updated_at'] = date('c');
@@ -860,12 +855,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$saved['ok']) {
             $redirectDocuments($tab, 'error', 'Unable to save receipt.', ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => $receiptId]);
         }
-        $receiptActor = [
-            'role' => $isAdmin ? 'admin' : 'employee',
-            'id' => (string) ($user['id'] ?? ''),
-            'name' => (string) ($user['full_name'] ?? ($isAdmin ? 'Admin' : 'Employee')),
-        ];
-        documents_append_document_action_log($receiptActor, $action === 'finalize_receipt' ? 'finalize' : 'update_draft', 'receipt', $receiptId, $view, $action === 'finalize_receipt' ? 'Receipt finalized.' : 'Receipt draft updated.');
 
         $msg = $action === 'finalize_receipt' ? 'Receipt finalized.' : 'Receipt draft saved.';
         $redirectDocuments($tab, 'success', $msg, ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => $receiptId]);
@@ -873,9 +862,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 
     if ($action === 'set_archive_state') {
-        if (!$isAdmin) {
-            $redirectDocuments('accepted_customers', 'error', 'Access denied.');
-        }
         $tab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
         $view = safe_text($_POST['return_view'] ?? '');
         $docType = safe_text($_POST['doc_type'] ?? '');
@@ -952,67 +938,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectDocuments($tab, 'error', 'Unable to update archive state.', $view !== '' ? ['view' => $view] : []);
         }
         $redirectDocuments($tab, 'success', $shouldArchive ? 'Document archived.' : 'Document unarchived.', $view !== '' ? ['view' => $view] : []);
-    }
-
-    if (in_array($action, ['document_verification_update', 'document_verification_bulk_update'], true)) {
-        if (!$isAdmin) {
-            $redirectDocuments('accepted_customers', 'error', 'Access denied.');
-        }
-        $verificationRows = documents_load_document_verification();
-        $allowedStatuses = ['not_verified', 'verified', 'needs_clarification'];
-        $newStatus = safe_text((string) ($_POST['verification_status'] ?? ''));
-        if (!in_array($newStatus, $allowedStatuses, true)) {
-            $redirectDocuments('document_verification', 'error', 'Invalid verification status.');
-        }
-        $adminNote = safe_text((string) ($_POST['admin_note'] ?? ''));
-        if ($newStatus === 'needs_clarification' && $adminNote === '') {
-            $redirectDocuments('document_verification', 'error', 'Admin note is required for needs clarification.');
-        }
-
-        $targetLogIds = [];
-        if ($action === 'document_verification_update') {
-            $singleLogId = safe_text((string) ($_POST['log_id'] ?? ''));
-            if ($singleLogId !== '') {
-                $targetLogIds[] = $singleLogId;
-            }
-        } else {
-            foreach ((array) ($_POST['log_ids'] ?? []) as $logIdRaw) {
-                $cleanId = safe_text((string) $logIdRaw);
-                if ($cleanId !== '') {
-                    $targetLogIds[] = $cleanId;
-                }
-            }
-        }
-        if ($targetLogIds === []) {
-            $redirectDocuments('document_verification', 'error', 'Select at least one log entry.');
-        }
-
-        $targetSet = array_flip($targetLogIds);
-        $updatedCount = 0;
-        $adminActor = ['role' => 'admin', 'id' => (string) ($user['id'] ?? ''), 'name' => (string) ($user['full_name'] ?? 'Admin')];
-        foreach ($verificationRows as &$verificationRow) {
-            $logId = (string) ($verificationRow['log_id'] ?? '');
-            if (!isset($targetSet[$logId])) {
-                continue;
-            }
-            $verificationRow['status'] = $newStatus;
-            $verificationRow['admin_note'] = $adminNote;
-            $verificationRow['verified_by'] = $adminActor;
-            $verificationRow['verified_at'] = date('c');
-            $updatedCount++;
-        }
-        unset($verificationRow);
-
-        if ($updatedCount < 1) {
-            $redirectDocuments('document_verification', 'error', 'No verification record updated.');
-        }
-
-        $savedVerification = documents_save_document_verification($verificationRows);
-        $redirectDocuments(
-            'document_verification',
-            ($savedVerification['ok'] ?? false) ? 'success' : 'error',
-            ($savedVerification['ok'] ?? false) ? ('Updated verification for ' . $updatedCount . ' action(s).') : 'Failed to save verification updates.'
-        );
     }
 
     if ($action === 'archive_accepted_customer' || $action === 'unarchive_accepted_customer') {
@@ -2744,7 +2669,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $activeTab = safe_text($_GET['tab'] ?? 'company');
-if (!in_array($activeTab, ['company', 'numbering', 'templates', 'accepted_customers', 'items', 'archived', 'document_verification'], true)) {
+if (!in_array($activeTab, ['company', 'numbering', 'templates', 'accepted_customers', 'items', 'archived'], true)) {
     $activeTab = 'company';
 }
 
@@ -2776,14 +2701,6 @@ $archiveSearch = strtolower(trim(safe_text($_GET['archive_q'] ?? '')));
 $itemsSubtab = safe_text($_GET['items_subtab'] ?? ($_GET['sub'] ?? 'components'));
 if (!in_array($itemsSubtab, ['components', 'kits', 'tax_profiles', 'variants', 'locations', 'inventory', 'inventory_verification', 'transactions', 'csv_import', 'archived'], true)) {
     $itemsSubtab = 'components';
-}
-
-if ($isEmployee && !in_array($activeTab, ['accepted_customers', 'items'], true)) {
-    $activeTab = 'accepted_customers';
-    if ($status === '' && $message === '') {
-        $status = 'error';
-        $message = 'Access denied. Employees can access Accepted Customers and Inventory only.';
-    }
 }
 
 if ($isEmployee && $activeTab === 'items' && !in_array($itemsSubtab, ['inventory', 'transactions', 'csv_import'], true)) {
@@ -2937,8 +2854,6 @@ $salesReceipts = documents_list_sales_documents('receipt');
 $salesChallans = documents_list_sales_documents('delivery_challan');
 $salesProformas = documents_list_sales_documents('proforma');
 $salesInvoices = documents_list_sales_documents('invoice');
-$documentActionLogs = documents_load_document_actions_log();
-$documentVerificationRows = documents_load_document_verification();
 $inventoryComponents = documents_inventory_components(true);
 $activeInventoryComponents = get_active_components();
 $inventoryKits = documents_inventory_cleanup_archived_kit_components(documents_inventory_kits(true));
@@ -3254,35 +3169,6 @@ usort($archivedRows, static function (array $a, array $b): int {
     return strcmp((string) ($b['archived_at'] ?? ''), (string) ($a['archived_at'] ?? ''));
 });
 
-$docLogById = [];
-foreach ($documentActionLogs as $logRow) {
-    if (!is_array($logRow)) {
-        continue;
-    }
-    $docLogById[(string) ($logRow['id'] ?? '')] = array_merge(documents_document_action_log_defaults(), $logRow);
-}
-
-$documentVerificationQueue = [];
-foreach ($documentVerificationRows as $verificationRow) {
-    if (!is_array($verificationRow)) {
-        continue;
-    }
-    $verificationRow = array_merge(documents_document_verification_defaults(), $verificationRow);
-    $logId = (string) ($verificationRow['log_id'] ?? '');
-    $actionRow = $docLogById[$logId] ?? null;
-    if (!is_array($actionRow)) {
-        continue;
-    }
-    $statusVal = (string) ($verificationRow['status'] ?? 'not_verified');
-    if (!in_array($statusVal, ['not_verified', 'needs_clarification'], true)) {
-        continue;
-    }
-    $documentVerificationQueue[] = ['verification' => $verificationRow, 'log' => $actionRow];
-}
-usort($documentVerificationQueue, static function (array $a, array $b): int {
-    return strcmp((string) ($b['log']['at'] ?? ''), (string) ($a['log']['at'] ?? ''));
-});
-
 
 ?>
 <!doctype html>
@@ -3344,21 +3230,16 @@ usort($documentVerificationQueue, static function (array $a, array $b): int {
     <?php endif; ?>
 
     <nav class="tabs">
-      <?php if ($isAdmin): ?>
-        <a class="tab <?= $activeTab === 'company' ? 'active' : '' ?>" href="?tab=company">Company Profile &amp; Branding</a>
-        <a class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering">Numbering Rules</a>
-        <a class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates">Template Sets</a>
-      <?php endif; ?>
+      <a class="tab <?= $activeTab === 'company' ? 'active' : '' ?>" href="?tab=company">Company Profile &amp; Branding</a>
+      <a class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering">Numbering Rules</a>
+      <a class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates">Template Sets</a>
       <a class="tab <?= $activeTab === 'accepted_customers' ? 'active' : '' ?>" href="?tab=accepted_customers">Accepted Customers</a>
       <a class="tab <?= $activeTab === 'items' ? 'active' : '' ?>" href="?tab=items">Items</a>
-      <?php if ($isAdmin): ?>
-        <a class="tab <?= $activeTab === 'document_verification' ? 'active' : '' ?>" href="?tab=document_verification">Document Verification</a>
-        <a class="tab <?= $activeTab === 'archived' ? 'active' : '' ?>" href="?tab=archived">Archived</a>
-        <a class="tab" href="admin-templates.php">Template Blocks &amp; Media</a>
-        <a class="tab" href="admin-quotations.php">Quotation Manager</a>
-        <a class="tab" href="admin-challans.php">Challans</a>
-        <a class="tab" href="admin-agreements.php">Agreements</a>
-      <?php endif; ?>
+      <a class="tab <?= $activeTab === 'archived' ? 'active' : '' ?>" href="?tab=archived">Archived</a>
+      <a class="tab" href="admin-templates.php">Template Blocks &amp; Media</a>
+      <a class="tab" href="admin-quotations.php">Quotation Manager</a>
+      <a class="tab" href="admin-challans.php">Challans</a>
+      <a class="tab" href="admin-agreements.php">Agreements</a>
       <span class="tab disabled">CSV Import (Phase 2+)</span>
     </nav>
 
@@ -3475,7 +3356,7 @@ usort($documentVerificationQueue, static function (array $a, array $b): int {
                     <td><?= htmlspecialchars((string) ($row['execution_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td>
                     <td><?= htmlspecialchars((string) ($row['status'] ?? 'active'), ENT_QUOTES) ?></td>
                     <td class="row-actions">
-                      <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?><?= $isAdmin ? '&mode=edit' : '' ?>" target="_blank" rel="noopener"><?= $isAdmin ? 'View / Edit' : 'View' ?></a>
+                      <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>&mode=edit" target="_blank" rel="noopener">View / Edit</a>
                       <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View as HTML</a>
                       <?php if ($isAdmin): ?>
                         <form class="inline-form" method="post">
@@ -3600,7 +3481,6 @@ usort($documentVerificationQueue, static function (array $a, array $b): int {
           </tbody></table>
 
           <h3>E) Proforma Invoice (PI)</h3>
-          <?php if ($isEmployee): ?><p class="muted">Finalize PI is admin-only.</p><?php endif; ?>
           <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
             <input type="hidden" name="action" value="create_pi" />
@@ -3615,7 +3495,6 @@ usort($documentVerificationQueue, static function (array $a, array $b): int {
           </tbody></table>
 
           <h3>F) Invoice</h3>
-          <?php if ($isEmployee): ?><p class="muted">Finalize Invoice is admin-only.</p><?php endif; ?>
           <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
             <input type="hidden" name="action" value="create_invoice" />
@@ -3665,40 +3544,6 @@ usort($documentVerificationQueue, static function (array $a, array $b): int {
             </tbody>
           </table>
         <?php endif; ?>
-      </section>
-    <?php endif; ?>
-
-    <?php if ($activeTab === 'document_verification' && $isAdmin): ?>
-      <section class="panel">
-        <h2 style="margin-top:0;">Document Verification Queue</h2>
-        <p class="muted">Shows employee document actions pending verification.</p>
-        <form method="post" style="margin-bottom:0.75rem;">
-          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
-          <select name="verification_status">
-            <option value="verified">Mark Verified</option>
-            <option value="needs_clarification">Mark Needs Clarification</option>
-            <option value="not_verified">Mark Not Verified</option>
-          </select>
-          <input type="text" name="admin_note" placeholder="Note (required for needs clarification)" style="min-width:320px;" />
-          <button class="btn" type="submit" name="action" value="document_verification_bulk_update">Apply Bulk Action</button>
-          <table><thead><tr><th><input type="checkbox" onclick="document.querySelectorAll('.doc-log-select').forEach(cb => cb.checked = this.checked);" /></th><th>Time</th><th>Employee</th><th>Doc Type</th><th>Action</th><th>Quote Ref</th><th>Status</th><th>View Doc</th></tr></thead><tbody>
-            <?php foreach ($documentVerificationQueue as $queueRow): ?>
-              <?php $log = (array) ($queueRow['log'] ?? []); $verify = (array) ($queueRow['verification'] ?? []); $docType = (string) ($log['doc_type'] ?? ''); $docId = (string) ($log['doc_id'] ?? ''); $quoteId = (string) ($log['quote_id'] ?? ''); $viewHref = ''; if ($docType === 'agreement') { $viewHref = 'agreement-view.php?id=' . urlencode($docId); } elseif ($docType === 'dc') { $viewHref = 'challan-view.php?id=' . urlencode($docId); } elseif ($docType === 'pi') { $viewHref = 'admin-proformas.php?id=' . urlencode($docId); } elseif ($docType === 'invoice') { $viewHref = 'admin-invoices.php?id=' . urlencode($docId); } elseif ($docType === 'quotation') { $viewHref = 'quotation-view.php?id=' . urlencode($docId); } elseif ($docType === 'receipt') { $viewHref = 'receipt-view.php?rid=' . urlencode($docId); } ?>
-              <tr>
-                <td><input class="doc-log-select" type="checkbox" name="log_ids[]" value="<?= htmlspecialchars((string) ($log['id'] ?? ''), ENT_QUOTES) ?>" /></td>
-                <td><?= htmlspecialchars((string) ($log['at'] ?? ''), ENT_QUOTES) ?></td>
-                <td><?= htmlspecialchars((string) (($log['actor']['name'] ?? '') . ' [' . ($log['actor']['id'] ?? '') . ']'), ENT_QUOTES) ?></td>
-                <td><?= htmlspecialchars(strtoupper($docType), ENT_QUOTES) ?></td>
-                <td><?= htmlspecialchars((string) ($log['action'] ?? ''), ENT_QUOTES) ?></td>
-                <td><?= htmlspecialchars($quoteId, ENT_QUOTES) ?></td>
-                <td><span class="pill secondary"><?= htmlspecialchars(ucwords(str_replace('_', ' ', (string) ($verify['status'] ?? 'not_verified'))), ENT_QUOTES) ?></span></td>
-                <td><?php if ($viewHref !== ''): ?><a class="btn secondary" href="<?= htmlspecialchars($viewHref, ENT_QUOTES) ?>" target="_blank" rel="noopener">View</a><?php else: ?><span class="muted">—</span><?php endif; ?></td>
-
-              </tr>
-            <?php endforeach; ?>
-            <?php if ($documentVerificationQueue === []): ?><tr><td colspan="8" class="muted">No pending verification records.</td></tr><?php endif; ?>
-          </tbody></table>
-        </form>
       </section>
     <?php endif; ?>
 
