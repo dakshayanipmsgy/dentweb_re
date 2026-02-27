@@ -502,125 +502,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = safe_text($_POST['action'] ?? '');
     $isDraft = (string) ($challan['status'] ?? 'draft') === 'draft';
-    if ($action === 'repair_dc_inventory') {
-        if ($viewerType !== 'admin') {
-            $redirectWith('error', 'Only admin can run DC inventory repair.');
-        }
-        if ((string) ($challan['status'] ?? '') !== 'final') {
-            $redirectWith('error', 'Only finalized DC can be repaired.');
-        }
-        if (!empty($challan['finalized_inventory_applied']) && !empty($challan['inventory_repair_done'])) {
-            $redirectWith('success', 'No repair needed. DC inventory was already applied/repaired.');
-        }
-        $stock = documents_inventory_load_stock();
-        $repairTxnIds = [];
-        $repairRows = [];
-        foreach ((array) ($challan['lines'] ?? []) as $line) {
-            if (!is_array($line) || !empty($line['is_cuttable_snapshot'])) {
-                continue;
-            }
-            $componentId = (string) ($line['component_id'] ?? '');
-            $variantId = (string) ($line['variant_id'] ?? '');
-            $needQty = max(0, (float) ($line['qty'] ?? 0));
-            if ($componentId === '' || $needQty <= 0) {
-                continue;
-            }
-            $component = $componentMap[$componentId] ?? null;
-            if (!is_array($component)) {
-                continue;
-            }
-            if (!empty($component['has_variants']) && $variantId === '') {
-                $repairRows[] = ['line_id' => (string) ($line['line_id'] ?? ''), 'status' => 'skipped', 'reason' => 'missing_variant'];
-                continue;
-            }
-
-            $alreadyTx = false;
-            $allTx = documents_inventory_load_transactions();
-            foreach ($allTx as $row) {
-                if (!is_array($row)) { continue; }
-                $tx = array_merge(documents_inventory_transaction_defaults(), $row);
-                if (
-                    strtoupper((string) ($tx['type'] ?? '')) === 'OUT'
-                    && (string) ($tx['ref_type'] ?? '') === 'delivery_challan'
-                    && (string) ($tx['ref_id'] ?? '') === (string) ($challan['id'] ?? '')
-                    && (string) ($tx['component_id'] ?? '') === $componentId
-                    && (string) ($tx['variant_id'] ?? '') === $variantId
-                    && abs((float) ($tx['qty'] ?? 0) - $needQty) <= 0.00001
-                ) {
-                    $alreadyTx = true;
-                    break;
-                }
-            }
-            if ($alreadyTx) {
-                $repairRows[] = ['line_id' => (string) ($line['line_id'] ?? ''), 'status' => 'skipped', 'reason' => 'transaction_exists'];
-                continue;
-            }
-
-            $sourceLocationId = safe_text((string) ($line['source_location_id'] ?? ''));
-            $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
-            $applied = documents_inventory_apply_non_cuttable_dispatch($entry, $needQty, $sourceLocationId, true);
-            if (!($applied['ok'] ?? false)) {
-                $repairRows[] = ['line_id' => (string) ($line['line_id'] ?? ''), 'status' => 'failed', 'reason' => (string) ($applied['error'] ?? 'apply_failed')];
-                continue;
-            }
-            $entry = (array) ($applied['entry'] ?? $entry);
-            $entry['updated_at'] = date('c');
-            documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
-
-            $txId = 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
-            $tx = [
-                'id' => $txId,
-                'type' => 'OUT',
-                'component_id' => $componentId,
-                'variant_id' => $variantId,
-                'variant_name_snapshot' => (string) ($line['variant_name_snapshot'] ?? ''),
-                'unit' => (string) ($line['unit_snapshot'] ?? ''),
-                'qty' => $needQty,
-                'length_ft' => 0,
-                'lot_consumption' => [],
-                'batch_consumption' => (array) ($applied['batch_consumption'] ?? []),
-                'location_consumption' => (array) ($applied['location_consumption'] ?? []),
-                'source_location_id' => $sourceLocationId,
-                'ref_type' => 'delivery_challan',
-                'ref_id' => (string) ($challan['id'] ?? ''),
-                'reason' => 'DC Inventory Repair',
-                'notes' => (string) ($line['notes'] ?? ''),
-                'created_at' => date('c'),
-                'created_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
-                'allow_negative' => true,
-            ];
-            documents_inventory_append_transaction($tx);
-            $repairTxnIds[] = $txId;
-            $repairRows[] = ['line_id' => (string) ($line['line_id'] ?? ''), 'status' => 'repaired', 'txn_id' => $txId];
-        }
-
-        $savedStock = documents_inventory_save_stock($stock);
-        if (!($savedStock['ok'] ?? false)) {
-            $redirectWith('error', 'Repair failed while saving stock.');
-        }
-
-        $challan['inventory_txn_ids'] = array_values(array_unique(array_merge((array) ($challan['inventory_txn_ids'] ?? []), $repairTxnIds)));
-        $challan['inventory_repair_done'] = true;
-        $challan['inventory_repair_at'] = date('c');
-        $challan['inventory_repair_log'] = array_values(array_merge((array) ($challan['inventory_repair_log'] ?? []), [[
-            'at' => date('c'),
-            'by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
-            'rows' => $repairRows,
-        ]]));
-        $challan['updated_at'] = date('c');
-        $saved = documents_save_challan($challan);
-        if (!($saved['ok'] ?? false)) {
-            $redirectWith('error', 'Repair applied but failed to persist DC marker.');
-        }
-        $repairedCount = 0;
-        foreach ($repairRows as $row) {
-            if (($row['status'] ?? '') === 'repaired') {
-                $repairedCount++;
-            }
-        }
-        $redirectWith('success', $repairedCount > 0 ? ('DC inventory repair completed. Repaired lines: ' . $repairedCount . '.') : 'No repair needed.');
-    }
-
     if ($action === 'repair_archive_restore') {
         if ($viewerType !== 'admin') {
             $redirectWith('error', 'Only admin can run archive inventory repair.');
@@ -656,7 +537,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : 'No repair needed. Archive restore already complete.');
     }
 
-    if (in_array($action, ['save_draft', 'finalize', 'archive', 'repair_archive_restore', 'repair_dc_inventory'], true)) {
+    if (in_array($action, ['save_draft', 'finalize', 'archive', 'repair_archive_restore'], true)) {
         if (!$isDraft && in_array($action, ['save_draft', 'finalize'], true)) {
             $redirectWith('error', 'Only draft DC can be edited/finalized.');
         }
@@ -975,9 +856,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($action === 'finalize') {
-            if (!empty($challan['finalized_inventory_applied'])) {
-                $redirectWith('error', 'Inventory already applied for this DC. Use amendment DC for changes.');
-            }
             $stock = documents_inventory_load_stock();
             $txnIds = [];
             $dispatchRows = [];
@@ -1126,17 +1004,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $needQty = max(0, (float) ($line['qty'] ?? 0));
                     if ($needQty <= 0) { continue; }
+                    $availableQty = max(0, (float) ($entry['on_hand_qty'] ?? 0));
+                    $consumeQty = min($needQty, $availableQty);
                     $sourceLocationId = safe_text((string) ($line['source_location_id'] ?? ''));
-                    if (!empty($component['has_variants']) && $variantId === '') {
-                        $redirectWith('error', 'Variant is required for non-cuttable variant-enabled component line.');
-                    }
-                    $consumed = documents_inventory_apply_non_cuttable_dispatch($entry, $needQty, $sourceLocationId, true);
+                    $consumed = $consumeQty > 0 ? documents_inventory_consume_from_location_breakdown($entry, $consumeQty, $sourceLocationId) : ['ok' => true, 'entry' => $entry, 'location_consumption' => []];
                     if (!($consumed['ok'] ?? false)) {
-                        $redirectWith('error', (string) ($consumed['error'] ?? 'Unable to consume stock for line.'));
+                        $consumed = ['ok' => true, 'entry' => $entry, 'location_consumption' => []];
                     }
                     $entry = (array) ($consumed['entry'] ?? $entry);
+                    $entry['on_hand_qty'] = ((float) ($entry['on_hand_qty'] ?? 0)) - ($needQty - $consumeQty);
                     $tx['qty'] = $needQty;
-                    $tx['batch_consumption'] = (array) ($consumed['batch_consumption'] ?? []);
                     $tx['location_consumption'] = (array) ($consumed['location_consumption'] ?? []);
                 }
 
@@ -1185,9 +1062,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $transactions = documents_inventory_load_transactions();
                 documents_inventory_sync_verification_log($transactions, true);
             }
-            $challan['inventory_txn_ids'] = array_values(array_unique(array_merge((array) ($challan['inventory_txn_ids'] ?? []), $txnIds)));
-            $challan['finalized_inventory_applied'] = true;
-            $challan['finalized_inventory_applied_at'] = date('c');
+            $challan['inventory_txn_ids'] = $txnIds;
             $challan['status'] = 'final';
         }
 
@@ -1399,7 +1274,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 </div>
 <?php endif; ?>
 
-<div class="row-actions" style="margin-top:12px"><?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="finalize">Finalize DC</button><?php endif; ?><?php if ((string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php endif; ?><?php if ($viewerType === 'admin' && (string) ($challan['status'] ?? '') === 'final' && (empty($challan['finalized_inventory_applied']) || empty($challan['inventory_repair_done']))): ?><button class="btn secondary" type="submit" name="action" value="repair_dc_inventory">Repair DC inventory</button><?php endif; ?><?php if ($viewerType === 'admin' && !empty($challan['archived_flag']) && in_array((string) ($challan['status'] ?? ''), ['final', 'archived'], true) && empty($challan['archive_restore_done'])): ?><button class="btn secondary" type="submit" name="action" value="repair_archive_restore">Repair archive inventory</button><?php endif; ?></div>
+<div class="row-actions" style="margin-top:12px"><?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="finalize">Finalize DC</button><?php endif; ?><?php if ((string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php endif; ?><?php if ($viewerType === 'admin' && !empty($challan['archived_flag']) && in_array((string) ($challan['status'] ?? ''), ['final', 'archived'], true) && empty($challan['archive_restore_done'])): ?><button class="btn secondary" type="submit" name="action" value="repair_archive_restore">Repair archive inventory</button><?php endif; ?></div>
 </form>
 </main>
 <script>
