@@ -1612,6 +1612,11 @@ function documents_challan_defaults(): array
         'created_by_id' => '',
         'created_by_name' => '',
         'inventory_txn_ids' => [],
+        'finalized_inventory_applied' => false,
+        'finalized_inventory_applied_at' => '',
+        'inventory_repair_done' => false,
+        'inventory_repair_at' => '',
+        'inventory_repair_log' => [],
         'archive_restore_done' => false,
         'archive_restore_at' => '',
         'archive_restore_by' => ['role' => '', 'id' => '', 'name' => ''],
@@ -5476,6 +5481,75 @@ function documents_inventory_consume_from_batches(array $entry, float $qty, stri
         'entry' => $entry,
         'batch_consumption' => $batchConsumption,
         'location_consumption' => documents_inventory_normalize_location_breakdown($locationConsumption),
+    ];
+}
+
+function documents_inventory_apply_non_cuttable_dispatch(array $entry, float $qty, string $sourceLocationId = '', bool $allowNegative = true): array
+{
+    $qty = max(0, $qty);
+    $sourceLocationId = safe_text($sourceLocationId);
+    if ($qty <= 0) {
+        return ['ok' => false, 'error' => 'Quantity must be greater than zero.'];
+    }
+
+    $useBatches = is_array($entry['batches'] ?? null) && count((array) $entry['batches']) > 0;
+    if ($useBatches) {
+        $consumed = documents_inventory_consume_from_batches($entry, $qty, $sourceLocationId);
+        if (($consumed['ok'] ?? false) || !$allowNegative) {
+            return $consumed;
+        }
+
+        $available = max(0, (float) ($entry['on_hand_qty'] ?? 0));
+        $consumeQty = min($qty, $available);
+        $consumed = $consumeQty > 0
+            ? documents_inventory_consume_from_batches($entry, $consumeQty, $sourceLocationId)
+            : ['ok' => true, 'entry' => $entry, 'batch_consumption' => [], 'location_consumption' => []];
+        if (!($consumed['ok'] ?? false)) {
+            return $consumed;
+        }
+        $entry = (array) ($consumed['entry'] ?? $entry);
+        $shortQty = max(0, $qty - $consumeQty);
+        if ($shortQty > 0.00001) {
+            $entry['batches'][] = [
+                'batch_id' => 'NEG-' . date('YmdHis') . '-' . bin2hex(random_bytes(2)),
+                'location_id' => $sourceLocationId,
+                'qty_remaining' => -round($shortQty, 4),
+                'created_by' => ['role' => 'system', 'id' => '', 'name' => 'system'],
+                'created_at' => date('c'),
+                'source_txn_id' => '',
+                'note' => 'Negative stock via DC finalize/repair',
+            ];
+            $entry['on_hand_qty'] = round((float) ($entry['on_hand_qty'] ?? 0) - $shortQty, 4);
+        }
+        return [
+            'ok' => true,
+            'entry' => $entry,
+            'batch_consumption' => (array) ($consumed['batch_consumption'] ?? []),
+            'location_consumption' => (array) ($consumed['location_consumption'] ?? []),
+        ];
+    }
+
+    $consumed = documents_inventory_consume_from_location_breakdown($entry, $qty, $sourceLocationId);
+    if (($consumed['ok'] ?? false) || !$allowNegative) {
+        return $consumed;
+    }
+
+    $available = max(0, (float) ($entry['on_hand_qty'] ?? 0));
+    $consumeQty = min($qty, $available);
+    $consumed = $consumeQty > 0
+        ? documents_inventory_consume_from_location_breakdown($entry, $consumeQty, $sourceLocationId)
+        : ['ok' => true, 'entry' => $entry, 'location_consumption' => []];
+    if (!($consumed['ok'] ?? false)) {
+        return $consumed;
+    }
+    $entry = (array) ($consumed['entry'] ?? $entry);
+    $entry['on_hand_qty'] = round((float) ($entry['on_hand_qty'] ?? 0) - max(0, $qty - $consumeQty), 4);
+
+    return [
+        'ok' => true,
+        'entry' => $entry,
+        'batch_consumption' => [],
+        'location_consumption' => (array) ($consumed['location_consumption'] ?? []),
     ];
 }
 
