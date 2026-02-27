@@ -3472,6 +3472,7 @@ function documents_inventory_component_defaults(): array
         'tax_profile_id' => '',
         'has_variants' => false,
         'is_cuttable' => false,
+        'inventory_tracked' => false,
         'standard_length_ft' => 0,
         'min_issue_ft' => 1,
         'description' => '',
@@ -3480,6 +3481,11 @@ function documents_inventory_component_defaults(): array
         'created_at' => '',
         'updated_at' => '',
     ];
+}
+
+function documents_inventory_component_is_tracked(array $component): bool
+{
+    return !empty($component['is_cuttable']);
 }
 
 function documents_inventory_kit_defaults(): array
@@ -4118,6 +4124,7 @@ function documents_inventory_components(bool $includeArchived = true): array
         }
         $component = array_merge(documents_inventory_component_defaults(), $row);
         $component['is_cuttable'] = (bool) ($component['is_cuttable'] ?? false);
+        $component['inventory_tracked'] = documents_inventory_component_is_tracked($component);
         $component['has_variants'] = (bool) ($component['has_variants'] ?? false);
         $component['standard_length_ft'] = (float) ($component['standard_length_ft'] ?? 0);
         $component['min_issue_ft'] = max(0.01, (float) ($component['min_issue_ft'] ?? 1));
@@ -4388,6 +4395,10 @@ function documents_inventory_sync_verification_log(array $transactions, bool $pe
         $row = array_merge(documents_inventory_transaction_defaults(), $tx);
         $txnId = (string) ($row['id'] ?? '');
         if ($txnId === '') {
+            continue;
+        }
+        $component = documents_inventory_get_component((string) ($row['component_id'] ?? ''));
+        if (!is_array($component) || !documents_inventory_component_is_tracked($component)) {
             continue;
         }
         $creator = is_array($row['created_by'] ?? null) ? $row['created_by'] : ['role' => '', 'id' => '', 'name' => ''];

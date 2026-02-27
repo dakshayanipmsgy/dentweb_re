@@ -103,7 +103,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
  }
 
  $allowedForAccepted = documents_quote_normalize_status((string)($quote['status'] ?? 'draft')) === 'accepted';
- if ($allowedForAccepted && in_array($action, ['create_agreement','create_receipt','create_delivery_challan','create_proforma','create_invoice'], true)) {
+ if ($allowedForAccepted && in_array($action, ['create_agreement','create_receipt','create_delivery_challan','create_invoice'], true)) {
     if ($viewerType !== 'admin' && $action !== 'create_delivery_challan') {
         $redirect('error', 'Permission denied.');
     }
@@ -165,24 +165,6 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         ]];
         documents_save_sales_document('delivery_challan', $doc);
         documents_quote_link_workflow_doc($quote, 'delivery_challan', (string)$doc['id']);
-    }
-
-    if ($action === 'create_proforma') {
-        $doc = documents_sales_document_defaults('proforma');
-        $doc['id'] = documents_generate_simple_document_id('PI');
-        $doc['quotation_id'] = (string)$quote['id'];
-        $doc['customer_mobile'] = (string)($quote['customer_mobile'] ?? '');
-        $doc['customer_name'] = (string)($quote['customer_name'] ?? '');
-        $doc['created_at'] = date('c');
-        $doc['created_by'] = ['type'=>$viewerType,'id'=>$viewerId,'name'=>$viewerName];
-        $doc['status'] = 'active';
-        $doc['pi_date'] = safe_text($_POST['pi_date'] ?? date('Y-m-d'));
-        $doc['pi_number'] = safe_text($_POST['pi_number'] ?? ('PI-' . strtoupper(substr((string)$doc['id'], -8))));
-        $doc['terms'] = safe_text($_POST['terms'] ?? '');
-        $doc['pricing_snapshot'] = (array)($quote['calc'] ?? []);
-        $doc['html_snapshot'] = '<h2>Proforma Invoice</h2><p>No: '.htmlspecialchars((string)$doc['pi_number'], ENT_QUOTES).'</p><p>Date: '.htmlspecialchars((string)$doc['pi_date'], ENT_QUOTES).'</p><p>Customer: '.htmlspecialchars((string)$doc['customer_name'], ENT_QUOTES).'</p><p>Gross Payable: ₹'.number_format((float)($quote['calc']['gross_payable'] ?? 0),2).'</p><p>Terms: '.nl2br(htmlspecialchars((string)$doc['terms'], ENT_QUOTES)).'</p>';
-        documents_save_sales_document('proforma', $doc);
-        documents_quote_link_workflow_doc($quote, 'proforma', (string)$doc['id']);
     }
 
     if ($action === 'create_invoice') {
