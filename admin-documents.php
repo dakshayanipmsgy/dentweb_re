@@ -245,130 +245,6 @@ $resolveAgreementTemplateId = static function (array $quote, array $templates): 
     return is_array($first) ? (string) ($first['id'] ?? 'default_pm_surya_ghar_agreement') : 'default_pm_surya_ghar_agreement';
 };
 
-
-
-$indianStates = ['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Andaman and Nicobar Islands','Chandigarh','Dadra and Nagar Haveli and Daman and Diu','Delhi','Jammu and Kashmir','Ladakh','Lakshadweep','Puducherry'];
-
-$piPricingSnapshotFromQuote = static function (array $quote): array {
-    $quote = documents_quote_prepare($quote);
-    $calc = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
-    $tb = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : [];
-    if ($tb === [] && is_array($calc['tax_breakdown'] ?? null)) {
-        $tb = (array) $calc['tax_breakdown'];
-    }
-    return [
-        'basic_total' => (float) ($tb['basic_total'] ?? $calc['basic_total'] ?? 0),
-        'gst_breakup_slabs' => is_array($tb['slabs'] ?? null) ? array_values($tb['slabs']) : [],
-        'system_gross_incl_gst' => (float) ($tb['gross_incl_gst'] ?? $calc['final_price_incl_gst'] ?? $calc['grand_total'] ?? 0),
-        'transportation' => (float) ($calc['transportation_rs'] ?? 0),
-        'discount' => (float) ($calc['discount_rs'] ?? 0),
-        'gross_payable_after_discount' => (float) ($calc['gross_payable'] ?? $tb['gross_incl_gst'] ?? 0),
-    ];
-};
-
-$buildPiItemsSnapshot = static function (array $quoteItems): array {
-    $rows = [];
-    $sr = 1;
-    foreach (documents_normalize_quote_structured_items($quoteItems) as $item) {
-        $rows[] = [
-            'sr_no' => $sr++,
-            'item_name' => safe_text((string) ($item['name_snapshot'] ?? 'Item')),
-            'description' => safe_multiline_text((string) ($item['master_description_snapshot'] ?? $item['description_snapshot'] ?? '')),
-            'hsn' => safe_text((string) ($item['hsn_snapshot'] ?? '')),
-            'qty' => max(0, (float) ($item['qty'] ?? 0)),
-            'unit' => safe_text((string) ($item['unit'] ?? 'Nos')),
-        ];
-    }
-    return $rows;
-};
-
-$preparePiDocument = static function (?array $row, array $quote = []) use ($piPricingSnapshotFromQuote, $buildPiItemsSnapshot): array {
-    $base = documents_sales_document_defaults('proforma');
-    $doc = array_merge($base, is_array($row) ? $row : []);
-    $doc['pi_id'] = safe_text((string) ($doc['pi_id'] ?? $doc['id'] ?? ''));
-    $doc['id'] = $doc['pi_id'];
-    $doc['pi_number'] = safe_text((string) ($doc['pi_number'] ?? $doc['proforma_no'] ?? ''));
-    $doc['proforma_no'] = $doc['pi_number'];
-    $doc['quote_id'] = safe_text((string) ($doc['quote_id'] ?? $doc['quotation_id'] ?? ''));
-    $doc['quotation_id'] = $doc['quote_id'];
-    $doc['customer_name_snapshot'] = safe_text((string) ($doc['customer_name_snapshot'] ?? $doc['customer_name'] ?? ''));
-    $doc['site_address_snapshot'] = safe_multiline_text((string) ($doc['site_address_snapshot'] ?? ''));
-    $doc['customer_gstin'] = strtoupper(safe_text((string) ($doc['customer_gstin'] ?? '')));
-    $doc['place_of_supply_state'] = safe_text((string) ($doc['place_of_supply_state'] ?? ''));
-    $doc['status'] = strtolower((string) ($doc['status'] ?? 'draft')) === 'final' ? 'final' : 'draft';
-    $doc['issue_date'] = safe_text((string) ($doc['issue_date'] ?? $doc['pi_date'] ?? date('Y-m-d')));
-    $doc['pi_date'] = $doc['issue_date'];
-    $doc['items_snapshot'] = is_array($doc['items_snapshot'] ?? null) ? array_values($doc['items_snapshot']) : [];
-    $doc['pricing_snapshot'] = is_array($doc['pricing_snapshot'] ?? null) ? $doc['pricing_snapshot'] : [];
-    $doc['created_by'] = is_array($doc['created_by'] ?? null) ? $doc['created_by'] : ['type' => '', 'id' => '', 'name' => ''];
-    $doc['finalized_by'] = is_array($doc['finalized_by'] ?? null) ? $doc['finalized_by'] : ['type' => '', 'id' => '', 'name' => ''];
-
-    if ($quote !== []) {
-        $quote = documents_quote_prepare($quote);
-        $snapshot = documents_quote_resolve_snapshot($quote);
-        if ($doc['quote_id'] === '') {
-            $doc['quote_id'] = (string) ($quote['id'] ?? '');
-            $doc['quotation_id'] = $doc['quote_id'];
-        }
-        if ($doc['customer_mobile'] === '') {
-            $doc['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
-        }
-        if ($doc['customer_name_snapshot'] === '') {
-            $doc['customer_name_snapshot'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
-            $doc['customer_name'] = $doc['customer_name_snapshot'];
-        }
-        if ($doc['site_address_snapshot'] === '') {
-            $doc['site_address_snapshot'] = safe_multiline_text((string) ($quote['site_address'] ?? $snapshot['address'] ?? ''));
-        }
-        if ($doc['place_of_supply_state'] === '') {
-            $doc['place_of_supply_state'] = safe_text((string) ($quote['state'] ?? 'Jharkhand')) ?: 'Jharkhand';
-        }
-        if ($doc['items_snapshot'] === []) {
-            $doc['items_snapshot'] = $buildPiItemsSnapshot(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
-        }
-        if ($doc['pricing_snapshot'] === []) {
-            $doc['pricing_snapshot'] = $piPricingSnapshotFromQuote($quote);
-        }
-    }
-
-    return $doc;
-};
-
-if (($_GET['action'] ?? '') === 'view_pi_html') {
-    $piId = safe_text((string) ($_GET['pi_id'] ?? ''));
-    if ($piId === '') {
-        http_response_code(400);
-        echo 'PI not found.';
-        exit;
-    }
-    $pi = $preparePiDocument(documents_get_sales_document('proforma', $piId));
-    if ($pi['pi_id'] === '') {
-        http_response_code(404);
-        echo 'PI not found.';
-        exit;
-    }
-    $quote = documents_get_quote((string) ($pi['quote_id'] ?? ''));
-    $quote = is_array($quote) ? documents_quote_prepare($quote) : [];
-    $company = load_company_profile();
-    $items = is_array($pi['items_snapshot'] ?? null) ? $pi['items_snapshot'] : [];
-    $pricing = is_array($pi['pricing_snapshot'] ?? null) ? $pi['pricing_snapshot'] : [];
-    ?>
-<!doctype html><html><head><meta charset="utf-8"><title>Proforma Invoice <?= htmlspecialchars((string) ($pi['pi_number'] ?? ''), ENT_QUOTES) ?></title>
-<style>body{font-family:Arial,sans-serif;color:#111;margin:0;padding:20px} .sheet{max-width:900px;margin:0 auto} table{width:100%;border-collapse:collapse} th,td{border:1px solid #d1d5db;padding:8px;vertical-align:top} th{background:#f3f4f6;text-align:left}.head{display:flex;justify-content:space-between;gap:12px;margin-bottom:16px}.muted{color:#6b7280}.totals{margin-top:12px;margin-left:auto;max-width:420px}.totals td:first-child{font-weight:600}.no-border td{border:none;padding:2px 0}.logo{max-height:70px}@media print{.no-print{display:none!important}body{padding:0}.sheet{max-width:none}}</style>
-</head><body><div class="sheet">
-<div class="head"><div><?php if ((string)($company['logo_path'] ?? '')!==''): ?><img class="logo" src="<?= htmlspecialchars((string)$company['logo_path'], ENT_QUOTES) ?>" alt="logo"><?php endif; ?><h2 style="margin:6px 0 2px"><?= htmlspecialchars((string) ($company['company_name'] ?? 'Company'), ENT_QUOTES) ?></h2><div class="muted"><?= nl2br(htmlspecialchars((string) ($company['address'] ?? ''), ENT_QUOTES)) ?></div><div><?= htmlspecialchars((string) ($company['phone'] ?? ''), ENT_QUOTES) ?></div></div><div style="text-align:right"><h1 style="margin:0">PROFORMA INVOICE</h1><div><strong>No:</strong> <?= htmlspecialchars((string) ($pi['pi_number'] ?? ''), ENT_QUOTES) ?></div><div><strong>Date:</strong> <?= htmlspecialchars((string) ($pi['issue_date'] ?? ''), ENT_QUOTES) ?></div><div><strong>Status:</strong> <?= htmlspecialchars(strtoupper((string) ($pi['status'] ?? 'draft')), ENT_QUOTES) ?></div></div></div>
-<table class="no-border"><tr><td style="width:50%"><strong>Customer:</strong> <?= htmlspecialchars((string) ($pi['customer_name_snapshot'] ?? ''), ENT_QUOTES) ?><br><strong>Mobile:</strong> <?= htmlspecialchars((string) ($pi['customer_mobile'] ?? ''), ENT_QUOTES) ?><br><strong>Address:</strong><br><?= nl2br(htmlspecialchars((string) ($pi['site_address_snapshot'] ?? ''), ENT_QUOTES)) ?></td><td><strong>Place of Supply:</strong> <?= htmlspecialchars((string) ($pi['place_of_supply_state'] ?? ''), ENT_QUOTES) ?><br><strong>Customer GSTIN:</strong> <?= htmlspecialchars((string) ($pi['customer_gstin'] ?? ''), ENT_QUOTES) ?></td></tr></table>
-<table><thead><tr><th style="width:60px">Sr</th><th>Item + Description</th><th style="width:110px">HSN</th><th style="width:90px">Qty</th><th style="width:90px">Unit</th></tr></thead><tbody><?php foreach($items as $item): ?><tr><td><?= (int) ($item['sr_no'] ?? 0) ?></td><td><strong><?= htmlspecialchars((string) ($item['item_name'] ?? ''), ENT_QUOTES) ?></strong><br><?= nl2br(htmlspecialchars((string) ($item['description'] ?? ''), ENT_QUOTES)) ?></td><td><?= htmlspecialchars((string) ($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($item['qty'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table>
-<table class="totals"><tbody><tr><td>Basic Total</td><td style="text-align:right"><?= htmlspecialchars($inr((float) ($pricing['basic_total'] ?? 0)), ENT_QUOTES) ?></td></tr><?php foreach ((array)($pricing['gst_breakup_slabs'] ?? []) as $slab): ?><tr><td>GST <?= htmlspecialchars((string) ($slab['label'] ?? (($slab['rate'] ?? '').'%')), ENT_QUOTES) ?></td><td style="text-align:right"><?= htmlspecialchars($inr((float) ($slab['gst'] ?? 0)), ENT_QUOTES) ?></td></tr><?php endforeach; ?><tr><td>System Gross (incl GST)</td><td style="text-align:right"><?= htmlspecialchars($inr((float) ($pricing['system_gross_incl_gst'] ?? 0)), ENT_QUOTES) ?></td></tr><tr><td>Transportation</td><td style="text-align:right"><?= htmlspecialchars($inr((float) ($pricing['transportation'] ?? 0)), ENT_QUOTES) ?></td></tr><tr><td>Discount</td><td style="text-align:right">-<?= htmlspecialchars($inr((float) ($pricing['discount'] ?? 0)), ENT_QUOTES) ?></td></tr><tr><td><strong>Total Payable</strong></td><td style="text-align:right"><strong><?= htmlspecialchars($inr((float) ($pricing['gross_payable_after_discount'] ?? 0)), ENT_QUOTES) ?></strong></td></tr></tbody></table>
-<?php if ((string)($company['bank_name'] ?? '') !== '' || (string)($company['bank_account_no'] ?? '') !== ''): ?><h3>Bank Details</h3><div><strong>Bank:</strong> <?= htmlspecialchars((string) ($company['bank_name'] ?? ''), ENT_QUOTES) ?>, <strong>A/C:</strong> <?= htmlspecialchars((string) ($company['bank_account_no'] ?? ''), ENT_QUOTES) ?>, <strong>IFSC:</strong> <?= htmlspecialchars((string) ($company['ifsc_code'] ?? ''), ENT_QUOTES) ?></div><?php endif; ?>
-<?php if ((string) ($pi['notes'] ?? '') !== ''): ?><p><strong>Notes:</strong><br><?= nl2br(htmlspecialchars((string) ($pi['notes'] ?? ''), ENT_QUOTES)) ?></p><?php endif; ?>
-<p class="muted" style="margin-top:24px">Generated by <?= htmlspecialchars((string) ($company['company_name'] ?? 'Company'), ENT_QUOTES) ?>. This is a computer generated proforma invoice.</p>
-<div class="no-print" style="margin-top:10px"><button onclick="window.print()">Print</button></div>
-</div></body></html>
-<?php
-    exit;
-}
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
         $redirectWith('company', 'error', 'Security validation failed. Please retry.');
@@ -376,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = safe_text($_POST['action'] ?? '');
 
-    $employeeAllowedActions = ['create_inventory_tx', 'edit_inventory_tx', 'save_inventory_edits', 'import_inventory_stock_in_csv', 'create_receipt', 'save_receipt_draft', 'finalize_receipt', 'create_agreement', 'create_delivery_challan', 'create_pi', 'create_invoice', 'save_pi_draft'];
+    $employeeAllowedActions = ['create_inventory_tx', 'edit_inventory_tx', 'save_inventory_edits', 'import_inventory_stock_in_csv', 'create_receipt', 'save_receipt_draft', 'finalize_receipt', 'create_agreement', 'create_delivery_challan', 'create_pi', 'create_invoice'];
     if (!$isAdmin && !in_array($action, $employeeAllowedActions, true)) {
         $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
     }
@@ -631,47 +507,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'create_pi') {
             $existingId = safe_text((string) ($quote['workflow']['proforma_invoice_id'] ?? ''));
             if ($existingId !== '') {
-                $existing = $preparePiDocument(documents_get_sales_document('proforma', $existingId), $quote);
-                if ($existing['pi_id'] !== '' && !documents_is_archived($existing)) {
-                    $redirectDocuments($tab, 'success', 'PI already exists.', ['view' => $view, 'pi_id' => $existingId, 'pack_action' => 'edit_pi']);
+                $existing = documents_get_sales_document('proforma', $existingId);
+                if ($existing !== null && !documents_is_archived($existing)) {
+                    header('Location: admin-proformas.php?id=' . urlencode($existingId));
+                    exit;
                 }
             }
 
-            $segment = safe_text((string) ($quote['segment'] ?? 'RES')) ?: 'RES';
-            $number = documents_generate_proforma_number($segment);
-            if (!($number['ok'] ?? false)) {
-                $redirectDocuments($tab, 'error', (string) ($number['error'] ?? 'Unable to generate PI number.'), ['view' => $view]);
+            $created = documents_create_proforma_from_quote($quote);
+            if (!($created['ok'] ?? false)) {
+                $redirectDocuments($tab, 'error', (string) ($created['error'] ?? 'Unable to create PI.'), ['view' => $view]);
             }
-            $piId = 'pi_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
-            $salesPi = $preparePiDocument([], $quote);
-            $salesPi['pi_id'] = $piId;
+            $piId = (string) ($created['proforma_id'] ?? '');
+            $piDoc = $piId !== '' ? documents_get_proforma($piId) : null;
+            if ($piDoc === null || $piId === '') {
+                $redirectDocuments($tab, 'error', 'PI created but could not be loaded.', ['view' => $view]);
+            }
+
+            $salesPi = documents_sales_document_defaults('proforma');
             $salesPi['id'] = $piId;
-            $salesPi['pi_number'] = (string) ($number['proforma_no'] ?? '');
-            $salesPi['proforma_no'] = $salesPi['pi_number'];
-            $salesPi['quote_id'] = (string) ($quote['id'] ?? '');
-            $salesPi['quotation_id'] = $salesPi['quote_id'];
+            $salesPi['quotation_id'] = (string) ($quote['id'] ?? '');
             $salesPi['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
-            $salesPi['customer_name_snapshot'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
-            $salesPi['customer_name'] = $salesPi['customer_name_snapshot'];
-            $salesPi['site_address_snapshot'] = safe_multiline_text((string) ($quote['site_address'] ?? $snapshot['address'] ?? ''));
-            $salesPi['place_of_supply_state'] = safe_text((string) ($quote['state'] ?? 'Jharkhand')) ?: 'Jharkhand';
+            $salesPi['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
+            $salesPi['proforma_no'] = (string) ($piDoc['proforma_no'] ?? '');
+            $salesPi['pi_date'] = date('Y-m-d');
+            $salesPi['amount'] = (float) ($piDoc['input_total_gst_inclusive'] ?? 0);
+            $salesPi['tax_profile_id'] = (string) ($quote['tax_profile_id'] ?? '');
+            $salesPi['tax_breakdown'] = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : (array) ($quote['calc']['tax_breakdown'] ?? []);
             $salesPi['status'] = 'draft';
-            $salesPi['issue_date'] = date('Y-m-d');
-            $salesPi['pi_date'] = $salesPi['issue_date'];
-            $salesPi['notes'] = safe_multiline_text((string) ($salesPi['notes'] ?? ''));
-            $salesPi['created_by'] = ['type' => (string) ($viewer['role'] ?? ''), 'id' => (string) ($viewer['id'] ?? ''), 'name' => (string) ($viewer['name'] ?? '')];
-            $salesPi['created_at'] = date('c');
-            $salesPi['updated_at'] = date('c');
+            $salesPi['created_by'] = $viewer;
+            $salesPi['created_at'] = (string) ($piDoc['created_at'] ?? date('c'));
             $savedSalesPi = documents_save_sales_document('proforma', $salesPi);
             if (!$savedSalesPi['ok']) {
-                $redirectDocuments($tab, 'error', 'Unable to create PI draft.', ['view' => $view]);
+                $redirectDocuments($tab, 'error', 'PI created, but workflow update failed.', ['view' => $view]);
             }
             documents_append_document_action_log($viewer, 'create_draft', 'pi', $piId, $view, 'Proforma draft created from accepted customer pack.');
 
             documents_quote_link_workflow_doc($quote, 'proforma', $piId);
             $quote['updated_at'] = date('c');
             documents_save_quote($quote);
-            $redirectDocuments($tab, 'success', 'PI draft created.', ['view' => $view, 'pi_id' => $piId, 'pack_action' => 'edit_pi']);
+            header('Location: admin-proformas.php?id=' . urlencode($piId));
+            exit;
         }
 
         if ($action === 'create_invoice') {
@@ -993,107 +869,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $msg = $action === 'finalize_receipt' ? 'Receipt finalized.' : 'Receipt draft saved.';
         $redirectDocuments($tab, 'success', $msg, ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => $receiptId]);
-    }
-
-
-    if (in_array($action, ['save_pi_draft', 'finalize_pi'], true)) {
-        $tab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
-        $view = safe_text($_POST['quotation_id'] ?? safe_text($_POST['return_view'] ?? ''));
-        $piId = safe_text($_POST['pi_id'] ?? '');
-        if ($view === '' || $piId === '') {
-            $redirectDocuments($tab, 'error', 'PI context missing.', ['view' => $view]);
-        }
-        if ($action === 'finalize_pi' && !$isAdmin) {
-            $redirectDocuments($tab, 'error', 'Only admin can finalize PI.', ['view' => $view, 'pi_id' => $piId, 'pack_action' => 'edit_pi']);
-        }
-        $quote = documents_get_quote($view);
-        if ($quote === null) {
-            $redirectDocuments($tab, 'error', 'Quotation not found.', ['view' => $view]);
-        }
-        $quote = documents_quote_prepare($quote);
-        $pi = $preparePiDocument(documents_get_sales_document('proforma', $piId), $quote);
-        if ($pi['pi_id'] === '' || (string) ($pi['quote_id'] ?? '') !== (string) ($quote['id'] ?? '')) {
-            $redirectDocuments($tab, 'error', 'PI not found.', ['view' => $view]);
-        }
-        if (documents_is_archived($pi)) {
-            $redirectDocuments($tab, 'error', 'Archived PI cannot be edited.', ['view' => $view]);
-        }
-        if ((string) ($pi['status'] ?? 'draft') === 'final') {
-            $redirectDocuments($tab, 'error', 'Finalized PI is locked.', ['view' => $view, 'pi_id' => $piId, 'pack_action' => 'edit_pi']);
-        }
-
-        $issueDate = safe_text((string) ($_POST['issue_date'] ?? $pi['issue_date'] ?? date('Y-m-d')));
-        if ($issueDate === '') { $issueDate = date('Y-m-d'); }
-        $d = DateTime::createFromFormat('Y-m-d', $issueDate);
-        if (!($d instanceof DateTime) || $d->format('Y-m-d') !== $issueDate) {
-            $redirectDocuments($tab, 'error', 'Invalid PI issue date.', ['view' => $view, 'pi_id' => $piId, 'pack_action' => 'edit_pi']);
-        }
-
-        $pi['issue_date'] = $issueDate;
-        $pi['pi_date'] = $issueDate;
-        $pi['customer_name_snapshot'] = safe_text((string) ($_POST['customer_name_snapshot'] ?? $pi['customer_name_snapshot'] ?? ''));
-        $pi['customer_name'] = $pi['customer_name_snapshot'];
-        $pi['customer_mobile'] = normalize_customer_mobile((string) ($_POST['customer_mobile'] ?? $pi['customer_mobile'] ?? ''));
-        $pi['site_address_snapshot'] = safe_multiline_text((string) ($_POST['site_address_snapshot'] ?? $pi['site_address_snapshot'] ?? ''));
-        $pi['customer_gstin'] = strtoupper(safe_text((string) ($_POST['customer_gstin'] ?? $pi['customer_gstin'] ?? '')));
-        $pi['place_of_supply_state'] = safe_text((string) ($_POST['place_of_supply_state'] ?? $pi['place_of_supply_state'] ?? ''));
-        $pi['notes'] = safe_multiline_text((string) ($_POST['notes'] ?? $pi['notes'] ?? ''));
-
-        $descriptions = is_array($_POST['item_description'] ?? null) ? (array) $_POST['item_description'] : [];
-        $items = is_array($pi['items_snapshot'] ?? null) ? array_values($pi['items_snapshot']) : [];
-        foreach ($items as $ix => $row) {
-            if (!is_array($row)) { continue; }
-            $items[$ix]['description'] = safe_multiline_text((string) ($descriptions[(string) $ix] ?? $row['description'] ?? ''));
-        }
-        $pi['items_snapshot'] = $items;
-
-        if ($isAdmin) {
-            $pi['pricing_snapshot']['basic_total'] = (float) ($_POST['pricing_basic_total'] ?? ($pi['pricing_snapshot']['basic_total'] ?? 0));
-            $pi['pricing_snapshot']['system_gross_incl_gst'] = (float) ($_POST['pricing_system_gross_incl_gst'] ?? ($pi['pricing_snapshot']['system_gross_incl_gst'] ?? 0));
-            $pi['pricing_snapshot']['transportation'] = (float) ($_POST['pricing_transportation'] ?? ($pi['pricing_snapshot']['transportation'] ?? 0));
-            $pi['pricing_snapshot']['discount'] = (float) ($_POST['pricing_discount'] ?? ($pi['pricing_snapshot']['discount'] ?? 0));
-            $pi['pricing_snapshot']['gross_payable_after_discount'] = (float) ($_POST['pricing_gross_payable_after_discount'] ?? ($pi['pricing_snapshot']['gross_payable_after_discount'] ?? 0));
-        }
-
-        $actor = ['role' => $isAdmin ? 'admin' : 'employee', 'id' => (string) ($user['id'] ?? ''), 'name' => (string) ($user['full_name'] ?? ($isAdmin ? 'Admin' : 'Employee'))];
-        if ($action === 'finalize_pi') {
-            $pi['status'] = 'final';
-            $pi['finalized_at'] = date('c');
-            $pi['finalized_by'] = ['type' => 'admin', 'id' => (string) ($actor['id'] ?? ''), 'name' => (string) ($actor['name'] ?? 'Admin')];
-        } else {
-            $pi['status'] = 'draft';
-        }
-
-        $saved = documents_save_sales_document('proforma', $pi);
-        if (!($saved['ok'] ?? false)) {
-            $redirectDocuments($tab, 'error', 'Unable to save PI.', ['view' => $view, 'pi_id' => $piId, 'pack_action' => 'edit_pi']);
-        }
-        $logAction = $action === 'finalize_pi' ? 'finalize' : 'update_draft';
-        documents_append_document_action_log($actor, $logAction, 'pi', $piId, $view, $action === 'finalize_pi' ? 'PI finalized.' : 'PI draft updated.');
-
-        if ($action === 'finalize_pi') {
-            $verifyRows = documents_load_document_verification();
-            foreach ($verifyRows as &$vRow) {
-                if (!is_array($vRow)) { continue; }
-                if ((string) ($vRow['status'] ?? '') !== 'not_verified') { continue; }
-                $logId = (string) ($vRow['log_id'] ?? '');
-                if ($logId === '') { continue; }
-                $allLogs = documents_load_document_actions_log();
-                foreach ($allLogs as $logRow) {
-                    if ((string) ($logRow['id'] ?? '') === $logId && (string) ($logRow['doc_type'] ?? '') === 'pi' && (string) ($logRow['doc_id'] ?? '') === $piId) {
-                        $vRow['status'] = 'verified';
-                        $vRow['verified_at'] = date('c');
-                        $vRow['verified_by'] = ['role' => 'admin', 'id' => (string) ($actor['id'] ?? ''), 'name' => (string) ($actor['name'] ?? '')];
-                        $vRow['admin_note'] = 'Auto-verified on finalize.';
-                        break;
-                    }
-                }
-            }
-            unset($vRow);
-            documents_save_document_verification($verifyRows);
-        }
-
-        $redirectDocuments($tab, 'success', $action === 'finalize_pi' ? 'PI finalized.' : 'PI draft saved.', ['view' => $view, 'pi_id' => $piId, 'pack_action' => 'edit_pi']);
     }
 
 
@@ -3393,17 +3168,6 @@ if ($packViewId !== '') {
     }
 }
 
-
-$packAction = safe_text((string) ($_GET['pack_action'] ?? ''));
-$packPiId = safe_text((string) ($_GET['pi_id'] ?? ''));
-$editingPi = null;
-if ($packQuote !== null && $packPiId !== '') {
-    $editingPiRow = documents_get_sales_document('proforma', $packPiId);
-    if (is_array($editingPiRow) && (string) ($editingPiRow['quotation_id'] ?? $editingPiRow['quote_id'] ?? '') === (string) ($packQuote['id'] ?? '')) {
-        $editingPi = $preparePiDocument($editingPiRow, $packQuote);
-    }
-}
-
 $collectByQuote = static function (array $rows, string $quoteId, bool $includeArchived) use ($isArchivedRecord): array {
     $list = [];
     foreach ($rows as $row) {
@@ -3836,71 +3600,18 @@ usort($documentVerificationQueue, static function (array $a, array $b): int {
           </tbody></table>
 
           <h3>E) Proforma Invoice (PI)</h3>
-          <?php $latestPi = $packProformas !== [] ? $preparePiDocument((array) $packProformas[0], $packQuote) : null; ?>
           <?php if ($isEmployee): ?><p class="muted">Finalize PI is admin-only.</p><?php endif; ?>
-          <?php if ($latestPi === null): ?>
-            <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
-              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
-              <input type="hidden" name="action" value="create_pi" />
-              <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
-              <input type="hidden" name="return_tab" value="accepted_customers" />
-              <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
-              <button class="btn" type="submit">Create PI</button>
-            </form>
-          <?php else: ?>
-            <div style="margin-bottom:0.75rem;display:flex;gap:8px;flex-wrap:wrap;">
-              <?php if ((string) ($latestPi['status'] ?? 'draft') === 'draft'): ?>
-                <a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => $packQuoteId, 'pack_action' => 'edit_pi', 'pi_id' => (string) ($latestPi['pi_id'] ?? ''), 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">Edit PI</a>
-              <?php endif; ?>
-              <a class="btn secondary" href="admin-documents.php?action=view_pi_html&pi_id=<?= urlencode((string) ($latestPi['pi_id'] ?? '')) ?>" target="_blank" rel="noopener">View PI (HTML)</a>
-            </div>
-          <?php endif; ?>
-
-          <?php if ($editingPi !== null && $packAction === 'edit_pi'): ?>
-            <?php $piLocked = (string) ($editingPi['status'] ?? 'draft') === 'final'; $piPricing = is_array($editingPi['pricing_snapshot'] ?? null) ? $editingPi['pricing_snapshot'] : []; ?>
-            <div class="card" style="margin-bottom:10px;">
-              <h4 style="margin:0 0 8px;">PI Editor: <?= htmlspecialchars((string) ($editingPi['pi_number'] ?? ''), ENT_QUOTES) ?></h4>
-              <form method="post">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
-                <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
-                <input type="hidden" name="return_tab" value="accepted_customers" />
-                <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
-                <input type="hidden" name="pi_id" value="<?= htmlspecialchars((string) ($editingPi['pi_id'] ?? ''), ENT_QUOTES) ?>" />
-                <div class="grid cols-2">
-                  <label>Issue Date<input type="date" name="issue_date" value="<?= htmlspecialchars((string) ($editingPi['issue_date'] ?? date('Y-m-d')), ENT_QUOTES) ?>" <?= $piLocked ? 'readonly' : '' ?> /></label>
-                  <label>Customer GSTIN<input type="text" name="customer_gstin" value="<?= htmlspecialchars((string) ($editingPi['customer_gstin'] ?? ''), ENT_QUOTES) ?>" <?= $piLocked ? 'readonly' : '' ?> /></label>
-                  <label>Customer Name<input type="text" name="customer_name_snapshot" value="<?= htmlspecialchars((string) ($editingPi['customer_name_snapshot'] ?? ''), ENT_QUOTES) ?>" <?= $piLocked ? 'readonly' : '' ?> /></label>
-                  <label>Mobile<input type="text" name="customer_mobile" value="<?= htmlspecialchars((string) ($editingPi['customer_mobile'] ?? ''), ENT_QUOTES) ?>" <?= $piLocked ? 'readonly' : '' ?> /></label>
-                  <label>Place of Supply State<select name="place_of_supply_state" <?= $piLocked ? 'disabled' : '' ?>><?php foreach ($indianStates as $st): ?><option value="<?= htmlspecialchars($st, ENT_QUOTES) ?>" <?= strcasecmp($st, (string) ($editingPi['place_of_supply_state'] ?? '')) === 0 ? 'selected' : '' ?>><?= htmlspecialchars($st, ENT_QUOTES) ?></option><?php endforeach; ?></select></label>
-                </div>
-                <label>Site Address<textarea name="site_address_snapshot" rows="2" <?= $piLocked ? 'readonly' : '' ?>><?= htmlspecialchars((string) ($editingPi['site_address_snapshot'] ?? ''), ENT_QUOTES) ?></textarea></label>
-
-                <table><thead><tr><th>Sr</th><th>Item + Description</th><th>HSN</th><th>Qty</th><th>Unit</th></tr></thead><tbody>
-                <?php foreach ((array) ($editingPi['items_snapshot'] ?? []) as $ix => $item): ?>
-                  <tr><td><?= (int) ($item['sr_no'] ?? ($ix + 1)) ?></td><td><strong><?= htmlspecialchars((string) ($item['item_name'] ?? ''), ENT_QUOTES) ?></strong><br><textarea name="item_description[<?= (int) $ix ?>]" rows="2" <?= $piLocked ? 'readonly' : '' ?>><?= htmlspecialchars((string) ($item['description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><?= htmlspecialchars((string) ($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($item['qty'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr>
-                <?php endforeach; ?>
-                </tbody></table>
-
-                <div class="grid cols-2" style="margin-top:8px;">
-                  <label>Basic Total<input type="number" step="0.01" name="pricing_basic_total" value="<?= htmlspecialchars((string) ($piPricing['basic_total'] ?? 0), ENT_QUOTES) ?>" <?= (!$isAdmin || $piLocked) ? 'readonly' : '' ?> /></label>
-                  <label>System Gross incl GST<input type="number" step="0.01" name="pricing_system_gross_incl_gst" value="<?= htmlspecialchars((string) ($piPricing['system_gross_incl_gst'] ?? 0), ENT_QUOTES) ?>" <?= (!$isAdmin || $piLocked) ? 'readonly' : '' ?> /></label>
-                  <label>Transportation<input type="number" step="0.01" name="pricing_transportation" value="<?= htmlspecialchars((string) ($piPricing['transportation'] ?? 0), ENT_QUOTES) ?>" <?= (!$isAdmin || $piLocked) ? 'readonly' : '' ?> /></label>
-                  <label>Discount<input type="number" step="0.01" name="pricing_discount" value="<?= htmlspecialchars((string) ($piPricing['discount'] ?? 0), ENT_QUOTES) ?>" <?= (!$isAdmin || $piLocked) ? 'readonly' : '' ?> /></label>
-                  <label>Total Payable<input type="number" step="0.01" name="pricing_gross_payable_after_discount" value="<?= htmlspecialchars((string) ($piPricing['gross_payable_after_discount'] ?? 0), ENT_QUOTES) ?>" <?= (!$isAdmin || $piLocked) ? 'readonly' : '' ?> /></label>
-                </div>
-                <label>Notes<textarea name="notes" rows="3" <?= $piLocked ? 'readonly' : '' ?>><?= htmlspecialchars((string) ($editingPi['notes'] ?? ''), ENT_QUOTES) ?></textarea></label>
-                <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
-                  <?php if (!$piLocked): ?><button class="btn secondary" type="submit" name="action" value="save_pi_draft">Save Draft</button><?php if ($isAdmin): ?><button class="btn" type="submit" name="action" value="finalize_pi">Finalize</button><?php endif; ?><?php else: ?><span class="pill" style="background:#dcfce7;color:#166534">Finalized (Locked)</span><?php endif; ?>
-                  <a class="btn secondary" href="admin-documents.php?action=view_pi_html&pi_id=<?= urlencode((string) ($editingPi['pi_id'] ?? '')) ?>" target="_blank" rel="noopener">View PI (HTML)</a>
-                  <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => $packQuoteId, 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">Close</a>
-                </div>
-              </form>
-            </div>
-          <?php endif; ?>
-
-          <table><thead><tr><th>PI Number</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-          <?php foreach ($packProformas as $row): $piRow = $preparePiDocument($row, $packQuote); ?><tr><td><?= htmlspecialchars((string) ($piRow['pi_number'] ?? $piRow['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($piRow['issue_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($piRow['status'] ?? 'draft'), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="admin-documents.php?action=view_pi_html&pi_id=<?= urlencode((string) ($piRow['pi_id'] ?? '')) ?>" target="_blank" rel="noopener">View PI (HTML)</a><?php if ((string) ($piRow['status'] ?? 'draft') === 'draft'): ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => $packQuoteId, 'pack_action' => 'edit_pi', 'pi_id' => (string) ($piRow['pi_id'] ?? ''), 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">Edit PI</a><?php endif; ?><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="proforma" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($piRow['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
-          <?php if ($packProformas === []): ?><tr><td colspan="4" class="muted">No PI found.</td></tr><?php endif; ?>
+          <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+            <input type="hidden" name="action" value="create_pi" />
+            <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+            <input type="hidden" name="return_tab" value="accepted_customers" />
+            <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+            <button class="btn" type="submit">Create PI</button>
+          </form>
+          <table><thead><tr><th>ID</th><th>Date</th><th>Actions</th></tr></thead><tbody>
+          <?php foreach ($packProformas as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['pi_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="admin-proformas.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="proforma" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
+          <?php if ($packProformas === []): ?><tr><td colspan="3" class="muted">No PI found.</td></tr><?php endif; ?>
           </tbody></table>
 
           <h3>F) Invoice</h3>
@@ -3972,7 +3683,7 @@ usort($documentVerificationQueue, static function (array $a, array $b): int {
           <button class="btn" type="submit" name="action" value="document_verification_bulk_update">Apply Bulk Action</button>
           <table><thead><tr><th><input type="checkbox" onclick="document.querySelectorAll('.doc-log-select').forEach(cb => cb.checked = this.checked);" /></th><th>Time</th><th>Employee</th><th>Doc Type</th><th>Action</th><th>Quote Ref</th><th>Status</th><th>View Doc</th></tr></thead><tbody>
             <?php foreach ($documentVerificationQueue as $queueRow): ?>
-              <?php $log = (array) ($queueRow['log'] ?? []); $verify = (array) ($queueRow['verification'] ?? []); $docType = (string) ($log['doc_type'] ?? ''); $docId = (string) ($log['doc_id'] ?? ''); $quoteId = (string) ($log['quote_id'] ?? ''); $viewHref = ''; if ($docType === 'agreement') { $viewHref = 'agreement-view.php?id=' . urlencode($docId); } elseif ($docType === 'dc') { $viewHref = 'challan-view.php?id=' . urlencode($docId); } elseif ($docType === 'pi') { $viewHref = 'admin-documents.php?action=view_pi_html&pi_id=' . urlencode($docId); } elseif ($docType === 'invoice') { $viewHref = 'admin-invoices.php?id=' . urlencode($docId); } elseif ($docType === 'quotation') { $viewHref = 'quotation-view.php?id=' . urlencode($docId); } elseif ($docType === 'receipt') { $viewHref = 'receipt-view.php?rid=' . urlencode($docId); } ?>
+              <?php $log = (array) ($queueRow['log'] ?? []); $verify = (array) ($queueRow['verification'] ?? []); $docType = (string) ($log['doc_type'] ?? ''); $docId = (string) ($log['doc_id'] ?? ''); $quoteId = (string) ($log['quote_id'] ?? ''); $viewHref = ''; if ($docType === 'agreement') { $viewHref = 'agreement-view.php?id=' . urlencode($docId); } elseif ($docType === 'dc') { $viewHref = 'challan-view.php?id=' . urlencode($docId); } elseif ($docType === 'pi') { $viewHref = 'admin-proformas.php?id=' . urlencode($docId); } elseif ($docType === 'invoice') { $viewHref = 'admin-invoices.php?id=' . urlencode($docId); } elseif ($docType === 'quotation') { $viewHref = 'quotation-view.php?id=' . urlencode($docId); } elseif ($docType === 'receipt') { $viewHref = 'receipt-view.php?rid=' . urlencode($docId); } ?>
               <tr>
                 <td><input class="doc-log-select" type="checkbox" name="log_ids[]" value="<?= htmlspecialchars((string) ($log['id'] ?? ''), ENT_QUOTES) ?>" /></td>
                 <td><?= htmlspecialchars((string) ($log['at'] ?? ''), ENT_QUOTES) ?></td>
