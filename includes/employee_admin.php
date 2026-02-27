@@ -141,7 +141,6 @@ final class EmployeeFsStore
             'phone' => trim((string) ($input['phone'] ?? ($existing['phone'] ?? ''))),
             'designation' => trim((string) ($input['designation'] ?? ($existing['designation'] ?? ''))),
             'status' => $status,
-            'can_access_admin_created_dcs' => !empty($input['can_access_admin_created_dcs'] ?? ($existing['can_access_admin_created_dcs'] ?? false)),
             'password_hash' => is_string($input['password_hash'] ?? null)
                 ? (string) $input['password_hash']
                 : (string) ($existing['password_hash'] ?? ''),
