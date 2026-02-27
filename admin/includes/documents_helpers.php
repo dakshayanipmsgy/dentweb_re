@@ -154,7 +154,7 @@ function documents_sales_delivery_challans_store_path(): string
 
 function documents_sales_proforma_store_path(): string
 {
-    return documents_base_dir() . '/proforma_invoices.json';
+    return documents_sales_documents_dir() . '/proforma_invoices/pi.json';
 }
 
 function documents_sales_invoice_store_path(): string
@@ -340,13 +340,6 @@ function documents_ensure_structure(): void
         if (!is_file($storePath)) {
             json_save($storePath, []);
         }
-    }
-
-    $legacyPiPath = documents_sales_documents_dir() . '/proforma_invoices/pi.json';
-    $newPiPath = documents_sales_proforma_store_path();
-    if (!is_file($newPiPath) && is_file($legacyPiPath)) {
-        $legacyRows = json_load($legacyPiPath, []);
-        json_save($newPiPath, is_array($legacyRows) ? $legacyRows : []);
     }
 
     if (!is_file(documents_inventory_stock_path())) {
