@@ -1612,10 +1612,6 @@ function documents_challan_defaults(): array
         'created_by_id' => '',
         'created_by_name' => '',
         'inventory_txn_ids' => [],
-        'archive_restore_done' => false,
-        'archive_restore_at' => '',
-        'archive_restore_by' => ['role' => '', 'id' => '', 'name' => ''],
-        'archive_restore_txn_ids' => [],
         'archived_flag' => false,
         'created_at' => '',
         'updated_at' => '',
@@ -1905,9 +1901,6 @@ function documents_get_challan(string $id): ?array
         $challan['created_by'] = ['role' => (string) ($challan['created_by_type'] ?? ''), 'id' => (string) ($challan['created_by_id'] ?? ''), 'name' => (string) ($challan['created_by_name'] ?? '')];
     }
     $challan['inventory_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['inventory_txn_ids'] ?? null) ? $challan['inventory_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
-    $challan['archive_restore_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['archive_restore_txn_ids'] ?? null) ? $challan['archive_restore_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
-    $challan['archive_restore_by'] = array_merge(['role' => '', 'id' => '', 'name' => ''], is_array($challan['archive_restore_by'] ?? null) ? $challan['archive_restore_by'] : []);
-    $challan['archive_restore_done'] = !empty($challan['archive_restore_done']);
     $challan['status'] = in_array(strtolower((string) ($challan['status'] ?? 'draft')), ['draft', 'final', 'archived'], true) ? strtolower((string) $challan['status']) : 'draft';
     if ((string) ($row['status'] ?? '') === 'Draft') { $challan['status'] = 'draft'; }
     if ((string) ($row['status'] ?? '') === 'Issued') { $challan['status'] = 'final'; }
@@ -1943,9 +1936,6 @@ function documents_list_challans(): array
             $challan['created_by'] = ['role' => (string) ($challan['created_by_type'] ?? ''), 'id' => (string) ($challan['created_by_id'] ?? ''), 'name' => (string) ($challan['created_by_name'] ?? '')];
         }
         $challan['inventory_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['inventory_txn_ids'] ?? null) ? $challan['inventory_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
-        $challan['archive_restore_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['archive_restore_txn_ids'] ?? null) ? $challan['archive_restore_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
-        $challan['archive_restore_by'] = array_merge(['role' => '', 'id' => '', 'name' => ''], is_array($challan['archive_restore_by'] ?? null) ? $challan['archive_restore_by'] : []);
-        $challan['archive_restore_done'] = !empty($challan['archive_restore_done']);
         $challan['status'] = in_array(strtolower((string) ($challan['status'] ?? 'draft')), ['draft', 'final', 'archived'], true) ? strtolower((string) $challan['status']) : 'draft';
         if ((string) ($row['status'] ?? '') === 'Draft') { $challan['status'] = 'draft'; }
         if ((string) ($row['status'] ?? '') === 'Issued') { $challan['status'] = 'final'; }
@@ -4595,167 +4585,6 @@ function documents_inventory_append_transaction(array $tx): array
 function documents_inventory_save_transactions(array $transactions): array
 {
     return json_save(documents_inventory_transactions_path(), array_values($transactions));
-}
-
-function documents_inventory_find_dc_out_transactions(array $challan, array $allTransactions): array
-{
-    $refId = (string) ($challan['id'] ?? '');
-    $sourceTxnIds = array_values(array_filter(array_map(
-        static fn($id): string => safe_text((string) $id),
-        (array) ($challan['inventory_txn_ids'] ?? [])
-    ), static fn(string $id): bool => $id !== ''));
-    $txnIdSet = array_fill_keys($sourceTxnIds, true);
-
-    $rows = [];
-    foreach ($allTransactions as $txIndex => $txRow) {
-        if (!is_array($txRow)) {
-            continue;
-        }
-        $tx = array_merge(documents_inventory_transaction_defaults(), $txRow);
-        if (strtoupper((string) ($tx['type'] ?? '')) !== 'OUT') {
-            continue;
-        }
-        $txId = (string) ($tx['id'] ?? '');
-        if ($txId === '') {
-            continue;
-        }
-        $matchesRef = ((string) ($tx['ref_type'] ?? '') === 'delivery_challan' && (string) ($tx['ref_id'] ?? '') === $refId);
-        if (!isset($txnIdSet[$txId]) && !$matchesRef) {
-            continue;
-        }
-        $rows[] = ['idx' => (int) $txIndex, 'txn' => $tx];
-    }
-
-    return $rows;
-}
-
-function documents_inventory_restore_cuttable_dc_archive(array $challan, array $viewer, bool $repairMode = false): array
-{
-    $challanId = (string) ($challan['id'] ?? '');
-    $challanStatus = strtolower((string) ($challan['status'] ?? 'draft'));
-    if ($challanId === '') {
-        return ['ok' => false, 'error' => 'Missing challan id.'];
-    }
-    if (!$repairMode && $challanStatus !== 'final') {
-        return ['ok' => true, 'skipped' => true, 'reason' => 'not_final'];
-    }
-    if ($repairMode && !(!empty($challan['archived_flag']) && in_array($challanStatus, ['final', 'archived'], true))) {
-        return ['ok' => true, 'skipped' => true, 'reason' => 'not_archived_final'];
-    }
-    if (!empty($challan['archive_restore_done'])) {
-        return ['ok' => true, 'skipped' => true, 'reason' => 'already_done'];
-    }
-
-    $transactions = documents_inventory_load_transactions();
-    $sourceRows = documents_inventory_find_dc_out_transactions($challan, $transactions);
-    if ($sourceRows === []) {
-        return ['ok' => false, 'error' => 'No OUT inventory transactions found for this DC.'];
-    }
-
-    $stock = documents_inventory_load_stock();
-    $restoredByKey = [];
-    foreach ($sourceRows as $row) {
-        $source = (array) ($row['txn'] ?? []);
-        $componentId = (string) ($source['component_id'] ?? '');
-        $variantId = (string) ($source['variant_id'] ?? '');
-        $lotConsumption = is_array($source['lot_consumption'] ?? null) ? $source['lot_consumption'] : [];
-        if ($componentId === '' || $lotConsumption === []) {
-            continue;
-        }
-
-        $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
-        foreach ($lotConsumption as $consume) {
-            if (!is_array($consume)) {
-                continue;
-            }
-            $lotId = safe_text((string) ($consume['lot_id'] ?? ''));
-            $usedFt = round(max(0, (float) ($consume['used_ft'] ?? 0)), 4);
-            if ($lotId === '' || $usedFt <= 0) {
-                continue;
-            }
-            $lotFound = false;
-            foreach ((array) ($entry['lots'] ?? []) as $lotIdx => $lot) {
-                if (!is_array($lot) || (string) ($lot['lot_id'] ?? '') !== $lotId) {
-                    continue;
-                }
-                $lotFound = true;
-                $currentRemaining = round(max(0, (float) ($lot['remaining_length_ft'] ?? 0)), 4);
-                $originalLength = round(max(0, (float) ($lot['original_length_ft'] ?? 0)), 4);
-                $nextRemaining = round($currentRemaining + $usedFt, 4);
-                if ($nextRemaining > $originalLength + 0.0001) {
-                    return ['ok' => false, 'error' => 'Restore exceeds original lot length for lot ' . $lotId . '.'];
-                }
-                $entry['lots'][$lotIdx]['remaining_length_ft'] = $nextRemaining;
-                $key = $componentId . '|' . $variantId . '|' . $lotId;
-                if (!isset($restoredByKey[$key])) {
-                    $restoredByKey[$key] = [
-                        'component_id' => $componentId,
-                        'variant_id' => $variantId,
-                        'lot_id' => $lotId,
-                        'restored_ft' => 0.0,
-                    ];
-                }
-                $restoredByKey[$key]['restored_ft'] = round((float) $restoredByKey[$key]['restored_ft'] + $usedFt, 4);
-                break;
-            }
-            if (!$lotFound) {
-                return ['ok' => false, 'error' => 'Lot ' . $lotId . ' not found in stock for component ' . $componentId . '.'];
-            }
-        }
-        $entry['updated_at'] = date('c');
-        documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
-    }
-
-    if ($restoredByKey === []) {
-        return ['ok' => false, 'error' => 'No lot consumption data found to restore for this DC.'];
-    }
-
-    $restoreTxnId = 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
-    $restoreTx = array_merge(documents_inventory_transaction_defaults(), [
-        'id' => $restoreTxnId,
-        'type' => 'RESTORE_FROM_ARCHIVE',
-        'ref_type' => 'delivery_challan_archive',
-        'ref_id' => $challanId,
-        'reason' => 'DC archive cuttable lot restoration',
-        'notes' => 'Restored lot-based cuttable inventory while archiving/repairing DC.',
-        'lot_restored' => array_values($restoredByKey),
-        'created_at' => date('c'),
-        'created_by' => [
-            'role' => (string) ($viewer['role'] ?? 'admin'),
-            'id' => (string) ($viewer['id'] ?? ''),
-            'name' => (string) ($viewer['name'] ?? 'Admin'),
-        ],
-    ]);
-
-    $transactions[] = $restoreTx;
-    $savedStock = documents_inventory_save_stock($stock);
-    if (!($savedStock['ok'] ?? false)) {
-        return ['ok' => false, 'error' => 'Failed to save stock restore changes.'];
-    }
-    $savedTx = documents_inventory_save_transactions($transactions);
-    if (!($savedTx['ok'] ?? false)) {
-        return ['ok' => false, 'error' => 'Stock restored but failed to save restore transaction.'];
-    }
-
-    $verificationRows = documents_inventory_load_verification_log();
-    $verificationRows[] = array_merge(documents_inventory_verification_defaults(), [
-        'txn_id' => $restoreTxnId,
-        'txn_type' => 'RESTORE_FROM_ARCHIVE',
-        'created_by' => $restoreTx['created_by'],
-        'created_at' => (string) ($restoreTx['created_at'] ?? ''),
-        'status' => 'verified',
-        'admin_note' => 'DC archive restore',
-        'verified_by' => $restoreTx['created_by'],
-        'verified_at' => (string) ($restoreTx['created_at'] ?? ''),
-    ]);
-    documents_inventory_save_verification_log($verificationRows);
-
-    return [
-        'ok' => true,
-        'restore_txn_id' => $restoreTxnId,
-        'lot_restored' => array_values($restoredByKey),
-        'total_ft' => round(array_reduce($restoredByKey, static fn(float $sum, array $row): float => $sum + (float) ($row['restored_ft'] ?? 0), 0.0), 4),
-    ];
 }
 
 function documents_inventory_load_verification_log(): array
