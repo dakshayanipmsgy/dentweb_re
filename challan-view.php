@@ -502,42 +502,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = safe_text($_POST['action'] ?? '');
     $isDraft = (string) ($challan['status'] ?? 'draft') === 'draft';
-    if ($action === 'repair_archive_restore') {
-        if ($viewerType !== 'admin') {
-            $redirectWith('error', 'Only admin can run archive inventory repair.');
-        }
-        $repairResult = documents_inventory_restore_cuttable_dc_archive($challan, ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName], true);
-        if (!($repairResult['ok'] ?? false)) {
-            $redirectWith('error', (string) ($repairResult['error'] ?? 'Failed to repair archive inventory restore.'));
-        }
-        if (!empty($repairResult['restore_txn_id'])) {
-            $challan['archive_restore_done'] = true;
-            $challan['archive_restore_at'] = date('c');
-            $challan['archive_restore_by'] = ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName];
-            $challan['archive_restore_txn_ids'] = array_values(array_unique(array_merge(
-                (array) ($challan['archive_restore_txn_ids'] ?? []),
-                [(string) $repairResult['restore_txn_id']]
-            )));
-            documents_append_document_action_log(
-                ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
-                'archive_restore',
-                'dc',
-                (string) ($challan['id'] ?? ''),
-                (string) ($challan['quote_id'] ?? $challan['linked_quote_id'] ?? ''),
-                'DC archive restore repair completed for cuttable lots. Restore txn: ' . (string) $repairResult['restore_txn_id']
-            );
-        }
-        $challan['updated_at'] = date('c');
-        $saved = documents_save_challan($challan);
-        if (!($saved['ok'] ?? false)) {
-            $redirectWith('error', 'Inventory repaired but failed to persist DC restore marker.');
-        }
-        $redirectWith('success', !empty($repairResult['restore_txn_id'])
-            ? 'Archive inventory repair completed. Lots restored: ' . count((array) ($repairResult['lot_restored'] ?? [])) . ', ft restored: ' . documents_inventory_format_number((float) ($repairResult['total_ft'] ?? 0), 4)
-            : 'No repair needed. Archive restore already complete.');
-    }
-
-    if (in_array($action, ['save_draft', 'finalize', 'archive', 'repair_archive_restore'], true)) {
+    if (in_array($action, ['save_draft', 'finalize', 'archive'], true)) {
         if (!$isDraft && in_array($action, ['save_draft', 'finalize'], true)) {
             $redirectWith('error', 'Only draft DC can be edited/finalized.');
         }
@@ -1070,33 +1035,151 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $challan['status'] = 'draft';
         }
         if ($action === 'archive') {
-            $restoreResult = documents_inventory_restore_cuttable_dc_archive($challan, ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName], false);
-            if (!($restoreResult['ok'] ?? false)) {
-                $redirectWith('error', (string) ($restoreResult['error'] ?? 'Failed to restore cuttable lot inventory while archiving DC.'));
-            }
-            if (!empty($restoreResult['restore_txn_id'])) {
-                $challan['archive_restore_done'] = true;
-                $challan['archive_restore_at'] = date('c');
-                $challan['archive_restore_by'] = ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName];
-                $challan['archive_restore_txn_ids'] = array_values(array_unique(array_merge(
-                    (array) ($challan['archive_restore_txn_ids'] ?? []),
-                    [(string) $restoreResult['restore_txn_id']]
-                )));
-                documents_append_document_action_log(
-                    ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
-                    'archive_restore',
-                    'dc',
-                    (string) ($challan['id'] ?? ''),
-                    (string) ($challan['quote_id'] ?? $challan['linked_quote_id'] ?? ''),
-                    'DC archive restore completed for cuttable lots. Restore txn: ' . (string) $restoreResult['restore_txn_id']
-                );
-            }
-            if (is_array($packingList)) {
-                $updatedPack = documents_reverse_dispatch_from_packing_list($packingList, (string) ($challan['id'] ?? ''));
-                $savedPack = documents_save_packing_list($updatedPack);
-                if (!($savedPack['ok'] ?? false)) {
-                    $redirectWith('error', 'Inventory restored, but packing list rollback failed.');
+            $challanStatus = (string) ($challan['status'] ?? 'draft');
+            if ($challanStatus === 'final') {
+                $stock = documents_inventory_load_stock();
+                $allTransactions = documents_inventory_load_transactions();
+                $transactionsById = [];
+                foreach ($allTransactions as $txIndex => $txRow) {
+                    if (!is_array($txRow)) {
+                        continue;
+                    }
+                    $txMerged = array_merge(documents_inventory_transaction_defaults(), $txRow);
+                    $transactionsById[(string) ($txMerged['id'] ?? '')] = ['idx' => $txIndex, 'tx' => $txMerged];
                 }
+
+                $reversalTxnIds = [];
+                $sourceTxnIds = array_values(array_filter(array_map(static fn($id): string => safe_text((string) $id), (array) ($challan['inventory_txn_ids'] ?? [])), static fn(string $id): bool => $id !== ''));
+                foreach ($sourceTxnIds as $sourceTxnId) {
+                    if (!isset($transactionsById[$sourceTxnId])) {
+                        continue;
+                    }
+                    $source = $transactionsById[$sourceTxnId]['tx'];
+                    if (!empty($source['archived_flag']) || !empty($source['voided_flag'])) {
+                        continue;
+                    }
+                    if (strtoupper((string) ($source['type'] ?? '')) !== 'OUT') {
+                        continue;
+                    }
+
+                    $componentId = (string) ($source['component_id'] ?? '');
+                    $variantId = (string) ($source['variant_id'] ?? '');
+                    if ($componentId === '') {
+                        continue;
+                    }
+
+                    $entry = documents_inventory_component_stock($stock, $componentId, $variantId);
+                    $lengthFt = max(0, (float) ($source['length_ft'] ?? 0));
+                    $qty = max(0, (float) ($source['qty'] ?? 0));
+                    if ($lengthFt > 0) {
+                        $lotConsumption = (array) ($source['lot_consumption'] ?? []);
+                        foreach ($lotConsumption as $consume) {
+                            if (!is_array($consume)) {
+                                continue;
+                            }
+                            $lotId = (string) ($consume['lot_id'] ?? '');
+                            $usedFt = max(0, (float) ($consume['used_ft'] ?? 0));
+                            if ($lotId === '' || $usedFt <= 0) {
+                                continue;
+                            }
+                            $matched = false;
+                            foreach ($entry['lots'] as $lotIdx => $lot) {
+                                if (!is_array($lot) || (string) ($lot['lot_id'] ?? '') !== $lotId) {
+                                    continue;
+                                }
+                                $currentRemaining = (float) ($lot['remaining_length_ft'] ?? 0);
+                                $entry['lots'][$lotIdx]['remaining_length_ft'] = round($currentRemaining + $usedFt, 4);
+                                $matched = true;
+                                break;
+                            }
+                            if (!$matched) {
+                                $entry['lots'][] = [
+                                    'lot_id' => $lotId,
+                                    'original_length_ft' => $usedFt,
+                                    'remaining_length_ft' => $usedFt,
+                                    'location_id' => (string) ($source['consume_location_id'] ?? $source['location_id'] ?? ''),
+                                    'created_at' => date('c'),
+                                    'created_by' => ['role' => 'system', 'id' => '', 'name' => 'DC archive reversal'],
+                                    'notes' => 'Recreated during DC archive reversal for txn ' . $sourceTxnId,
+                                ];
+                            }
+                        }
+                    } elseif ($qty > 0) {
+                        $locationRows = is_array($source['location_consumption'] ?? null) ? $source['location_consumption'] : [];
+                        if ($locationRows !== []) {
+                            foreach ($locationRows as $locRow) {
+                                if (!is_array($locRow)) {
+                                    continue;
+                                }
+                                $consumeQty = max(0, (float) ($locRow['qty'] ?? 0));
+                                $locationId = safe_text((string) ($locRow['location_id'] ?? ''));
+                                if ($consumeQty <= 0) {
+                                    continue;
+                                }
+                                $entry = documents_inventory_add_to_location_breakdown($entry, $consumeQty, $locationId);
+                                $entry['batches'][] = documents_inventory_create_batch($locationId, $consumeQty, ['role' => 'system', 'id' => '', 'name' => 'DC archive reversal'], $sourceTxnId);
+                            }
+                        } else {
+                            $entry = documents_inventory_add_to_location_breakdown($entry, $qty, (string) ($source['consume_location_id'] ?? ''));
+                            $entry['batches'][] = documents_inventory_create_batch((string) ($source['consume_location_id'] ?? ''), $qty, ['role' => 'system', 'id' => '', 'name' => 'DC archive reversal'], $sourceTxnId);
+                        }
+                    }
+                    $entry['updated_at'] = date('c');
+                    documents_inventory_set_component_stock($stock, $componentId, $variantId, $entry);
+
+                    $reversalTxnId = 'txn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+                    $reversalTx = array_merge(documents_inventory_transaction_defaults(), [
+                        'id' => $reversalTxnId,
+                        'type' => 'REVERSAL_IN',
+                        'component_id' => $componentId,
+                        'variant_id' => $variantId,
+                        'variant_name_snapshot' => (string) ($source['variant_name_snapshot'] ?? ''),
+                        'qty' => $qty,
+                        'length_ft' => $lengthFt,
+                        'lot_consumption' => (array) ($source['lot_consumption'] ?? []),
+                        'location_consumption' => (array) ($source['location_consumption'] ?? []),
+                        'unit' => (string) ($source['unit'] ?? ''),
+                        'ref_type' => 'delivery_challan_archive_reversal',
+                        'ref_id' => (string) ($challan['id'] ?? ''),
+                        'reverses_txn_id' => $sourceTxnId,
+                        'notes' => 'Reversal generated while archiving DC ' . (string) ($challan['challan_no'] ?? $challan['id'] ?? ''),
+                        'created_at' => date('c'),
+                        'created_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
+                    ]);
+                    $allTransactions[] = $reversalTx;
+                    $reversalTxnIds[] = $reversalTxnId;
+
+                    $sourceIdx = (int) ($transactionsById[$sourceTxnId]['idx'] ?? -1);
+                    if ($sourceIdx >= 0 && isset($allTransactions[$sourceIdx]) && is_array($allTransactions[$sourceIdx])) {
+                        $allTransactions[$sourceIdx] = array_merge(documents_inventory_transaction_defaults(), (array) $allTransactions[$sourceIdx], [
+                            'archived_flag' => true,
+                            'voided_flag' => true,
+                            'archived_at' => date('c'),
+                            'voided_at' => date('c'),
+                            'archived_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
+                            'voided_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
+                            'reversed_by_txn_id' => $reversalTxnId,
+                        ]);
+                    }
+                }
+
+                $savedStock = documents_inventory_save_stock($stock);
+                if (!($savedStock['ok'] ?? false)) {
+                    $redirectWith('error', 'Failed to reverse inventory while archiving DC.');
+                }
+                $savedTx = documents_inventory_save_transactions($allTransactions);
+                if (!($savedTx['ok'] ?? false)) {
+                    $redirectWith('error', 'Inventory stock was reversed, but transaction history update failed.');
+                }
+
+                if (is_array($packingList)) {
+                    $updatedPack = documents_reverse_dispatch_from_packing_list($packingList, (string) ($challan['id'] ?? ''));
+                    $savedPack = documents_save_packing_list($updatedPack);
+                    if (!($savedPack['ok'] ?? false)) {
+                        $redirectWith('error', 'Inventory reversed, but packing list rollback failed.');
+                    }
+                }
+                $challan['reversal_txn_ids'] = $reversalTxnIds;
             }
             $challan['status'] = 'archived';
             $challan['archived_flag'] = true;
@@ -1274,7 +1357,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 </div>
 <?php endif; ?>
 
-<div class="row-actions" style="margin-top:12px"><?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="finalize">Finalize DC</button><?php endif; ?><?php if ((string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php endif; ?><?php if ($viewerType === 'admin' && !empty($challan['archived_flag']) && in_array((string) ($challan['status'] ?? ''), ['final', 'archived'], true) && empty($challan['archive_restore_done'])): ?><button class="btn secondary" type="submit" name="action" value="repair_archive_restore">Repair archive inventory</button><?php endif; ?></div>
+<div class="row-actions" style="margin-top:12px"><?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="finalize">Finalize DC</button><?php endif; ?><?php if ((string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php endif; ?></div>
 </form>
 </main>
 <script>
