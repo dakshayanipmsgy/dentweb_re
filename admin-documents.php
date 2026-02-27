@@ -16,7 +16,7 @@ if (!$isAdmin && !$isEmployee) {
     exit;
 }
 
-$docTypes = ['quotation', 'proforma', 'agreement', 'challan', 'invoice_public', 'invoice_internal', 'receipt', 'sales_return'];
+$docTypes = ['quotation', 'agreement', 'challan', 'invoice_public', 'invoice_internal', 'receipt', 'sales_return'];
 $segments = ['RES', 'COM', 'IND', 'INST', 'PROD'];
 
 $companyPath = documents_company_profile_path();
@@ -172,7 +172,6 @@ $documentTypeMap = [
     'agreement' => 'agreement',
     'receipt' => 'receipt',
     'delivery_challan' => 'delivery_challan',
-    'proforma' => 'proforma',
     'invoice' => 'invoice',
 ];
 
@@ -181,7 +180,6 @@ $documentTypeLabel = [
     'agreement' => 'Agreement',
     'receipt' => 'Receipt',
     'delivery_challan' => 'Delivery Challan',
-    'proforma' => 'Proforma Invoice',
     'invoice' => 'Invoice',
 ];
 
@@ -295,7 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $redirectWith('company', 'success', $msg);
     }
 
-    if (in_array($action, ['create_agreement', 'create_receipt', 'create_delivery_challan', 'create_pi', 'create_invoice'], true)) {
+    if (in_array($action, ['create_agreement', 'create_receipt', 'create_delivery_challan', 'create_invoice'], true)) {
         $tab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
         $view = safe_text($_POST['quotation_id'] ?? safe_text($_POST['return_view'] ?? ''));
         if ($view === '') {
@@ -498,51 +496,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quote['updated_at'] = date('c');
             documents_save_quote($quote);
             header('Location: challan-view.php?id=' . urlencode((string) $challan['id']) . '&status=success&message=' . urlencode('Delivery challan draft created.'));
-            exit;
-        }
-
-        if ($action === 'create_pi') {
-            $existingId = safe_text((string) ($quote['workflow']['proforma_invoice_id'] ?? ''));
-            if ($existingId !== '') {
-                $existing = documents_get_sales_document('proforma', $existingId);
-                if ($existing !== null && !documents_is_archived($existing)) {
-                    header('Location: admin-proformas.php?id=' . urlencode($existingId));
-                    exit;
-                }
-            }
-
-            $created = documents_create_proforma_from_quote($quote);
-            if (!($created['ok'] ?? false)) {
-                $redirectDocuments($tab, 'error', (string) ($created['error'] ?? 'Unable to create PI.'), ['view' => $view]);
-            }
-            $piId = (string) ($created['proforma_id'] ?? '');
-            $piDoc = $piId !== '' ? documents_get_proforma($piId) : null;
-            if ($piDoc === null || $piId === '') {
-                $redirectDocuments($tab, 'error', 'PI created but could not be loaded.', ['view' => $view]);
-            }
-
-            $salesPi = documents_sales_document_defaults('proforma');
-            $salesPi['id'] = $piId;
-            $salesPi['quotation_id'] = (string) ($quote['id'] ?? '');
-            $salesPi['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
-            $salesPi['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
-            $salesPi['proforma_no'] = (string) ($piDoc['proforma_no'] ?? '');
-            $salesPi['pi_date'] = date('Y-m-d');
-            $salesPi['amount'] = (float) ($piDoc['input_total_gst_inclusive'] ?? 0);
-            $salesPi['tax_profile_id'] = (string) ($quote['tax_profile_id'] ?? '');
-            $salesPi['tax_breakdown'] = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : (array) ($quote['calc']['tax_breakdown'] ?? []);
-            $salesPi['status'] = 'draft';
-            $salesPi['created_by'] = $viewer;
-            $salesPi['created_at'] = (string) ($piDoc['created_at'] ?? date('c'));
-            $savedSalesPi = documents_save_sales_document('proforma', $salesPi);
-            if (!$savedSalesPi['ok']) {
-                $redirectDocuments($tab, 'error', 'PI created, but workflow update failed.', ['view' => $view]);
-            }
-
-            documents_quote_link_workflow_doc($quote, 'proforma', $piId);
-            $quote['updated_at'] = date('c');
-            documents_save_quote($quote);
-            header('Location: admin-proformas.php?id=' . urlencode($piId));
             exit;
         }
 
@@ -2267,6 +2220,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($component === null) {
                 $redirectDocuments('items', 'error', 'Component not found.', ['items_subtab' => 'inventory']);
             }
+            if (!documents_inventory_component_is_tracked($component)) {
+                $redirectDocuments('items', 'error', 'Only cuttable components are inventory tracked.', ['items_subtab' => 'inventory']);
+            }
 
             $variantId = safe_text((string) ($_POST['variant_id'] ?? ''));
             $variantNameSnapshot = '';
@@ -2852,10 +2808,17 @@ $quotes = documents_list_quotes();
 $salesAgreements = documents_list_sales_documents('agreement');
 $salesReceipts = documents_list_sales_documents('receipt');
 $salesChallans = documents_list_sales_documents('delivery_challan');
-$salesProformas = documents_list_sales_documents('proforma');
 $salesInvoices = documents_list_sales_documents('invoice');
 $inventoryComponents = documents_inventory_components(true);
 $activeInventoryComponents = get_active_components();
+$trackedInventoryComponents = array_values(array_filter($inventoryComponents, static fn(array $component): bool => is_array($component) && !empty($component) && documents_inventory_component_is_tracked($component) && empty($component['archived_flag'])));
+$trackedInventoryComponentIds = [];
+foreach ($inventoryComponents as $componentRow) {
+    if (!is_array($componentRow) || !documents_inventory_component_is_tracked($componentRow)) {
+        continue;
+    }
+    $trackedInventoryComponentIds[(string) ($componentRow['id'] ?? '')] = true;
+}
 $inventoryKits = documents_inventory_cleanup_archived_kit_components(documents_inventory_kits(true));
 $activeInventoryKits = get_active_kits();
 $inventoryTaxProfiles = documents_inventory_tax_profiles(true);
@@ -2914,6 +2877,12 @@ foreach ($activeInventoryVariants as $variantRow) {
 }
 $inventoryStock = documents_inventory_load_stock();
 $inventoryTransactions = documents_inventory_load_transactions();
+$inventoryTransactions = array_values(array_filter($inventoryTransactions, static function ($tx) use ($trackedInventoryComponentIds): bool {
+    if (!is_array($tx)) {
+        return false;
+    }
+    return isset($trackedInventoryComponentIds[(string) ($tx['component_id'] ?? '')]);
+}));
 $inventoryTransactions = array_map(static function ($tx): array {
     $row = array_merge(documents_inventory_transaction_defaults(), is_array($tx) ? $tx : []);
     if (!is_array($row['created_by'] ?? null)) {
@@ -3133,7 +3102,7 @@ foreach ($agreements as $agreement) {
     ];
 }
 
-foreach (['agreement' => $salesAgreements, 'receipt' => $salesReceipts, 'delivery_challan' => $salesChallans, 'proforma' => $salesProformas, 'invoice' => $salesInvoices] as $type => $rows) {
+foreach (['agreement' => $salesAgreements, 'receipt' => $salesReceipts, 'delivery_challan' => $salesChallans, 'invoice' => $salesInvoices] as $type => $rows) {
     foreach ($rows as $row) {
         if (!is_array($row) || !$isArchivedRecord($row)) {
             continue;
@@ -3251,7 +3220,6 @@ usort($archivedRows, static function (array $a, array $b): int {
             $packAgreements = $collectByQuote($salesAgreements, $packQuoteId, $includeArchivedPack);
             $packReceipts = $collectByQuote($salesReceipts, $packQuoteId, $includeArchivedPack);
             $packChallans = $collectByQuote($salesChallans, $packQuoteId, $includeArchivedPack);
-            $packProformas = $collectByQuote($salesProformas, $packQuoteId, $includeArchivedPack);
             $packInvoices = $collectByQuote($salesInvoices, $packQuoteId, $includeArchivedPack);
             $packReceiptsActive = array_values(array_filter($packReceipts, static fn(array $r): bool => !documents_is_archived($r)));
             $packFinalReceived = 0.0;
@@ -3479,19 +3447,6 @@ usort($archivedRows, static function (array $a, array $b): int {
           <?php endforeach; ?>
           <?php if ($packChallans === []): ?><tr><td colspan="4" class="muted">No delivery challans available.</td></tr><?php endif; ?>
           </tbody></table>
-
-          <h3>E) Proforma Invoice (PI)</h3>
-          <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
-            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
-            <input type="hidden" name="action" value="create_pi" />
-            <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
-            <input type="hidden" name="return_tab" value="accepted_customers" />
-            <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
-            <button class="btn" type="submit">Create PI</button>
-          </form>
-          <table><thead><tr><th>ID</th><th>Date</th><th>Actions</th></tr></thead><tbody>
-          <?php foreach ($packProformas as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['pi_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="admin-proformas.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="proforma" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
-          <?php if ($packProformas === []): ?><tr><td colspan="3" class="muted">No PI found.</td></tr><?php endif; ?>
           </tbody></table>
 
           <h3>F) Invoice</h3>
@@ -3615,7 +3570,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <h4>Select Components for this Kit</h4>
               <div><label>Search Components</label><input type="text" id="kitComponentSearch" placeholder="Search component name/category" /></div>
               <table id="kitComponentSelector"><thead><tr><th>Select</th><th>Name</th><th>Default Unit</th><th>Cuttable?</th><th>Has Variants?</th><th>Tax Profile</th></tr></thead><tbody>
-              <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag'])) { continue; } $cid = (string) ($component['id'] ?? ''); $cmpTax = documents_inventory_get_tax_profile((string) ($component['tax_profile_id'] ?? '')); ?>
+              <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag']) || !documents_inventory_component_is_tracked($component)) { continue; } $cid = (string) ($component['id'] ?? ''); $cmpTax = documents_inventory_get_tax_profile((string) ($component['tax_profile_id'] ?? '')); ?>
                 <tr data-kit-component-row="1">
                   <td><input type="checkbox" class="kit-component-checkbox" data-component-id="<?= htmlspecialchars($cid, ENT_QUOTES) ?>" <?= isset($kitItemsByComponent[$cid]) ? 'checked' : '' ?> /></td>
                   <td><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></td>
@@ -3629,7 +3584,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <h4>Selected Components</h4>
               <p class="muted">Formula supports: digits, kwp, + - * / and parentheses. Example: <code>kwp * 25</code></p>
               <table id="kitSelectedBomTable"><thead><tr><th>Component</th><th>Mode</th><th>Config</th><th>Unit</th><th>Remarks</th><th>Remove</th></tr></thead><tbody>
-              <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag'])) { continue; } $cid=(string)($component['id']??''); $selected = isset($kitItemsByComponent[$cid]); $item=$selected ? (array)$kitItemsByComponent[$cid] : []; $unitDefault = !empty($component['is_cuttable']) ? 'ft' : (string)($component['default_unit']??'pcs'); $lineMode = (string)($item['mode'] ?? (($item['qty'] ?? 0) > 0 ? 'fixed_qty' : 'fixed_qty')); $lineFixedQty = (float)($item['fixed_qty'] ?? ($item['qty'] ?? 0)); $capacityRule = is_array($item['capacity_rule'] ?? null) ? $item['capacity_rule'] : []; $capType = (string)($capacityRule['type'] ?? 'formula'); $capExpr = (string)($capacityRule['expr'] ?? 'kwp * 1'); $slabs = is_array($capacityRule['slabs'] ?? null) ? $capacityRule['slabs'] : []; if ($slabs === []) { $slabs = [['kwp_min' => 0, 'kwp_max' => 0, 'qty' => 0]]; } $ruleCfg = is_array($item['rule'] ?? null) ? $item['rule'] : []; $ruleType = (string)($ruleCfg['rule_type'] ?? 'min_total_wp'); $ruleTarget = (string)($ruleCfg['target_expr'] ?? 'kwp * 1000'); $ruleOverbuild = (float)($ruleCfg['allow_overbuild_pct'] ?? 0); ?>
+              <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag']) || !documents_inventory_component_is_tracked($component)) { continue; } $cid=(string)($component['id']??''); $selected = isset($kitItemsByComponent[$cid]); $item=$selected ? (array)$kitItemsByComponent[$cid] : []; $unitDefault = !empty($component['is_cuttable']) ? 'ft' : (string)($component['default_unit']??'pcs'); $lineMode = (string)($item['mode'] ?? (($item['qty'] ?? 0) > 0 ? 'fixed_qty' : 'fixed_qty')); $lineFixedQty = (float)($item['fixed_qty'] ?? ($item['qty'] ?? 0)); $capacityRule = is_array($item['capacity_rule'] ?? null) ? $item['capacity_rule'] : []; $capType = (string)($capacityRule['type'] ?? 'formula'); $capExpr = (string)($capacityRule['expr'] ?? 'kwp * 1'); $slabs = is_array($capacityRule['slabs'] ?? null) ? $capacityRule['slabs'] : []; if ($slabs === []) { $slabs = [['kwp_min' => 0, 'kwp_max' => 0, 'qty' => 0]]; } $ruleCfg = is_array($item['rule'] ?? null) ? $item['rule'] : []; $ruleType = (string)($ruleCfg['rule_type'] ?? 'min_total_wp'); $ruleTarget = (string)($ruleCfg['target_expr'] ?? 'kwp * 1000'); $ruleOverbuild = (float)($ruleCfg['allow_overbuild_pct'] ?? 0); ?>
                 <tr class="kit-bom-row" data-component-id="<?= htmlspecialchars($cid, ENT_QUOTES) ?>" style="<?= $selected ? '' : 'display:none;' ?>">
                   <td><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?><input type="hidden" class="kit-selected-component-id" name="selected_component_ids[]" value="<?= $selected ? htmlspecialchars($cid, ENT_QUOTES) : '' ?>" /><input type="hidden" name="bom_line_id[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]" value="<?= htmlspecialchars((string)($item['line_id'] ?? ''), ENT_QUOTES) ?>" /></td>
                   <td><select class="kit-bom-mode" name="bom_mode[<?= htmlspecialchars($cid, ENT_QUOTES) ?>]"><option value="fixed_qty" <?= $lineMode==='fixed_qty'?'selected':'' ?>>Fixed</option><option value="capacity_qty" <?= $lineMode==='capacity_qty'?'selected':'' ?>>Capacity-based</option><option value="rule_fulfillment" <?= $lineMode==='rule_fulfillment'?'selected':'' ?>>Rule-fulfillment</option><option value="unfixed_manual" <?= $lineMode==='unfixed_manual'?'selected':'' ?>>Manual</option></select></td>
@@ -3800,7 +3755,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <input type="hidden" name="action" value="create_inventory_tx" />
               <input type="hidden" name="tx_type" value="IN" />
               <h4>Add Stock (IN)</h4>
-              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): if (!empty($component['archived_flag'])) { continue; } ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
+              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($trackedInventoryComponents as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div data-variant-wrap="1"><label>Variant</label><select name="variant_id"><option value="">-- select variant --</option></select><small class="muted" data-variant-empty="1" style="display:none;">No variants found for selected component.</small></div>
               <div data-non-cuttable-wrap="1"><label>Qty (non-cuttable)</label><input type="number" step="0.01" min="0" name="qty" /></div>
               <div data-cuttable-wrap="1"><label>Piece Count (cuttable)</label><input type="number" step="1" min="1" name="cut_piece_count" /></div>
@@ -3814,7 +3769,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <input type="hidden" name="action" value="create_inventory_tx" />
               <input type="hidden" name="tx_type" value="OUT" />
               <h4>Issue Stock (OUT)</h4>
-              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): if (!empty($component['archived_flag'])) { continue; } ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
+              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($trackedInventoryComponents as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div data-variant-wrap="1"><label>Variant</label><select name="variant_id"><option value="">-- select variant --</option></select><small class="muted" data-variant-empty="1" style="display:none;">No variants found for selected component.</small></div>
               <div data-non-cuttable-wrap="1"><label>Qty</label><input type="number" step="0.01" min="0" name="qty" /></div>
               <div data-cuttable-wrap="1"><label>Length (ft for cuttable)</label><input type="number" step="0.01" min="0" name="length_ft" /></div>
@@ -3828,7 +3783,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <input type="hidden" name="action" value="create_inventory_tx" />
               <input type="hidden" name="tx_type" value="MOVE" />
               <h4>Move Stock (MOVE)</h4>
-              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): if (!empty($component['archived_flag'])) { continue; } ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
+              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($trackedInventoryComponents as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div data-variant-wrap="1"><label>Variant</label><select name="variant_id"><option value="">-- select variant --</option></select><small class="muted" data-variant-empty="1" style="display:none;">No variants found for selected component.</small></div>
               <div data-non-cuttable-wrap="1"><label>Batch ID (for qty stock)</label><input name="move_batch_id" placeholder="Optional" /></div>
               <div data-cuttable-wrap="1"><label>Lot ID (for cuttable)</label><input name="move_lot_id" placeholder="Optional" /></div>
@@ -3845,7 +3800,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <input type="hidden" name="action" value="create_inventory_tx" />
               <input type="hidden" name="tx_type" value="ADJUST" />
               <h4>Adjust Stock (ADJUST)</h4>
-              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($inventoryComponents as $component): if (!empty($component['archived_flag'])) { continue; } ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
+              <div><label>Component</label><select name="component_id" required><option value="">-- select --</option><?php foreach ($trackedInventoryComponents as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
               <div data-variant-wrap="1"><label>Variant</label><select name="variant_id"><option value="">-- select variant --</option></select><small class="muted" data-variant-empty="1" style="display:none;">No variants found for selected component.</small></div>
               <div data-non-cuttable-wrap="1"><label>Qty</label><input type="number" step="0.01" min="0" name="qty" /></div>
               <div data-cuttable-wrap="1"><label>Length (ft)</label><input type="number" step="0.01" min="0" name="length_ft" /></div>
@@ -3882,7 +3837,7 @@ usort($archivedRows, static function (array $a, array $b): int {
             <input type="text" id="inventorySummarySearch" placeholder="Component or variant name" />
           </div>
           <table id="inventorySummaryTable"><thead><tr><th>Component</th><th>Type</th><th>Summary</th></tr></thead><tbody>
-            <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag'])) { continue; } $componentId=(string) ($component['id'] ?? ''); $isCuttable=!empty($component['is_cuttable']); $hasVariants=!empty($component['has_variants']); $componentEntry = documents_inventory_component_stock($inventoryStock, $componentId, ''); $lots = is_array($componentEntry['lots'] ?? null) ? $componentEntry['lots'] : []; usort($lots, static function ($a, $b): int { return strcmp((string) (($a['received_at'] ?? '')), (string) (($b['received_at'] ?? ''))); }); $totalFt = documents_inventory_compute_on_hand($inventoryStock, $componentId, '', true); $variantRows = (array) ($variantsByComponent[$componentId] ?? []); $variantTotalQty = documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false); $variantCuttableStats = []; $variantCuttableTotalFt = 0.0; $variantCuttablePieces = 0; if ($isCuttable && $hasVariants) { foreach ($variantRows as $variantRow) { if (!is_array($variantRow) || !empty($variantRow['archived_flag'])) { continue; } $variantId=(string) ($variantRow['id'] ?? ''); if ($variantId === '') { continue; } $variantEntry = documents_inventory_component_stock($inventoryStock, $componentId, $variantId); $variantLots = is_array($variantEntry['lots'] ?? null) ? $variantEntry['lots'] : []; usort($variantLots, static function ($a, $b): int { return strcmp((string) (($a['received_at'] ?? '')), (string) (($b['received_at'] ?? ''))); }); $variantFt = documents_inventory_compute_on_hand($inventoryStock, $componentId, $variantId, true); $variantPieces = count($variantLots); $variantCuttableStats[] = ['variant' => $variantRow, 'variant_id' => $variantId, 'entry' => $variantEntry, 'lots' => $variantLots, 'ft' => $variantFt, 'pieces' => $variantPieces]; $variantCuttableTotalFt += $variantFt; $variantCuttablePieces += $variantPieces; } } $componentCuttableLots = ($isCuttable && $hasVariants) ? [] : $lots; $componentCuttablePieces = ($isCuttable && $hasVariants) ? $variantCuttablePieces : count($componentCuttableLots); $componentCuttableTotalFt = ($isCuttable && $hasVariants) ? $variantCuttableTotalFt : $totalFt; $summaryText = $isCuttable ? (documents_inventory_format_number($componentCuttableTotalFt, 4) . ' ft') : ($hasVariants ? (documents_inventory_format_number($variantTotalQty, 4) . ' qty total') : (documents_inventory_format_number(documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false), 4) . ' ' . (string) ($component['default_unit'] ?? 'qty'))); $isActiveStock = false; if ($isCuttable) { $isActiveStock = $componentCuttableTotalFt > 0.00001 && $componentCuttablePieces > 0; } elseif ($hasVariants) { foreach ($variantRows as $variantRowForState) { if (!is_array($variantRowForState) || !empty($variantRowForState['archived_flag'])) { continue; } $variantIdForState=(string) ($variantRowForState['id'] ?? ''); if ($variantIdForState !== '' && abs((float) documents_inventory_compute_on_hand($inventoryStock, $componentId, $variantIdForState, false)) > 0.00001) { $isActiveStock = true; break; } } } else { $isActiveStock = abs((float) documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false)) > 0.00001; } if (($inventoryStockView === 'active' && !$isActiveStock) || ($inventoryStockView === 'finished' && $isActiveStock)) { continue; } $searchHaystack = strtolower(trim((string) ($component['name'] ?? '') . ' ' . implode(' ', array_map(static function ($vr): string { return (string) ($vr['display_name'] ?? ''); }, $variantRows)))); $locationBreakdownText = array_map(static function (array $row) use ($component): string { return documents_inventory_resolve_location_name((string) ($row['location_id'] ?? '')) . ': ' . documents_inventory_format_number((float) ($row['qty'] ?? 0), 4) . ' ' . (string) ($component['default_unit'] ?? 'qty'); }, (array) ($componentEntry['location_breakdown'] ?? [])); $componentEditable = !isset($inventoryComponentBlocked[$componentId]); ?>
+            <?php foreach ($inventoryComponents as $component): if (!is_array($component) || !empty($component['archived_flag']) || !documents_inventory_component_is_tracked($component)) { continue; } $componentId=(string) ($component['id'] ?? ''); $isCuttable=!empty($component['is_cuttable']); $hasVariants=!empty($component['has_variants']); $componentEntry = documents_inventory_component_stock($inventoryStock, $componentId, ''); $lots = is_array($componentEntry['lots'] ?? null) ? $componentEntry['lots'] : []; usort($lots, static function ($a, $b): int { return strcmp((string) (($a['received_at'] ?? '')), (string) (($b['received_at'] ?? ''))); }); $totalFt = documents_inventory_compute_on_hand($inventoryStock, $componentId, '', true); $variantRows = (array) ($variantsByComponent[$componentId] ?? []); $variantTotalQty = documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false); $variantCuttableStats = []; $variantCuttableTotalFt = 0.0; $variantCuttablePieces = 0; if ($isCuttable && $hasVariants) { foreach ($variantRows as $variantRow) { if (!is_array($variantRow) || !empty($variantRow['archived_flag'])) { continue; } $variantId=(string) ($variantRow['id'] ?? ''); if ($variantId === '') { continue; } $variantEntry = documents_inventory_component_stock($inventoryStock, $componentId, $variantId); $variantLots = is_array($variantEntry['lots'] ?? null) ? $variantEntry['lots'] : []; usort($variantLots, static function ($a, $b): int { return strcmp((string) (($a['received_at'] ?? '')), (string) (($b['received_at'] ?? ''))); }); $variantFt = documents_inventory_compute_on_hand($inventoryStock, $componentId, $variantId, true); $variantPieces = count($variantLots); $variantCuttableStats[] = ['variant' => $variantRow, 'variant_id' => $variantId, 'entry' => $variantEntry, 'lots' => $variantLots, 'ft' => $variantFt, 'pieces' => $variantPieces]; $variantCuttableTotalFt += $variantFt; $variantCuttablePieces += $variantPieces; } } $componentCuttableLots = ($isCuttable && $hasVariants) ? [] : $lots; $componentCuttablePieces = ($isCuttable && $hasVariants) ? $variantCuttablePieces : count($componentCuttableLots); $componentCuttableTotalFt = ($isCuttable && $hasVariants) ? $variantCuttableTotalFt : $totalFt; $summaryText = $isCuttable ? (documents_inventory_format_number($componentCuttableTotalFt, 4) . ' ft') : ($hasVariants ? (documents_inventory_format_number($variantTotalQty, 4) . ' qty total') : (documents_inventory_format_number(documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false), 4) . ' ' . (string) ($component['default_unit'] ?? 'qty'))); $isActiveStock = false; if ($isCuttable) { $isActiveStock = $componentCuttableTotalFt > 0.00001 && $componentCuttablePieces > 0; } elseif ($hasVariants) { foreach ($variantRows as $variantRowForState) { if (!is_array($variantRowForState) || !empty($variantRowForState['archived_flag'])) { continue; } $variantIdForState=(string) ($variantRowForState['id'] ?? ''); if ($variantIdForState !== '' && abs((float) documents_inventory_compute_on_hand($inventoryStock, $componentId, $variantIdForState, false)) > 0.00001) { $isActiveStock = true; break; } } } else { $isActiveStock = abs((float) documents_inventory_compute_on_hand($inventoryStock, $componentId, '', false)) > 0.00001; } if (($inventoryStockView === 'active' && !$isActiveStock) || ($inventoryStockView === 'finished' && $isActiveStock)) { continue; } $searchHaystack = strtolower(trim((string) ($component['name'] ?? '') . ' ' . implode(' ', array_map(static function ($vr): string { return (string) ($vr['display_name'] ?? ''); }, $variantRows)))); $locationBreakdownText = array_map(static function (array $row) use ($component): string { return documents_inventory_resolve_location_name((string) ($row['location_id'] ?? '')) . ': ' . documents_inventory_format_number((float) ($row['qty'] ?? 0), 4) . ' ' . (string) ($component['default_unit'] ?? 'qty'); }, (array) ($componentEntry['location_breakdown'] ?? [])); $componentEditable = !isset($inventoryComponentBlocked[$componentId]); ?>
               <tr class="inventory-summary-group" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>"><td><strong><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></strong></td><td><?php if ($isCuttable): ?><span class="pill">Cuttable (ft)</span><?php endif; ?><?php if ($hasVariants): ?><span class="pill">Variants</span><?php endif; ?><?php if (!$isCuttable && !$hasVariants): ?><span class="muted">Plain</span><?php endif; ?></td><td><?= htmlspecialchars($summaryText, ENT_QUOTES) ?><?php if (!$isCuttable && !$hasVariants): ?><br><span class="muted"><?= htmlspecialchars(implode(' | ', $locationBreakdownText !== [] ? $locationBreakdownText : ['Unassigned: 0']), ENT_QUOTES) ?></span><?php endif; ?><?php if ($inventoryEditMode && !$isCuttable && !$hasVariants && !$componentEditable): ?><br><span class="muted">Used stock cannot be edited.</span><?php endif; ?></td></tr>
               <?php if ($isCuttable): ?>
                 <tr class="inventory-summary-detail" data-inventory-group="1" data-search="<?= htmlspecialchars($searchHaystack, ENT_QUOTES) ?>">
@@ -4078,7 +4033,6 @@ usort($archivedRows, static function (array $a, array $b): int {
               <option value="agreement" <?= $archiveTypeFilter === 'agreement' ? 'selected' : '' ?>>Agreements</option>
               <option value="receipt" <?= $archiveTypeFilter === 'receipt' ? 'selected' : '' ?>>Receipts</option>
               <option value="delivery_challan" <?= $archiveTypeFilter === 'delivery_challan' ? 'selected' : '' ?>>DC</option>
-              <option value="proforma" <?= $archiveTypeFilter === 'proforma' ? 'selected' : '' ?>>PI</option>
               <option value="invoice" <?= $archiveTypeFilter === 'invoice' ? 'selected' : '' ?>>Invoice</option>
             </select>
           </div>
