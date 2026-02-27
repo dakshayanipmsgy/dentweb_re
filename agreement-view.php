@@ -115,15 +115,6 @@ if ($mode === 'edit') {
                 $redirectWith('error', 'Unable to save agreement changes.');
             }
 
-            documents_append_document_action_log(
-                ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
-                $action === 'mark_final' ? 'finalize' : ($action === 'archive' ? 'archive' : 'update_draft'),
-                'agreement',
-                (string) ($agreement['id'] ?? ''),
-                (string) ($agreement['linked_quote_id'] ?? ''),
-                $action === 'mark_final' ? 'Agreement marked final.' : ($action === 'archive' ? 'Agreement archived.' : 'Agreement updated.')
-            );
-
             $msg = 'Agreement saved.';
             if ($action === 'mark_final') {
                 $msg = 'Agreement marked as Final.';
