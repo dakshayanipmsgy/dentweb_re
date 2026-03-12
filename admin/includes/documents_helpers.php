@@ -978,6 +978,9 @@ function documents_quote_defaults(): array
         'customer_snapshot' => documents_customer_snapshot_defaults(),
         'system_type' => 'Ongrid',
         'capacity_kwp' => '',
+        'system_capacity_kwp_main' => 0,
+        'system_capacity_kwp_complimentary' => null,
+        'system_capacity_kwp_total' => 0,
         'system_capacity_kwp' => 0,
         'project_summary_line' => '',
         'valid_until' => '',
@@ -3157,7 +3160,25 @@ function documents_quote_prepare(array $quote): array
     $quote['status'] = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
     $quote['workflow'] = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
     $quote['capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? ''));
-    $quote['system_capacity_kwp'] = max(0, (float) ($quote['system_capacity_kwp'] ?? $quote['capacity_kwp'] ?? 0));
+    $capacityFallback = max(0, (float) ($quote['system_capacity_kwp'] ?? $quote['capacity_kwp'] ?? 0));
+    $mainRaw = $quote['system_capacity_kwp_main'] ?? null;
+    if ($mainRaw === null || (is_string($mainRaw) && trim($mainRaw) === '')) {
+        $mainCapacity = $capacityFallback;
+    } else {
+        $mainCapacity = max(0, (float) $mainRaw);
+    }
+    $complimentaryRaw = $quote['system_capacity_kwp_complimentary'] ?? null;
+    if ($complimentaryRaw === null || (is_string($complimentaryRaw) && trim($complimentaryRaw) === '')) {
+        $complimentaryCapacity = null;
+    } else {
+        $complimentaryCapacity = max(0, (float) $complimentaryRaw);
+    }
+    $totalCapacity = $mainCapacity + (float) ($complimentaryCapacity ?? 0);
+    $quote['system_capacity_kwp_main'] = $mainCapacity;
+    $quote['system_capacity_kwp_complimentary'] = $complimentaryCapacity;
+    $quote['system_capacity_kwp_total'] = $totalCapacity;
+    $quote['system_capacity_kwp'] = $totalCapacity;
+    $quote['capacity_kwp'] = safe_text((string) $totalCapacity);
     $quote['quote_items'] = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
     $quote['tax_profile_id'] = safe_text((string) ($quote['tax_profile_id'] ?? ''));
     $quote['gst_mode_snapshot'] = safe_text((string) ($quote['gst_mode_snapshot'] ?? ''));
@@ -4006,11 +4027,43 @@ function documents_packing_required_line_defaults(): array
 
 function documents_quote_system_capacity_kwp(array $quote): float
 {
-    $primary = (float) ($quote['system_capacity_kwp'] ?? 0);
+    $mainRaw = $quote['system_capacity_kwp_main'] ?? null;
+    if ($mainRaw !== null && !(is_string($mainRaw) && trim($mainRaw) === '')) {
+        $main = max(0, (float) $mainRaw);
+        $complimentaryRaw = $quote['system_capacity_kwp_complimentary'] ?? null;
+        $complimentary = ($complimentaryRaw === null || (is_string($complimentaryRaw) && trim($complimentaryRaw) === ''))
+            ? 0.0
+            : max(0, (float) $complimentaryRaw);
+        return $main + $complimentary;
+    }
+
+    $primary = (float) ($quote['system_capacity_kwp_total'] ?? $quote['system_capacity_kwp'] ?? 0);
     if ($primary > 0) {
         return $primary;
     }
     return max(0, (float) ($quote['capacity_kwp'] ?? 0));
+}
+
+function documents_quote_system_capacity_split(array $quote): array
+{
+    $mainRaw = $quote['system_capacity_kwp_main'] ?? null;
+    $complimentaryRaw = $quote['system_capacity_kwp_complimentary'] ?? null;
+    $legacyCapacity = documents_quote_system_capacity_kwp($quote);
+
+    $main = ($mainRaw === null || (is_string($mainRaw) && trim($mainRaw) === ''))
+        ? $legacyCapacity
+        : max(0, (float) $mainRaw);
+    $complimentary = ($complimentaryRaw === null || (is_string($complimentaryRaw) && trim($complimentaryRaw) === ''))
+        ? 0.0
+        : max(0, (float) $complimentaryRaw);
+    $hasComplimentary = !($complimentaryRaw === null || (is_string($complimentaryRaw) && trim($complimentaryRaw) === ''));
+
+    return [
+        'main' => $main,
+        'complimentary' => $complimentary,
+        'complimentary_provided' => $hasComplimentary,
+        'total' => $main + $complimentary,
+    ];
 }
 
 function documents_quote_structured_item_defaults(): array
