@@ -572,6 +572,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['finance_inputs']['loan']['margin_pct'] = safe_text($_POST['loan_margin_pct'] ?? '');
         $quote['finance_inputs']['loan']['loan_amount'] = safe_text($_POST['loan_amount'] ?? '');
         $quote = documents_quote_apply_customer_savings_inputs($quote, $_POST, $quoteDefaults);
+        $monthlyBillTouched = safe_text((string) ($_POST['monthly_bill_touched'] ?? '0')) === '1';
+        $savedMonthlyBill = (float) ($quote['customer_savings_inputs']['monthly_bill_before_rs'] ?? 0);
+        $savedAnnualGeneration = (float) ($quote['customer_savings_inputs']['annual_generation_kwh_per_kw'] ?? 0);
+        $savedUnitRate = (float) ($quote['customer_savings_inputs']['unit_rate_rs_per_kwh'] ?? 0);
+        $savedCapacity = max(0, (float) ($quote['capacity_kwp'] ?? 0));
+        if (!$monthlyBillTouched && $savedMonthlyBill <= 0 && $savedCapacity > 0 && $savedAnnualGeneration > 0 && $savedUnitRate > 0) {
+            $computedMonthlyBill = ($savedCapacity * $savedAnnualGeneration * $savedUnitRate) / 12;
+            $computedMonthlyBill = (float) round($computedMonthlyBill);
+            $quote['finance_inputs']['monthly_bill_rs'] = (string) $computedMonthlyBill;
+            $quote['customer_savings_inputs']['monthly_bill_before_rs'] = $computedMonthlyBill;
+        }
         $quote['finance_inputs']['subsidy_expected_rs'] = (string) $subsidyExpectedRs;
         $quote['finance_inputs']['transportation_rs'] = (string) $transportationRs;
         $quote['finance_inputs']['discount_rs'] = (string) $discountRs;
@@ -949,6 +960,7 @@ if ($lookup !== null) {
 <div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
 <div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Add kits/components from Items Master. Name/description snapshots are captured automatically.</div><table id="structuredItemsTable"><thead><tr><th>Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Quotation-specific description / note</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?></div><?php $masterPreview = (string)($sItem['master_description_snapshot'] ?? ($sItem['description_snapshot'] ?? '')); if (trim($masterPreview) !== ''): ?><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars($masterPreview, ENT_QUOTES) ?></div><?php endif; ?><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"><?= htmlspecialchars((string)($sItem['custom_description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
 <div><label>Monthly electricity bill (₹)</label><input type="number" step="0.01" name="monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted">Suggested bill based on generation & tariff. You can change it. <a href="#" id="resetMonthlySuggestion">Reset suggestion</a></div></div>
+<input type="hidden" name="monthly_bill_touched" id="monthlyBillTouched" value="0">
 <div><label>Unit rate (₹/kWh)</label><input type="number" step="0.01" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($editing['finance_inputs']['unit_rate_rs_per_kwh'] ?: ($segmentDefaults['unit_rate_rs_per_kwh'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($editing['finance_inputs']['annual_generation_per_kw'] ?: ($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Transportation ₹</label><input type="number" step="0.01" name="transportation_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['transportation_rs'] ?? ''), ENT_QUOTES) ?>"></div>
@@ -1205,6 +1217,7 @@ document.querySelectorAll('#structuredItemsTable tbody tr').forEach((tr) => sync
 
     const syncCapacity = () => {
         if (!hiddenCapacity) return;
+        const previousValue = String(hiddenCapacity.value || '').trim();
         if (enableSplitMode) {
             const total = parseNum(mainInput?.value || 0) + parseNum(complimentaryInput?.value || 0);
             const formatted = (Math.round(total * 100) / 100).toString();
@@ -1212,6 +1225,9 @@ document.querySelectorAll('#structuredItemsTable tbody tr').forEach((tr) => sync
             if (totalDisplay) totalDisplay.value = formatted;
         } else if (legacyCapacityInput) {
             hiddenCapacity.value = String(legacyCapacityInput.value || '').trim();
+        }
+        if (String(hiddenCapacity.value || '').trim() !== previousValue) {
+            hiddenCapacity.dispatchEvent(new Event('input', { bubbles: true }));
         }
     };
 
