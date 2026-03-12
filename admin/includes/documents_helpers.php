@@ -978,9 +978,6 @@ function documents_quote_defaults(): array
         'customer_snapshot' => documents_customer_snapshot_defaults(),
         'system_type' => 'Ongrid',
         'capacity_kwp' => '',
-        'main_capacity_kwp' => 0,
-        'complimentary_capacity_kwp' => 0,
-        'total_capacity_kwp' => 0,
         'system_capacity_kwp' => 0,
         'project_summary_line' => '',
         'valid_until' => '',
@@ -2538,7 +2535,7 @@ function documents_normalize_quotes_store(): void
         }
         $prepared = documents_quote_prepare($row);
         $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
-        $prepared['items'] = documents_normalize_quote_items(is_array($prepared['items'] ?? null) ? $prepared['items'] : [], (string) ($prepared['system_type'] ?? 'Ongrid'), documents_quote_system_capacity_kwp($prepared), $defaultHsn);
+        $prepared['items'] = documents_normalize_quote_items(is_array($prepared['items'] ?? null) ? $prepared['items'] : [], (string) ($prepared['system_type'] ?? 'Ongrid'), (float) ($prepared['capacity_kwp'] ?? 0), $defaultHsn);
         json_save($file, $prepared);
     }
 }
@@ -2558,7 +2555,7 @@ function documents_list_quotes(): array
         }
         $quote = documents_quote_prepare(is_array($row) ? $row : []);
         $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
-        $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), documents_quote_system_capacity_kwp($quote), $defaultHsn);
+        $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
         $quotes[] = $quote;
     }
 
@@ -2585,7 +2582,7 @@ function documents_get_quote(string $id): ?array
     }
     $quote = documents_quote_prepare($row);
     $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
-    $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), documents_quote_system_capacity_kwp($quote), $defaultHsn);
+    $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
     return $quote;
 }
 
@@ -2598,7 +2595,7 @@ function documents_save_quote(array $quote): array
     $path = documents_quotations_dir() . '/' . $id . '.json';
     $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
     $quote = documents_quote_prepare($quote);
-    $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), documents_quote_system_capacity_kwp($quote), $defaultHsn);
+    $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
     if (safe_text((string) ($quote['special_requests_text'] ?? '')) === '' && safe_text((string) ($quote['special_requests_inclusive'] ?? '')) !== '') {
         $quote['special_requests_text'] = (string) $quote['special_requests_inclusive'];
     }
@@ -3160,17 +3157,7 @@ function documents_quote_prepare(array $quote): array
     $quote['status'] = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
     $quote['workflow'] = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
     $quote['capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? ''));
-    $mainCapacity = (float) ($quote['main_capacity_kwp'] ?? 0);
-    if ($mainCapacity <= 0) {
-        $mainCapacity = max(0, (float) ($quote['capacity_kwp'] !== '' ? $quote['capacity_kwp'] : ($quote['system_capacity_kwp'] ?? 0)));
-    }
-    $complimentaryCapacity = max(0, (float) ($quote['complimentary_capacity_kwp'] ?? 0));
-    $totalCapacity = max(0, $mainCapacity + $complimentaryCapacity);
-    $quote['main_capacity_kwp'] = $mainCapacity;
-    $quote['complimentary_capacity_kwp'] = $complimentaryCapacity;
-    $quote['total_capacity_kwp'] = $totalCapacity;
-    $quote['capacity_kwp'] = $mainCapacity > 0 ? (string) $mainCapacity : $quote['capacity_kwp'];
-    $quote['system_capacity_kwp'] = $totalCapacity;
+    $quote['system_capacity_kwp'] = max(0, (float) ($quote['system_capacity_kwp'] ?? $quote['capacity_kwp'] ?? 0));
     $quote['quote_items'] = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
     $quote['tax_profile_id'] = safe_text((string) ($quote['tax_profile_id'] ?? ''));
     $quote['gst_mode_snapshot'] = safe_text((string) ($quote['gst_mode_snapshot'] ?? ''));
@@ -4019,16 +4006,11 @@ function documents_packing_required_line_defaults(): array
 
 function documents_quote_system_capacity_kwp(array $quote): float
 {
-    $main = (float) ($quote['main_capacity_kwp'] ?? 0);
-    if ($main <= 0) {
-        $main = max(0, (float) ($quote['capacity_kwp'] ?? 0));
+    $primary = (float) ($quote['system_capacity_kwp'] ?? 0);
+    if ($primary > 0) {
+        return $primary;
     }
-    $complimentary = max(0, (float) ($quote['complimentary_capacity_kwp'] ?? 0));
-    $total = max(0, $main + $complimentary);
-    if ($total > 0) {
-        return $total;
-    }
-    return max(0, (float) ($quote['system_capacity_kwp'] ?? $quote['capacity_kwp'] ?? 0));
+    return max(0, (float) ($quote['capacity_kwp'] ?? 0));
 }
 
 function documents_quote_structured_item_defaults(): array
