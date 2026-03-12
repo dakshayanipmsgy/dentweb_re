@@ -10,21 +10,28 @@
     const safeDefaultEnergy = Number.isFinite(defaultEnergy) ? defaultEnergy : 1450;
 
     const field = (name) => quoteForm.querySelector('[name="' + name + '"]');
+    const firstField = (names) => {
+        for (const name of names) {
+            const input = field(name);
+            if (input) return input;
+        }
+        return null;
+    };
     const loanEnabled = field('loan_enabled');
     const templateSet = field('template_set_id');
     const totalInput = field('system_total_incl_gst_rs');
     const transportInput = field('transportation_rs');
-    const subsidyInput = field('subsidy_expected_rs');
-    const capacityMainInput = field('system_capacity_main_kwp') || field('capacity_kwp');
-    const capacityComplimentaryInput = field('system_capacity_complimentary_kwp');
+    const subsidyInput = firstField(['subsidy_expected_rs', 'subsidy_amount_rs']);
+    const capacityMainInput = firstField(['system_capacity_main_kwp', 'capacity_kwp']);
+    const capacityComplimentaryInput = firstField(['system_capacity_complimentary_kwp', 'capacity_complimentary_kwp']);
     const capacityTotalInput = field('system_capacity_total_kwp');
     const schemeTypeInput = field('scheme_type');
     const customerTypeInput = field('customer_type');
     const pmSuryagharInput = field('is_pm_suryaghar');
     const quoteIdInput = field('quote_id');
     const unitRateInput = field('unit_rate_rs_per_kwh');
-    const annualGenerationInput = field('annual_generation_per_kw');
-    const monthlyBillInput = field('monthly_bill_rs');
+    const annualGenerationInput = firstField(['annual_generation_per_kw', 'annual_generation_kwh_per_kw']);
+    const monthlyBillInput = firstField(['monthly_bill_rs', 'monthly_bill_before_rs']);
     const loanAmountInput = field('loan_amount');
     const loanInterestInput = field('loan_interest_pct');
     const loanTenureInput = field('loan_tenure_years');
@@ -39,7 +46,7 @@
         input.addEventListener('input', () => { input.dataset.touched = '1'; });
     });
 
-    const parseNum = (value) => {
+    const toNum = (value) => {
         const n = Number(value);
         return Number.isFinite(n) ? n : 0;
     };
@@ -79,8 +86,8 @@
     };
 
     const getTotalCapacity = () => {
-        const main = Math.max(0, parseNum(capacityMainInput?.value));
-        const complimentary = Math.max(0, parseNum(capacityComplimentaryInput?.value));
+        const main = Math.max(0, toNum(capacityMainInput?.value));
+        const complimentary = Math.max(0, toNum(capacityComplimentaryInput?.value));
         const total = main + complimentary;
         if (capacityTotalInput) {
             capacityTotalInput.value = String(Math.round(total * 100) / 100);
@@ -88,8 +95,10 @@
         return total;
     };
 
+    const getMainCapacity = () => Math.max(0, toNum(capacityMainInput?.value));
+
     const subsidyByCapacity = (capacity) => {
-        if (Math.abs(capacity - 2.0) < 0.01) return 60000;
+        if (Math.abs(capacity - 2.0) <= 0.01) return 60000;
         if (capacity >= 3.0) return 78000;
         return 0;
     };
@@ -104,41 +113,41 @@
             if (subsidyInput.dataset.touched === '1' && !isEmpty) return;
             if (!isEmpty && !isNewQuote) return;
         }
-        subsidyInput.value = String(subsidyByCapacity(getTotalCapacity()));
+        subsidyInput.value = String(subsidyByCapacity(getMainCapacity()));
     };
 
-    const computeGrossPayable = () => parseNum(totalInput?.value) + parseNum(transportInput?.value);
+    const computeGrossPayable = () => toNum(totalInput?.value) + toNum(transportInput?.value);
 
     const applyLoanDefaults = (force) => {
         const shouldForce = !!force;
         if (!loanEnabled || !loanEnabled.checked) return;
         const loanCfg = currentSegmentSettings().loan_bestcase || {};
         const grossPayable = computeGrossPayable();
-        const maxLoan = parseNum(loanCfg.max_loan_rs || 200000);
-        const minMarginPct = parseNum(loanCfg.min_margin_pct || 10);
+        const maxLoan = toNum(loanCfg.max_loan_rs || 200000);
+        const minMarginPct = toNum(loanCfg.min_margin_pct || 10);
         const desiredLoan = grossPayable - (grossPayable * (minMarginPct / 100));
         const loanAmount = Math.max(0, Math.min(desiredLoan, maxLoan));
         const marginAmount = Math.max(0, grossPayable - loanAmount);
 
         setIfAllowed(loanAmountInput, loanAmount, { force: shouldForce });
         setIfAllowed(loanMarginInput, marginAmount, { force: shouldForce });
-        setIfAllowed(loanInterestInput, parseNum(loanCfg.interest_pct || 6), { force: shouldForce });
-        setIfAllowed(loanTenureInput, parseNum(loanCfg.tenure_years || 10), { force: shouldForce, noDecimals: true });
+        setIfAllowed(loanInterestInput, toNum(loanCfg.interest_pct || 6), { force: shouldForce });
+        setIfAllowed(loanTenureInput, toNum(loanCfg.tenure_years || 10), { force: shouldForce, noDecimals: true });
     };
 
     const applyMonthlySuggestion = (force) => {
         const shouldForce = !!force;
         const segSettings = currentSegmentSettings();
         if (unitRateInput && fieldEmpty(unitRateInput) && (!unitRateInput.dataset.touched || shouldForce)) {
-            unitRateInput.value = String(parseNum(segSettings.unit_rate_rs_per_kwh || 0));
+            unitRateInput.value = String(toNum(segSettings.unit_rate_rs_per_kwh || 0));
         }
         if (annualGenerationInput && fieldEmpty(annualGenerationInput) && (!annualGenerationInput.dataset.touched || shouldForce)) {
-            annualGenerationInput.value = String(parseNum(segSettings.annual_generation_per_kw || safeDefaultEnergy));
+            annualGenerationInput.value = String(toNum(segSettings.annual_generation_per_kw || safeDefaultEnergy));
         }
 
         const capacity = getTotalCapacity();
-        const annualGeneration = parseNum(annualGenerationInput?.value || segSettings.annual_generation_per_kw || safeDefaultEnergy);
-        const unitRate = parseNum(unitRateInput?.value || segSettings.unit_rate_rs_per_kwh || 0);
+        const annualGeneration = toNum(annualGenerationInput?.value || segSettings.annual_generation_per_kw || safeDefaultEnergy);
+        const unitRate = toNum(unitRateInput?.value || segSettings.unit_rate_rs_per_kwh || 0);
         setIfAllowed(monthlyBillInput, (capacity * annualGeneration * unitRate) / 12, { force: shouldForce, noDecimals: true });
     };
 
@@ -147,7 +156,7 @@
     bindRecalc(transportInput, () => applyLoanDefaults(false));
     bindRecalc(subsidyInput, () => applyLoanDefaults(false));
     bindRecalc(capacityMainInput, () => { getTotalCapacity(); applyMonthlySuggestion(false); applySubsidyDefault(false); });
-    bindRecalc(capacityComplimentaryInput, () => { getTotalCapacity(); applyMonthlySuggestion(false); applySubsidyDefault(false); });
+    bindRecalc(capacityComplimentaryInput, () => { getTotalCapacity(); applyMonthlySuggestion(false); });
     bindRecalc(unitRateInput, () => applyMonthlySuggestion(false));
     bindRecalc(annualGenerationInput, () => applyMonthlySuggestion(false));
 
