@@ -15,8 +15,7 @@
     const totalInput = field('system_total_incl_gst_rs');
     const transportInput = field('transportation_rs');
     const subsidyInput = field('subsidy_expected_rs');
-    const mainCapacityInput = field('system_capacity_kwp_main');
-    const complimentaryCapacityInput = field('system_capacity_kwp_complimentary');
+    const capacityInput = field('capacity_kwp');
     const schemeTypeInput = field('scheme_type');
     const customerTypeInput = field('customer_type');
     const pmSuryagharInput = field('is_pm_suryaghar');
@@ -85,7 +84,7 @@
 
     const applySubsidyDefault = (force) => {
         const shouldForce = !!force;
-        if (!subsidyInput || !mainCapacityInput) return;
+        if (!subsidyInput || !capacityInput) return;
         const isNewQuote = !quoteIdInput || String(quoteIdInput.value || '').trim() === '';
         const isEmpty = fieldEmpty(subsidyInput);
         if (!shouldForce) {
@@ -93,7 +92,7 @@
             if (subsidyInput.dataset.touched === '1' && !isEmpty) return;
             if (!isEmpty && !isNewQuote) return;
         }
-        subsidyInput.value = String(subsidyByCapacity(parseNum(mainCapacityInput.value) + parseNum(complimentaryCapacityInput?.value)));
+        subsidyInput.value = String(subsidyByCapacity(parseNum(capacityInput.value)));
     };
 
     const computeGrossPayable = () => parseNum(totalInput?.value) + parseNum(transportInput?.value);
@@ -125,7 +124,7 @@
             annualGenerationInput.value = String(parseNum(segSettings.annual_generation_per_kw || safeDefaultEnergy));
         }
 
-        const capacity = parseNum(mainCapacityInput?.value) + parseNum(complimentaryCapacityInput?.value);
+        const capacity = parseNum(capacityInput?.value);
         const annualGeneration = parseNum(annualGenerationInput?.value || segSettings.annual_generation_per_kw || safeDefaultEnergy);
         const unitRate = parseNum(unitRateInput?.value || segSettings.unit_rate_rs_per_kwh || 0);
         setIfAllowed(monthlyBillInput, (capacity * annualGeneration * unitRate) / 12, { force: shouldForce, noDecimals: true });
@@ -135,8 +134,7 @@
     bindRecalc(totalInput, () => applyLoanDefaults(false));
     bindRecalc(transportInput, () => applyLoanDefaults(false));
     bindRecalc(subsidyInput, () => applyLoanDefaults(false));
-    bindRecalc(mainCapacityInput, () => { applyMonthlySuggestion(false); applySubsidyDefault(false); });
-    bindRecalc(complimentaryCapacityInput, () => { applyMonthlySuggestion(false); applySubsidyDefault(false); });
+    bindRecalc(capacityInput, () => { applyMonthlySuggestion(false); applySubsidyDefault(false); });
     bindRecalc(unitRateInput, () => applyMonthlySuggestion(false));
     bindRecalc(annualGenerationInput, () => applyMonthlySuggestion(false));
 
