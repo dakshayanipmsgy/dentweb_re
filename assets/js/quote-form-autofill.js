@@ -15,7 +15,10 @@
     const totalInput = field('system_total_incl_gst_rs');
     const transportInput = field('transportation_rs');
     const subsidyInput = field('subsidy_expected_rs');
+    const capacityMainInput = field(config.capacityMainField || 'main_capacity_kwp');
+    const capacityComplimentaryInput = field(config.capacityComplimentaryField || 'complimentary_capacity_kwp');
     const capacityInput = field('capacity_kwp');
+    const capacityTotalDisplay = config.capacityTotalDisplayId ? document.getElementById(config.capacityTotalDisplayId) : null;
     const schemeTypeInput = field('scheme_type');
     const customerTypeInput = field('customer_type');
     const pmSuryagharInput = field('is_pm_suryaghar');
@@ -42,6 +45,18 @@
         return Number.isFinite(n) ? n : 0;
     };
     const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
+
+    const totalCapacity = () => {
+        const main = parseNum(capacityMainInput?.value || capacityInput?.value);
+        const complimentary = parseNum(capacityComplimentaryInput?.value);
+        return Math.max(0, main + complimentary);
+    };
+
+    const refreshTotalCapacityDisplay = () => {
+        if (!capacityTotalDisplay) return;
+        capacityTotalDisplay.value = totalCapacity().toFixed(2) + ' kWp';
+    };
+
     const setIfAllowed = (input, value, options) => {
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
@@ -84,7 +99,7 @@
 
     const applySubsidyDefault = (force) => {
         const shouldForce = !!force;
-        if (!subsidyInput || !capacityInput) return;
+        if (!subsidyInput || (!capacityMainInput && !capacityInput)) return;
         const isNewQuote = !quoteIdInput || String(quoteIdInput.value || '').trim() === '';
         const isEmpty = fieldEmpty(subsidyInput);
         if (!shouldForce) {
@@ -92,7 +107,7 @@
             if (subsidyInput.dataset.touched === '1' && !isEmpty) return;
             if (!isEmpty && !isNewQuote) return;
         }
-        subsidyInput.value = String(subsidyByCapacity(parseNum(capacityInput.value)));
+        subsidyInput.value = String(subsidyByCapacity(totalCapacity()));
     };
 
     const computeGrossPayable = () => parseNum(totalInput?.value) + parseNum(transportInput?.value);
@@ -124,7 +139,7 @@
             annualGenerationInput.value = String(parseNum(segSettings.annual_generation_per_kw || safeDefaultEnergy));
         }
 
-        const capacity = parseNum(capacityInput?.value);
+        const capacity = totalCapacity();
         const annualGeneration = parseNum(annualGenerationInput?.value || segSettings.annual_generation_per_kw || safeDefaultEnergy);
         const unitRate = parseNum(unitRateInput?.value || segSettings.unit_rate_rs_per_kwh || 0);
         setIfAllowed(monthlyBillInput, (capacity * annualGeneration * unitRate) / 12, { force: shouldForce, noDecimals: true });
@@ -134,7 +149,9 @@
     bindRecalc(totalInput, () => applyLoanDefaults(false));
     bindRecalc(transportInput, () => applyLoanDefaults(false));
     bindRecalc(subsidyInput, () => applyLoanDefaults(false));
-    bindRecalc(capacityInput, () => { applyMonthlySuggestion(false); applySubsidyDefault(false); });
+    bindRecalc(capacityMainInput, () => { refreshTotalCapacityDisplay(); applyMonthlySuggestion(false); applySubsidyDefault(false); });
+    bindRecalc(capacityComplimentaryInput, () => { refreshTotalCapacityDisplay(); applyMonthlySuggestion(false); applySubsidyDefault(false); });
+    bindRecalc(capacityInput, () => { refreshTotalCapacityDisplay(); applyMonthlySuggestion(false); applySubsidyDefault(false); });
     bindRecalc(unitRateInput, () => applyMonthlySuggestion(false));
     bindRecalc(annualGenerationInput, () => applyMonthlySuggestion(false));
 
@@ -173,6 +190,7 @@
         applyLoanDefaults(false);
     });
 
+    refreshTotalCapacityDisplay();
     applyLoanDefaults(false);
     applyMonthlySuggestion(false);
     applySubsidyDefault(false);
