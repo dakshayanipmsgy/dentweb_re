@@ -78,24 +78,6 @@ function quotation_shadow_css(string $preset): string
     return $map[$preset] ?? $map['soft'];
 }
 
-function get_total_capacity_kwp(array $quote): float
-{
-    $total = (float) ($quote['system_capacity_total_kwp'] ?? 0);
-    if ($total > 0) {
-        return max(0, $total);
-    }
-    $main = (float) ($quote['system_capacity_main_kwp'] ?? 0);
-    $complimentary = (float) ($quote['system_capacity_complimentary_kwp'] ?? 0);
-    if ($main > 0 || $complimentary > 0) {
-        return max(0, $main) + max(0, $complimentary);
-    }
-    $legacy = (float) ($quote['system_capacity_kwp'] ?? 0);
-    if ($legacy > 0) {
-        return max(0, $legacy);
-    }
-    return max(0, (float) ($quote['capacity_kwp'] ?? 0));
-}
-
 
 function compute_financial_clarity(array $quote, array $calc, array $snapshot): array
 {
@@ -111,7 +93,7 @@ function compute_financial_clarity(array $quote, array $calc, array $snapshot): 
 
     $gross = $toFloat($calc['gross_payable'] ?? 0);
     $subsidy = $toFloat($calc['subsidy_expected_rs'] ?? 0);
-    $capacity = get_total_capacity_kwp($quote);
+    $capacity = max(0, $toFloat($quote['capacity_kwp'] ?? $quote['system_capacity_kwp'] ?? 0));
     $tariff = max(0.1, $toFloat($snapshot['unit_rate_rs_per_kwh'] ?? null, 1));
     $annualGeneration = max(0, $toFloat($snapshot['annual_generation_kwh_per_kw'] ?? null, 0));
     $monthlyUnitsSolar = ($capacity * $annualGeneration) / 12;
@@ -336,11 +318,6 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
     $isAccepted = $quoteStatus === 'accepted' || $quoteAcceptedAt !== '';
     $statusBadgeLabel = $isAccepted ? 'Accepted' : 'Draft';
     $statusBadgeClass = $isAccepted ? 'accepted' : 'draft';
-    $mainCapacity = (float) ($quote['system_capacity_main_kwp'] ?? $quote['capacity_kwp'] ?? get_total_capacity_kwp($quote));
-    $complimentaryCapacity = (float) ($quote['system_capacity_complimentary_kwp'] ?? 0);
-    $hasComplimentaryCapacity = $complimentaryCapacity > 0.0001;
-    $discountAmount = (float) ($calc['discount_rs'] ?? 0);
-    $grossPayableLabel = $discountAmount > 0 ? 'Gross Payable (after discount)' : 'Gross Payable';
 ?>
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quotation</title>
@@ -354,10 +331,10 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <section class="card"><span class="chip">✅ MNRE compliant</span><span class="chip"><?= $segment === 'RES' ? '✅ PM Surya Ghar eligible' : 'ℹ️ Segment specific policy' ?></span><span class="chip">🔌 Net metering supported</span><span class="chip">🛡️ 25+ year life / warranty</span></section>
 <section class="card"><div class="h sec">🏠 Customer &amp; Site 📍</div><div class="grid2"><div class="metric"><b>Customer</b><div><?= htmlspecialchars((string)($quote['customer_name'] ?? ''), ENT_QUOTES) ?></div><div class="muted"><?= htmlspecialchars((string)($quote['customer_mobile'] ?? ''), ENT_QUOTES) ?></div></div><div class="metric"><b>Site</b><div><?= htmlspecialchars((string)($quote['site_address'] ?? ''), ENT_QUOTES) ?></div><div class="muted"><?= htmlspecialchars((string)($quote['district'] ?? ''), ENT_QUOTES) ?></div></div></div></section>
 <?php if ($coverNote !== ''): ?><section class="card"><div><?= quotation_sanitize_html($coverNote) ?></div></section><?php endif; ?>
-<section class="card"><div class="h sec">⚡ At a glance</div><div class="hero"><div class="metric">System Size<b><?= htmlspecialchars(number_format($mainCapacity, 1), ENT_QUOTES) ?> kWp</b><?php if ($hasComplimentaryCapacity): ?><div class="muted" style="font-size:.85em;margin-top:6px">Complimentary Non-DCR solar supply: <?= htmlspecialchars(number_format($complimentaryCapacity, 1), ENT_QUOTES) ?> kWp</div><?php endif; ?></div><div class="metric">Monthly Bill (Without Solar)<b><?= quotation_format_inr_indian((float)($financialClarity['monthly_bill_before_rs'] ?? 0), $showDecimals) ?></b></div><div class="metric">Monthly Outflow (With Solar – Bank Finance)<b id="heroOutflowBank">-</b></div><div class="metric">Monthly Outflow (With Solar – Self Funded)<b id="heroOutflowSelf">-</b></div></div><div class="save-line">🟢 You save approx <span id="heroSaving">-</span> every month</div></section>
+<section class="card"><div class="h sec">⚡ At a glance</div><div class="hero"><div class="metric">System Size<b><?= htmlspecialchars((string)($quote['capacity_kwp'] ?? '0'), ENT_QUOTES) ?> kWp</b></div><div class="metric">Monthly Bill (Without Solar)<b><?= quotation_format_inr_indian((float)($financialClarity['monthly_bill_before_rs'] ?? 0), $showDecimals) ?></b></div><div class="metric">Monthly Outflow (With Solar – Bank Finance)<b id="heroOutflowBank">-</b></div><div class="metric">Monthly Outflow (With Solar – Self Funded)<b id="heroOutflowSelf">-</b></div></div><div class="save-line">🟢 You save approx <span id="heroSaving">-</span> every month</div></section>
 <section class="card"><div class="h sec">📦 Item summary</div><table><thead><tr><th>Sr No</th><th>Item and Description</th><th>HSN</th><th class="center">Quantity</th><th class="center">Unit</th></tr></thead><tbody><?php if ($itemRows === []): ?><tr><td colspan="5" class="center muted">No line items added.</td></tr><?php else: foreach ($itemRows as $idx => $item): ?><tr><td><?= (int)$idx + 1 ?></td><td><div><?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?></div><?php $itemDesc=(string)($item['description'] ?? ''); if (trim($itemDesc) !== ''): ?><div class="item-master-description"><?= nl2br(htmlspecialchars($itemDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?><?php $customDesc=(string)($item['custom_description'] ?? ''); if (trim($customDesc) !== ''): ?><div class="item-custom-description">📝 <?= nl2br(htmlspecialchars($customDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?></td><td><?= htmlspecialchars((string)($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['qty'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
 <?php if($specialReq!==''): ?><section class="card"><div class="h sec">✍️ Special Requests From Consumer (Inclusive in the rate)</div><div><?= quotation_sanitize_html($specialReq) ?></div><div><i>In case of conflict between annexures and special requests, special requests will be prioritized.</i></div></section><?php endif; ?>
-<section class="card"><div class="h sec">💰 Pricing summary</div><table><thead><tr><th>#</th><th>Particular</th><th class="right">Amount</th></tr></thead><tbody><tr><td>1</td><td>Gross payable (before discount)</td><td class="right"><?= quotation_format_inr_indian((float)($calc['gross_payable_before_discount'] ?? $calc['gross_payable'] ?? 0), $showDecimals) ?></td></tr><tr><td>2</td><td>Discount<?php $discountNote=(string)($calc['discount_note'] ?? ''); if(trim($discountNote)!==''): ?><div class="muted" style="font-size:.85em;margin-top:2px"><?= htmlspecialchars($discountNote, ENT_QUOTES) ?></div><?php endif; ?></td><td class="right">- <?= quotation_format_inr_indian((float)($calc['discount_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td>3</td><td><?= htmlspecialchars($grossPayableLabel, ENT_QUOTES) ?></td><td class="right" id="upfront" style="font-weight:800;font-size:1.15em"></td></tr><tr><td>4</td><td>Subsidy expected</td><td class="right"><?= quotation_format_inr_indian((float)($calc['subsidy_expected_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td>5</td><td><b>Net Investment/Cost After Subsidy Credit</b></td><td class="right"><b id="upfrontNet"></b></td></tr></tbody></table></section>
+<section class="card"><div class="h sec">💰 Pricing summary</div><table><thead><tr><th>#</th><th>Particular</th><th class="right">Amount</th></tr></thead><tbody><tr><td>1</td><td>Gross payable (before discount)</td><td class="right"><?= quotation_format_inr_indian((float)($calc['gross_payable_before_discount'] ?? $calc['gross_payable'] ?? 0), $showDecimals) ?></td></tr><tr><td>2</td><td>Discount<?php $discountNote=(string)($calc['discount_note'] ?? ''); if(trim($discountNote)!==''): ?><div class="muted" style="font-size:.85em;margin-top:2px"><?= htmlspecialchars($discountNote, ENT_QUOTES) ?></div><?php endif; ?></td><td class="right">- <?= quotation_format_inr_indian((float)($calc['discount_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td>3</td><td>Gross payable (after discount)</td><td class="right" id="upfront"></td></tr><tr><td>4</td><td>Subsidy expected</td><td class="right"><?= quotation_format_inr_indian((float)($calc['subsidy_expected_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td>5</td><td><b>Net Investment/Cost After Subsidy Credit</b></td><td class="right"><b id="upfrontNet"></b></td></tr></tbody></table></section>
 <section class="card"><div class="h sec">📊 Charts &amp; graphics</div>
 <div class="chart-block">
 <div class="chart-title">Monthly Outflow Comparison</div>
