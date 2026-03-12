@@ -370,6 +370,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quote['system_capacity_kwp'] = max(0, (float) $capacity);
         }
         $quote['project_summary_line'] = safe_text($_POST['project_summary_line'] ?? '');
+        $quote['quotation_date'] = safe_text($_POST['quotation_date'] ?? '');
         $quote['valid_until'] = safe_text($_POST['valid_until'] ?? '');
         $quote['pricing_mode'] = $pricingMode;
         $quote['place_of_supply_state'] = $placeOfSupply;
@@ -838,6 +839,7 @@ if ($editing !== null && documents_quote_is_locked($editing)) {
 
 if ($editing === null) {
     $editing = documents_quote_defaults();
+    $editing['quotation_date'] = date('Y-m-d');
     $editing['valid_until'] = date('Y-m-d', strtotime('+7 days'));
 }
 
@@ -938,6 +940,7 @@ if ($lookup !== null) {
 </div>
 <div id="legacyCapacityField" style="display:<?= ($editing['id'] === '' || $hasMainSolarOnQuote) ? 'none' : 'block' ?>"><label>Capacity kWp</label><input name="capacity_kwp" <?= ($editing['id'] === '' || $hasMainSolarOnQuote) ? '' : 'required' ?> value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>"></div>
 <input type="hidden" name="capacity_kwp" id="computedCapacityKwp" value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>">
+<div><label>Quotation Date</label><input type="date" name="quotation_date" value="<?= htmlspecialchars((string)($editing['quotation_date'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Valid Until</label><input type="date" name="valid_until" value="<?= htmlspecialchars((string)$editing['valid_until'], ENT_QUOTES) ?>"></div>
 <div><label>Cover note paragraph</label><textarea name="cover_note_text"><?= htmlspecialchars((string)($editing['cover_note_text'] ?: ($quoteDefaults['defaults']['cover_note_template'] ?? '')), ENT_QUOTES) ?></textarea></div>
 <div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div><div><label>Total system price (including GST) ₹</label><input type="number" step="0.01" required name="system_total_incl_gst_rs" value="<?= htmlspecialchars((string)($editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
