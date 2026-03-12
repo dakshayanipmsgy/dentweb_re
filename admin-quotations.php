@@ -227,29 +227,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectWith('error', 'Customer mobile and name are required.');
         }
 
-        $capacityMainRaw = safe_text($_POST['system_capacity_kwp_main'] ?? '');
-        if ($capacityMainRaw === '') {
-            $redirectWith('error', 'Main System Size (kWp) is required.');
+        $capacity = safe_text($_POST['capacity_kwp'] ?? '');
+        if ($capacity === '') {
+            $redirectWith('error', 'Capacity kWp is required.');
         }
-        $capacityMain = (float) $capacityMainRaw;
-        if ($capacityMain <= 0) {
-            $redirectWith('error', 'Main System Size (kWp) must be greater than 0.');
-        }
-
-        $capacityComplimentaryRaw = safe_text($_POST['system_capacity_kwp_complimentary'] ?? '');
-        $capacityComplimentary = null;
-        if ($capacityComplimentaryRaw !== '') {
-            $capacityComplimentary = (float) $capacityComplimentaryRaw;
-            if ($capacityComplimentary < 0) {
-                $redirectWith('error', 'Complimentary Non-DCR solar supply (kWp) cannot be negative.');
-            }
-            if ($capacityComplimentary == 0.0) {
-                $capacityComplimentary = null;
-            }
-        }
-
-        $capacityTotal = $capacityMain + (float) ($capacityComplimentary ?? 0);
-        $capacity = (string) $capacityTotal;
 
 
         $pricingMode = safe_text($_POST['pricing_mode'] ?? 'solar_split_70_30');
@@ -360,10 +341,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $quote['system_type'] = safe_text($_POST['system_type'] ?? 'Ongrid');
         $quote['capacity_kwp'] = $capacity;
-        $quote['system_capacity_kwp_main'] = $capacityMain;
-        $quote['system_capacity_kwp_complimentary'] = $capacityComplimentary;
-        $quote['system_capacity_kwp_total'] = $capacityTotal;
-        $quote['system_capacity_kwp'] = $capacityTotal;
+        $quote['system_capacity_kwp'] = max(0, (float) $capacity);
         $quote['project_summary_line'] = safe_text($_POST['project_summary_line'] ?? '');
         $quote['valid_until'] = safe_text($_POST['valid_until'] ?? '');
         $quote['pricing_mode'] = $pricingMode;
@@ -864,11 +842,6 @@ $lookupType = (string) ($lookupResult['type'] ?? '');
 $lookupNote = (string) ($lookupResult['note'] ?? '');
 $lookupBadge = $lookupType === 'customer' ? 'Customer' : ($lookupType === 'lead' ? 'Lead' : '');
 $quoteSnapshot = documents_quote_resolve_snapshot($editing);
-$mainCapacityForForm = (float) ($editing['system_capacity_kwp_main'] ?? 0);
-if ($mainCapacityForForm <= 0) {
-    $mainCapacityForForm = (float) ($editing['system_capacity_kwp'] ?? $editing['capacity_kwp'] ?? 0);
-}
-$complimentaryCapacityForForm = (float) ($editing['system_capacity_kwp_complimentary'] ?? 0);
 if ($lookup !== null) {
     $quoteSnapshot = array_merge($quoteSnapshot, $lookup);
     if ($lookupType === 'lead') {
@@ -917,8 +890,7 @@ if ($lookup !== null) {
 <div><label>Meter Number</label><input name="meter_number" value="<?= htmlspecialchars((string)(($editing['meter_number'] !== '') ? $editing['meter_number'] : ($quoteSnapshot['meter_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Meter Serial Number</label><input name="meter_serial_number" value="<?= htmlspecialchars((string)(($editing['meter_serial_number'] !== '') ? $editing['meter_serial_number'] : ($quoteSnapshot['meter_serial_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>System Type</label><select name="system_type"><?php foreach (['Ongrid','Hybrid','Offgrid','Product'] as $t): ?><option value="<?= $t ?>" <?= $editing['system_type']===$t?'selected':'' ?>><?= $t ?></option><?php endforeach; ?></select></div>
-<div><label>Main System Size (kWp)</label><input type="number" step="0.01" min="0.01" name="system_capacity_kwp_main" required value="<?= htmlspecialchars((string)$mainCapacityForForm, ENT_QUOTES) ?>"></div>
-<div><label>Complimentary Non-DCR solar supply (kWp)</label><input type="number" step="0.01" min="0" name="system_capacity_kwp_complimentary" value="<?= $complimentaryCapacityForForm > 0 ? htmlspecialchars((string)$complimentaryCapacityForForm, ENT_QUOTES) : '' ?>"></div>
+<div><label>Capacity kWp</label><input name="capacity_kwp" required value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>"></div>
 <div><label>Valid Until</label><input type="date" name="valid_until" value="<?= htmlspecialchars((string)$editing['valid_until'], ENT_QUOTES) ?>"></div>
 <div><label>Cover note paragraph</label><textarea name="cover_note_text"><?= htmlspecialchars((string)($editing['cover_note_text'] ?: ($quoteDefaults['defaults']['cover_note_template'] ?? '')), ENT_QUOTES) ?></textarea></div>
 <div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div><div><label>Total system price (including GST) ₹</label><input type="number" step="0.01" required name="system_total_incl_gst_rs" value="<?= htmlspecialchars((string)($editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
