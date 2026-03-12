@@ -32,9 +32,16 @@
     const resetMonthlyBtn = config.resetMonthlyBtn || document.getElementById('resetMonthlySuggestion');
     const resetSubsidyBtn = config.resetSubsidyBtn || document.getElementById('resetSubsidyDefault');
 
+    const monthlyBillTouchedFlag = field('monthly_bill_touched');
+
     const managedFields = [monthlyBillInput, subsidyInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput, unitRateInput, annualGenerationInput].filter(Boolean);
     managedFields.forEach((input) => {
-        input.addEventListener('input', () => { input.dataset.touched = '1'; });
+        input.addEventListener('input', () => {
+            input.dataset.touched = '1';
+            if (input === monthlyBillInput && monthlyBillTouchedFlag) {
+                monthlyBillTouchedFlag.value = '1';
+            }
+        });
     });
 
     const parseNum = (value) => {
@@ -46,9 +53,13 @@
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
         if (!input) return;
+        if (!force && input === monthlyBillInput && monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1') return;
         if (!force && input.dataset.touched === '1' && !fieldEmpty(input)) return;
         const val = noDecimals ? Math.round(value) : Math.round(value * 100) / 100;
         input.value = String(val);
+        if (input === monthlyBillInput && monthlyBillTouchedFlag && force) {
+            monthlyBillTouchedFlag.value = '0';
+        }
     };
 
     const currentSegmentCode = () => {
@@ -127,6 +138,10 @@
         const capacity = parseNum(capacityInput?.value);
         const annualGeneration = parseNum(annualGenerationInput?.value || segSettings.annual_generation_per_kw || safeDefaultEnergy);
         const unitRate = parseNum(unitRateInput?.value || segSettings.unit_rate_rs_per_kwh || 0);
+        const currentMonthlyBill = parseNum(monthlyBillInput?.value);
+        const monthlyBillTouched = monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1';
+        if (!shouldForce && monthlyBillTouched) return;
+        if (!shouldForce && monthlyBillInput && !fieldEmpty(monthlyBillInput) && currentMonthlyBill > 0 && monthlyBillInput.dataset.touched === '1') return;
         setIfAllowed(monthlyBillInput, (capacity * annualGeneration * unitRate) / 12, { force: shouldForce, noDecimals: true });
     };
 
@@ -162,10 +177,15 @@
     resetMonthlyBtn?.addEventListener('click', (e) => {
         e.preventDefault();
         if (monthlyBillInput) monthlyBillInput.dataset.touched = '';
+        if (monthlyBillTouchedFlag) monthlyBillTouchedFlag.value = '0';
         if (unitRateInput) unitRateInput.dataset.touched = '';
         if (annualGenerationInput) annualGenerationInput.dataset.touched = '';
         applyMonthlySuggestion(true);
     });
+
+    if (monthlyBillTouchedFlag) {
+        monthlyBillTouchedFlag.value = '0';
+    }
     resetSubsidyBtn?.addEventListener('click', (e) => {
         e.preventDefault();
         if (subsidyInput) subsidyInput.dataset.touched = '';
