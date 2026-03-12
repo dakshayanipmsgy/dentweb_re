@@ -61,10 +61,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mobile = normalize_customer_mobile((string) ($_POST['customer_mobile'] ?? ''));
         $customerName = safe_text($_POST['customer_name'] ?? '');
         $customerRecord = $partyType === 'customer' ? documents_find_customer_by_mobile($mobile) : null;
-        $capacity = safe_text($_POST['capacity_kwp'] ?? '');
-        if ($mobile === '' || $customerName === '' || $capacity === '') {
-            $redirectWith('error', 'Please fill required fields (mobile, name, capacity).');
+        $mainCapacityRaw = trim((string) ($_POST['main_capacity_kwp'] ?? $_POST['capacity_kwp'] ?? ''));
+        $complimentaryRaw = trim((string) ($_POST['complimentary_capacity_kwp'] ?? ''));
+        if ($mobile === '' || $customerName === '' || $mainCapacityRaw === '') {
+            $redirectWith('error', 'Please fill required fields (mobile, name, main system size).');
         }
+        $mainCapacity = (float) $mainCapacityRaw;
+        if ($mainCapacity <= 0) {
+            $redirectWith('error', 'Main system size (kWp) must be greater than 0.');
+        }
+        $complimentaryCapacity = $complimentaryRaw === '' ? 0.0 : (float) $complimentaryRaw;
+        if ($complimentaryCapacity < 0) {
+            $redirectWith('error', 'Complimentary Non-DCR solar supply (kWp) cannot be negative.');
+        }
+        $totalCapacity = $mainCapacity + $complimentaryCapacity;
 
         $pricingMode = safe_text($_POST['pricing_mode'] ?? 'solar_split_70_30');
         if (!in_array($pricingMode, ['solar_split_70_30', 'flat_5'], true)) {
@@ -162,7 +172,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         $quote['system_type'] = safe_text($_POST['system_type'] ?? 'Ongrid');
-        $quote['capacity_kwp'] = $capacity;
+        $quote['main_capacity_kwp'] = $mainCapacity;
+        $quote['complimentary_capacity_kwp'] = $complimentaryCapacity;
+        $quote['total_capacity_kwp'] = $totalCapacity;
+        $quote['capacity_kwp'] = (string) $mainCapacity;
+        $quote['system_capacity_kwp'] = $totalCapacity;
         $quote['project_summary_line'] = safe_text($_POST['project_summary_line'] ?? '');
         $quote['valid_until'] = safe_text($_POST['valid_until'] ?? '');
         $quote['pricing_mode'] = $pricingMode;
@@ -187,7 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
         }
         $defaultHsn = safe_text((string) ($quoteDefaults['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
-        $quote['items'] = documents_normalize_quote_items($rawItems, $quote['system_type'], (float) $quote['capacity_kwp'], $defaultHsn);
+        $quote['items'] = documents_normalize_quote_items($rawItems, $quote['system_type'], $totalCapacity, $defaultHsn);
         $systemTotalInclGstRs = (float) ($_POST['system_total_incl_gst_rs'] ?? 0);
         $transportationRs = (float) ($_POST['transportation_rs'] ?? 0);
         $subsidyExpectedRs = (float) ($_POST['subsidy_expected_rs'] ?? 0);
@@ -343,7 +357,7 @@ if ($lookup !== null) {
 <div><label>Meter Number</label><input name="meter_number" value="<?= htmlspecialchars((string)(($editing['meter_number'] !== '') ? $editing['meter_number'] : ($quoteSnapshot['meter_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Meter Serial Number</label><input name="meter_serial_number" value="<?= htmlspecialchars((string)(($editing['meter_serial_number'] !== '') ? $editing['meter_serial_number'] : ($quoteSnapshot['meter_serial_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>System Type</label><select name="system_type"><?php foreach (['Ongrid','Hybrid','Offgrid','Product'] as $t): ?><option value="<?= $t ?>" <?= $editing['system_type']===$t?'selected':'' ?>><?= $t ?></option><?php endforeach; ?></select></div>
-<div><label>Capacity kWp</label><input name="capacity_kwp" required value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>"></div>
+<div><label>Main Solar System Size (kWp)</label><input type="number" step="0.01" min="0.01" name="main_capacity_kwp" required value="<?= htmlspecialchars((string)($editing['main_capacity_kwp'] ?: $editing['capacity_kwp']), ENT_QUOTES) ?>"></div><div><label>Complimentary Non-DCR Solar Supply (kWp)</label><input type="number" step="0.01" min="0" name="complimentary_capacity_kwp" value="<?= htmlspecialchars((string)($editing['complimentary_capacity_kwp'] ?? ''), ENT_QUOTES) ?>"></div><div><label>Total capacity used for calculations</label><input id="total_capacity_kwp_display" readonly value="<?= htmlspecialchars((string)number_format(((float)($editing['main_capacity_kwp'] ?: $editing['capacity_kwp'])) + (float)($editing['complimentary_capacity_kwp'] ?? 0), 2), ENT_QUOTES) ?> kWp"></div>
 <div><label>Valid Until</label><input type="date" name="valid_until" value="<?= htmlspecialchars((string)$editing['valid_until'], ENT_QUOTES) ?>"></div>
 <div><label>Cover note paragraph</label><textarea name="cover_note_text"><?= htmlspecialchars((string)($editing['cover_note_text'] ?: ($quoteDefaults['defaults']['cover_note_template'] ?? '')), ENT_QUOTES) ?></textarea></div>
 <div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div><div><label>Total system price (including GST) ₹</label><input type="number" step="0.01" required name="system_total_incl_gst_rs" value="<?= htmlspecialchars((string)($editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
@@ -379,4 +393,4 @@ if ($lookup !== null) {
 <div class="card"><h2>My Quote List</h2><table><thead><tr><th>Quote No</th><th>Name</th><th>Status</th><th>Amount</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
 <?php foreach ($quotes as $q): ?><tr><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'employee'), ENT_QUOTES) ?></td><td>₹<?= number_format((float)$q['calc']['grand_total'],2) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td><td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <?php if (documents_quote_can_edit($q, 'employee', (string) ($employee['id'] ?? ''))): ?><a class="btn secondary" href="employee-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?></td></tr><?php endforeach; if ($quotes===[]): ?><tr><td colspan="6">No quotations yet.</td></tr><?php endif; ?></tbody></table></div>
 <script>document.addEventListener('click',function(e){if(e.target&&e.target.id==='addItemBtn'){const tb=document.querySelector('#itemsTable tbody');if(!tb)return;const tr=document.createElement('tr');const dH='<?= htmlspecialchars((string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>';tr.innerHTML='<td></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="'+dH+'"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';tb.appendChild(tr);ren();}if(e.target&&e.target.classList.contains('rm-item')){e.target.closest('tr')?.remove();ren();}});function ren(){document.querySelectorAll('#itemsTable tbody tr').forEach((tr,i)=>{const td=tr.querySelector('td');if(td)td.textContent=String(i+1);});}ren();</script>
-<script>window.quoteFormAutofillConfig={settingsBySegment:<?= json_encode($autofillSegments, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,defaultEnergy:<?= json_encode((float)($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450)) ?>};</script><script src="assets/js/quote-form-autofill.js"></script></main></body></html>
+<script>window.quoteFormAutofillConfig={settingsBySegment:<?= json_encode($autofillSegments, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,defaultEnergy:<?= json_encode((float)($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450)) ?>,capacityMainField:'main_capacity_kwp',capacityComplimentaryField:'complimentary_capacity_kwp',capacityTotalDisplayId:'total_capacity_kwp_display'};</script><script src="assets/js/quote-form-autofill.js"></script></main></body></html>
