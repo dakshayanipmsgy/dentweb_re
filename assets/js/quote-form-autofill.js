@@ -15,7 +15,7 @@
     const totalInput = field('system_total_incl_gst_rs');
     const transportInput = field('transportation_rs');
     const subsidyInput = field('subsidy_expected_rs');
-    const capacityInput = field('capacity_kwp');
+    const capacityInput = quoteForm.querySelector('#computedCapacityKwp') || field('capacity_kwp');
     const schemeTypeInput = field('scheme_type');
     const customerTypeInput = field('customer_type');
     const pmSuryagharInput = field('is_pm_suryaghar');

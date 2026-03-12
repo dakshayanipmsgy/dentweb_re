@@ -977,6 +977,8 @@ function documents_quote_defaults(): array
         'sub_division_name' => '',
         'customer_snapshot' => documents_customer_snapshot_defaults(),
         'system_type' => 'Ongrid',
+        'main_solar_kwp' => '',
+        'complimentary_non_dcr_kwp' => '',
         'capacity_kwp' => '',
         'system_capacity_kwp' => 0,
         'project_summary_line' => '',
@@ -3156,6 +3158,8 @@ function documents_quote_prepare(array $quote): array
     $quote = array_merge(documents_quote_defaults(), $quote);
     $quote['status'] = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
     $quote['workflow'] = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
+    $quote['main_solar_kwp'] = safe_text((string) ($quote['main_solar_kwp'] ?? ''));
+    $quote['complimentary_non_dcr_kwp'] = safe_text((string) ($quote['complimentary_non_dcr_kwp'] ?? ''));
     $quote['capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? ''));
     $quote['system_capacity_kwp'] = max(0, (float) ($quote['system_capacity_kwp'] ?? $quote['capacity_kwp'] ?? 0));
     $quote['quote_items'] = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
