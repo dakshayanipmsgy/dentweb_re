@@ -93,20 +93,40 @@ function compute_financial_clarity(array $quote, array $calc, array $snapshot): 
 
     $gross = $toFloat($calc['gross_payable'] ?? 0);
     $subsidy = $toFloat($calc['subsidy_expected_rs'] ?? 0);
-    $capacity = max(0, documents_quote_system_capacity_kwp($quote));
+    $kwpMain = max(0, $toFloat($quote['system_size_main_kwp'] ?? $quote['capacity_kwp'] ?? $quote['system_capacity_kwp'] ?? 0));
+    $kwpComp = max(0, $toFloat($quote['system_size_complimentary_kwp'] ?? 0));
+    $kwpTotal = $kwpMain + $kwpComp;
+    if ($kwpTotal <= 0) {
+        $kwpTotal = max(0, documents_quote_system_capacity_kwp($quote));
+    }
     $tariff = max(0.1, $toFloat($snapshot['unit_rate_rs_per_kwh'] ?? null, 1));
     $annualGeneration = max(0, $toFloat($snapshot['annual_generation_kwh_per_kw'] ?? null, 0));
-    $monthlyUnitsSolar = ($capacity * $annualGeneration) / 12;
+    $monthlyUnitsSolar = ($kwpTotal * $annualGeneration) / 12;
+
+    $savedInputs = is_array($quote['customer_savings_inputs'] ?? null) ? $quote['customer_savings_inputs'] : [];
+    $explicitMonthlyBillBefore = array_key_exists('monthly_bill_before_rs', $savedInputs)
+        && !($savedInputs['monthly_bill_before_rs'] === null || (is_string($savedInputs['monthly_bill_before_rs']) && trim($savedInputs['monthly_bill_before_rs']) === ''));
+    $monthlyBillBefore = 0.0;
+    if ($explicitMonthlyBillBefore) {
+        $monthlyBillBefore = max(0, $toFloat($savedInputs['monthly_bill_before_rs'] ?? 0));
+    } elseif (($snapshot['monthly_units_before'] ?? null) !== null && (float) $snapshot['monthly_units_before'] > 0) {
+        $monthlyBillBefore = max(0, ((float) $snapshot['monthly_units_before']) * $tariff);
+    } elseif (($snapshot['monthly_bill_before_rs'] ?? null) !== null && (float) $snapshot['monthly_bill_before_rs'] > 0) {
+        $monthlyBillBefore = max(0, (float) $snapshot['monthly_bill_before_rs']);
+    }
+    if ($monthlyBillBefore <= 0) {
+        $monthlyBillBefore = max(0, $toFloat($quote['finance_inputs']['monthly_bill_rs'] ?? 0));
+    }
 
     $monthlyUnitsBefore = null;
     if (($snapshot['monthly_units_before'] ?? null) !== null && (float) $snapshot['monthly_units_before'] > 0) {
         $monthlyUnitsBefore = (float) $snapshot['monthly_units_before'];
-    } elseif (($snapshot['monthly_bill_before_rs'] ?? null) !== null && (float) $snapshot['monthly_bill_before_rs'] > 0) {
-        $monthlyUnitsBefore = (float) $snapshot['monthly_bill_before_rs'] / $tariff;
+    } elseif ($monthlyBillBefore > 0) {
+        $monthlyUnitsBefore = $monthlyBillBefore / $tariff;
     }
 
     if ($monthlyUnitsBefore === null) {
-        $fallbackBill = $toFloat($quote['finance_inputs']['monthly_bill_rs'] ?? 0);
+        $fallbackBill = $monthlyBillBefore > 0 ? $monthlyBillBefore : $toFloat($quote['finance_inputs']['monthly_bill_rs'] ?? 0);
         $monthlyUnitsBefore = $fallbackBill > 0 ? ($fallbackBill / $tariff) : 0.0;
     }
     $residualUnits = max(0, $monthlyUnitsBefore - $monthlyUnitsSolar);
@@ -141,11 +161,13 @@ function compute_financial_clarity(array $quote, array $calc, array $snapshot): 
     return [
         'gross' => $gross,
         'subsidy' => $subsidy,
-        'monthly_bill_before_rs' => $toFloat($snapshot['monthly_bill_before_rs'] ?? 0),
+        'monthly_bill_before_rs' => $monthlyBillBefore,
         'monthly_units_before' => $monthlyUnitsBefore,
         'unit_rate_rs_per_kwh' => $tariff,
         'annual_generation_kwh_per_kw' => $annualGeneration,
-        'capacity_kwp' => $capacity,
+        'capacity_kwp' => $kwpTotal,
+        'capacity_main_kwp' => $kwpMain,
+        'capacity_complimentary_kwp' => $kwpComp,
         'monthly_units_solar' => $monthlyUnitsSolar,
         'residual_bill' => $residualBill,
         'margin_amount_rs' => $marginAmount,
