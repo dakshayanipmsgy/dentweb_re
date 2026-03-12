@@ -341,7 +341,9 @@ foreach ($quoteItems as $quoteItem) {
             }
             $quotationSeenComponentIds[$componentId] = true;
             $isCuttable = !empty($component['is_cuttable']);
-            $onHand = documents_inventory_compute_on_hand($stockSnapshot, $componentId, '', $isCuttable);
+            $onHand = $isCuttable
+                ? documents_inventory_compute_on_hand($stockSnapshot, $componentId, '', true)
+                : 0;
             $item = [
                 'packing_line_id' => '',
                 'component_id' => $componentId,
@@ -352,7 +354,7 @@ foreach ($quoteItems as $quoteItem) {
                 'pending_ft' => 0,
                 'pending_wp' => 0,
                 'fulfilled' => false,
-                'status' => $onHand > 0 ? 'Ready (in stock)' : 'Low/0 stock',
+                'status' => $isCuttable ? ($onHand > 0 ? 'Ready (in stock)' : 'Low/0 stock') : '',
                 'on_hand' => $onHand,
                 'has_variants' => !empty($component['has_variants']),
                 'is_cuttable' => $isCuttable,
@@ -382,7 +384,9 @@ foreach ($quoteItems as $quoteItem) {
     }
     $quotationSeenComponentIds[$componentId] = true;
     $isCuttable = !empty($component['is_cuttable']);
-    $onHand = documents_inventory_compute_on_hand($stockSnapshot, $componentId, '', $isCuttable);
+    $onHand = $isCuttable
+        ? documents_inventory_compute_on_hand($stockSnapshot, $componentId, '', true)
+        : 0;
     $item = [
         'packing_line_id' => '',
         'component_id' => $componentId,
@@ -393,7 +397,7 @@ foreach ($quoteItems as $quoteItem) {
         'pending_ft' => 0,
         'pending_wp' => 0,
         'fulfilled' => false,
-        'status' => $onHand > 0 ? 'Ready (in stock)' : 'Low/0 stock',
+        'status' => $isCuttable ? ($onHand > 0 ? 'Ready (in stock)' : 'Low/0 stock') : '',
         'on_hand' => $onHand,
         'has_variants' => !empty($component['has_variants']),
         'is_cuttable' => $isCuttable,
@@ -1217,14 +1221,14 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <div id="quotation-tree">
 <?php foreach ($quotationGroups as $group): ?>
 <details open><summary><strong><?= htmlspecialchars((string) ($group['name'] ?? 'Group'), ENT_QUOTES) ?></strong></summary>
-<?php foreach ((array) ($group['items'] ?? []) as $item): $statusClass = ($item['status'] === 'Fulfilled') ? 'done' : (($item['on_hand'] > 0) ? 'ok' : 'bad'); ?>
-<div class="tree-item quotation-tree-item" data-stock="<?= htmlspecialchars((string) ((float) ($item['on_hand'] ?? 0)), ENT_QUOTES) ?>">
+<?php foreach ((array) ($group['items'] ?? []) as $item): $showStock = !empty($item['is_cuttable']); $statusClass = ($item['status'] === 'Fulfilled') ? 'done' : (($item['on_hand'] > 0) ? 'ok' : 'bad'); ?>
+<div class="tree-item quotation-tree-item" data-stock="<?= htmlspecialchars((string) (($showStock ? (float) ($item['on_hand'] ?? 0) : 0.0)), ENT_QUOTES) ?>" data-stock-tracked="<?= $showStock ? '1' : '0' ?>">
 <div class="tree-head"><div>
 <div><strong><?= htmlspecialchars((string) ($item['component_name'] ?? ''), ENT_QUOTES) ?></strong></div>
-<div class="small muted"><?= htmlspecialchars((string) ($item['pending_text'] ?? ''), ENT_QUOTES) ?> · Stock: <?= htmlspecialchars((string) round((float) ($item['on_hand'] ?? 0), 2), ENT_QUOTES) ?> <?= !empty($item['is_cuttable']) ? 'ft' : 'qty' ?></div>
+<div class="small muted"><?= htmlspecialchars((string) ($item['pending_text'] ?? ''), ENT_QUOTES) ?><?php if ($showStock): ?> · Stock: <?= htmlspecialchars((string) round((float) ($item['on_hand'] ?? 0), 2), ENT_QUOTES) ?> ft<?php endif; ?></div>
 <?php if ((string) ($item['hint'] ?? '') !== ''): ?><div class="small muted"><?= htmlspecialchars((string) ($item['hint'] ?? ''), ENT_QUOTES) ?></div><?php endif; ?>
 </div>
-<div class="row-actions"><span class="pill <?= $statusClass ?>"><?= htmlspecialchars((string) ($item['status'] ?? ''), ENT_QUOTES) ?></span><?php if ($editable): ?><button type="button" class="btn secondary add-quotation-line" data-payload='<?= htmlspecialchars(json_encode($item, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>'>+ Add to DC</button><?php endif; ?></div>
+<div class="row-actions"><?php if ($showStock): ?><span class="pill <?= $statusClass ?>"><?= htmlspecialchars((string) ($item['status'] ?? ''), ENT_QUOTES) ?></span><?php endif; ?><?php if ($editable): ?><button type="button" class="btn secondary add-quotation-line" data-payload='<?= htmlspecialchars(json_encode($item, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>'>+ Add to DC</button><?php endif; ?></div>
 </div></div>
 <?php endforeach; ?>
 </details>
@@ -1253,7 +1257,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <h3>Quotation Items (Builder)</h3>
 
 <table id="dc-lines-quotation"><thead><tr><th style="width:5%">Sr.</th><th style="width:44%">Components</th><th style="width:10%">HSN</th><th style="width:16%">Quantity / pieces</th><th style="width:15%">length</th><th style="width:10%">Actions</th></tr></thead><tbody>
-<?php foreach ((array) $quotationBuilderLines as $line): if (!is_array($line)) { continue; } $componentId=(string)($line['component_id']??''); $variantId=(string)($line['variant_id']??''); $isCuttable=!empty($line['is_cuttable_snapshot']); $lineStock=documents_inventory_compute_on_hand($stockSnapshot,$componentId,$variantId,$isCuttable); ?>
+<?php foreach ((array) $quotationBuilderLines as $line): if (!is_array($line)) { continue; } $componentId=(string)($line['component_id']??''); $variantId=(string)($line['variant_id']??''); $isCuttable=!empty($line['is_cuttable_snapshot']); $lineStock=$isCuttable?documents_inventory_compute_on_hand($stockSnapshot,$componentId,$variantId,true):0; ?>
 <tr class="dc-line-row">
 <td class="sr-col"></td>
 <td>
@@ -1263,9 +1267,9 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <select name="line_component_id[]" class="component-select" <?= $editable ? '' : 'disabled' ?>>
 <option value="">Select</option><?php foreach ($componentClientMap as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($component['id'] ?? ''))===$componentId?'selected':'' ?>><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?>
 </select>
-<select name="line_variant_id[]" class="variant-select" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>><option value="">N/A</option><?php foreach ((array) ($variantsByComponent[$componentId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variant['id'] ?? ''))===$variantId?'selected':'' ?>><?= htmlspecialchars((string) ($variant['name'] ?? ''), ENT_QUOTES) ?><?= !empty($variant['archived']) ? ' (archived)' : '' ?> — Stock: <?= htmlspecialchars((string) round((float) ($variant['stock'] ?? 0), 2), ENT_QUOTES) ?></option><?php endforeach; ?></select>
+<select name="line_variant_id[]" class="variant-select" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>><option value="">N/A</option><?php foreach ((array) ($variantsByComponent[$componentId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variant['id'] ?? ''))===$variantId?'selected':'' ?>><?= htmlspecialchars((string) ($variant['name'] ?? ''), ENT_QUOTES) ?><?= !empty($variant['archived']) ? ' (archived)' : '' ?><?= $isCuttable ? ' — Stock: ' . htmlspecialchars((string) round((float) ($variant['stock'] ?? 0), 2), ENT_QUOTES) : '' ?></option><?php endforeach; ?></select>
 <input name="line_notes[]" placeholder="Description / notes" value="<?= htmlspecialchars((string) ($line['notes'] ?? ''), ENT_QUOTES) ?>" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>>
-<div class="small muted stock-hint" style="margin-top:6px">Stock: <?= htmlspecialchars((string) round($lineStock, 2), ENT_QUOTES) ?><?= $isCuttable ? ' ft' : '' ?><?= $lineStock <= 0 ? ' (will go negative)' : '' ?></div>
+<div class="small muted stock-hint" style="margin-top:6px"><?php if ($isCuttable): ?>Stock: <?= htmlspecialchars((string) round($lineStock, 2), ENT_QUOTES) ?> ft<?= $lineStock <= 0 ? ' (will go negative)' : '' ?><?php endif; ?></div>
 <div class="small" style="margin-top:6px;color:#b91c1c"><?php foreach ((array) ($line['line_errors'] ?? []) as $lineError): ?><div><?= htmlspecialchars((string) $lineError, ENT_QUOTES) ?></div><?php endforeach; ?></div>
 <div class="cuttable-panel small" style="margin-top:6px"></div>
 </td>
@@ -1291,7 +1295,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <?php if ($editable): ?><p><button type="button" id="add-extra-line" class="btn secondary">+ Add Line</button></p><?php endif; ?>
 
 <table id="dc-lines-extra"><thead><tr><th style="width:5%">Sr.</th><th style="width:44%">Components</th><th style="width:10%">HSN</th><th style="width:16%">Quantity / pieces</th><th style="width:15%">length</th><th style="width:10%">Actions</th></tr></thead><tbody>
-<?php foreach ((array) $extraBuilderLines as $line): if (!is_array($line)) { continue; } $componentId=(string)($line['component_id']??''); $variantId=(string)($line['variant_id']??''); $isCuttable=!empty($line['is_cuttable_snapshot']); $lineStock=documents_inventory_compute_on_hand($stockSnapshot,$componentId,$variantId,$isCuttable); ?>
+<?php foreach ((array) $extraBuilderLines as $line): if (!is_array($line)) { continue; } $componentId=(string)($line['component_id']??''); $variantId=(string)($line['variant_id']??''); $isCuttable=!empty($line['is_cuttable_snapshot']); $lineStock=$isCuttable?documents_inventory_compute_on_hand($stockSnapshot,$componentId,$variantId,true):0; ?>
 <tr class="dc-line-row">
 <td class="sr-col"></td>
 <td>
@@ -1301,9 +1305,9 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <select name="line_component_id[]" class="component-select" <?= $editable ? '' : 'disabled' ?>>
 <option value="">Select</option><?php foreach ($componentClientMap as $component): ?><option value="<?= htmlspecialchars((string) ($component['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($component['id'] ?? ''))===$componentId?'selected':'' ?>><?= htmlspecialchars((string) ($component['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?>
 </select>
-<select name="line_variant_id[]" class="variant-select" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>><option value="">N/A</option><?php foreach ((array) ($variantsByComponent[$componentId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variant['id'] ?? ''))===$variantId?'selected':'' ?>><?= htmlspecialchars((string) ($variant['name'] ?? ''), ENT_QUOTES) ?><?= !empty($variant['archived']) ? ' (archived)' : '' ?> — Stock: <?= htmlspecialchars((string) round((float) ($variant['stock'] ?? 0), 2), ENT_QUOTES) ?></option><?php endforeach; ?></select>
+<select name="line_variant_id[]" class="variant-select" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>><option value="">N/A</option><?php foreach ((array) ($variantsByComponent[$componentId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string) ($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($variant['id'] ?? ''))===$variantId?'selected':'' ?>><?= htmlspecialchars((string) ($variant['name'] ?? ''), ENT_QUOTES) ?><?= !empty($variant['archived']) ? ' (archived)' : '' ?><?= $isCuttable ? ' — Stock: ' . htmlspecialchars((string) round((float) ($variant['stock'] ?? 0), 2), ENT_QUOTES) : '' ?></option><?php endforeach; ?></select>
 <input name="line_notes[]" placeholder="Description / notes" value="<?= htmlspecialchars((string) ($line['notes'] ?? ''), ENT_QUOTES) ?>" style="margin-top:6px" <?= $editable ? '' : 'disabled' ?>>
-<div class="small muted stock-hint" style="margin-top:6px">Stock: <?= htmlspecialchars((string) round($lineStock, 2), ENT_QUOTES) ?><?= $isCuttable ? ' ft' : '' ?><?= $lineStock <= 0 ? ' (will go negative)' : '' ?></div>
+<div class="small muted stock-hint" style="margin-top:6px"><?php if ($isCuttable): ?>Stock: <?= htmlspecialchars((string) round($lineStock, 2), ENT_QUOTES) ?> ft<?= $lineStock <= 0 ? ' (will go negative)' : '' ?><?php endif; ?></div>
 <div class="small" style="margin-top:6px;color:#b91c1c"><?php foreach ((array) ($line['line_errors'] ?? []) as $lineError): ?><div><?= htmlspecialchars((string) $lineError, ENT_QUOTES) ?></div><?php endforeach; ?></div>
 <div class="cuttable-panel small" style="margin-top:6px"></div>
 </td>
@@ -1554,7 +1558,7 @@ const wireRow = (tr) => {
       (VARIANTS[cid] || []).forEach(v => {
         const o = document.createElement('option');
         o.value = v.id;
-        o.textContent = `${v.name}${v.archived ? ' (archived)' : ''} — Stock: ${Number(v.stock||0).toFixed(2)}`;
+        o.textContent = `${v.name}${v.archived ? ' (archived)' : ''}${isCuttable ? ` — Stock: ${Number(v.stock||0).toFixed(2)}` : ''}`;
         variant.appendChild(o);
       });
       variant.disabled = false;
@@ -1639,7 +1643,8 @@ if (editable) {
     const only = e.target.checked;
     document.querySelectorAll('.quotation-tree-item').forEach(el => {
       const stock = Number(el.getAttribute('data-stock') || '0');
-      el.style.display = (only && stock <= 0) ? 'none' : '';
+      const tracked = el.getAttribute('data-stock-tracked') === '1';
+      el.style.display = (only && tracked && stock <= 0) ? 'none' : '';
     });
   });
 
