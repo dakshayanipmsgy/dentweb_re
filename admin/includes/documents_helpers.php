@@ -979,6 +979,9 @@ function documents_quote_defaults(): array
         'system_type' => 'Ongrid',
         'capacity_kwp' => '',
         'system_capacity_kwp' => 0,
+        'system_capacity_kwp_main' => 0,
+        'system_capacity_kwp_complimentary' => null,
+        'system_capacity_kwp_total' => 0,
         'project_summary_line' => '',
         'valid_until' => '',
         'pricing_mode' => 'solar_split_70_30',
@@ -3157,7 +3160,25 @@ function documents_quote_prepare(array $quote): array
     $quote['status'] = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
     $quote['workflow'] = array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
     $quote['capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? ''));
-    $quote['system_capacity_kwp'] = max(0, (float) ($quote['system_capacity_kwp'] ?? $quote['capacity_kwp'] ?? 0));
+    $legacyCapacity = max(0, (float) ($quote['system_capacity_kwp'] ?? $quote['capacity_kwp'] ?? 0));
+    $mainCapacity = max(0, (float) ($quote['system_capacity_kwp_main'] ?? 0));
+    if ($mainCapacity <= 0) {
+        $mainCapacity = $legacyCapacity;
+    }
+    $complimentaryRaw = $quote['system_capacity_kwp_complimentary'] ?? null;
+    $complimentaryCapacity = null;
+    if (!($complimentaryRaw === null || (is_string($complimentaryRaw) && trim($complimentaryRaw) === ''))) {
+        $complimentaryCapacity = max(0, (float) $complimentaryRaw);
+        if ($complimentaryCapacity <= 0) {
+            $complimentaryCapacity = null;
+        }
+    }
+    $totalCapacity = $mainCapacity + (float) ($complimentaryCapacity ?? 0);
+    $quote['system_capacity_kwp_main'] = $mainCapacity;
+    $quote['system_capacity_kwp_complimentary'] = $complimentaryCapacity;
+    $quote['system_capacity_kwp_total'] = $totalCapacity;
+    $quote['system_capacity_kwp'] = $totalCapacity;
+    $quote['capacity_kwp'] = (string) $totalCapacity;
     $quote['quote_items'] = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
     $quote['tax_profile_id'] = safe_text((string) ($quote['tax_profile_id'] ?? ''));
     $quote['gst_mode_snapshot'] = safe_text((string) ($quote['gst_mode_snapshot'] ?? ''));
@@ -4006,6 +4027,13 @@ function documents_packing_required_line_defaults(): array
 
 function documents_quote_system_capacity_kwp(array $quote): float
 {
+    $main = max(0, (float) ($quote['system_capacity_kwp_main'] ?? 0));
+    $complimentary = max(0, (float) ($quote['system_capacity_kwp_complimentary'] ?? 0));
+    $total = $main + $complimentary;
+    if ($total > 0) {
+        return $total;
+    }
+
     $primary = (float) ($quote['system_capacity_kwp'] ?? 0);
     if ($primary > 0) {
         return $primary;
