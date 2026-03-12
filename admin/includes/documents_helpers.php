@@ -982,6 +982,7 @@ function documents_quote_defaults(): array
         'capacity_kwp' => '',
         'system_capacity_kwp' => 0,
         'project_summary_line' => '',
+        'quotation_date' => '',
         'valid_until' => '',
         'pricing_mode' => 'solar_split_70_30',
         'tax_profile_id' => '',
