@@ -228,7 +228,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $capacity = safe_text($_POST['capacity_kwp'] ?? '');
-        if ($capacity === '') {
+        $submittedMainSolarKwpRaw = trim((string) ($_POST['main_solar_kwp'] ?? ''));
+        $submittedComplimentaryRaw = trim((string) ($_POST['complimentary_non_dcr_kwp'] ?? ''));
+        $submittedMainSolarKwp = safe_text($submittedMainSolarKwpRaw);
+        $existingHasMainSolar = $existing !== null && safe_text((string) ($existing['main_solar_kwp'] ?? '')) !== '';
+        $shouldUseSplitCapacity = $submittedMainSolarKwp !== '' || $existingHasMainSolar;
+
+        if ($shouldUseSplitCapacity) {
+            $mainSolar = (float) $submittedMainSolarKwp;
+            $complimentarySolar = $submittedComplimentaryRaw !== '' ? (float) $submittedComplimentaryRaw : 0.0;
+            $totalCapacity = $mainSolar + $complimentarySolar;
+            if ($mainSolar <= 0) {
+                $redirectWith('error', 'Main Solar Size (kWp) must be greater than 0.');
+            }
+            if ($totalCapacity <= 0) {
+                $redirectWith('error', 'Total System Capacity (kWp) must be greater than 0.');
+            }
+            $capacity = (string) $totalCapacity;
+        } elseif ($capacity === '') {
             $redirectWith('error', 'Capacity kWp is required.');
         }
 
@@ -340,8 +357,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         $quote['system_type'] = safe_text($_POST['system_type'] ?? 'Ongrid');
-        $quote['capacity_kwp'] = $capacity;
-        $quote['system_capacity_kwp'] = max(0, (float) $capacity);
+        if ($shouldUseSplitCapacity) {
+            $mainSolar = (float) $submittedMainSolarKwp;
+            $complimentarySolar = $submittedComplimentaryRaw !== '' ? (float) $submittedComplimentaryRaw : 0.0;
+            $totalCapacity = $mainSolar + $complimentarySolar;
+            $quote['main_solar_kwp'] = (string) $mainSolar;
+            $quote['complimentary_non_dcr_kwp'] = (string) $complimentarySolar;
+            $quote['capacity_kwp'] = (string) $totalCapacity;
+            $quote['system_capacity_kwp'] = max(0, $totalCapacity);
+        } else {
+            $quote['capacity_kwp'] = $capacity;
+            $quote['system_capacity_kwp'] = max(0, (float) $capacity);
+        }
         $quote['project_summary_line'] = safe_text($_POST['project_summary_line'] ?? '');
         $quote['valid_until'] = safe_text($_POST['valid_until'] ?? '');
         $quote['pricing_mode'] = $pricingMode;
@@ -890,7 +917,16 @@ if ($lookup !== null) {
 <div><label>Meter Number</label><input name="meter_number" value="<?= htmlspecialchars((string)(($editing['meter_number'] !== '') ? $editing['meter_number'] : ($quoteSnapshot['meter_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Meter Serial Number</label><input name="meter_serial_number" value="<?= htmlspecialchars((string)(($editing['meter_serial_number'] !== '') ? $editing['meter_serial_number'] : ($quoteSnapshot['meter_serial_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>System Type</label><select name="system_type"><?php foreach (['Ongrid','Hybrid','Offgrid','Product'] as $t): ?><option value="<?= $t ?>" <?= $editing['system_type']===$t?'selected':'' ?>><?= $t ?></option><?php endforeach; ?></select></div>
-<div><label>Capacity kWp</label><input name="capacity_kwp" required value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>"></div>
+<?php $hasMainSolarOnQuote = safe_text((string)($editing['main_solar_kwp'] ?? '')) !== ''; ?>
+<div id="splitCapacityFields" style="display:<?= ($editing['id'] === '' || $hasMainSolarOnQuote) ? 'block' : 'none' ?>;grid-column:span 2">
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+        <div><label>Main Solar Size (kWp)</label><input type="number" step="0.01" min="0" name="main_solar_kwp" id="mainSolarKwpInput" value="<?= htmlspecialchars((string)($editing['main_solar_kwp'] ?? ''), ENT_QUOTES) ?>" <?= ($editing['id'] === '' || $hasMainSolarOnQuote) ? 'required' : '' ?>></div>
+        <div><label>Complimentary Non-DCR Solar Size (kWp)</label><input type="number" step="0.01" min="0" name="complimentary_non_dcr_kwp" id="complimentaryNonDcrKwpInput" value="<?= htmlspecialchars((string)($editing['complimentary_non_dcr_kwp'] ?? ''), ENT_QUOTES) ?>"></div>
+        <div><label>Total System Capacity (kWp)</label><input type="number" step="0.01" min="0" id="totalSystemCapacityDisplay" readonly value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>"></div>
+    </div>
+</div>
+<div id="legacyCapacityField" style="display:<?= ($editing['id'] === '' || $hasMainSolarOnQuote) ? 'none' : 'block' ?>"><label>Capacity kWp</label><input name="capacity_kwp" <?= ($editing['id'] === '' || $hasMainSolarOnQuote) ? '' : 'required' ?> value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>"></div>
+<input type="hidden" name="capacity_kwp" id="computedCapacityKwp" value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>">
 <div><label>Valid Until</label><input type="date" name="valid_until" value="<?= htmlspecialchars((string)$editing['valid_until'], ENT_QUOTES) ?>"></div>
 <div><label>Cover note paragraph</label><textarea name="cover_note_text"><?= htmlspecialchars((string)($editing['cover_note_text'] ?: ($quoteDefaults['defaults']['cover_note_template'] ?? '')), ENT_QUOTES) ?></textarea></div>
 <div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div><div><label>Total system price (including GST) ₹</label><input type="number" step="0.01" required name="system_total_incl_gst_rs" value="<?= htmlspecialchars((string)($editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
@@ -1139,6 +1175,50 @@ document.querySelectorAll('#structuredItemsTable tbody tr').forEach((tr) => sync
             hex.value = initial;
         }
     });
+})();
+
+(function () {
+    const quoteForm = document.querySelector('form input[name="action"][value="save_quote"]')?.form;
+    if (!quoteForm) return;
+
+    const quoteIdInput = quoteForm.querySelector('[name="quote_id"]');
+    const mainInput = quoteForm.querySelector('#mainSolarKwpInput');
+    const complimentaryInput = quoteForm.querySelector('#complimentaryNonDcrKwpInput');
+    const totalDisplay = quoteForm.querySelector('#totalSystemCapacityDisplay');
+    const hiddenCapacity = quoteForm.querySelector('#computedCapacityKwp');
+    const legacyWrap = quoteForm.querySelector('#legacyCapacityField');
+    const splitWrap = quoteForm.querySelector('#splitCapacityFields');
+    const legacyCapacityInput = legacyWrap ? legacyWrap.querySelector('input[name="capacity_kwp"]') : null;
+
+    const isNewQuote = !quoteIdInput || String(quoteIdInput.value || '').trim() === '';
+    const hasSplitData = mainInput && String(mainInput.value || '').trim() !== '';
+
+    const parseNum = (value) => {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : 0;
+    };
+
+    const enableSplitMode = isNewQuote || hasSplitData;
+    if (splitWrap) splitWrap.style.display = enableSplitMode ? 'block' : 'none';
+    if (legacyWrap) legacyWrap.style.display = enableSplitMode ? 'none' : 'block';
+    if (mainInput) mainInput.required = enableSplitMode;
+
+    const syncCapacity = () => {
+        if (!hiddenCapacity) return;
+        if (enableSplitMode) {
+            const total = parseNum(mainInput?.value || 0) + parseNum(complimentaryInput?.value || 0);
+            const formatted = (Math.round(total * 100) / 100).toString();
+            hiddenCapacity.value = formatted;
+            if (totalDisplay) totalDisplay.value = formatted;
+        } else if (legacyCapacityInput) {
+            hiddenCapacity.value = String(legacyCapacityInput.value || '').trim();
+        }
+    };
+
+    mainInput?.addEventListener('input', syncCapacity);
+    complimentaryInput?.addEventListener('input', syncCapacity);
+    legacyCapacityInput?.addEventListener('input', syncCapacity);
+    syncCapacity();
 })();
 
 window.quoteFormAutofillConfig = {
