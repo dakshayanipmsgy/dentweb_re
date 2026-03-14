@@ -570,7 +570,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'seq_start' => $seqStart,
             'seq_current' => $seqCurrent,
             'active' => isset($_POST['active']),
+            'is_active' => isset($_POST['active']),
             'archived_flag' => false,
+            'deleted_at' => '',
+            'deleted_by' => ['type' => '', 'id' => '', 'name' => ''],
         ];
         $payload['updated_at'] = date('c');
 
@@ -598,6 +601,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($action === 'archive_numbering_rule') {
                 $rule['archived_flag'] = true;
                 $rule['active'] = false;
+                $rule['is_active'] = false;
+                $rule['deleted_at'] = date('c');
+                $rule['deleted_by'] = [
+                    'type' => (string) ($user['role_name'] ?? 'admin'),
+                    'id' => (string) ($user['id'] ?? ''),
+                    'name' => (string) ($user['name'] ?? 'Admin'),
+                ];
                 break;
             }
 
@@ -621,6 +631,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $rule['seq_start'] = max(1, (int) ($_POST['seq_start'] ?? 1));
             $rule['seq_current'] = max(1, (int) ($_POST['seq_current'] ?? 1));
             $rule['active'] = isset($_POST['active']);
+            $rule['is_active'] = isset($_POST['active']);
+            if ($rule['is_active']) {
+                $rule['archived_flag'] = false;
+            }
         }
         unset($rule);
 
@@ -2642,6 +2656,18 @@ $company = load_company_profile();
 $numbering = json_load($numberingPath, documents_numbering_defaults());
 $numbering = array_merge(documents_numbering_defaults(), is_array($numbering) ? $numbering : []);
 $numbering['rules'] = is_array($numbering['rules']) ? $numbering['rules'] : [];
+$activeNumberingRules = [];
+$archivedNumberingRules = [];
+foreach ($numbering['rules'] as $rule) {
+    if (!is_array($rule)) {
+        continue;
+    }
+    if (documents_numbering_rule_is_active($rule)) {
+        $activeNumberingRules[] = $rule;
+    } else {
+        $archivedNumberingRules[] = $rule;
+    }
+}
 
 $templates = json_load($templatePath, []);
 $templates = is_array($templates) ? $templates : [];
@@ -4124,11 +4150,10 @@ usort($archivedRows, static function (array $a, array $b): int {
             <tr><th>Type</th><th>Segment</th><th>Prefix</th><th>Format</th><th>Digits</th><th>Start</th><th>Current</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
-            <?php if ($numbering['rules'] === []): ?>
+            <?php if ($activeNumberingRules === []): ?>
               <tr><td colspan="9">No numbering rules added yet.</td></tr>
             <?php endif; ?>
-            <?php foreach ($numbering['rules'] as $rule): ?>
-              <?php if (!is_array($rule) || !empty($rule['archived_flag'])) { continue; } ?>
+            <?php foreach ($activeNumberingRules as $rule): ?>
               <tr>
                 <form method="post">
                   <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
@@ -4140,7 +4165,7 @@ usort($archivedRows, static function (array $a, array $b): int {
                   <td><input type="number" name="seq_digits" min="2" max="6" value="<?= (int) ($rule['seq_digits'] ?? 4) ?>" /></td>
                   <td><input type="number" name="seq_start" min="1" value="<?= (int) ($rule['seq_start'] ?? 1) ?>" /></td>
                   <td><input type="number" name="seq_current" min="1" value="<?= (int) ($rule['seq_current'] ?? 1) ?>" /></td>
-                  <td><label><input type="checkbox" name="active" <?= !empty($rule['active']) ? 'checked' : '' ?> /> Active</label></td>
+                  <td><label><input type="checkbox" name="active" <?= documents_numbering_rule_is_active($rule) ? 'checked' : '' ?> /> Active</label></td>
                   <td>
                     <button class="btn" type="submit" name="action" value="update_numbering_rule">Save</button>
                     <button class="btn secondary" type="submit" name="action" value="reset_counter">Reset Counter</button>
@@ -4166,6 +4191,24 @@ usort($archivedRows, static function (array $a, array $b): int {
           <div><label>Status</label><label><input type="checkbox" name="active" checked /> Active</label></div>
           <div><button class="btn" type="submit">Save Numbering Rule</button></div>
         </form>
+
+        <?php if ($archivedNumberingRules !== []): ?>
+          <h3>Archived rules</h3>
+          <table>
+            <thead><tr><th>Type</th><th>Segment</th><th>Prefix</th><th>Deleted at</th><th>Deleted by</th></tr></thead>
+            <tbody>
+              <?php foreach ($archivedNumberingRules as $rule): ?>
+                <tr>
+                  <td><?= htmlspecialchars((string) ($rule['doc_type'] ?? ''), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) ($rule['segment'] ?? ''), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) ($rule['prefix'] ?? ''), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) ($rule['deleted_at'] ?? ''), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) (($rule['deleted_by']['name'] ?? '') ?: ($rule['deleted_by']['id'] ?? '')), ENT_QUOTES) ?></td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        <?php endif; ?>
       </section>
     <?php endif; ?>
 

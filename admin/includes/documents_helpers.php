@@ -712,7 +712,7 @@ function documents_ensure_numbering_rules_for_proforma_invoice(): void
                 if (!is_array($rule)) {
                     continue;
                 }
-                if (($rule['doc_type'] ?? '') === $entry['doc_type'] && ($rule['segment'] ?? '') === $segment && !($rule['archived_flag'] ?? false) && ($rule['active'] ?? false)) {
+                if (($rule['doc_type'] ?? '') === $entry['doc_type'] && ($rule['segment'] ?? '') === $segment && documents_numbering_rule_is_active(is_array($rule) ? $rule : [])) {
                     $exists = true;
                     break;
                 }
@@ -731,6 +731,7 @@ function documents_ensure_numbering_rules_for_proforma_invoice(): void
                 'seq_current' => 1,
                 'seq_digits' => 4,
                 'active' => true,
+                'is_active' => true,
                 'archived_flag' => false,
                 'notes' => 'Auto-seeded by workflow.',
                 'created_at' => date('c'),
@@ -791,6 +792,25 @@ function documents_numbering_defaults(): array
         'rules' => [],
         'updated_at' => '',
     ];
+}
+
+function documents_numbering_rule_is_active(array $rule): bool
+{
+    if (($rule['archived_flag'] ?? false) || ($rule['is_active'] ?? true) === false) {
+        return false;
+    }
+    return (bool) ($rule['active'] ?? true);
+}
+
+function documents_first_non_empty_string(array $sources): string
+{
+    foreach ($sources as $value) {
+        $text = safe_text((string) $value);
+        if ($text !== '') {
+            return $text;
+        }
+    }
+    return '';
 }
 
 function documents_template_starters(): array
@@ -1733,7 +1753,16 @@ function documents_get_challan(string $id): ?array
 
     $challan = array_merge(documents_challan_defaults(), $row);
     $challan['dc_id'] = (string) ($challan['dc_id'] ?: $challan['id']);
-    $challan['dc_number'] = (string) ($challan['dc_number'] ?: $challan['challan_no']);
+    $resolvedDcNumber = documents_first_non_empty_string([
+        $challan['dc_number'] ?? '',
+        $challan['challan_no'] ?? '',
+        $row['dc_no'] ?? '',
+        $row['document_number'] ?? '',
+    ]);
+    $challan['dc_number'] = $resolvedDcNumber;
+    if (safe_text((string) ($challan['challan_no'] ?? '')) === '') {
+        $challan['challan_no'] = $resolvedDcNumber;
+    }
     $challan['quote_id'] = (string) ($challan['quote_id'] ?: $challan['linked_quote_id']);
     $challan['customer_mobile'] = (string) ($challan['customer_mobile'] ?: ($challan['customer_snapshot']['mobile'] ?? ''));
     $challan['customer_name_snapshot'] = (string) ($challan['customer_name_snapshot'] ?: ($challan['customer_snapshot']['name'] ?? ''));
@@ -1750,6 +1779,12 @@ function documents_get_challan(string $id): ?array
     if ((string) ($row['status'] ?? '') === 'Archived') { $challan['status'] = 'archived'; }
     $challan['lines'] = documents_migrate_challan_items_to_lines($challan);
     $challan['items'] = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
+    if ($resolvedDcNumber !== '' && (
+        safe_text((string) ($row['dc_number'] ?? '')) === ''
+        || safe_text((string) ($row['challan_no'] ?? '')) === ''
+    )) {
+        json_save($path, $challan);
+    }
     return $challan;
 }
 
@@ -2585,6 +2620,15 @@ function documents_get_quote(string $id): ?array
         return null;
     }
     $quote = documents_quote_prepare($row);
+    $resolvedQuoteNo = documents_first_non_empty_string([
+        $quote['quote_no'] ?? '',
+        $row['quotation_number'] ?? '',
+        $row['document_number'] ?? '',
+    ]);
+    if ($resolvedQuoteNo !== '' && safe_text((string) ($quote['quote_no'] ?? '')) === '') {
+        $quote['quote_no'] = $resolvedQuoteNo;
+        json_save($path, $quote);
+    }
     $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
     $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
     return $quote;
@@ -2622,6 +2666,15 @@ function documents_get_proforma(string $id): ?array
         return null;
     }
     $doc = array_merge(documents_proforma_defaults(), $row);
+    $resolvedProformaNo = documents_first_non_empty_string([
+        $doc['proforma_no'] ?? '',
+        $row['proforma_number'] ?? '',
+        $row['document_number'] ?? '',
+    ]);
+    if ($resolvedProformaNo !== '' && safe_text((string) ($doc['proforma_no'] ?? '')) === '') {
+        $doc['proforma_no'] = $resolvedProformaNo;
+        json_save($path, $doc);
+    }
     $doc['customer_snapshot'] = array_merge(documents_customer_snapshot_defaults(), is_array($doc['customer_snapshot'] ?? null) ? $doc['customer_snapshot'] : []);
     return $doc;
 }
@@ -2650,6 +2703,15 @@ function documents_get_invoice(string $id): ?array
         return null;
     }
     $doc = array_merge(documents_invoice_defaults(), $row);
+    $resolvedInvoiceNo = documents_first_non_empty_string([
+        $doc['invoice_no'] ?? '',
+        $row['invoice_number'] ?? '',
+        $row['document_number'] ?? '',
+    ]);
+    if ($resolvedInvoiceNo !== '' && safe_text((string) ($doc['invoice_no'] ?? '')) === '') {
+        $doc['invoice_no'] = $resolvedInvoiceNo;
+        json_save($path, $doc);
+    }
     $doc['customer_snapshot'] = array_merge(documents_customer_snapshot_defaults(), is_array($doc['customer_snapshot'] ?? null) ? $doc['customer_snapshot'] : []);
     return $doc;
 }
@@ -2950,7 +3012,7 @@ function documents_generate_document_number(string $docType, string $segment): a
         if (!is_array($rule)) {
             continue;
         }
-        if (($rule['archived_flag'] ?? false) || !($rule['active'] ?? false)) {
+        if (!documents_numbering_rule_is_active(is_array($rule) ? $rule : [])) {
             continue;
         }
         if (($rule['doc_type'] ?? '') !== $docType || ($rule['segment'] ?? '') !== $segment) {
