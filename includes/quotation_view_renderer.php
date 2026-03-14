@@ -258,7 +258,22 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
         ];
     }
 
-    $coverNote = trim((string) ($quote['cover_note_text'] ?? '')) ?: trim((string) ($quoteDefaults['defaults']['cover_note_template'] ?? ''));
+    $coverNoteSnapshot = trim((string) ($quote['cover_notes_html_snapshot'] ?? ''));
+    if ($coverNoteSnapshot === '') {
+        $coverNoteSnapshot = trim((string) ($ann['cover_notes'] ?? ''));
+    }
+    $coverNoteLiveTemplate = '';
+    if ($coverNoteSnapshot === '' && $templateSetId !== '') {
+        $templateBlocks = documents_get_template_blocks();
+        $templateEntry = $templateBlocks[$templateSetId] ?? null;
+        if (is_array($templateEntry) && is_array($templateEntry['blocks'] ?? null)) {
+            $coverNoteLiveTemplate = trim((string) ($templateEntry['blocks']['cover_notes'] ?? ''));
+        }
+    }
+    $coverNote = $coverNoteSnapshot
+        ?: $coverNoteLiveTemplate
+        ?: trim((string) ($quote['cover_note_text'] ?? ''))
+        ?: trim((string) ($quoteDefaults['defaults']['cover_note_template'] ?? ''));
     $specialReq = trim((string) ($quote['special_requests_text'] ?? $quote['special_requests_inclusive'] ?? ''));
 
     $tokens = is_array($quoteDefaults['global']['ui_tokens'] ?? null) ? $quoteDefaults['global']['ui_tokens'] : [];

@@ -1022,6 +1022,7 @@ function documents_quote_defaults(): array
             'net_after_subsidy' => 0,
         ],
         'cover_note_text' => '',
+        'cover_notes_html_snapshot' => '',
         'special_requests_text' => '',
         'special_requests_inclusive' => '',
         'items' => [],
