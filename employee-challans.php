@@ -115,6 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $challan['id'] = 'dc_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
     $challan['challan_no'] = (string) $number['challan_no'];
+    $challan['numbering_rule_id_used'] = (string) ($number['rule_id'] ?? '');
     $challan['status'] = $action === 'issue' ? 'Issued' : 'Draft';
     $challan['segment'] = $segment;
     $challan['template_set_id'] = $templateSetId;

@@ -46,6 +46,41 @@ $redirectDocuments = static function (string $tab, string $type, string $msg, ar
     exit;
 };
 
+$countNumberingRuleUsage = static function (string $ruleId): int {
+    if ($ruleId === '') {
+        return 0;
+    }
+
+    $count = 0;
+    foreach (documents_list_quotes() as $quote) {
+        if ((string) ($quote['numbering_rule_id_used'] ?? '') === $ruleId) {
+            $count++;
+        }
+    }
+    foreach (documents_list_agreements() as $agreement) {
+        if ((string) ($agreement['numbering_rule_id_used'] ?? '') === $ruleId) {
+            $count++;
+        }
+    }
+    foreach (documents_list_challans() as $challan) {
+        if ((string) ($challan['numbering_rule_id_used'] ?? '') === $ruleId) {
+            $count++;
+        }
+    }
+    foreach (documents_list_proformas() as $proforma) {
+        if ((string) ($proforma['numbering_rule_id_used'] ?? '') === $ruleId) {
+            $count++;
+        }
+    }
+    foreach (documents_list_invoices() as $invoice) {
+        if ((string) ($invoice['numbering_rule_id_used'] ?? '') === $ruleId) {
+            $count++;
+        }
+    }
+
+    return $count;
+};
+
 
 $redirectCsvImport = static function (string $type, string $message, array $report = []): void {
     $_SESSION['items_csv_import_report'] = $report;
@@ -340,6 +375,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $agreement = documents_agreement_defaults();
             $agreement['id'] = 'agr_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
             $agreement['agreement_no'] = (string) ($number['agreement_no'] ?? '');
+            $agreement['numbering_rule_id_used'] = (string) ($number['rule_id'] ?? '');
             $agreement['status'] = 'Draft';
             $agreement['template_id'] = $templateId;
             $agreement['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
@@ -443,6 +479,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $challan['id'] = 'dc_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
             $challan['challan_no'] = (string) ($number['challan_no'] ?? '');
+            $challan['numbering_rule_id_used'] = (string) ($number['rule_id'] ?? '');
             $challan['dc_id'] = (string) $challan['id'];
             $challan['dc_number'] = (string) $challan['challan_no'];
             $challan['status'] = 'draft';
@@ -547,8 +584,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'save_numbering_rule') {
         $payload = json_load($numberingPath, documents_numbering_defaults());
-        $payload = array_merge(documents_numbering_defaults(), is_array($payload) ? $payload : []);
-        $payload['rules'] = is_array($payload['rules']) ? $payload['rules'] : [];
+        $payload = documents_numbering_rules_normalize_payload(is_array($payload) ? $payload : []);
 
         $docType = safe_text($_POST['doc_type'] ?? '');
         $segment = safe_text($_POST['segment'] ?? '');
@@ -572,6 +608,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'active' => isset($_POST['active']),
             'is_active' => isset($_POST['active']),
             'archived_flag' => false,
+            'deleted_flag' => false,
             'deleted_at' => '',
             'deleted_by' => ['type' => '', 'id' => '', 'name' => ''],
         ];
@@ -587,8 +624,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'update_numbering_rule' || $action === 'archive_numbering_rule' || $action === 'reset_counter') {
         $payload = json_load($numberingPath, documents_numbering_defaults());
-        $payload = array_merge(documents_numbering_defaults(), is_array($payload) ? $payload : []);
-        $payload['rules'] = is_array($payload['rules']) ? $payload['rules'] : [];
+        $payload = documents_numbering_rules_normalize_payload(is_array($payload) ? $payload : []);
 
         $ruleId = safe_text($_POST['rule_id'] ?? '');
         $found = false;
@@ -600,6 +636,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($action === 'archive_numbering_rule') {
                 $rule['archived_flag'] = true;
+                $rule['deleted_flag'] = true;
                 $rule['active'] = false;
                 $rule['is_active'] = false;
                 $rule['deleted_at'] = date('c');
@@ -650,7 +687,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $msg = 'Numbering rule updated.';
         if ($action === 'archive_numbering_rule') {
-            $msg = 'Numbering rule archived.';
+            $msg = 'Numbering rule deleted for future use. Existing document numbers remain unchanged.';
         } elseif ($action === 'reset_counter') {
             $msg = 'Counter reset to start value.';
         }
@@ -2654,8 +2691,7 @@ unset($_SESSION['items_csv_import_report']);
 $company = load_company_profile();
 
 $numbering = json_load($numberingPath, documents_numbering_defaults());
-$numbering = array_merge(documents_numbering_defaults(), is_array($numbering) ? $numbering : []);
-$numbering['rules'] = is_array($numbering['rules']) ? $numbering['rules'] : [];
+$numbering = documents_numbering_rules_normalize_payload(is_array($numbering) ? $numbering : []);
 $activeNumberingRules = [];
 $archivedNumberingRules = [];
 foreach ($numbering['rules'] as $rule) {
@@ -4154,6 +4190,7 @@ usort($archivedRows, static function (array $a, array $b): int {
               <tr><td colspan="9">No numbering rules added yet.</td></tr>
             <?php endif; ?>
             <?php foreach ($activeNumberingRules as $rule): ?>
+              <?php $ruleUsageCount = $countNumberingRuleUsage((string) ($rule['id'] ?? '')); ?>
               <tr>
                 <form method="post">
                   <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
@@ -4169,7 +4206,8 @@ usort($archivedRows, static function (array $a, array $b): int {
                   <td>
                     <button class="btn" type="submit" name="action" value="update_numbering_rule">Save</button>
                     <button class="btn secondary" type="submit" name="action" value="reset_counter">Reset Counter</button>
-                    <button class="btn warn" type="submit" name="action" value="archive_numbering_rule">Archive</button>
+                    <button class="btn warn" type="submit" name="action" value="archive_numbering_rule" onclick="return confirm('This rule<?= $ruleUsageCount > 0 ? ' has been used before' : '' ?>. Deleting it will stop future use, but existing document numbers will remain unchanged. Continue?');">Delete</button>
+                    <?php if ($ruleUsageCount > 0): ?><div class="muted" style="font-size:11px;margin-top:4px;">Used in <?= (int) $ruleUsageCount ?> document(s).</div><?php endif; ?>
                   </td>
                 </form>
               </tr>
@@ -4193,7 +4231,7 @@ usort($archivedRows, static function (array $a, array $b): int {
         </form>
 
         <?php if ($archivedNumberingRules !== []): ?>
-          <h3>Archived rules</h3>
+          <h3>Deleted rules (historical)</h3>
           <table>
             <thead><tr><th>Type</th><th>Segment</th><th>Prefix</th><th>Deleted at</th><th>Deleted by</th></tr></thead>
             <tbody>
