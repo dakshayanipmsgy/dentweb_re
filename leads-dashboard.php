@@ -180,9 +180,221 @@ function leads_group_duplicate_mobiles(array $leads): array
     });
 }
 
+
+function leads_json_response(array $payload, int $status = 200): void
+{
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload);
+    exit;
+}
+
+function leads_row_classes(array $lead, string $today): string
+{
+    $statusValue = strtolower(trim((string) ($lead['status'] ?? '')));
+    $ratingValue = strtolower(trim((string) ($lead['rating'] ?? '')));
+    $nextFollowupDate = trim((string) ($lead['next_followup_date'] ?? ''));
+    $isConverted = $statusValue === 'converted' || strcasecmp((string) ($lead['converted_flag'] ?? ''), 'yes') === 0;
+    $isNotInterested = $statusValue === 'not interested';
+    if ($isConverted || $isNotInterested) {
+        return '';
+    }
+    if ($nextFollowupDate !== '') {
+        if ($nextFollowupDate < $today) {
+            return 'lead-row-overdue';
+        }
+        if ($nextFollowupDate === $today) {
+            return 'lead-row-today';
+        }
+        if ($ratingValue === 'hot') {
+            return 'lead-row-hot';
+        }
+    } elseif ($statusValue === 'new') {
+        return 'lead-row-new';
+    }
+    return '';
+}
+
+function leads_render_row(array $lead, int $index, string $today, string $quotationCreatePath): string
+{
+    $statusValue = strtolower(trim((string) ($lead['status'] ?? '')));
+    $isConverted = $statusValue === 'converted' || strcasecmp((string) ($lead['converted_flag'] ?? ''), 'yes') === 0;
+    $isNotInterested = $statusValue === 'not interested';
+    $isArchived = !empty($lead['archived_flag']);
+    $customerCreated = !empty($lead['customer_created_flag']);
+    $hasMobile = trim((string) ($lead['mobile'] ?? '')) !== '' || trim((string) ($lead['alt_mobile'] ?? '')) !== '';
+    $hasLeadName = trim((string) ($lead['name'] ?? '')) !== '';
+    $leadMobileNormalized = normalize_customer_mobile((string) ($lead['mobile'] ?? ''));
+    if ($leadMobileNormalized === '') {
+        $leadMobileNormalized = normalize_customer_mobile((string) ($lead['alt_mobile'] ?? ''));
+    }
+    $canCreateQuotation = !$isArchived && $hasLeadName && $leadMobileNormalized !== '';
+    $rowClass = leads_row_classes($lead, $today);
+    ob_start();
+    ?>
+    <tr id="lead-row-<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" class="<?php echo leads_safe($rowClass); ?>">
+      <td>
+        <input type="checkbox" class="lead-select" name="lead_ids[]" value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" form="bulk-actions-form" />
+      </td>
+      <td class="lead-index"><?php echo $index; ?></td>
+      <td><?php echo leads_safe((string) ($lead['name'] ?? '')); ?></td>
+      <td><a href="tel:<?php echo leads_safe((string) ($lead['mobile'] ?? '')); ?>"><?php echo leads_safe((string) ($lead['mobile'] ?? '')); ?></a></td>
+      <td><?php echo leads_safe((string) ($lead['city'] ?? '')); ?></td>
+      <td><span class="badge pill"><?php echo leads_safe((string) ($lead['status'] ?? '')); ?></span></td>
+      <td><?php echo leads_safe((string) ($lead['rating'] ?? '')); ?></td>
+      <td><?php echo leads_safe(trim(((string) ($lead['next_followup_date'] ?? '')) . ' ' . ((string) ($lead['next_followup_time'] ?? '')))); ?></td>
+      <td><?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
+      <td>
+        <?php if (($lead['source_campaign_name'] ?? '') !== ''): ?>
+          <?php echo leads_safe((string) ($lead['source_campaign_name'] ?? '')); ?>
+          <?php if (($lead['source_campaign_id'] ?? '') !== ''): ?>
+            <span class="badge" style="background:#e2e8f0;color:#0f172a;">#<?php echo leads_safe((string) ($lead['source_campaign_id'] ?? '')); ?></span>
+          <?php endif; ?>
+        <?php else: ?>&ndash;<?php endif; ?>
+      </td>
+      <td>
+        <div class="table-actions">
+          <a class="btn-secondary lead-action" data-action="view_edit" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="lead-detail.php?id=<?php echo urlencode((string) ($lead['id'] ?? '')); ?>">View / Edit</a>
+          <a class="btn-secondary lead-action" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">WhatsApp</a>
+          <button type="button" class="btn lead-action" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#10b981;">Mark Contacted Now</button>
+          <?php if ($canCreateQuotation): ?>
+            <a class="btn lead-action" data-action="create_quotation" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#1d4ed8;" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
+          <?php else: ?>
+            <?php $quotationDisabledReason = $isArchived ? 'Archived lead' : 'Missing name/mobile'; ?>
+            <button type="button" class="btn-secondary" style="padding:0.35rem 0.6rem; opacity:0.55; cursor:not-allowed;" disabled title="<?php echo leads_safe($quotationDisabledReason); ?>"><?php echo $isArchived ? 'Archived' : 'Create Quotation'; ?></button>
+          <?php endif; ?>
+          <?php if (!$isArchived): ?>
+            <button type="button" class="btn-secondary lead-action" data-action="archive_lead" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;">Archive</button>
+          <?php endif; ?>
+          <?php if (!$customerCreated && $hasMobile): ?>
+            <button type="button" class="btn-secondary lead-action" data-action="create_customer" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#e0f2fe; color:#0f172a;">Create Customer</button>
+          <?php endif; ?>
+          <?php if (!$isConverted): ?>
+            <button type="button" class="btn lead-action" data-action="mark_converted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#16a34a;">Converted</button>
+          <?php endif; ?>
+          <?php if (!$isNotInterested): ?>
+            <button type="button" class="btn-secondary lead-action" data-action="mark_not_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#fbbf24; color:#1f2937;">Not Interested</button>
+          <?php endif; ?>
+        </div>
+      </td>
+    </tr>
+    <?php
+    return (string) ob_get_clean();
+}
+
 $messages = [];
 if (isset($_GET['msg']) && trim((string) $_GET['msg']) !== '') {
     $messages[] = ['type' => 'success', 'text' => (string) $_GET['msg']];
+}
+
+$today = date('Y-m-d');
+
+$isAjaxRequest = (isset($_REQUEST['ajax']) && $_REQUEST['ajax'] === '1')
+    || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string) $_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+if ($isAjaxRequest) {
+    $ajaxAction = (string) ($_REQUEST['ajax_action'] ?? '');
+    $leadId = (string) ($_REQUEST['lead_id'] ?? '');
+    if ($ajaxAction === 'fetch_lead_form') {
+        $lead = find_lead_by_id($leadId);
+        if ($lead === null) {
+            leads_json_response(['success' => false, 'message' => 'Lead not found.'], 404);
+        }
+        ob_start();
+        ?>
+        <form id="lead-edit-form" class="grid" style="gap:0.75rem;">
+          <input type="hidden" name="lead_id" value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" />
+          <label>Name <input type="text" name="name" value="<?php echo leads_safe((string) ($lead['name'] ?? '')); ?>" required></label>
+          <label>Mobile <input type="text" name="mobile" value="<?php echo leads_safe((string) ($lead['mobile'] ?? '')); ?>"></label>
+          <label>City <input type="text" name="city" value="<?php echo leads_safe((string) ($lead['city'] ?? '')); ?>"></label>
+          <label>Status <input type="text" name="status" value="<?php echo leads_safe((string) ($lead['status'] ?? '')); ?>"></label>
+          <label>Rating <input type="text" name="rating" value="<?php echo leads_safe((string) ($lead['rating'] ?? '')); ?>"></label>
+          <label>Next Follow-up Date <input type="date" name="next_followup_date" value="<?php echo leads_safe((string) ($lead['next_followup_date'] ?? '')); ?>"></label>
+          <label>Notes <input type="text" name="notes" value="<?php echo leads_safe((string) ($lead['notes'] ?? '')); ?>"></label>
+          <div style="display:flex;justify-content:flex-end;"><button type="submit" class="btn">Save Changes</button></div>
+        </form>
+        <?php
+        leads_json_response(['success' => true, 'html' => (string) ob_get_clean(), 'lead' => $lead]);
+    }
+
+    $lead = find_lead_by_id($leadId);
+    if ($lead === null) {
+        leads_json_response(['success' => false, 'message' => 'Lead not found.'], 404);
+    }
+
+    $updates = [];
+    $message = 'Updated.';
+    $removeRow = false;
+    if ($ajaxAction === 'save_lead') {
+        $updates = [
+            'name' => trim((string) ($_POST['name'] ?? '')),
+            'mobile' => trim((string) ($_POST['mobile'] ?? '')),
+            'city' => trim((string) ($_POST['city'] ?? '')),
+            'status' => trim((string) ($_POST['status'] ?? '')),
+            'rating' => trim((string) ($_POST['rating'] ?? '')),
+            'next_followup_date' => trim((string) ($_POST['next_followup_date'] ?? '')),
+            'notes' => trim((string) ($_POST['notes'] ?? '')),
+        ];
+        $message = 'Lead updated successfully.';
+    } elseif ($ajaxAction === 'mark_contacted') {
+        $updates = ['last_contacted_at' => date('Y-m-d H:i:s')];
+        if (trim((string) ($lead['next_followup_date'] ?? '')) === '') {
+            $updates['next_followup_date'] = date('Y-m-d', strtotime('+3 days'));
+        }
+        $message = 'Lead marked as contacted.';
+    } elseif ($ajaxAction === 'archive_lead') {
+        $updates = ['archived_flag' => true, 'archived_at' => (string) (($lead['archived_at'] ?? '') !== '' ? $lead['archived_at'] : date('Y-m-d H:i:s'))];
+        $message = 'Lead archived.';
+        $removeRow = true;
+    } elseif ($ajaxAction === 'create_customer_from_lead') {
+        $customerResult = leads_create_customer_from_lead($customerStore, $lead);
+        if (($customerResult['mobile'] ?? '') !== '') {
+            $updates = ['customer_created_flag' => true, 'customer_mobile_link' => $customerResult['mobile']];
+            if (isset($customerResult['customer']['serial_number'])) {
+                $updates['customer_id_link'] = (string) $customerResult['customer']['serial_number'];
+            }
+            $message = ($customerResult['existing'] ?? false) ? 'Existing customer linked to lead.' : 'Customer created from lead.';
+        }
+    } elseif ($ajaxAction === 'mark_converted') {
+        $customerResult = leads_create_customer_from_lead($customerStore, $lead);
+        $updates = [
+            'status' => 'Converted',
+            'converted_flag' => 'Yes',
+            'converted_date' => date('Y-m-d'),
+            'archived_flag' => true,
+            'archived_at' => date('Y-m-d H:i:s'),
+        ];
+        if (($customerResult['mobile'] ?? '') !== '') {
+            $updates['customer_created_flag'] = true;
+            $updates['customer_mobile_link'] = $customerResult['mobile'];
+        }
+        $message = 'Lead marked as converted.';
+        $removeRow = true;
+    } elseif ($ajaxAction === 'mark_not_interested') {
+        $updates = ['status' => 'Not Interested', 'converted_flag' => 'No', 'not_interested_reason' => trim((string) ($_POST['reason'] ?? (string) ($lead['not_interested_reason'] ?? '')))];
+        $message = 'Lead marked as not interested.';
+    } elseif ($ajaxAction === 'mark_quotation_sent') {
+        $updates = ['status' => 'Quotation Sent'];
+        $message = 'Lead marked as quotation sent.';
+    }
+
+    if ($updates === []) {
+        leads_json_response(['success' => false, 'message' => 'No updates were applied.'], 422);
+    }
+
+    $result = update_lead($leadId, $updates);
+    if ($result === null) {
+        leads_json_response(['success' => false, 'message' => 'Unable to update lead.'], 500);
+    }
+    $updatedLead = $result['after'];
+    $rowIndex = (int) ($_REQUEST['row_index'] ?? 1);
+    leads_json_response([
+        'success' => true,
+        'message' => $message,
+        'lead_id' => $leadId,
+        'remove_row' => $removeRow,
+        'row_html' => leads_render_row($updatedLead, max(1, $rowIndex), $today, $quotationCreatePath),
+    ]);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -621,6 +833,15 @@ ksort($duplicateGroups);
     .lead-filters { margin-bottom: 0.75rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
     .lead-filters a { padding: 0.4rem 0.75rem; border-radius: 999px; border: 1px solid #d1d5db; text-decoration: none; color: #1f2937; background: #fff; }
     .lead-filters a.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+    .ux-modal-backdrop, .ux-drawer-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,0.45); z-index: 9998; display: none; }
+    .ux-modal { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(940px, 96vw); max-height: 88vh; overflow: auto; background: #fff; border-radius: 14px; padding: 1rem; z-index: 9999; display: none; }
+    .ux-drawer { position: fixed; top: 0; right: 0; width: min(560px, 96vw); height: 100vh; background: #fff; box-shadow: -8px 0 30px rgba(0,0,0,0.2); z-index: 9999; transform: translateX(102%); transition: transform .2s ease; display: flex; flex-direction: column; }
+    .ux-drawer.open { transform: translateX(0); }
+    .ux-panel-header { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e5e7eb; padding-bottom:0.5rem; margin-bottom:0.75rem; }
+    .ux-panel-body { overflow:auto; }
+    .ux-toast-wrap { position: fixed; right: 1rem; bottom: 1rem; display: flex; flex-direction: column; gap: 0.5rem; z-index: 10000; }
+    .ux-toast { background: #111827; color: #fff; padding: 0.65rem 0.85rem; border-radius: 10px; box-shadow: 0 10px 24px rgba(0,0,0,0.2); }
   </style>
 </head>
 <body>
@@ -829,112 +1050,7 @@ ksort($duplicateGroups);
               <tr><td colspan="12">No leads match the selected filters.</td></tr>
             <?php else: ?>
               <?php foreach ($filteredLeads as $index => $lead): ?>
-                <?php
-                  $statusValue = strtolower(trim((string) ($lead['status'] ?? '')));
-                  $ratingValue = strtolower(trim((string) ($lead['rating'] ?? '')));
-                  $nextFollowupDate = trim((string) ($lead['next_followup_date'] ?? ''));
-                  $isConverted = $statusValue === 'converted' || strcasecmp((string) ($lead['converted_flag'] ?? ''), 'yes') === 0;
-                  $isNotInterested = $statusValue === 'not interested';
-                  $isArchived = !empty($lead['archived_flag']);
-                  $customerCreated = !empty($lead['customer_created_flag']);
-                  $hasMobile = trim((string) ($lead['mobile'] ?? '')) !== '' || trim((string) ($lead['alt_mobile'] ?? '')) !== '';
-                  $hasLeadName = trim((string) ($lead['name'] ?? '')) !== '';
-                  $leadMobileNormalized = normalize_customer_mobile((string) ($lead['mobile'] ?? ''));
-                  if ($leadMobileNormalized === '') {
-                      $leadMobileNormalized = normalize_customer_mobile((string) ($lead['alt_mobile'] ?? ''));
-                  }
-                  $canCreateQuotation = !$isArchived && $hasLeadName && $leadMobileNormalized !== '';
-                  $rowClass = '';
-
-                  if (!$isConverted && !$isNotInterested) {
-                      if ($nextFollowupDate !== '') {
-                          if ($nextFollowupDate < $today) {
-                              $rowClass = 'lead-row-overdue';
-                          } elseif ($nextFollowupDate === $today) {
-                              $rowClass = 'lead-row-today';
-                          } elseif ($ratingValue === 'hot') {
-                              $rowClass = 'lead-row-hot';
-                          }
-                      } elseif ($statusValue === 'new') {
-                          $rowClass = 'lead-row-new';
-                      }
-                  }
-                ?>
-                <tr class="<?= leads_safe($rowClass) ?>">
-                  <td>
-                    <input
-                      type="checkbox"
-                      class="lead-select"
-                      name="lead_ids[]"
-                      value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>"
-                      form="bulk-actions-form"
-                    />
-                  </td>
-                  <td><?php echo $index + 1; ?></td>
-                  <td><?php echo leads_safe((string) ($lead['name'] ?? '')); ?></td>
-                  <td><a href="tel:<?php echo leads_safe((string) ($lead['mobile'] ?? '')); ?>"><?php echo leads_safe((string) ($lead['mobile'] ?? '')); ?></a></td>
-                  <td><?php echo leads_safe((string) ($lead['city'] ?? '')); ?></td>
-                  <td><span class="badge pill"><?php echo leads_safe((string) ($lead['status'] ?? '')); ?></span></td>
-                  <td><?php echo leads_safe((string) ($lead['rating'] ?? '')); ?></td>
-                  <td><?php echo leads_safe(trim(((string) ($lead['next_followup_date'] ?? '')) . ' ' . ((string) ($lead['next_followup_time'] ?? '')))); ?></td>
-                  <td><?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?></td>
-                  <td><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
-                  <td>
-                    <?php if (($lead['source_campaign_name'] ?? '') !== ''): ?>
-                      <?php echo leads_safe((string) ($lead['source_campaign_name'] ?? '')); ?>
-                      <?php if (($lead['source_campaign_id'] ?? '') !== ''): ?>
-                        <span class="badge" style="background:#e2e8f0;color:#0f172a;">#<?php echo leads_safe((string) ($lead['source_campaign_id'] ?? '')); ?></span>
-                      <?php endif; ?>
-                    <?php else: ?>
-                      &ndash;
-                    <?php endif; ?>
-                  </td>
-                  <td>
-                    <div class="table-actions">
-                      <a class="btn-secondary" style="padding:0.35rem 0.6rem;" href="lead-detail.php?id=<?php echo urlencode((string) ($lead['id'] ?? '')); ?>">View / Edit</a>
-                      <a class="btn-secondary" style="padding:0.35rem 0.6rem;" href="https://wa.me/91<?php echo leads_safe(preg_replace('/[^0-9]/', '', (string) ($lead['mobile'] ?? ''))); ?>?text=<?php echo urlencode('Hello ' . ($lead['name'] ?? '') . ', this is Dakshayani Enterprises regarding your solar enquiry.'); ?>" target="_blank">WhatsApp</a>
-                      <form method="post" style="margin:0;">
-                        <input type="hidden" name="intent" value="mark_contacted" />
-                        <input type="hidden" name="lead_id" value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" />
-                        <button type="submit" class="btn" style="padding:0.35rem 0.6rem; background:#10b981;">Mark Contacted Now</button>
-                      </form>
-                      <?php if ($canCreateQuotation): ?>
-                        <a class="btn" style="padding:0.35rem 0.6rem; background:#1d4ed8;" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
-                      <?php else: ?>
-                        <?php $quotationDisabledReason = $isArchived ? 'Archived lead' : 'Missing name/mobile'; ?>
-                        <button type="button" class="btn-secondary" style="padding:0.35rem 0.6rem; opacity:0.55; cursor:not-allowed;" disabled title="<?php echo leads_safe($quotationDisabledReason); ?>"><?php echo $isArchived ? 'Archived' : 'Create Quotation'; ?></button>
-                      <?php endif; ?>
-                      <?php if (!$isArchived): ?>
-                        <form method="post" action="/leads-dashboard.php" style="display:inline-block; margin:0;">
-                          <input type="hidden" name="lead_action" value="archive_lead" />
-                          <input type="hidden" name="lead_id" value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" />
-                          <button type="submit" class="btn-secondary" style="padding:0.35rem 0.6rem;" onclick="return confirm('Archive this lead?');">Archive</button>
-                        </form>
-                      <?php endif; ?>
-                      <?php if (!$customerCreated && $hasMobile): ?>
-                        <form method="post" action="/leads-dashboard.php" style="display:inline-block; margin:0;">
-                          <input type="hidden" name="lead_action" value="create_customer_from_lead" />
-                          <input type="hidden" name="lead_id" value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" />
-                          <button type="submit" class="btn-secondary" style="padding:0.35rem 0.6rem; background:#e0f2fe; color:#0f172a;" onclick="return confirm('Create customer from this lead?');">Create Customer</button>
-                        </form>
-                      <?php endif; ?>
-                      <?php if (!$isConverted): ?>
-                        <form method="post" style="margin:0;">
-                          <input type="hidden" name="lead_action" value="mark_converted" />
-                          <input type="hidden" name="lead_id" value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" />
-                          <button type="submit" class="btn" style="padding:0.35rem 0.6rem; background:#16a34a;" onclick="return confirm('Mark this lead as Converted?');">Converted</button>
-                        </form>
-                      <?php endif; ?>
-                      <?php if (!$isNotInterested): ?>
-                        <form method="post" style="margin:0;">
-                          <input type="hidden" name="lead_action" value="mark_not_interested" />
-                          <input type="hidden" name="lead_id" value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" />
-                          <button type="submit" class="btn-secondary" style="padding:0.35rem 0.6rem; background:#fbbf24; color:#1f2937;" onclick="return confirm('Mark this lead as Not Interested?');">Not Interested</button>
-                        </form>
-                      <?php endif; ?>
-                    </div>
-                  </td>
-                </tr>
+                <?php echo leads_render_row($lead, $index + 1, $today, $quotationCreatePath); ?>
               <?php endforeach; ?>
             <?php endif; ?>
           </tbody>
@@ -942,8 +1058,95 @@ ksort($duplicateGroups);
       </div>
     </div>
   </div>
+  <div id="ux-modal-backdrop" class="ux-modal-backdrop"></div>
+  <div id="ux-modal" class="ux-modal" role="dialog" aria-modal="true" aria-label="Lead modal">
+    <div class="ux-panel-header"><h3 id="ux-modal-title" style="margin:0;">Modal</h3><button type="button" class="btn-secondary" id="ux-modal-close">Close</button></div>
+    <div id="ux-modal-body" class="ux-panel-body"></div>
+  </div>
+
+  <div id="ux-drawer-backdrop" class="ux-drawer-backdrop"></div>
+  <aside id="ux-drawer" class="ux-drawer" aria-label="Lead drawer">
+    <div style="padding:1rem;">
+      <div class="ux-panel-header"><h3 id="ux-drawer-title" style="margin:0;">Lead</h3><button type="button" class="btn-secondary" id="ux-drawer-close">Close</button></div>
+      <div id="ux-drawer-body" class="ux-panel-body"></div>
+    </div>
+  </aside>
+  <div id="ux-toast-wrap" class="ux-toast-wrap" aria-live="polite"></div>
+
   <script>
     const selectAll = document.getElementById('select-all-leads');
+    const modal = document.getElementById('ux-modal');
+    const modalBackdrop = document.getElementById('ux-modal-backdrop');
+    const modalBody = document.getElementById('ux-modal-body');
+    const modalTitle = document.getElementById('ux-modal-title');
+    const drawer = document.getElementById('ux-drawer');
+    const drawerBackdrop = document.getElementById('ux-drawer-backdrop');
+    const drawerBody = document.getElementById('ux-drawer-body');
+    const drawerTitle = document.getElementById('ux-drawer-title');
+    const toastWrap = document.getElementById('ux-toast-wrap');
+
+    function showToast(message) {
+      const el = document.createElement('div');
+      el.className = 'ux-toast';
+      el.textContent = message;
+      toastWrap.appendChild(el);
+      setTimeout(() => el.remove(), 3000);
+    }
+
+    function openModal(title, html) {
+      modalTitle.textContent = title;
+      modalBody.innerHTML = html;
+      modal.style.display = 'block';
+      modalBackdrop.style.display = 'block';
+    }
+
+    function closeModal() {
+      modal.style.display = 'none';
+      modalBackdrop.style.display = 'none';
+      modalBody.innerHTML = '';
+    }
+
+    function openDrawer(title, html) {
+      drawerTitle.textContent = title;
+      drawerBody.innerHTML = html;
+      drawer.classList.add('open');
+      drawerBackdrop.style.display = 'block';
+    }
+
+    function closeDrawer() {
+      drawer.classList.remove('open');
+      drawerBackdrop.style.display = 'none';
+      drawerBody.innerHTML = '';
+    }
+
+    async function ajaxAction(action, payload = {}) {
+      const body = new URLSearchParams({ ajax: '1', ajax_action: action, ...payload });
+      const response = await fetch('/leads-dashboard.php', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body,
+      });
+      return response.json();
+    }
+
+    function refreshRowFromResponse(data, row) {
+      if (!row || !data) return;
+      if (data.remove_row) {
+        row.style.transition = 'opacity .2s ease';
+        row.style.opacity = '0';
+        setTimeout(() => row.remove(), 220);
+        return;
+      }
+      if (data.row_html) {
+        row.outerHTML = data.row_html;
+      }
+    }
+
+    document.getElementById('ux-modal-close').addEventListener('click', closeModal);
+    document.getElementById('ux-drawer-close').addEventListener('click', closeDrawer);
+    modalBackdrop.addEventListener('click', closeModal);
+    drawerBackdrop.addEventListener('click', closeDrawer);
+
     if (selectAll) {
       selectAll.addEventListener('change', () => {
         document.querySelectorAll('.lead-select').forEach((checkbox) => {
@@ -951,6 +1154,100 @@ ksort($duplicateGroups);
         });
       });
     }
+
+    document.addEventListener('submit', async (event) => {
+      if (event.target && event.target.id === 'lead-edit-form') {
+        event.preventDefault();
+        const form = event.target;
+        const row = document.getElementById(`lead-row-${form.lead_id.value}`);
+        const rowIndex = row ? (row.querySelector('.lead-index')?.textContent || '1') : '1';
+        const formData = new FormData(form);
+        formData.append('ajax', '1');
+        formData.append('ajax_action', 'save_lead');
+        formData.append('row_index', rowIndex);
+        const response = await fetch('/leads-dashboard.php', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData });
+        const data = await response.json();
+        if (data.success) {
+          refreshRowFromResponse(data, row);
+          showToast(data.message || 'Saved');
+          closeDrawer();
+        } else {
+          showToast(data.message || 'Unable to save');
+        }
+      }
+    });
+
+    document.addEventListener('click', async (event) => {
+      const actionEl = event.target.closest('.lead-action');
+      if (!actionEl) return;
+      event.preventDefault();
+      const action = actionEl.dataset.action;
+      const leadId = actionEl.dataset.leadId;
+      const row = document.getElementById(`lead-row-${leadId}`);
+      const rowIndex = row ? (row.querySelector('.lead-index')?.textContent || '1') : '1';
+
+      if (action === 'view_edit') {
+        const data = await ajaxAction('fetch_lead_form', { lead_id: leadId });
+        if (data.success) {
+          openDrawer('View / Edit Lead', data.html || '');
+        } else {
+          showToast(data.message || 'Unable to load lead');
+        }
+        return;
+      }
+
+      if (action === 'whatsapp') {
+        const mobile = row?.children?.[3]?.innerText?.trim() || '';
+        const name = row?.children?.[2]?.innerText?.trim() || 'Customer';
+        const clean = mobile.replace(/\D+/g, '');
+        const msg = encodeURIComponent(`Hello ${name}, this is Dakshayani Enterprises regarding your solar enquiry.`);
+        const url = `https://wa.me/91${clean}?text=${msg}`;
+        openModal('WhatsApp', `<p style="margin-top:0;"><strong>Number:</strong> ${mobile || 'N/A'}</p><p>Open WhatsApp in a new tab while keeping this dashboard intact.</p><a class="btn" href="${url}" target="_blank" rel="noopener">Open WhatsApp</a>`);
+        return;
+      }
+
+      if (action === 'create_quotation') {
+        const href = actionEl.getAttribute('href') || '#';
+        openModal('Create Quotation', `<iframe src="${href}" style="width:100%;height:70vh;border:1px solid #e5e7eb;border-radius:8px;"></iframe><div style="margin-top:.75rem;text-align:right;"><button type="button" class="btn" id="quotation-done">Done & Mark Quotation Sent</button></div>`);
+        document.getElementById('quotation-done')?.addEventListener('click', async () => {
+          const data = await ajaxAction('mark_quotation_sent', { lead_id: leadId, row_index: rowIndex });
+          if (data.success) {
+            refreshRowFromResponse(data, row);
+            showToast(data.message || 'Updated');
+            closeModal();
+          }
+        });
+        return;
+      }
+
+      const confirmations = {
+        archive_lead: 'Archive this lead?',
+        create_customer: 'Create customer from this lead?',
+        mark_converted: 'Mark this lead as Converted?',
+        mark_not_interested: 'Mark this lead as Not Interested?',
+      };
+      if (confirmations[action] && !window.confirm(confirmations[action])) {
+        return;
+      }
+
+      const endpointMap = {
+        mark_contacted: 'mark_contacted',
+        archive_lead: 'archive_lead',
+        create_customer: 'create_customer_from_lead',
+        mark_converted: 'mark_converted',
+        mark_not_interested: 'mark_not_interested',
+      };
+      const ajaxName = endpointMap[action];
+      if (!ajaxName) return;
+
+      const data = await ajaxAction(ajaxName, { lead_id: leadId, row_index: rowIndex });
+      if (data.success) {
+        refreshRowFromResponse(data, row);
+        showToast(data.message || 'Done');
+      } else {
+        showToast(data.message || 'Action failed');
+      }
+    });
   </script>
 </body>
 </html>
