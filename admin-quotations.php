@@ -292,6 +292,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quote = documents_quote_defaults();
             $quote['id'] = $id;
             $quote['quote_no'] = (string) $number['quote_no'];
+            $quote['numbering_rule_id_used'] = (string) ($number['rule_id'] ?? '');
             $quote['created_at'] = date('c');
             $user = current_user();
             $roleName = (string) ($user['role_name'] ?? 'admin');

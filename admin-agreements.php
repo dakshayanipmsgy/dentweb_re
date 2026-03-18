@@ -90,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $agreement = documents_agreement_defaults();
         $agreement['id'] = $id;
         $agreement['agreement_no'] = (string) $number['agreement_no'];
+        $agreement['numbering_rule_id_used'] = (string) ($number['rule_id'] ?? '');
         $agreement['status'] = 'Draft';
         $agreement['template_id'] = $templateId;
         $agreement['customer_mobile'] = $customerMobile;
