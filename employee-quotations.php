@@ -100,7 +100,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quote = documents_quote_defaults();
             $quote['id'] = 'qtn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
             $quote['quote_no'] = (string) $number['quote_no'];
-            $quote['numbering_rule_id_used'] = (string) ($number['rule_id'] ?? '');
             $quote['created_at'] = date('c');
             $quote['created_by_type'] = 'employee';
             $quote['created_by_id'] = (string) ($employee['id'] ?? '');

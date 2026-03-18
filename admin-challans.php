@@ -174,7 +174,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = current_user();
         $challan['id'] = 'dc_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
         $challan['challan_no'] = (string) $number['challan_no'];
-        $challan['numbering_rule_id_used'] = (string) ($number['rule_id'] ?? '');
         $challan['created_by_type'] = 'admin';
         $challan['created_by_id'] = (string) ($user['id'] ?? '');
         $challan['created_by_name'] = (string) ($user['full_name'] ?? 'Admin');

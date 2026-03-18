@@ -796,58 +796,10 @@ function documents_numbering_defaults(): array
 
 function documents_numbering_rule_is_active(array $rule): bool
 {
-    if (($rule['deleted_flag'] ?? false) || ($rule['archived_flag'] ?? false) || ($rule['is_active'] ?? true) === false) {
+    if (($rule['archived_flag'] ?? false) || ($rule['is_active'] ?? true) === false) {
         return false;
     }
     return (bool) ($rule['active'] ?? true);
-}
-
-function documents_normalize_numbering_rule(array $rule, int $index = 0): array
-{
-    $rule['id'] = safe_text((string) ($rule['id'] ?? ''));
-    if ($rule['id'] === '') {
-        $base = safe_slug((string) (($rule['doc_type'] ?? 'rule') . '-' . ($rule['segment'] ?? 'segment')));
-        if ($base === '') {
-            $base = 'numbering-rule';
-        }
-        $rule['id'] = $base . '-' . substr(sha1(json_encode($rule) . '|' . (string) $index), 0, 10);
-    }
-
-    $rule['deleted_flag'] = (bool) ($rule['deleted_flag'] ?? ($rule['archived_flag'] ?? false));
-    $rule['deleted_at'] = safe_text((string) ($rule['deleted_at'] ?? ''));
-    $deletedBy = is_array($rule['deleted_by'] ?? null) ? $rule['deleted_by'] : [];
-    $rule['deleted_by'] = [
-        'type' => safe_text((string) ($deletedBy['type'] ?? '')),
-        'id' => safe_text((string) ($deletedBy['id'] ?? '')),
-        'name' => safe_text((string) ($deletedBy['name'] ?? '')),
-    ];
-    if ($rule['deleted_flag']) {
-        $rule['archived_flag'] = true;
-        $rule['active'] = false;
-        $rule['is_active'] = false;
-    } else {
-        $rule['archived_flag'] = (bool) ($rule['archived_flag'] ?? false);
-        $rule['active'] = (bool) ($rule['active'] ?? ($rule['is_active'] ?? true));
-        $rule['is_active'] = (bool) ($rule['is_active'] ?? $rule['active']);
-    }
-
-    return $rule;
-}
-
-function documents_numbering_rules_normalize_payload(array $payload): array
-{
-    $payload = array_merge(documents_numbering_defaults(), $payload);
-    $rules = isset($payload['rules']) && is_array($payload['rules']) ? $payload['rules'] : [];
-    $normalizedRules = [];
-    foreach ($rules as $index => $rule) {
-        if (!is_array($rule)) {
-            continue;
-        }
-        $normalizedRules[] = documents_normalize_numbering_rule($rule, (int) $index);
-    }
-    $payload['rules'] = $normalizedRules;
-
-    return $payload;
 }
 
 function documents_first_non_empty_string(array $sources): string
@@ -985,7 +937,6 @@ function documents_quote_defaults(): array
     return [
         'id' => '',
         'quote_no' => '',
-        'numbering_rule_id_used' => '',
         'revision' => 0,
         'status' => 'Draft',
         'archived_flag' => false,
@@ -1258,7 +1209,6 @@ function documents_proforma_defaults(): array
     return [
         'id' => '',
         'proforma_no' => '',
-        'numbering_rule_id_used' => '',
         'status' => 'Draft',
         'linked_quote_id' => '',
         'customer_mobile' => '',
@@ -1277,7 +1227,6 @@ function documents_invoice_defaults(): array
     return [
         'id' => '',
         'invoice_no' => '',
-        'numbering_rule_id_used' => '',
         'status' => 'Draft',
         'invoice_kind' => 'public',
         'linked_quote_id' => '',
@@ -1405,7 +1354,6 @@ function documents_agreement_defaults(): array
     return [
         'id' => '',
         'agreement_no' => '',
-        'numbering_rule_id_used' => '',
         'status' => 'Draft',
         'archived_flag' => false,
         'archived_at' => '',
@@ -1503,7 +1451,6 @@ function documents_challan_defaults(): array
         'dc_id' => '',
         'dc_number' => '',
         'challan_no' => '',
-        'numbering_rule_id_used' => '',
         'status' => 'draft',
         'segment' => 'RES',
         'template_set_id' => '',
@@ -1784,7 +1731,7 @@ function documents_generate_challan_number(string $segment): array
         return $number;
     }
 
-    return ['ok' => true, 'challan_no' => (string) ($number['doc_no'] ?? ''), 'rule_id' => (string) ($number['rule_id'] ?? ''), 'error' => ''];
+    return ['ok' => true, 'challan_no' => (string) ($number['doc_no'] ?? ''), 'error' => ''];
 }
 
 function documents_get_challan(string $id): ?array
@@ -2784,7 +2731,7 @@ function documents_generate_proforma_number(string $segment): array
     if (!$number['ok']) {
         return $number;
     }
-    return ['ok' => true, 'proforma_no' => (string) ($number['doc_no'] ?? ''), 'rule_id' => (string) ($number['rule_id'] ?? ''), 'error' => ''];
+    return ['ok' => true, 'proforma_no' => (string) ($number['doc_no'] ?? ''), 'error' => ''];
 }
 
 function documents_generate_invoice_public_number(string $segment): array
@@ -2793,7 +2740,7 @@ function documents_generate_invoice_public_number(string $segment): array
     if (!$number['ok']) {
         return $number;
     }
-    return ['ok' => true, 'invoice_no' => (string) ($number['doc_no'] ?? ''), 'rule_id' => (string) ($number['rule_id'] ?? ''), 'error' => ''];
+    return ['ok' => true, 'invoice_no' => (string) ($number['doc_no'] ?? ''), 'error' => ''];
 }
 
 function documents_quote_can_edit(array $quote, string $viewerType, string $viewerId = ''): bool
@@ -2911,7 +2858,6 @@ function documents_create_agreement_from_quote(array $quote, array $adminUser): 
     $agreement = documents_agreement_defaults();
     $agreement['id'] = 'agr_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
     $agreement['agreement_no'] = (string) ($number['agreement_no'] ?? '');
-    $agreement['numbering_rule_id_used'] = (string) ($number['rule_id'] ?? '');
     $agreement['status'] = 'Draft';
     $agreement['template_id'] = is_string($templateId) ? $templateId : 'default_pm_surya_ghar_agreement';
     $agreement['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
@@ -2975,7 +2921,6 @@ function documents_create_proforma_from_quote(array $quote): array
     $doc = documents_proforma_defaults();
     $doc['id'] = 'pi_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
     $doc['proforma_no'] = (string) ($number['proforma_no'] ?? '');
-    $doc['numbering_rule_id_used'] = (string) ($number['rule_id'] ?? '');
     $doc['status'] = 'Draft';
     $doc['linked_quote_id'] = safe_text((string) ($quote['id'] ?? ''));
     $doc['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
@@ -3015,7 +2960,6 @@ function documents_create_invoice_from_quote(array $quote): array
     $doc = documents_invoice_defaults();
     $doc['id'] = 'inv_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
     $doc['invoice_no'] = (string) ($number['invoice_no'] ?? '');
-    $doc['numbering_rule_id_used'] = (string) ($number['rule_id'] ?? '');
     $doc['status'] = 'Draft';
     $doc['invoice_kind'] = 'public';
     $doc['linked_quote_id'] = safe_text((string) ($quote['id'] ?? ''));
@@ -3043,7 +2987,7 @@ function documents_generate_quote_number(string $segment): array
     if (!$number['ok']) {
         return $number;
     }
-    return ['ok' => true, 'quote_no' => (string) ($number['doc_no'] ?? ''), 'rule_id' => (string) ($number['rule_id'] ?? ''), 'error' => ''];
+    return ['ok' => true, 'quote_no' => (string) ($number['doc_no'] ?? ''), 'error' => ''];
 }
 
 function documents_generate_agreement_number(string $segment = 'RES'): array
@@ -3052,15 +2996,15 @@ function documents_generate_agreement_number(string $segment = 'RES'): array
     if (!$number['ok']) {
         return $number;
     }
-    return ['ok' => true, 'agreement_no' => (string) ($number['doc_no'] ?? ''), 'rule_id' => (string) ($number['rule_id'] ?? ''), 'error' => ''];
+    return ['ok' => true, 'agreement_no' => (string) ($number['doc_no'] ?? ''), 'error' => ''];
 }
 
 function documents_generate_document_number(string $docType, string $segment): array
 {
     $numberingPath = documents_settings_dir() . '/numbering_rules.json';
     $payload = json_load($numberingPath, documents_numbering_defaults());
-    $payload = documents_numbering_rules_normalize_payload(is_array($payload) ? $payload : []);
-    $rules = $payload['rules'];
+    $payload = array_merge(documents_numbering_defaults(), is_array($payload) ? $payload : []);
+    $rules = isset($payload['rules']) && is_array($payload['rules']) ? $payload['rules'] : [];
 
     $fy = current_fy_string((int) ($payload['fy_start_month'] ?? 4));
     $selectedIndex = null;
@@ -3101,7 +3045,7 @@ function documents_generate_document_number(string $docType, string $segment): a
         return ['ok' => false, 'error' => 'Failed to update numbering rule counter.'];
     }
 
-    return ['ok' => true, 'doc_no' => $docNo, 'rule_id' => (string) ($rule['id'] ?? ''), 'error' => ''];
+    return ['ok' => true, 'doc_no' => $docNo, 'error' => ''];
 }
 
 function documents_list_agreements(): array
