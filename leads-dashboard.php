@@ -180,6 +180,83 @@ function leads_group_duplicate_mobiles(array $leads): array
     });
 }
 
+function leads_whatsapp_settings_path(): string
+{
+    return __DIR__ . '/data/leads/lead_whatsapp_settings.json';
+}
+
+function leads_load_whatsapp_settings(): array
+{
+    $path = leads_whatsapp_settings_path();
+    if (!is_file($path)) {
+        return [
+            'default_whatsapp_message' => '',
+            'updated_at' => '',
+            'updated_by' => '',
+        ];
+    }
+
+    $raw = file_get_contents($path);
+    if ($raw === false || trim($raw) === '') {
+        return [
+            'default_whatsapp_message' => '',
+            'updated_at' => '',
+            'updated_by' => '',
+        ];
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [
+            'default_whatsapp_message' => '',
+            'updated_at' => '',
+            'updated_by' => '',
+        ];
+    }
+
+    return [
+        'default_whatsapp_message' => trim((string) ($decoded['default_whatsapp_message'] ?? '')),
+        'updated_at' => trim((string) ($decoded['updated_at'] ?? '')),
+        'updated_by' => trim((string) ($decoded['updated_by'] ?? '')),
+    ];
+}
+
+function leads_save_whatsapp_settings(string $defaultMessage, string $updatedBy): bool
+{
+    $path = leads_whatsapp_settings_path();
+    $directory = dirname($path);
+    if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+        return false;
+    }
+
+    $payload = [
+        'default_whatsapp_message' => trim($defaultMessage),
+        'updated_at' => date('Y-m-d H:i:s'),
+        'updated_by' => trim($updatedBy) !== '' ? trim($updatedBy) : 'Admin',
+    ];
+
+    return file_put_contents($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) !== false;
+}
+
+function leads_build_sort_link(string $column, string $currentSortBy, string $currentSortDir): string
+{
+    $query = $_GET;
+    $nextDir = 'asc';
+    if ($currentSortBy === $column && $currentSortDir === 'asc') {
+        $nextDir = 'desc';
+    }
+    $query['sort_by'] = $column;
+    $query['sort_dir'] = $nextDir;
+    return '/leads-dashboard.php?' . http_build_query($query);
+}
+
+function leads_sort_indicator(string $column, string $currentSortBy, string $currentSortDir): string
+{
+    if ($currentSortBy !== $column) {
+        return '';
+    }
+    return $currentSortDir === 'desc' ? ' ↓' : ' ↑';
+}
+
 
 function leads_json_response(array $payload, int $status = 200): void
 {
@@ -225,6 +302,10 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
     $hasMobile = trim((string) ($lead['mobile'] ?? '')) !== '' || trim((string) ($lead['alt_mobile'] ?? '')) !== '';
     $hasLeadName = trim((string) ($lead['name'] ?? '')) !== '';
     $leadMobileNormalized = normalize_customer_mobile((string) ($lead['mobile'] ?? ''));
+    $leadMobileRaw = trim((string) ($lead['mobile'] ?? ''));
+    if ($leadMobileRaw === '') {
+        $leadMobileRaw = trim((string) ($lead['alt_mobile'] ?? ''));
+    }
     if ($leadMobileNormalized === '') {
         $leadMobileNormalized = normalize_customer_mobile((string) ($lead['alt_mobile'] ?? ''));
     }
@@ -232,19 +313,27 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
     $rowClass = leads_row_classes($lead, $today);
     ob_start();
     ?>
-    <tr id="lead-row-<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" class="<?php echo leads_safe($rowClass); ?>">
+    <tr id="lead-row-<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>"
+        data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>"
+        data-name="<?php echo leads_safe((string) ($lead['name'] ?? '')); ?>"
+        data-mobile="<?php echo leads_safe($leadMobileRaw); ?>"
+        data-city="<?php echo leads_safe((string) ($lead['city'] ?? '')); ?>"
+        data-assigned-to="<?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?>"
+        class="<?php echo leads_safe($rowClass); ?>">
       <td>
         <input type="checkbox" class="lead-select" name="lead_ids[]" value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" form="bulk-actions-form" />
       </td>
       <td class="lead-index"><?php echo $index; ?></td>
       <td><?php echo leads_safe((string) ($lead['name'] ?? '')); ?></td>
-      <td><a href="tel:<?php echo leads_safe((string) ($lead['mobile'] ?? '')); ?>"><?php echo leads_safe((string) ($lead['mobile'] ?? '')); ?></a></td>
+      <td><a href="tel:<?php echo leads_safe($leadMobileRaw); ?>"><?php echo leads_safe($leadMobileRaw); ?></a></td>
       <td><?php echo leads_safe((string) ($lead['city'] ?? '')); ?></td>
       <td><span class="badge pill"><?php echo leads_safe((string) ($lead['status'] ?? '')); ?></span></td>
       <td><?php echo leads_safe((string) ($lead['rating'] ?? '')); ?></td>
       <td><?php echo leads_safe(trim(((string) ($lead['next_followup_date'] ?? '')) . ' ' . ((string) ($lead['next_followup_time'] ?? '')))); ?></td>
       <td><?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?></td>
       <td><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['created_at'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['updated_at'] ?? '')); ?></td>
       <td>
         <?php if (($lead['source_campaign_name'] ?? '') !== ''): ?>
           <?php echo leads_safe((string) ($lead['source_campaign_name'] ?? '')); ?>
@@ -472,7 +561,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $intent = isset($_POST['intent']) ? (string) $_POST['intent'] : '';
 
-    if ($intent === 'bulk_action') {
+    if ($intent === 'save_whatsapp_settings') {
+        if (!$loggedInAdmin) {
+            $messages[] = ['type' => 'error', 'text' => 'Only admin can update WhatsApp draft settings.'];
+        } else {
+            $actorDetails = leads_actor_details();
+            $defaultMessage = trim((string) ($_POST['default_whatsapp_message'] ?? ''));
+            if (leads_save_whatsapp_settings($defaultMessage, (string) ($actorDetails['name'] ?? 'Admin'))) {
+                $messages[] = ['type' => 'success', 'text' => 'WhatsApp draft message saved.'];
+            } else {
+                $messages[] = ['type' => 'error', 'text' => 'Unable to save WhatsApp draft settings.'];
+            }
+        }
+    } elseif ($intent === 'bulk_action') {
         $bulkAction = isset($_POST['bulk_action']) ? (string) $_POST['bulk_action'] : '';
         $selectedIds = $_POST['lead_ids'] ?? [];
         if (!is_array($selectedIds)) {
@@ -702,6 +803,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $leads = load_all_leads();
+$whatsappSettings = leads_load_whatsapp_settings();
 
 $view = $_GET['view'] ?? 'active';
 if (!in_array($view, ['active', 'archived', 'all'], true)) {
@@ -714,6 +816,15 @@ $ratingFilter = (string) ($_GET['rating'] ?? 'all');
 $assignedFilter = (string) ($_GET['assigned_to'] ?? 'all');
 $followupToday = isset($_GET['followup_today']) && $_GET['followup_today'] === '1';
 $followupOverdue = isset($_GET['followup_overdue']) && $_GET['followup_overdue'] === '1';
+$sortBy = strtolower(trim((string) ($_GET['sort_by'] ?? 'created_at')));
+$sortDir = strtolower(trim((string) ($_GET['sort_dir'] ?? 'desc')));
+$allowedSort = ['sr_no', 'name', 'mobile', 'city', 'status', 'rating', 'next_followup', 'assigned_to', 'last_contacted_at', 'created_at', 'updated_at'];
+if (!in_array($sortBy, $allowedSort, true)) {
+    $sortBy = 'created_at';
+}
+if (!in_array($sortDir, ['asc', 'desc'], true)) {
+    $sortDir = 'desc';
+}
 
 $today = date('Y-m-d');
 $filteredLeads = array_values(array_filter($leads, function (array $lead) use ($searchTerm, $statusFilter, $ratingFilter, $assignedFilter, $followupToday, $followupOverdue, $today, $view): bool {
@@ -770,6 +881,68 @@ $filteredLeads = array_values(array_filter($leads, function (array $lead) use ($
 
     return $matchesSearch && $matchesStatus && $matchesRating && $matchesAssigned && $matchesFollowup;
 }));
+
+usort($filteredLeads, static function (array $a, array $b) use ($sortBy, $sortDir): int {
+    $direction = $sortDir === 'desc' ? -1 : 1;
+    $indexA = (int) ($a['id'] ?? 0);
+    $indexB = (int) ($b['id'] ?? 0);
+
+    if ($sortBy === 'sr_no') {
+        return ($indexA <=> $indexB) * $direction;
+    }
+
+    $textSort = static function (string $left, string $right) use ($direction): int {
+        return strnatcasecmp($left, $right) * $direction;
+    };
+
+    if ($sortBy === 'name') {
+        return $textSort((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+    }
+    if ($sortBy === 'mobile') {
+        return $textSort((string) ($a['mobile'] ?? ''), (string) ($b['mobile'] ?? ''));
+    }
+    if ($sortBy === 'city') {
+        return $textSort((string) ($a['city'] ?? ''), (string) ($b['city'] ?? ''));
+    }
+    if ($sortBy === 'status') {
+        return $textSort((string) ($a['status'] ?? ''), (string) ($b['status'] ?? ''));
+    }
+    if ($sortBy === 'rating') {
+        return $textSort((string) ($a['rating'] ?? ''), (string) ($b['rating'] ?? ''));
+    }
+    if ($sortBy === 'assigned_to') {
+        return $textSort((string) ($a['assigned_to_name'] ?? ''), (string) ($b['assigned_to_name'] ?? ''));
+    }
+
+    $toTimestamp = static function (string $date, string $time = '00:00:00'): int {
+        $value = trim($date . ' ' . $time);
+        if ($value === '') {
+            return 0;
+        }
+        $timestamp = strtotime($value);
+        return $timestamp === false ? 0 : $timestamp;
+    };
+
+    if ($sortBy === 'next_followup') {
+        $aTs = $toTimestamp((string) ($a['next_followup_date'] ?? ''), (string) ($a['next_followup_time'] ?? '00:00:00'));
+        $bTs = $toTimestamp((string) ($b['next_followup_date'] ?? ''), (string) ($b['next_followup_time'] ?? '00:00:00'));
+        return ($aTs <=> $bTs) * $direction;
+    }
+    if ($sortBy === 'last_contacted_at') {
+        $aTs = $toTimestamp((string) ($a['last_contacted_at'] ?? ''));
+        $bTs = $toTimestamp((string) ($b['last_contacted_at'] ?? ''));
+        return ($aTs <=> $bTs) * $direction;
+    }
+    if ($sortBy === 'updated_at') {
+        $aTs = $toTimestamp((string) ($a['updated_at'] ?? ''));
+        $bTs = $toTimestamp((string) ($b['updated_at'] ?? ''));
+        return ($aTs <=> $bTs) * $direction;
+    }
+
+    $aTs = $toTimestamp((string) ($a['created_at'] ?? ''));
+    $bTs = $toTimestamp((string) ($b['created_at'] ?? ''));
+    return ($aTs <=> $bTs) * $direction;
+});
 
 $assignedNames = array_values(array_unique(array_filter(array_map(static function (array $lead): string {
     return trim((string) ($lead['assigned_to_name'] ?? ''));
@@ -842,6 +1015,9 @@ ksort($duplicateGroups);
     .ux-panel-body { overflow:auto; }
     .ux-toast-wrap { position: fixed; right: 1rem; bottom: 1rem; display: flex; flex-direction: column; gap: 0.5rem; z-index: 10000; }
     .ux-toast { background: #111827; color: #fff; padding: 0.65rem 0.85rem; border-radius: 10px; box-shadow: 0 10px 24px rgba(0,0,0,0.2); }
+    .sort-link { color: inherit; text-decoration: none; white-space: nowrap; }
+    .sort-link:hover { text-decoration: underline; }
+    textarea { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d1d5db; border-radius: 10px; font: inherit; }
   </style>
 </head>
 <body>
@@ -967,15 +1143,43 @@ ksort($duplicateGroups);
       <?php endif; ?>
     </div>
 
+    <?php if ($loggedInAdmin): ?>
+      <div class="card">
+        <h2 style="margin-top:0;">WhatsApp Draft Message</h2>
+        <p style="margin-top:0;color:#4b5563;">Use placeholders: <code>{{name}}</code>, <code>{{mobile}}</code>, <code>{{city}}</code>, <code>{{assigned_to}}</code>.</p>
+        <form method="post" class="grid" style="gap:0.5rem;">
+          <input type="hidden" name="intent" value="save_whatsapp_settings" />
+          <label for="default_whatsapp_message">Default WhatsApp Message</label>
+          <textarea id="default_whatsapp_message" name="default_whatsapp_message" rows="4" placeholder="Hello {{name}}, thank you for your interest in solar..."><?php echo leads_safe((string) ($whatsappSettings['default_whatsapp_message'] ?? '')); ?></textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+            <small style="color:#6b7280;">
+              Last updated:
+              <?php echo leads_safe((string) ($whatsappSettings['updated_at'] ?? 'Never')); ?>
+              <?php if (trim((string) ($whatsappSettings['updated_by'] ?? '')) !== ''): ?>
+                by <?php echo leads_safe((string) ($whatsappSettings['updated_by'] ?? '')); ?>
+              <?php endif; ?>
+            </small>
+            <button type="submit" class="btn">Save Draft</button>
+          </div>
+        </form>
+      </div>
+    <?php endif; ?>
+
     <div class="card">
       <h2 style="margin-top:0;">Leads</h2>
       <div class="lead-filters">
-        <a href="/leads-dashboard.php?view=active" class="<?php echo $view === 'active' ? 'active' : ''; ?>">Active Leads</a>
-        <a href="/leads-dashboard.php?view=archived" class="<?php echo $view === 'archived' ? 'active' : ''; ?>">Archived Leads</a>
-        <a href="/leads-dashboard.php?view=all" class="<?php echo $view === 'all' ? 'active' : ''; ?>">All Leads</a>
+        <?php $baseQuery = $_GET; ?>
+        <?php $activeQuery = $baseQuery; $activeQuery['view'] = 'active'; ?>
+        <?php $archivedQuery = $baseQuery; $archivedQuery['view'] = 'archived'; ?>
+        <?php $allQuery = $baseQuery; $allQuery['view'] = 'all'; ?>
+        <a href="/leads-dashboard.php?<?php echo leads_safe(http_build_query($activeQuery)); ?>" class="<?php echo $view === 'active' ? 'active' : ''; ?>">Active Leads</a>
+        <a href="/leads-dashboard.php?<?php echo leads_safe(http_build_query($archivedQuery)); ?>" class="<?php echo $view === 'archived' ? 'active' : ''; ?>">Archived Leads</a>
+        <a href="/leads-dashboard.php?<?php echo leads_safe(http_build_query($allQuery)); ?>" class="<?php echo $view === 'all' ? 'active' : ''; ?>">All Leads</a>
       </div>
       <form method="get" class="filters">
         <input type="hidden" name="view" value="<?php echo leads_safe($view); ?>" />
+        <input type="hidden" name="sort_by" value="<?php echo leads_safe($sortBy); ?>" />
+        <input type="hidden" name="sort_dir" value="<?php echo leads_safe($sortDir); ?>" />
         <input type="text" name="search" placeholder="Search name, mobile, city" value="<?php echo leads_safe((string) ($_GET['search'] ?? '')); ?>" />
         <select name="status">
           <option value="all">All Statuses</option>
@@ -1032,22 +1236,24 @@ ksort($duplicateGroups);
                   All
                 </label>
               </th>
-              <th>#</th>
-              <th>Name</th>
-              <th>Mobile</th>
-              <th>City</th>
-              <th>Status</th>
-              <th>Rating</th>
-              <th>Next Follow-Up</th>
-              <th>Assigned To</th>
-              <th>Last Contacted</th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('sr_no', $sortBy, $sortDir)); ?>">#<?php echo leads_safe(leads_sort_indicator('sr_no', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('name', $sortBy, $sortDir)); ?>">Name<?php echo leads_safe(leads_sort_indicator('name', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('mobile', $sortBy, $sortDir)); ?>">Mobile<?php echo leads_safe(leads_sort_indicator('mobile', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('city', $sortBy, $sortDir)); ?>">City<?php echo leads_safe(leads_sort_indicator('city', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('status', $sortBy, $sortDir)); ?>">Status<?php echo leads_safe(leads_sort_indicator('status', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('rating', $sortBy, $sortDir)); ?>">Rating<?php echo leads_safe(leads_sort_indicator('rating', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('next_followup', $sortBy, $sortDir)); ?>">Next Follow-Up<?php echo leads_safe(leads_sort_indicator('next_followup', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('assigned_to', $sortBy, $sortDir)); ?>">Assigned To<?php echo leads_safe(leads_sort_indicator('assigned_to', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('last_contacted_at', $sortBy, $sortDir)); ?>">Last Contacted<?php echo leads_safe(leads_sort_indicator('last_contacted_at', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('created_at', $sortBy, $sortDir)); ?>">Created At<?php echo leads_safe(leads_sort_indicator('created_at', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('updated_at', $sortBy, $sortDir)); ?>">Updated At<?php echo leads_safe(leads_sort_indicator('updated_at', $sortBy, $sortDir)); ?></a></th>
               <th>Campaign</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             <?php if ($filteredLeads === []): ?>
-              <tr><td colspan="12">No leads match the selected filters.</td></tr>
+              <tr><td colspan="14">No leads match the selected filters.</td></tr>
             <?php else: ?>
               <?php foreach ($filteredLeads as $index => $lead): ?>
                 <?php echo leads_render_row($lead, $index + 1, $today, $quotationCreatePath); ?>
@@ -1084,6 +1290,7 @@ ksort($duplicateGroups);
     const drawerBody = document.getElementById('ux-drawer-body');
     const drawerTitle = document.getElementById('ux-drawer-title');
     const toastWrap = document.getElementById('ux-toast-wrap');
+    const whatsappTemplate = <?php echo json_encode((string) ($whatsappSettings['default_whatsapp_message'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
 
     function showToast(message) {
       const el = document.createElement('div');
@@ -1117,6 +1324,24 @@ ksort($duplicateGroups);
       drawer.classList.remove('open');
       drawerBackdrop.style.display = 'none';
       drawerBody.innerHTML = '';
+    }
+
+    function normalizeWhatsappMobile(rawMobile) {
+      const digits = (rawMobile || '').replace(/\D+/g, '');
+      if (digits.length === 10) return `91${digits}`;
+      if (digits.length === 12 && digits.startsWith('91')) return digits;
+      return '';
+    }
+
+    function applyWhatsappTemplate(template, row) {
+      const values = {
+        name: row?.dataset?.name?.trim() || 'Customer',
+        mobile: row?.dataset?.mobile?.trim() || '',
+        city: row?.dataset?.city?.trim() || '',
+        assigned_to: row?.dataset?.assignedTo?.trim() || '',
+      };
+
+      return template.replace(/\{\{\s*(name|mobile|city|assigned_to)\s*\}\}/gi, (_, key) => values[key.toLowerCase()] || '');
     }
 
     async function ajaxAction(action, payload = {}) {
@@ -1197,12 +1422,22 @@ ksort($duplicateGroups);
       }
 
       if (action === 'whatsapp') {
-        const mobile = row?.children?.[3]?.innerText?.trim() || '';
-        const name = row?.children?.[2]?.innerText?.trim() || 'Customer';
-        const clean = mobile.replace(/\D+/g, '');
-        const msg = encodeURIComponent(`Hello ${name}, this is Dakshayani Enterprises regarding your solar enquiry.`);
-        const url = `https://wa.me/91${clean}?text=${msg}`;
-        openModal('WhatsApp', `<p style="margin-top:0;"><strong>Number:</strong> ${mobile || 'N/A'}</p><p>Open WhatsApp in a new tab while keeping this dashboard intact.</p><a class="btn" href="${url}" target="_blank" rel="noopener">Open WhatsApp</a>`);
+        if (!whatsappTemplate || !whatsappTemplate.trim()) {
+          showToast('WhatsApp draft message is not set.');
+          return;
+        }
+        const normalizedMobile = normalizeWhatsappMobile(row?.dataset?.mobile || '');
+        if (!normalizedMobile) {
+          showToast('Invalid lead mobile number for WhatsApp.');
+          return;
+        }
+        const finalMessage = applyWhatsappTemplate(whatsappTemplate, row).trim();
+        if (!finalMessage) {
+          showToast('WhatsApp draft message resolved to empty text.');
+          return;
+        }
+        const url = `https://wa.me/${normalizedMobile}?text=${encodeURIComponent(finalMessage)}`;
+        window.open(url, '_blank', 'noopener');
         return;
       }
 
