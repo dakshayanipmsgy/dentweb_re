@@ -17,8 +17,6 @@ try {
     $hero = $settings['hero'] ?? [];
     $sections = $settings['sections'] ?? [];
     $global = $settings['global'] ?? [];
-    $announcementBar = $settings['announcement_bar'] ?? [];
-    $calculator = $settings['savings_calculator'] ?? [];
 
     $offers = array_values(array_map(static function (array $offer): array {
         return [
@@ -43,12 +41,8 @@ try {
     $response = [
         'theme' => $theme,
         'hero' => [
-            'kicker' => $hero['kicker'] ?? '',
             'title' => $hero['title'] ?? '',
             'subtitle' => $hero['subtitle'] ?? '',
-            'background_type' => $hero['background_type'] ?? 'image',
-            'background_image' => $hero['background_image'] ?? '',
-            'background_video' => $hero['background_video'] ?? '',
             'primary_image' => $hero['primary_image'] ?? '',
             'primary_caption' => $hero['primary_caption'] ?? '',
             'announcement_badge' => $hero['announcement_badge'] ?? '',
@@ -58,15 +52,6 @@ try {
             'secondary_button_text' => $hero['secondary_button_text'] ?? '',
             'secondary_button_link' => $hero['secondary_button_link'] ?? '',
         ],
-        'announcement_bar' => [
-            'enabled' => !empty($announcementBar['enabled']),
-            'text' => $announcementBar['text'] ?? '',
-            'link' => $announcementBar['link'] ?? '',
-            'start_date' => $announcementBar['start_date'] ?? '',
-            'end_date' => $announcementBar['end_date'] ?? '',
-            'dismissible' => !array_key_exists('dismissible', $announcementBar) || !empty($announcementBar['dismissible']),
-        ],
-        'savings_calculator' => $calculator,
         'global' => [
             'site_tagline' => $global['site_tagline'] ?? '',
             'header_callout' => $global['header_callout'] ?? '',

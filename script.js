@@ -53,7 +53,7 @@ const INLINE_PARTIALS = {
         </nav>
 
         <div class="nav-actions" role="group" aria-label="Header quick actions">
-          <a href="/contact" class="btn btn-primary nav-cta-link">Get Your Free Solar Quote</a>
+          <a href="/login.php" class="btn btn-secondary nav-login-link">Login Portal</a>
           <span class="nav-theme-badge" data-site-theme-label hidden></span>
         </div>
 
@@ -101,7 +101,6 @@ const INLINE_PARTIALS = {
         <div class="nav-mobile-divider" role="presentation"></div>
         <div class="nav-mobile-section" aria-label="Quick actions">
           <p class="nav-mobile-theme" data-site-theme-label hidden></p>
-          <a href="/contact" class="btn btn-primary nav-mobile-cta">Get Your Free Solar Quote</a>
         </div>
       </nav>
 
@@ -1257,23 +1256,55 @@ function applyGlobalContent(global = {}) {
   refreshSubheaderMarquee();
 }
 
+function renderHeroGallery(items) {
+  const container = document.querySelector('[data-hero-gallery]');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (!Array.isArray(items) || !items.length) {
+    toggleHidden(container, true);
+    return;
+  }
+
+  toggleHidden(container, false);
+
+  const galleryItems = items.slice(0, 3);
+  galleryItems.slice(0, 3).forEach((item) => {
+    const figure = document.createElement('figure');
+    const img = document.createElement('img');
+    img.src = item.image;
+    img.alt = item.caption;
+    img.loading = 'lazy';
+
+    const caption = document.createElement('figcaption');
+    caption.textContent = item.caption;
+
+    figure.appendChild(img);
+    figure.appendChild(caption);
+    container.appendChild(figure);
+  });
+}
+
 function applyHeroSettings(hero = {}, theme = {}) {
   const heroSection = document.querySelector('[data-hero-section]');
   const kicker = document.querySelector('[data-hero-kicker]');
   const title = document.querySelector('[data-hero-title]');
   const subtitle = document.querySelector('[data-hero-subtitle]');
-  const bgImage = document.querySelector('[data-hero-background-image]');
-  const bgVideo = document.querySelector('[data-hero-background-video]');
+  const mainImage = document.querySelector('[data-hero-main-image]');
+  const mainCaption = document.querySelector('[data-hero-main-caption]');
   const primaryBtn = document.querySelector('[data-hero-primary]');
   const primaryBtnText = document.querySelector('[data-hero-primary-text]');
   const secondaryBtn = document.querySelector('[data-hero-secondary]');
   const secondaryBtnText = document.querySelector('[data-hero-secondary-text]');
+  const announcement = document.querySelector('[data-hero-announcement]');
+  const announcementBadge = document.querySelector('[data-hero-announcement-badge]');
+  const announcementText = document.querySelector('[data-hero-announcement-text]');
   const root = document.documentElement;
   const activeTheme = document.body?.dataset?.festivalTheme || 'default';
-  const resolvedImage = (typeof hero.background_image === 'string' ? hero.background_image : hero.primary_image) || '';
-  const heroImage = resolvedImage.trim() || DEFAULT_HERO_IMAGE;
-  const backgroundVideo = typeof hero.background_video === 'string' ? hero.background_video.trim() : '';
-  const isVideo = hero.background_type === 'video' && backgroundVideo;
+  const resolvedImage = (typeof hero.primary_image === 'string' ? hero.primary_image : hero.primaryImage) || '';
+  const primaryImage = resolvedImage.trim() || DEFAULT_HERO_IMAGE;
+  const primaryAlt = typeof hero.primaryAlt === 'string' ? hero.primaryAlt : '';
 
   if (kicker) {
     const kickerText = typeof hero.kicker === 'string' ? hero.kicker.trim() : '';
@@ -1282,17 +1313,11 @@ function applyHeroSettings(hero = {}, theme = {}) {
   }
   if (title) title.textContent = typeof hero.title === 'string' ? hero.title : '';
   if (subtitle) subtitle.textContent = typeof hero.subtitle === 'string' ? hero.subtitle : '';
-  if (bgImage) bgImage.src = heroImage;
-  if (bgVideo) {
-    if (isVideo) {
-      bgVideo.src = backgroundVideo;
-      bgVideo.hidden = false;
-      if (typeof bgVideo.load === 'function') bgVideo.load();
-    } else {
-      bgVideo.hidden = true;
-      bgVideo.removeAttribute('src');
-    }
+  if (mainImage) {
+    mainImage.src = primaryImage;
+    mainImage.alt = primaryAlt || mainImage.alt || 'Dakshayani Enterprises';
   }
+  if (mainCaption) mainCaption.textContent = typeof hero.primary_caption === 'string' ? hero.primary_caption : (typeof hero.primaryCaption === 'string' ? hero.primaryCaption : '');
 
   if (primaryBtn) {
     if (typeof hero.primary_button_link === 'string') {
@@ -1308,123 +1333,29 @@ function applyHeroSettings(hero = {}, theme = {}) {
     toggleHidden(secondaryBtn, !hero.secondary_button_text);
   }
 
-  if (heroImage && activeTheme === 'default') {
-    root.style.setProperty('--hero-image-url', `url('${heroImage}')`);
+  if (announcement) {
+    const badge = typeof hero.announcement_badge === 'string' ? hero.announcement_badge : '';
+    const text = typeof hero.announcement_text === 'string' ? hero.announcement_text : '';
+    if (announcementBadge) {
+      announcementBadge.textContent = badge;
+      toggleHidden(announcementBadge, !badge);
+    }
+    if (announcementText) {
+      announcementText.textContent = text;
+      toggleHidden(announcementText, !text);
+    }
+    toggleHidden(announcement, !badge && !text);
   }
+
+  if (primaryImage && activeTheme === 'default') {
+    root.style.setProperty('--hero-image-url', `url('${primaryImage}')`);
+  }
+
+  renderHeroGallery(Array.isArray(hero.gallery) ? hero.gallery : []);
 
   if (heroSection) {
-    heroSection.dataset.heroBackground = isVideo ? 'video' : 'image';
     heroSection.hidden = false;
   }
-}
-
-function renderAnnouncementBar(config = {}) {
-  const bar = document.querySelector('[data-announcement-bar]');
-  const textNode = document.querySelector('[data-announcement-text]');
-  const linkNode = document.querySelector('[data-announcement-link]');
-  const closeNode = document.querySelector('[data-announcement-close]');
-  if (!bar || !textNode || !linkNode || !closeNode) return;
-
-  const enabled = !!config.enabled;
-  const text = typeof config.text === 'string' ? config.text.trim() : '';
-  const link = typeof config.link === 'string' ? config.link.trim() : '';
-  const start = typeof config.start_date === 'string' ? config.start_date.trim() : '';
-  const end = typeof config.end_date === 'string' ? config.end_date.trim() : '';
-  const dismissible = config.dismissible !== false;
-  const today = new Date().toISOString().slice(0, 10);
-  const inRange = (!start || today >= start) && (!end || today <= end);
-
-  if (!enabled || !text || !inRange) {
-    bar.hidden = true;
-    return;
-  }
-
-  if (dismissible && localStorage.getItem('dakshayani_announcement_dismissed') === `${text}|${start}|${end}`) {
-    bar.hidden = true;
-    return;
-  }
-
-  textNode.textContent = text;
-  linkNode.href = link || '#';
-  linkNode.classList.toggle('is-static', !link);
-  closeNode.hidden = !dismissible;
-  if (dismissible) {
-    closeNode.onclick = () => {
-      localStorage.setItem('dakshayani_announcement_dismissed', `${text}|${start}|${end}`);
-      bar.hidden = true;
-    };
-  }
-  bar.hidden = false;
-}
-
-function renderSavingsCalculator(settings = {}) {
-  const section = document.querySelector('[data-savings-calculator]');
-  if (!section) return;
-  if (settings.enabled === false) {
-    section.hidden = true;
-    return;
-  }
-
-  const slider = section.querySelector('[data-calculator-bill-slider]');
-  const input = section.querySelector('[data-calculator-bill-input]');
-  const systemType = section.querySelector('[data-calculator-system-type]');
-  const results = section.querySelector('[data-calculator-results]');
-  const cta = section.querySelector('[data-calculator-cta]');
-  if (!slider || !input || !systemType || !results || !cta) return;
-
-  const minBill = Number(settings.min_monthly_bill || 1000);
-  const maxBill = Number(settings.max_monthly_bill || 50000);
-  const defaultBill = Math.min(maxBill, Math.max(minBill, Number(settings.default_monthly_bill || 3500)));
-  const allowedTypes = Array.isArray(settings.allowed_system_types) && settings.allowed_system_types.length ? settings.allowed_system_types : ['on_grid', 'hybrid'];
-
-  slider.min = String(minBill);
-  slider.max = String(maxBill);
-  input.min = String(minBill);
-  input.max = String(maxBill);
-  slider.value = String(defaultBill);
-  input.value = String(defaultBill);
-  cta.textContent = settings.cta_text || 'Schedule Consultation';
-  cta.href = settings.cta_link || '/contact';
-
-  systemType.innerHTML = '';
-  allowedTypes.forEach((type) => {
-    const option = document.createElement('option');
-    option.value = type;
-    option.textContent = type === 'hybrid' ? 'Hybrid' : 'On-grid';
-    systemType.appendChild(option);
-  });
-
-  const formatCurrency = (value) => `₹${Math.round(value).toLocaleString('en-IN')}`;
-  const formatNumber = (value) => `${value.toFixed(1)} kW`;
-  const formatYears = (value) => `${value.toFixed(1)} years`;
-
-  const render = () => {
-    const bill = Math.min(maxBill, Math.max(minBill, Number(input.value || slider.value || defaultBill)));
-    slider.value = String(bill);
-    input.value = String(bill);
-    const type = systemType.value || 'on_grid';
-    const systemSize = Math.max(1, bill / 1000);
-    const perKw = Number(settings?.cost_per_kw?.[type] || 60000);
-    const investment = systemSize * perKw;
-    const subsidyPercent = Number(settings?.subsidy?.[`${type}_percent`] || 0) / 100;
-    const subsidyMax = Number(settings?.subsidy?.max_amount || 0);
-    const subsidy = Math.min(investment * subsidyPercent, subsidyMax);
-    const paybackYears = Number(settings?.payback?.[`${type}_years`] || 5);
-    const labels = settings.labels || {};
-    const cards = [
-      { label: labels.system_size || 'Estimated System Size', value: formatNumber(systemSize) },
-      { label: labels.investment || 'Estimated Investment', value: formatCurrency(investment) },
-      { label: labels.subsidy || 'Estimated Subsidy', value: formatCurrency(subsidy) },
-      { label: labels.payback || 'Estimated Payback Period', value: formatYears(paybackYears) },
-    ];
-    results.innerHTML = cards.map((card) => `<article class="savings-result"><p>${card.label}</p><h3>${card.value}</h3></article>`).join('');
-  };
-
-  slider.oninput = render;
-  input.oninput = render;
-  systemType.onchange = render;
-  render();
-  section.hidden = false;
 }
 
 function renderCtaStrip(sections = {}) {
@@ -1631,8 +1562,6 @@ function applySiteContent(detail = {}) {
   applyThemeTokens(theme);
   applyGlobalContent(detail.global || {});
   applyHeroSettings(detail.hero || {}, theme);
-  renderAnnouncementBar(detail.announcement_bar || {});
-  renderSavingsCalculator(detail.savings_calculator || {});
   renderOffers(detail.sections || {}, detail.offers || detail.seasonal_offers || [], theme);
   renderTestimonials(detail.sections || {}, detail.testimonials || [], theme);
   renderCtaStrip(detail.sections || {});
