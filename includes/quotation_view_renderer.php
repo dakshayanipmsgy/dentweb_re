@@ -105,7 +105,10 @@ function compute_financial_clarity(array $quote, array $calc, array $snapshot): 
         return (float) $value;
     };
 
-    $gross = $toFloat($calc['gross_payable'] ?? 0);
+    $grossBeforeDiscount = $toFloat($calc['gross_payable_before_discount'] ?? 0);
+    $discount = max(0, $toFloat($calc['discount_rs'] ?? 0));
+    $grossFallback = max(0, $grossBeforeDiscount - $discount);
+    $gross = $toFloat($calc['gross_payable'] ?? $grossFallback);
     $subsidy = $toFloat($calc['subsidy_expected_rs'] ?? 0);
     $capacity = max(0, $toFloat($quote['capacity_kwp'] ?? $quote['system_capacity_kwp'] ?? 0));
     $tariff = max(0.1, $toFloat($snapshot['unit_rate_rs_per_kwh'] ?? null, 1));
@@ -272,7 +275,6 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
     }
     $coverNote = $coverNoteSnapshot
         ?: $coverNoteLiveTemplate
-        ?: trim((string) ($quote['cover_note_text'] ?? ''))
         ?: trim((string) ($quoteDefaults['defaults']['cover_note_template'] ?? ''));
     $specialReq = trim((string) ($quote['special_requests_text'] ?? $quote['special_requests_inclusive'] ?? ''));
 
@@ -366,6 +368,37 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
     $discountRsDisplay = $discountApplicable ? (float) $rawDiscountFromQuote : 0.0;
     $grossPayableLabel = $discountApplicable ? 'Gross payable (after discount)' : 'Gross payable';
 
+    $fieldValue = static function ($value): string {
+        if ($value === null) {
+            return '';
+        }
+        return trim((string) $value);
+    };
+    $customerSiteFields = [
+        ['label' => 'Name', 'value' => $fieldValue($quote['customer_name'] ?? '')],
+        ['label' => 'Mobile', 'value' => $fieldValue($quote['customer_mobile'] ?? '')],
+        ['label' => 'Site Address', 'value' => $fieldValue($quote['site_address'] ?? '')],
+        ['label' => 'District', 'value' => $fieldValue($quote['district'] ?? '')],
+        ['label' => 'City', 'value' => $fieldValue($quote['city'] ?? '')],
+        ['label' => 'State', 'value' => $fieldValue($quote['state'] ?? '')],
+        ['label' => 'PIN', 'value' => $fieldValue($quote['pin'] ?? '')],
+        ['label' => 'Billing Address', 'value' => $fieldValue($quote['billing_address'] ?? '')],
+        ['label' => 'Place of Supply State', 'value' => $fieldValue($quote['place_of_supply_state'] ?? '')],
+        ['label' => 'Consumer Account No. (JBVNL)', 'value' => $fieldValue($quote['consumer_account_no'] ?? '')],
+        ['label' => 'Meter Number', 'value' => $fieldValue($quote['meter_number'] ?? '')],
+        ['label' => 'Meter Serial Number', 'value' => $fieldValue($quote['meter_serial_number'] ?? '')],
+        ['label' => 'Application ID', 'value' => $fieldValue($quote['application_id'] ?? '')],
+        ['label' => 'Application Submitted Date', 'value' => $fieldValue($quote['application_submitted_date'] ?? '')],
+        ['label' => 'Sanction Load', 'value' => $fieldValue($quote['sanction_load_kwp'] ?? '')],
+        ['label' => 'Installed PV Capacity', 'value' => $fieldValue($quote['installed_pv_module_capacity_kwp'] ?? '')],
+        ['label' => 'Circle', 'value' => $fieldValue($quote['circle_name'] ?? '')],
+        ['label' => 'Division', 'value' => $fieldValue($quote['division_name'] ?? '')],
+        ['label' => 'Sub Division', 'value' => $fieldValue($quote['sub_division_name'] ?? '')],
+    ];
+    $customerSiteFields = array_values(array_filter($customerSiteFields, static function (array $field): bool {
+        return $field['value'] !== '';
+    }));
+
     $quotationDateRaw = safe_text((string) ($quote['quotation_date'] ?? ''));
     if ($quotationDateRaw === '') {
         $quotationDateRaw = safe_text((string) ($quote['created_at'] ?? ''));
@@ -383,7 +416,7 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <section class="card header"><div class="header-top"><?php if ($hasLogo): ?><div class="header-logo"><img src="<?= htmlspecialchars($logoSrc, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($companyName, ENT_QUOTES) ?> logo" /></div><?php endif; ?><div class="header-main"><div class="h"><?= htmlspecialchars($companyName, ENT_QUOTES) ?></div><div><?= htmlspecialchars((string)($company['address_line'] ?? ''), ENT_QUOTES) ?>, <?= htmlspecialchars((string)($company['city'] ?? ''), ENT_QUOTES) ?></div><div><?= implode(' | ', $phoneBits) ?><?= $phoneBits !== [] ? ' | ' : '' ?>✉️ <?= htmlspecialchars((string)($company['email_primary'] ?? ''), ENT_QUOTES) ?> · 🌐 <?= htmlspecialchars($website, ENT_QUOTES) ?><?= $waLink !== '' ? ' · <a href="' . htmlspecialchars($waLink, ENT_QUOTES) . '">Chat</a>' : '' ?></div><div>GSTIN <?= htmlspecialchars((string)($company['gstin'] ?? ''), ENT_QUOTES) ?> · UDYAM <?= htmlspecialchars((string)($company['udyam'] ?? ''), ENT_QUOTES) ?> · PAN <?= htmlspecialchars((string)($company['pan'] ?? ''), ENT_QUOTES) ?></div><div>Quote No <b><?= htmlspecialchars((string)($quote['quote_no'] ?? ''), ENT_QUOTES) ?></b></div></div></div></section>
 <section class="card quote-status-row"><div><span class="quote-status-badge <?= htmlspecialchars($statusBadgeClass, ENT_QUOTES) ?>">Status: <?= htmlspecialchars($statusBadgeLabel, ENT_QUOTES) ?></span><div class="quote-meta-dates muted"><div>Quotation Date: <?= htmlspecialchars($quotationDateDisplay, ENT_QUOTES) ?></div><div>Valid Until: <?= htmlspecialchars($validUntilDisplay, ENT_QUOTES) ?></div></div></div></section>
 <section class="card"><span class="chip">✅ MNRE compliant</span><span class="chip"><?= $segment === 'RES' ? '✅ PM Surya Ghar eligible' : 'ℹ️ Segment specific policy' ?></span><span class="chip">🔌 Net metering supported</span><span class="chip">🛡️ 25+ year life / warranty</span></section>
-<section class="card"><div class="h sec">🏠 Customer &amp; Site 📍</div><div class="grid2"><div class="metric"><b>Customer</b><div><?= htmlspecialchars((string)($quote['customer_name'] ?? ''), ENT_QUOTES) ?></div><div class="muted"><?= htmlspecialchars((string)($quote['customer_mobile'] ?? ''), ENT_QUOTES) ?></div></div><div class="metric"><b>Site</b><div><?= htmlspecialchars((string)($quote['site_address'] ?? ''), ENT_QUOTES) ?></div><div class="muted"><?= htmlspecialchars((string)($quote['district'] ?? ''), ENT_QUOTES) ?></div></div></div></section>
+<?php if ($customerSiteFields !== []): ?><section class="card"><div class="h sec">🏠 Customer &amp; Site 📍</div><div class="grid2"><?php foreach ($customerSiteFields as $field): ?><div class="metric"><b><?= htmlspecialchars((string) ($field['label'] ?? ''), ENT_QUOTES) ?></b><div><?= nl2br(htmlspecialchars((string) ($field['value'] ?? ''), ENT_QUOTES)) ?></div></div><?php endforeach; ?></div></section><?php endif; ?>
 <?php if ($coverNote !== ''): ?><section class="card"><div><?= quotation_sanitize_html($coverNote) ?></div></section><?php endif; ?>
 <section class="card"><div class="h sec">⚡ At a glance</div><div class="hero"><div class="metric">System Size<?php if ($hasMainSolarSplit): ?><b class="system-size-main"><?= htmlspecialchars(number_format($mainSolarKwp, 2, '.', ''), ENT_QUOTES) ?> kWp</b><?php if ($complimentarySolarKwp > 0): ?><small class="system-size-sub">Complimentary Non-DCR Solar Size: <?= htmlspecialchars(number_format($complimentarySolarKwp, 2, '.', ''), ENT_QUOTES) ?> kWp</small><?php endif; ?><?php else: ?><b><?= htmlspecialchars((string)($quote['capacity_kwp'] ?? '0'), ENT_QUOTES) ?> kWp</b><?php endif; ?></div><div class="metric">Monthly Bill (Without Solar)<b><?= htmlspecialchars($monthlyBillBeforeDisplay, ENT_QUOTES) ?></b></div><div class="metric">Monthly Outflow (With Solar – Bank Finance)<b id="heroOutflowBank">-</b></div><div class="metric">Monthly Outflow (With Solar – Self Funded)<b id="heroOutflowSelf">-</b></div></div><div class="save-line">🟢 You save approx <span id="heroSaving">-</span> every month</div></section>
 <section class="card"><div class="h sec">📦 Item summary</div><table><thead><tr><th>Sr No</th><th>Item and Description</th><th>HSN</th><th class="center">Quantity</th><th class="center">Unit</th></tr></thead><tbody><?php if ($itemRows === []): ?><tr><td colspan="5" class="center muted">No line items added.</td></tr><?php else: foreach ($itemRows as $idx => $item): ?><tr><td><?= (int)$idx + 1 ?></td><td><div><?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?></div><?php $itemDesc=(string)($item['description'] ?? ''); if (trim($itemDesc) !== ''): ?><div class="item-master-description"><?= nl2br(htmlspecialchars($itemDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?><?php $customDesc=(string)($item['custom_description'] ?? ''); if (trim($customDesc) !== ''): ?><div class="item-custom-description">📝 <?= nl2br(htmlspecialchars($customDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?></td><td><?= htmlspecialchars((string)($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['qty'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
