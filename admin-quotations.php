@@ -585,7 +585,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['gst_mode_snapshot'] = (string) ($quote['tax_breakdown']['mode'] ?? 'single');
         $quote['gst_slabs_snapshot'] = is_array($quote['tax_breakdown']['slabs'] ?? null) ? $quote['tax_breakdown']['slabs'] : [];
         $quote['input_total_gst_inclusive'] = $systemTotalInclGstRs;
-        $quote['cover_note_text'] = trim((string) ($_POST['cover_note_text'] ?? ''));
         $quote['special_requests_text'] = trim((string) ($_POST['special_requests_text'] ?? ''));
         $quote['special_requests_inclusive'] = $quote['special_requests_text'];
         $quote['special_requests_override_note'] = true;
@@ -616,7 +615,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['finance_inputs']['transportation_rs'] = (string) $transportationRs;
         $quote['finance_inputs']['discount_rs'] = (string) $discountRs;
         $quote['finance_inputs']['discount_note'] = $discountNote;
-        $quote['finance_inputs']['notes_for_customer'] = trim((string) ($_POST['notes_for_customer'] ?? ''));
         $quote['style_overrides']['typography']['base_font_px'] = safe_text($_POST['style_base_font_px'] ?? '');
         $quote['style_overrides']['typography']['heading_scale'] = safe_text($_POST['style_heading_scale'] ?? '');
         $quote['style_overrides']['typography']['density'] = safe_text($_POST['style_density'] ?? '');
@@ -930,9 +928,6 @@ if ($editing['id'] === '' && $fromLeadId !== '') {
         $editing['customer_snapshot']['district'] = (string) ($prefill['district'] ?? '');
         $editing['customer_snapshot']['state'] = (string) ($prefill['state'] ?? '');
         $editing['customer_snapshot']['address'] = (string) ($prefill['locality'] ?? '');
-        if ($editing['cover_note_text'] === '' && (string) ($prefill['notes'] ?? '') !== '') {
-            $editing['cover_note_text'] = (string) ($prefill['notes'] ?? '');
-        }
         $editing['source'] = is_array($prefill['source'] ?? null) ? $prefill['source'] : ['type' => '', 'lead_id' => '', 'lead_mobile' => ''];
         $prefillMessage = 'Prefilled from Lead: ' . (string) ($prefill['customer_name'] ?? '');
     } else {
@@ -1011,7 +1006,6 @@ if ($lookup !== null) {
 <input type="hidden" name="capacity_kwp" id="computedCapacityKwp" value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>">
 <div><label>Quotation Date</label><input type="date" name="quotation_date" value="<?= htmlspecialchars((string)($editing['quotation_date'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Valid Until</label><input type="date" name="valid_until" value="<?= htmlspecialchars((string)$editing['valid_until'], ENT_QUOTES) ?>"></div>
-<div><label>Cover note paragraph</label><textarea name="cover_note_text"><?= htmlspecialchars((string)($editing['cover_note_text'] ?: ($quoteDefaults['defaults']['cover_note_template'] ?? '')), ENT_QUOTES) ?></textarea></div>
 <div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div><div><label>Total system price (including GST) ₹</label><input type="number" step="0.01" required name="system_total_incl_gst_rs" value="<?= htmlspecialchars((string)($editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
 <div><label>Tax Profile</label><select name="tax_profile_id"><option value="">-- none --</option><?php foreach ($inventoryTaxProfiles as $profile): ?><option value="<?= htmlspecialchars((string)($profile['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($editing['tax_profile_id'] ?? '')===(string)($profile['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($profile['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
 <div><label>Place of Supply State</label><input name="place_of_supply_state" value="<?= htmlspecialchars((string)$editing['place_of_supply_state'], ENT_QUOTES) ?>"></div>
@@ -1020,7 +1014,7 @@ if ($lookup !== null) {
 <div><label>State</label><input name="state" value="<?= htmlspecialchars((string)($editing['state'] !== '' ? $editing['state'] : ($quoteSnapshot['state'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>PIN</label><input name="pin" value="<?= htmlspecialchars((string)($quoteSnapshot['pin_code'] ?? $editing['pin']), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Billing Address</label><textarea name="billing_address"><?= htmlspecialchars((string)((($editing['billing_address'] !== '') ? $editing['billing_address'] : ($quoteSnapshot['address'] ?? ''))), ENT_QUOTES) ?></textarea></div>
-<div style="grid-column:1/-1"><label>Site Address</label><textarea name="site_address"><?= htmlspecialchars((string)((($editing['site_address'] !== '') ? $editing['site_address'] : ($quoteSnapshot['address'] ?? ''))), ENT_QUOTES) ?></textarea></div>
+<div style="grid-column:1/-1"><label>Site Address</label><div style="display:flex;gap:8px;align-items:flex-start"><textarea name="site_address" id="siteAddressField"><?= htmlspecialchars((string)((($editing['site_address'] !== '') ? $editing['site_address'] : ($quoteSnapshot['address'] ?? ''))), ENT_QUOTES) ?></textarea><button type="button" class="btn secondary" id="copyBillingAddressBtn" style="white-space:nowrap">Copy from Billing Address</button></div></div>
 <div><label>Application ID</label><input name="application_id" value="<?= htmlspecialchars((string)(($editing['application_id'] !== '') ? $editing['application_id'] : ($quoteSnapshot['application_id'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Application Submitted Date</label><input name="application_submitted_date" value="<?= htmlspecialchars((string)(($editing['application_submitted_date'] !== '') ? $editing['application_submitted_date'] : ($quoteSnapshot['application_submitted_date'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Sanction Load (kWp)</label><input name="sanction_load_kwp" value="<?= htmlspecialchars((string)(($editing['sanction_load_kwp'] !== '') ? $editing['sanction_load_kwp'] : ($quoteSnapshot['sanction_load_kwp'] ?? '')), ENT_QUOTES) ?>"></div>
@@ -1044,7 +1038,6 @@ if ($lookup !== null) {
 <div><label>Loan interest %</label><input type="number" step="0.01" name="loan_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['interest_pct'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Loan tenure years</label><input type="number" step="1" name="loan_tenure_years" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Margin money ₹</label><input type="number" step="0.01" name="loan_margin_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['margin_pct'] ?? ''), ENT_QUOTES) ?>"><div class="muted"><a href="#" id="resetLoanDefaults">Reset to defaults</a></div></div>
-<div style="grid-column:1/-1"><label>Notes for customer</label><textarea name="notes_for_customer"><?= htmlspecialchars((string)($editing['finance_inputs']['notes_for_customer'] ?? ''), ENT_QUOTES) ?></textarea></div>
 <div style="grid-column:1/-1"><h3>Typography & Watermark Overrides</h3></div>
 <div><label>Base font px</label><input type="number" step="1" name="style_base_font_px" value="<?= htmlspecialchars((string)($editing['style_overrides']['typography']['base_font_px'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Heading scale</label><input type="number" step="0.1" name="style_heading_scale" value="<?= htmlspecialchars((string)($editing['style_overrides']['typography']['heading_scale'] ?? ''), ENT_QUOTES) ?>"></div>
@@ -1144,7 +1137,7 @@ $quoteShareMobile = $quotationExtractMobile($q);
         {title:'Section 4 — Item Builder', containsHeadings:['Items Table','Item Builder (Structured)']},
         {title:'Section 5 — Customer Savings Inputs', names:['Main Solar Size (kWp)','Complimentary Non-DCR Solar Size (kWp)','Total System Capacity (kWp)','Total system price (including GST) ₹','Tax Profile','Pricing Mode','Monthly electricity bill (₹)','Unit rate (₹/kWh)','Annual generation per kW','Transportation ₹','Discount (₹)','Discount note','Subsidy ₹','Loan enabled','Loan interest %','Loan tenure years','Margin money ₹','Loan amount ₹'], containsHeadings:['Customer Savings Inputs'], className:'savings'},
         {title:'Section 6 — Typography / Watermark Overrides', containsHeadings:['Typography & Watermark Overrides']},
-        {title:'Section 7 — Annexure Overrides', containsHeadings:['Annexure Overrides']},
+        {title:'Section 7 — Annexure Overrides', names:['Cover Notes','System Inclusions','Payment Terms','Warranty','System Type Explainer','Transportation','Terms & Conditions','PM Subsidy Info','Completion Milestones','Next Steps'], containsHeadings:['Annexure Overrides']},
       ];
 
       const controls=[...grid.children];
@@ -1164,8 +1157,8 @@ $quoteShareMobile = $quotationExtractMobile($q);
           if((sec.cfg.names||[]).includes(label)){target=sec;break;}
           if((sec.cfg.containsHeadings||[]).length && isHeadingBlock(node,sec.cfg.containsHeadings)){target=sec;break;}
         }
-        if(label==='Project Summary' || label==='Special Requests From Consumer (Inclusive in the rate)' || label==='Place of Supply State' || label==='Cover note paragraph' || label==='Notes for customer'){ target=sectionCards[2]; }
-        if((label.includes('Address') || label.includes('Summary') || label.includes('Special Requests') || label.startsWith('Notes for customer')) && node.style.gridColumn!=='1/-1'){node.classList.add('full-span');}
+        if(label==='Project Summary' || label==='Special Requests From Consumer (Inclusive in the rate)' || label==='Place of Supply State'){ target=sectionCards[2]; }
+        if((label.includes('Address') || label.includes('Summary') || label.includes('Special Requests')) && node.style.gridColumn!=='1/-1'){node.classList.add('full-span');}
         if(node.querySelector('table') || isHeadingBlock(node,['Item Builder (Structured)','Annexure Overrides']) || node.querySelector('textarea')){ if((sectionCards[3].inner===target.inner || sectionCards[6].inner===target.inner)){node.classList.add('full-span');} }
         target.inner.appendChild(node);
       });
@@ -1200,6 +1193,17 @@ $quoteShareMobile = $quotationExtractMobile($q);
       if(submitBtn){submitBtn.classList.add('btn');saveInner.appendChild(submitBtn);}      
       grid.appendChild(saveCard);
     }
+  }
+
+
+  const copyBillingAddressBtn=document.getElementById('copyBillingAddressBtn');
+  const billingAddressField=document.querySelector('textarea[name="billing_address"]');
+  const siteAddressField=document.getElementById('siteAddressField')||document.querySelector('textarea[name="site_address"]');
+  if(copyBillingAddressBtn&&billingAddressField&&siteAddressField){
+    copyBillingAddressBtn.addEventListener('click',()=>{
+      siteAddressField.value=billingAddressField.value;
+      siteAddressField.dispatchEvent(new Event('input',{bubbles:true}));
+    });
   }
 
   const panelWrap=document.createElement('div');panelWrap.id='uxTabPanels';

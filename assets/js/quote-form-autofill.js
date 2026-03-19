@@ -15,6 +15,7 @@
     const totalInput = field('system_total_incl_gst_rs');
     const transportInput = field('transportation_rs');
     const subsidyInput = field('subsidy_expected_rs');
+    const discountInput = field('discount_rs');
     const capacityInput = quoteForm.querySelector('#computedCapacityKwp') || field('capacity_kwp');
     const schemeTypeInput = field('scheme_type');
     const customerTypeInput = field('customer_type');
@@ -106,7 +107,11 @@
         subsidyInput.value = String(subsidyByCapacity(parseNum(capacityInput.value)));
     };
 
-    const computeGrossPayable = () => parseNum(totalInput?.value) + parseNum(transportInput?.value);
+    const computeGrossPayable = () => {
+        const grossBeforeDiscount = parseNum(totalInput?.value) + parseNum(transportInput?.value);
+        const discount = Math.max(0, parseNum(discountInput?.value));
+        return Math.max(0, grossBeforeDiscount - discount);
+    };
 
     const applyLoanDefaults = (force) => {
         const shouldForce = !!force;
@@ -148,6 +153,7 @@
     const bindRecalc = (input, handler) => { if (input) input.addEventListener('input', handler); };
     bindRecalc(totalInput, () => applyLoanDefaults(false));
     bindRecalc(transportInput, () => applyLoanDefaults(false));
+    bindRecalc(discountInput, () => applyLoanDefaults(false));
     bindRecalc(subsidyInput, () => applyLoanDefaults(false));
     bindRecalc(capacityInput, () => { applyMonthlySuggestion(false); applySubsidyDefault(false); });
     bindRecalc(unitRateInput, () => applyMonthlySuggestion(false));

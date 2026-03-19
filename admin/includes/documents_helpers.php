@@ -1078,7 +1078,6 @@ function documents_quote_defaults(): array
             'transportation_rs' => '',
             'discount_rs' => '0',
             'discount_note' => '',
-            'notes_for_customer' => '',
         ],
         'customer_savings_inputs' => [
             'unit_rate_rs_per_kwh' => null,
