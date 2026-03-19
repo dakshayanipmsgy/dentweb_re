@@ -66,6 +66,7 @@ $allowedButtonStyles = website_settings_allowed_button_styles();
 $allowedCardStyles = website_settings_allowed_card_styles();
 $allowedFontSizes = website_settings_allowed_font_sizes();
 $allowedFontWeights = website_settings_allowed_font_weights();
+$allowedSystemTypes = website_settings_allowed_system_types();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $token = $_POST['csrf_token'] ?? '';
@@ -89,6 +90,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'kicker' => trim((string) ($_POST['hero_kicker'] ?? '')),
             'title' => trim((string) ($_POST['hero_title'] ?? '')),
             'subtitle' => trim((string) ($_POST['hero_subtitle'] ?? '')),
+            'background_type' => ($_POST['hero_background_type'] ?? 'image') === 'video' ? 'video' : 'image',
+            'background_image' => trim((string) ($_POST['hero_background_image'] ?? '')),
+            'background_video' => trim((string) ($_POST['hero_background_video'] ?? '')),
             'primary_image' => trim((string) ($_POST['hero_primary_image'] ?? '')),
             'primary_caption' => trim((string) ($_POST['hero_primary_caption'] ?? '')),
             'primary_button_text' => trim((string) ($_POST['hero_primary_button_text'] ?? '')),
@@ -97,6 +101,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'secondary_button_link' => trim((string) ($_POST['hero_secondary_button_link'] ?? '')),
             'announcement_badge' => trim((string) ($_POST['hero_announcement_badge'] ?? '')),
             'announcement_text' => trim((string) ($_POST['hero_announcement_text'] ?? '')),
+        ];
+
+        $announcementBar = [
+            'enabled' => isset($_POST['announcement_bar_enabled']) ? 1 : 0,
+            'text' => trim((string) ($_POST['announcement_bar_text'] ?? '')),
+            'link' => trim((string) ($_POST['announcement_bar_link'] ?? '')),
+            'start_date' => trim((string) ($_POST['announcement_bar_start_date'] ?? '')),
+            'end_date' => trim((string) ($_POST['announcement_bar_end_date'] ?? '')),
+            'dismissible' => isset($_POST['announcement_bar_dismissible']) ? 1 : 0,
+        ];
+
+        $selectedSystemTypes = $_POST['calculator_allowed_system_types'] ?? [];
+        if (!is_array($selectedSystemTypes)) {
+            $selectedSystemTypes = [];
+        }
+        $selectedSystemTypes = array_values(array_filter(array_map(static fn($type): string => trim((string) $type), $selectedSystemTypes), static function (string $type) use ($allowedSystemTypes): bool {
+            return in_array($type, $allowedSystemTypes, true);
+        }));
+
+        $calculator = [
+            'enabled' => isset($_POST['calculator_enabled']) ? 1 : 0,
+            'min_monthly_bill' => (int) ($_POST['calculator_min_monthly_bill'] ?? 0),
+            'max_monthly_bill' => (int) ($_POST['calculator_max_monthly_bill'] ?? 0),
+            'default_monthly_bill' => (int) ($_POST['calculator_default_monthly_bill'] ?? 0),
+            'allowed_system_types' => $selectedSystemTypes,
+            'cost_per_kw' => [
+                'on_grid' => (int) ($_POST['calculator_cost_per_kw_on_grid'] ?? 0),
+                'hybrid' => (int) ($_POST['calculator_cost_per_kw_hybrid'] ?? 0),
+            ],
+            'subsidy' => [
+                'on_grid_percent' => (float) ($_POST['calculator_subsidy_on_grid_percent'] ?? 0),
+                'hybrid_percent' => (float) ($_POST['calculator_subsidy_hybrid_percent'] ?? 0),
+                'max_amount' => (int) ($_POST['calculator_subsidy_max_amount'] ?? 0),
+            ],
+            'payback' => [
+                'on_grid_years' => (float) ($_POST['calculator_payback_on_grid_years'] ?? 0),
+                'hybrid_years' => (float) ($_POST['calculator_payback_hybrid_years'] ?? 0),
+            ],
+            'labels' => [
+                'system_size' => trim((string) ($_POST['calculator_label_system_size'] ?? '')),
+                'investment' => trim((string) ($_POST['calculator_label_investment'] ?? '')),
+                'subsidy' => trim((string) ($_POST['calculator_label_subsidy'] ?? '')),
+                'payback' => trim((string) ($_POST['calculator_label_payback'] ?? '')),
+            ],
+            'cta_text' => trim((string) ($_POST['calculator_cta_text'] ?? '')),
+            'cta_link' => trim((string) ($_POST['calculator_cta_link'] ?? '')),
         ];
 
         $sections = [
@@ -255,7 +305,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $merged = $settings;
             $merged['global'] = array_merge($settings['global'] ?? [], $global);
             $merged['hero'] = array_merge($settings['hero'] ?? [], $hero);
+            $merged['announcement_bar'] = array_merge($settings['announcement_bar'] ?? [], $announcementBar);
             $merged['sections'] = array_merge($settings['sections'] ?? [], $sections);
+            $merged['savings_calculator'] = array_replace_recursive($settings['savings_calculator'] ?? [], $calculator);
             $merged['theme'] = array_merge($settings['theme'] ?? [], $theme);
             $merged['testimonials'] = $testimonials;
             $merged['seasonal_offers'] = $seasonalOffers;
@@ -433,6 +485,149 @@ $globalJson = htmlspecialchars(json_encode($settings['global'] ?? []), ENT_QUOTE
         <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
           <div class="flex items-center justify-between">
             <div>
+              <h2 class="text-xl font-semibold text-slate-900">Homepage Announcement Bar</h2>
+              <p class="text-sm text-slate-600">Schedule a top announcement with optional link and dismiss button.</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="flex items-center gap-3 text-sm text-slate-700">
+              <input type="checkbox" name="announcement_bar_enabled" value="1" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" <?= !empty($settings['announcement_bar']['enabled']) ? 'checked' : '' ?>>
+              Enable announcement bar
+            </label>
+            <label class="flex items-center gap-3 text-sm text-slate-700">
+              <input type="checkbox" name="announcement_bar_dismissible" value="1" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" <?= !array_key_exists('dismissible', $settings['announcement_bar'] ?? []) || !empty($settings['announcement_bar']['dismissible']) ? 'checked' : '' ?>>
+              Show dismiss (close) button
+            </label>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="block space-y-1 md:col-span-2">
+              <span class="text-sm font-medium text-slate-700">Announcement text</span>
+              <input type="text" name="announcement_bar_text" value="<?= htmlspecialchars($settings['announcement_bar']['text'] ?? '') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+            <label class="block space-y-1 md:col-span-2">
+              <span class="text-sm font-medium text-slate-700">Announcement link (optional)</span>
+              <input type="text" name="announcement_bar_link" value="<?= htmlspecialchars($settings['announcement_bar']['link'] ?? '') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Start date</span>
+              <input type="date" name="announcement_bar_start_date" value="<?= htmlspecialchars($settings['announcement_bar']['start_date'] ?? '') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">End date</span>
+              <input type="date" name="announcement_bar_end_date" value="<?= htmlspecialchars($settings['announcement_bar']['end_date'] ?? '') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+          </div>
+        </section>
+
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-xl font-semibold text-slate-900">Savings Calculator Settings</h2>
+              <p class="text-sm text-slate-600">Control assumptions and labels for the homepage solar savings calculator.</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="flex items-center gap-3 text-sm text-slate-700">
+              <input type="checkbox" name="calculator_enabled" value="1" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" <?= !empty($settings['savings_calculator']['enabled']) ? 'checked' : '' ?>>
+              Enable calculator on homepage
+            </label>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Min monthly bill (₹)</span>
+              <input type="number" min="0" step="100" name="calculator_min_monthly_bill" value="<?= htmlspecialchars((string) ($settings['savings_calculator']['min_monthly_bill'] ?? 1000)) ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Max monthly bill (₹)</span>
+              <input type="number" min="0" step="100" name="calculator_max_monthly_bill" value="<?= htmlspecialchars((string) ($settings['savings_calculator']['max_monthly_bill'] ?? 50000)) ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Default monthly bill (₹)</span>
+              <input type="number" min="0" step="100" name="calculator_default_monthly_bill" value="<?= htmlspecialchars((string) ($settings['savings_calculator']['default_monthly_bill'] ?? 3500)) ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+          </div>
+          <div class="space-y-2">
+            <p class="text-sm font-medium text-slate-700">Allowed system types</p>
+            <div class="flex flex-wrap gap-4">
+              <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="calculator_allowed_system_types[]" value="on_grid" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" <?= in_array('on_grid', $settings['savings_calculator']['allowed_system_types'] ?? ['on_grid', 'hybrid'], true) ? 'checked' : '' ?>>
+                On-grid
+              </label>
+              <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="calculator_allowed_system_types[]" value="hybrid" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" <?= in_array('hybrid', $settings['savings_calculator']['allowed_system_types'] ?? ['on_grid', 'hybrid'], true) ? 'checked' : '' ?>>
+                Hybrid
+              </label>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Cost per kW (On-grid)</span>
+              <input type="number" min="0" step="100" name="calculator_cost_per_kw_on_grid" value="<?= htmlspecialchars((string) ($settings['savings_calculator']['cost_per_kw']['on_grid'] ?? 60000)) ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Cost per kW (Hybrid)</span>
+              <input type="number" min="0" step="100" name="calculator_cost_per_kw_hybrid" value="<?= htmlspecialchars((string) ($settings['savings_calculator']['cost_per_kw']['hybrid'] ?? 80000)) ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Subsidy % (On-grid)</span>
+              <input type="number" min="0" step="0.1" name="calculator_subsidy_on_grid_percent" value="<?= htmlspecialchars((string) ($settings['savings_calculator']['subsidy']['on_grid_percent'] ?? 20)) ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Subsidy % (Hybrid)</span>
+              <input type="number" min="0" step="0.1" name="calculator_subsidy_hybrid_percent" value="<?= htmlspecialchars((string) ($settings['savings_calculator']['subsidy']['hybrid_percent'] ?? 15)) ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Subsidy cap amount (₹)</span>
+              <input type="number" min="0" step="100" name="calculator_subsidy_max_amount" value="<?= htmlspecialchars((string) ($settings['savings_calculator']['subsidy']['max_amount'] ?? 78000)) ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Payback years (On-grid)</span>
+              <input type="number" min="0" step="0.1" name="calculator_payback_on_grid_years" value="<?= htmlspecialchars((string) ($settings['savings_calculator']['payback']['on_grid_years'] ?? 4.5)) ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Payback years (Hybrid)</span>
+              <input type="number" min="0" step="0.1" name="calculator_payback_hybrid_years" value="<?= htmlspecialchars((string) ($settings['savings_calculator']['payback']['hybrid_years'] ?? 6.0)) ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Result label: system size</span>
+              <input type="text" name="calculator_label_system_size" value="<?= htmlspecialchars($settings['savings_calculator']['labels']['system_size'] ?? 'Estimated System Size') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Result label: investment</span>
+              <input type="text" name="calculator_label_investment" value="<?= htmlspecialchars($settings['savings_calculator']['labels']['investment'] ?? 'Estimated Investment') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Result label: subsidy</span>
+              <input type="text" name="calculator_label_subsidy" value="<?= htmlspecialchars($settings['savings_calculator']['labels']['subsidy'] ?? 'Estimated Subsidy') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Result label: payback</span>
+              <input type="text" name="calculator_label_payback" value="<?= htmlspecialchars($settings['savings_calculator']['labels']['payback'] ?? 'Estimated Payback Period') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Calculator CTA text</span>
+              <input type="text" name="calculator_cta_text" value="<?= htmlspecialchars($settings['savings_calculator']['cta_text'] ?? 'Schedule Consultation') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Calculator CTA link</span>
+              <input type="text" name="calculator_cta_link" value="<?= htmlspecialchars($settings['savings_calculator']['cta_link'] ?? '/contact') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+          </div>
+        </section>
+
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
+          <div class="flex items-center justify-between">
+            <div>
               <h2 class="text-xl font-semibold text-slate-900">Home Hero &amp; Announcement</h2>
               <p class="text-sm text-slate-600">Primary hero messaging and announcement badge.</p>
             </div>
@@ -451,6 +646,26 @@ $globalJson = htmlspecialchars(json_encode($settings['global'] ?? []), ENT_QUOTE
             <label class="block space-y-1">
               <span class="text-sm font-medium text-slate-700">Hero subtitle</span>
               <input type="text" name="hero_subtitle" value="<?= htmlspecialchars($settings['hero']['subtitle'] ?? '') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+            </label>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Background type</span>
+              <select name="hero_background_type" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+                <option value="image" <?= (($settings['hero']['background_type'] ?? 'image') === 'image') ? 'selected' : '' ?>>Image</option>
+                <option value="video" <?= (($settings['hero']['background_type'] ?? 'image') === 'video') ? 'selected' : '' ?>>Video</option>
+              </select>
+            </label>
+            <label class="block space-y-1 md:col-span-2">
+              <span class="text-sm font-medium text-slate-700">Background image URL</span>
+              <input type="text" name="hero_background_image" value="<?= htmlspecialchars($settings['hero']['background_image'] ?? ($settings['hero']['primary_image'] ?? '')) ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500" placeholder="/images/hero/hero.png">
+            </label>
+          </div>
+          <div class="grid grid-cols-1 gap-4">
+            <label class="block space-y-1">
+              <span class="text-sm font-medium text-slate-700">Background video URL</span>
+              <input type="text" name="hero_background_video" value="<?= htmlspecialchars($settings['hero']['background_video'] ?? '') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500" placeholder="/uploads/hero-video.mp4 or https://...">
+              <p class="text-xs text-slate-500">Video is used only when background type is set to video.</p>
             </label>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -513,7 +728,7 @@ $globalJson = htmlspecialchars(json_encode($settings['global'] ?? []), ENT_QUOTE
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label class="block space-y-1">
               <span class="text-sm font-medium text-slate-700">Primary button text</span>
-              <input type="text" name="hero_primary_button_text" value="<?= htmlspecialchars($settings['hero']['primary_button_text'] ?? '') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+              <input type="text" name="hero_primary_button_text" value="<?= htmlspecialchars($settings['hero']['primary_button_text'] ?? 'Get Your Free Solar Quote') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
             </label>
             <label class="block space-y-1">
               <span class="text-sm font-medium text-slate-700">Primary button link</span>
@@ -523,7 +738,7 @@ $globalJson = htmlspecialchars(json_encode($settings['global'] ?? []), ENT_QUOTE
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label class="block space-y-1">
               <span class="text-sm font-medium text-slate-700">Secondary button text</span>
-              <input type="text" name="hero_secondary_button_text" value="<?= htmlspecialchars($settings['hero']['secondary_button_text'] ?? '') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
+              <input type="text" name="hero_secondary_button_text" value="<?= htmlspecialchars($settings['hero']['secondary_button_text'] ?? 'Check Subsidy Eligibility') ?>" class="w-full rounded-lg border-slate-200 focus:border-emerald-500 focus:ring-emerald-500">
             </label>
             <label class="block space-y-1">
               <span class="text-sm font-medium text-slate-700">Secondary button link</span>
