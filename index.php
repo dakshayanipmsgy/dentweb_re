@@ -8,6 +8,8 @@ $sections = $ws['sections'] ?? [];
 $testimonials = $ws['testimonials'] ?? [];
 $offers = $ws['seasonal_offers'] ?? [];
 $theme = $ws['theme'] ?? [];
+$announcementBar = $ws['announcement_bar'] ?? [];
+$calculatorSettings = $ws['savings_calculator'] ?? [];
 $primaryColor = $theme['primary_color'] ?? '#333333';
 $secondaryColor = $theme['secondary_color'] ?? '#00374a';
 $accentColor = $theme['accent_color'] ?? '#f5ec00';
@@ -118,6 +120,8 @@ $buttonSecondaryText = ($buttonToken['secondary_bg'] === 'transparent') ? $secon
 $embeddedContent = [
     'theme' => $theme,
     'hero' => $hero,
+    'announcement_bar' => $announcementBar,
+    'savings_calculator' => $calculatorSettings,
     'sections' => $sections,
     'offers' => $offers,
     'testimonials' => $testimonials,
@@ -294,55 +298,91 @@ $schemaContext = [
   <?php endif; ?>
 
   <main>
+    <section class="announcement-bar" data-announcement-bar hidden>
+      <div class="container announcement-bar__inner">
+        <a href="#" class="announcement-bar__link" data-announcement-link>
+          <span data-announcement-text></span>
+        </a>
+        <button type="button" class="announcement-bar__close" data-announcement-close hidden aria-label="Dismiss announcement">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </section>
+
     <section id="hero" class="hero section" data-hero-section hidden>
-      <div class="container hero-grid">
-        <div class="hero-content">
-          <div class="hero-announcement" data-hero-announcement hidden>
-            <span class="badge" data-hero-announcement-badge></span>
-            <p data-hero-announcement-text></p>
-          </div>
+      <div class="hero-bg-media" data-hero-background-media>
+        <img src="/images/hero/hero.png" alt="" loading="eager" fetchpriority="high" data-hero-background-image />
+        <video data-hero-background-video muted autoplay playsinline loop preload="none" hidden></video>
+      </div>
+      <div class="container hero-grid hero-grid--revamp">
+        <div class="hero-content hero-content--revamp">
+          <span class="hero-kicker" data-hero-kicker hidden></span>
           <h1 class="hero-title" data-hero-title></h1>
           <p class="hero-sub" data-hero-subtitle></p>
-
-          <div class="hero-actions">
-            <a href="#" class="btn btn-primary" data-hero-primary>
-              <i class="fa-solid fa-calendar-check"></i>
-              <span data-hero-primary-text></span>
+          <div class="hero-actions hero-actions--revamp">
+            <a href="/contact" class="btn btn-primary" data-hero-primary>
+              <i class="fa-solid fa-bolt"></i>
+              <span data-hero-primary-text>Get Your Free Solar Quote</span>
             </a>
-            <a href="#" class="btn btn-secondary" data-hero-secondary hidden>
-              <i class="fa-solid fa-handshake-angle"></i>
-              <span data-hero-secondary-text></span>
+            <a href="/pm-surya-ghar" class="btn btn-secondary" data-hero-secondary>
+              <i class="fa-solid fa-file-circle-check"></i>
+              <span data-hero-secondary-text>Check Subsidy Eligibility</span>
             </a>
-          </div>
-
-          <div class="hero-assurance">
-            <div class="assurance-item">
-              <span class="assurance-value">500+</span>
-              <span class="assurance-label">Homes &amp; MSMEs energised</span>
-            </div>
-            <div class="assurance-item">
-              <span class="assurance-value">₹78k</span>
-              <span class="assurance-label">PM Surya Ghar subsidy managed</span>
-            </div>
-            <div class="assurance-item">
-              <span class="assurance-value">98%</span>
-              <span class="assurance-label">Net-metering success rate</span>
-            </div>
           </div>
         </div>
-
-        <div class="hero-media">
-          <figure class="hero-media-main" data-hero-main>
-            <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="" loading="lazy" data-hero-main-image />
-            <figcaption data-hero-main-caption></figcaption>
-          </figure>
-          <div class="hero-mini-gallery" data-hero-gallery></div>
+        <div class="hero-highlight">
+          <h3>Why homeowners choose Dakshayani</h3>
+          <ul class="hero-points">
+            <li><i class="fa-solid fa-circle-check"></i> End-to-end EPC + subsidy support</li>
+            <li><i class="fa-solid fa-circle-check"></i> On-grid &amp; hybrid system expertise</li>
+            <li><i class="fa-solid fa-circle-check"></i> Transparent ROI and payback planning</li>
+          </ul>
         </div>
       </div>
-      <div class="hero-trust">
-        <span><i class="fa-solid fa-shield-heart"></i>MNRE empanelled EPC partner</span>
-        <img src="images/logo/New dakshayani logo centered small.png" alt="Dakshayani Enterprises" loading="lazy" />
-        <span><i class="fa-solid fa-solar-panel"></i>Tier-1 modules &amp; hybrid inverters</span>
+      <div class="container">
+        <div class="hero-assurance hero-assurance--compact">
+          <div class="assurance-item">
+            <span class="assurance-value">500+</span>
+            <span class="assurance-label">Homes &amp; MSMEs energised</span>
+          </div>
+          <div class="assurance-item">
+            <span class="assurance-value">₹78k</span>
+            <span class="assurance-label">PM Surya Ghar subsidy managed</span>
+          </div>
+          <div class="assurance-item">
+            <span class="assurance-value">98%</span>
+            <span class="assurance-label">Net-metering success rate</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section savings-calculator" data-savings-calculator hidden>
+      <div class="container">
+        <div class="savings-calculator__card">
+          <div class="savings-calculator__head">
+            <h2>Solar Savings Calculator</h2>
+            <p>Estimate your ideal system size, investment, subsidy, and payback instantly.</p>
+          </div>
+          <div class="savings-calculator__controls">
+            <label class="savings-field">
+              <span>Monthly electricity bill (₹)</span>
+              <input type="range" min="1000" max="50000" step="100" value="3500" data-calculator-bill-slider>
+              <input type="number" min="1000" max="50000" step="100" value="3500" data-calculator-bill-input>
+            </label>
+            <label class="savings-field">
+              <span>System type</span>
+              <select data-calculator-system-type>
+                <option value="on_grid">On-grid</option>
+                <option value="hybrid">Hybrid</option>
+              </select>
+            </label>
+          </div>
+          <div class="savings-calculator__results" data-calculator-results></div>
+          <div class="savings-calculator__cta-wrap">
+            <a href="/contact" class="btn btn-primary" data-calculator-cta>Schedule Consultation</a>
+          </div>
+        </div>
       </div>
     </section>
 

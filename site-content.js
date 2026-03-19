@@ -63,6 +63,9 @@
     kicker: asString(hero.kicker),
     title: asString(hero.title),
     subtitle: asString(hero.subtitle),
+    background_type: (hero.background_type === 'video' ? 'video' : 'image'),
+    background_image: asString(hero.background_image),
+    background_video: asString(hero.background_video),
     primary_image: asString(hero.primary_image ?? hero.primaryImage),
     primary_caption: asString(hero.primary_caption ?? hero.primaryCaption),
     primary_button_text: asString(hero.primary_button_text ?? hero.primaryButtonText),
@@ -97,6 +100,48 @@
     callout_font_weight: ALLOWED_FONT_WEIGHTS.includes(global.callout_font_weight) ? global.callout_font_weight : DEFAULT_GLOBAL_STYLE.callout_font_weight,
     subheader_bg_color: normalizeHex(global.subheader_bg_color, DEFAULT_GLOBAL_STYLE.subheader_bg_color),
   });
+
+  const normalizeAnnouncementBar = (bar = {}) => ({
+    enabled: !!bar.enabled,
+    text: asString(bar.text),
+    link: asString(bar.link),
+    start_date: asString(bar.start_date),
+    end_date: asString(bar.end_date),
+    dismissible: bar.dismissible !== false,
+  });
+
+  const normalizeCalculator = (calculator = {}) => {
+    const allowed = Array.isArray(calculator.allowed_system_types) ? calculator.allowed_system_types : ['on_grid', 'hybrid'];
+    return {
+      enabled: calculator.enabled !== false,
+      min_monthly_bill: Number(calculator.min_monthly_bill || 1000),
+      max_monthly_bill: Number(calculator.max_monthly_bill || 50000),
+      default_monthly_bill: Number(calculator.default_monthly_bill || 3500),
+      allowed_system_types: allowed.filter((item) => ['on_grid', 'hybrid'].includes(item)),
+      cost_per_kw: {
+        on_grid: Number(calculator?.cost_per_kw?.on_grid || 60000),
+        hybrid: Number(calculator?.cost_per_kw?.hybrid || 80000),
+      },
+      subsidy: {
+        on_grid_percent: Number(calculator?.subsidy?.on_grid_percent || 20),
+        hybrid_percent: Number(calculator?.subsidy?.hybrid_percent || 15),
+        max_amount: Number(calculator?.subsidy?.max_amount || 78000),
+      },
+      payback: {
+        on_grid_years: Number(calculator?.payback?.on_grid_years || 4.5),
+        hybrid_years: Number(calculator?.payback?.hybrid_years || 6),
+      },
+      labels: {
+        system_size: asString(calculator?.labels?.system_size) || 'Estimated System Size',
+        investment: asString(calculator?.labels?.investment) || 'Estimated Investment',
+        subsidy: asString(calculator?.labels?.subsidy) || 'Estimated Subsidy',
+        payback: asString(calculator?.labels?.payback) || 'Estimated Payback Period',
+      },
+      cta_text: asString(calculator.cta_text) || 'Schedule Consultation',
+      cta_link: asString(calculator.cta_link) || '/contact',
+    };
+  };
+
   const normalizePayload = (raw = {}) => {
     const normalizedHero = normalizeHero(raw.hero || {});
     const normalizedTheme = normalizeTheme(raw.theme || {});
@@ -109,7 +154,10 @@
       hero: {
         ...normalizedHero,
         primary_image: normalizedHero.primary_image || DEFAULT_HERO_IMAGE,
+        background_image: normalizedHero.background_image || normalizedHero.primary_image || DEFAULT_HERO_IMAGE,
       },
+      announcement_bar: normalizeAnnouncementBar(raw.announcement_bar || {}),
+      savings_calculator: normalizeCalculator(raw.savings_calculator || {}),
       sections: normalizedSections,
       offers: normalizedOffers,
       seasonal_offers: normalizedOffers,
