@@ -2316,6 +2316,48 @@ function documents_normalize_mobile(string $input): string
     return strlen($digits) > 10 ? substr($digits, -10) : '';
 }
 
+function documents_normalize_whatsapp_mobile(string $raw): string
+{
+    $trimmed = trim($raw);
+    if ($trimmed === '') {
+        return '';
+    }
+
+    $hasLeadingPlus = str_starts_with($trimmed, '+');
+    $digitsOnly = preg_replace('/\D+/', '', $trimmed);
+    if (!is_string($digitsOnly) || $digitsOnly === '') {
+        return '';
+    }
+
+    $validIndianCore = static function (string $number): bool {
+        return (bool) preg_match('/^[6-9]\d{9}$/', $number);
+    };
+
+    if (strlen($digitsOnly) === 10 && $validIndianCore($digitsOnly)) {
+        return '91' . $digitsOnly;
+    }
+
+    if (strlen($digitsOnly) === 11 && str_starts_with($digitsOnly, '0')) {
+        $core = substr($digitsOnly, 1);
+        if ($validIndianCore($core)) {
+            return '91' . $core;
+        }
+        return '';
+    }
+
+    if (strlen($digitsOnly) === 12 && str_starts_with($digitsOnly, '91')) {
+        $core = substr($digitsOnly, 2);
+        return $validIndianCore($core) ? $digitsOnly : '';
+    }
+
+    if ($hasLeadingPlus && str_starts_with($trimmed, '+91') && strlen($digitsOnly) === 12) {
+        $core = substr($digitsOnly, 2);
+        return $validIndianCore($core) ? $digitsOnly : '';
+    }
+
+    return '';
+}
+
 function documents_map_lead_record(array $lead, string $matchedMobile = ''): array
 {
     $location = is_array($lead['location'] ?? null) ? $lead['location'] : [];
