@@ -899,7 +899,7 @@ if ($lookup !== null) {
 ?>
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Quotations</title>
-<style>body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px}.card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}label{font-size:12px;font-weight:700;display:block;margin-bottom:4px}input,select,textarea{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box}textarea{min-height:70px}.btn{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}.btn.secondary{background:#fff;color:#1f2937;border:1px solid #cbd5e1}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe1ea;padding:8px;text-align:left;font-size:13px}.muted{color:#64748b}.alert{padding:8px;border-radius:8px;margin-bottom:12px}.ok{background:#ecfdf5}.err{background:#fef2f2}</style></head>
+<style>body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px}.card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}label{font-size:12px;font-weight:700;display:block;margin-bottom:4px}input,select,textarea{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box}textarea{min-height:70px}.btn{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}.btn.secondary{background:#fff;color:#1f2937;border:1px solid #cbd5e1}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe1ea;padding:8px;text-align:left;font-size:13px}.muted{color:#64748b}.alert{padding:8px;border-radius:8px;margin-bottom:12px}.ok{background:#ecfdf5}.err{background:#fef2f2}.ux-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}.ux-tab-btn{border:1px solid #cbd5e1;background:#fff;border-radius:999px;padding:8px 14px;cursor:pointer;font-weight:600}.ux-tab-btn.active{background:#1d4ed8;color:#fff;border-color:#1d4ed8}.ux-panel{display:none}.ux-panel.active{display:block}.section-card{border:1px solid #e2e8f0;border-radius:10px;padding:12px;background:#fcfdff;margin-bottom:14px}.section-card h3{margin:0 0 10px}.sticky-mini-bar{position:sticky;bottom:8px;z-index:4;background:#ffffffd9;backdrop-filter:blur(2px);border:1px solid #dbe1ea;border-radius:10px;padding:10px;display:flex;gap:8px;justify-content:flex-end}.sticky-head th{position:sticky;top:0;background:#f8fafc;z-index:2}.ux-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.42);display:none;z-index:60}.ux-modal{position:fixed;inset:6vh 4vw;background:#fff;border-radius:12px;display:none;z-index:61;box-shadow:0 22px 56px rgba(0,0,0,.25);overflow:hidden}.ux-modal iframe{width:100%;height:100%;border:none}.ux-modal-head{padding:10px 12px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center}.ux-open{display:block}</style></head>
 <body><main class="wrap">
 <div class="card"><h1>Quotations</h1><a class="btn secondary" href="admin-documents.php">Back to Documents</a> <a class="btn secondary" href="admin-quotations.php?tab=quotations">Quotations</a> <a class="btn secondary" href="admin-quotations.php?tab=archived">Archived</a> <a class="btn" href="admin-quotations.php?tab=settings">Settings</a> <a class="btn" href="admin-quotations.php?tab=quotations">Create New</a></div>
 <?php if ($message !== ''): ?><div class="alert <?= $status === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
@@ -1033,6 +1033,45 @@ $waDraftMessage = rawurlencode('Please review this quotation: ' . $publicShareUr
 <?php foreach ($allQuotes as $q): ?><tr><td><input type="checkbox" name="selected_ids[]" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"></td><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td></tr><?php endforeach; ?>
 </tbody></table>
 </form></div>
+<div class="ux-backdrop" id="uxBackdrop"></div><div class="ux-modal" id="uxModal" aria-hidden="true"><div class="ux-modal-head"><strong id="uxModalTitle">Preview</strong><button class="btn secondary" type="button" id="uxModalClose">Close</button></div><iframe id="uxModalFrame" src="about:blank"></iframe></div>
+<script>
+(function(){
+  const wrap=document.querySelector('.wrap');
+  if(!wrap)return;
+  const cards=[...wrap.querySelectorAll(':scope > .card')];
+  if(cards.length<4)return;
+  const tabs=document.createElement('div');tabs.className='ux-tabs';
+  const panels=document.createElement('div');
+  const map=[
+    {key:'list',label:'Quotation List',match:/Quotation List/i},
+    {key:'editor',label:'Create / Edit Quotation',match:/Create Quotation|Edit Quotation/i},
+    {key:'bulk',label:'Bulk Actions',match:/Bulk Modify Quotations/i},
+    {key:'settings',label:'Settings / Helpers',match:/Settings/i}
+  ];
+  const byKey={};
+  cards.forEach((card)=>{const h=card.querySelector('h2');const t=(h&&h.textContent||'').trim(); map.forEach(m=>{if(!byKey[m.key]&&m.match.test(t)){byKey[m.key]=card;}});});
+  ['editor'].forEach(k=>{const c=byKey[k];if(c){const heads=[...c.querySelectorAll('.grid > div > label')];heads.forEach(lb=>{const name=(lb.textContent||'').trim();let section='';if(/Template Set|Party Type|Mobile|Name|Customer Lookup/i.test(name))section='Customer Lookup & Basic Identity';else if(/System Type|Main Solar|Complimentary|Total System|Quotation Date|Valid Until|Pricing Mode|Total system price/i.test(name))section='System & Pricing Basics';else if(/District|City|State|PIN|Address|Meter|Application|Consumer Account|Circle|Division|Sub Division|Sanction|Installed PV/i.test(name))section='Site & Customer Details';else if(/Monthly|Unit Rate|Annual|Interest|Tenure|Transportation|Discount/i.test(name))section='Customer Savings Inputs';if(!section)return;const holder=lb.closest('div');if(!holder)return;holder.setAttribute('data-ux-section',section);}); const grid=c.querySelector('.grid'); if(grid){const order=['Customer Lookup & Basic Identity','System & Pricing Basics','Site & Customer Details','Item Builder','Customer Savings Inputs','Typography / Watermark Overrides','Annexure Overrides']; order.forEach(sec=>{const block=document.createElement('div');block.className='section-card';block.style.gridColumn='1/-1';const h3=document.createElement('h3');h3.textContent=sec;block.appendChild(h3);const matches=[...grid.querySelectorAll('[data-ux-section="'+sec+'"]')];if(sec==='Item Builder'){matches.push(...[...grid.querySelectorAll('h3')].map(x=>x.parentElement).filter(Boolean));} if(matches.length){matches.forEach(m=>block.appendChild(m));grid.insertBefore(block,grid.firstChild);} }); }
+  });
+  const order=['list','editor','bulk','settings'];
+  const panelWrap=document.createElement('div');panelWrap.id='uxTabPanels';
+  order.forEach((key)=>{const panel=document.createElement('section');panel.className='ux-panel';panel.dataset.key=key; if(byKey[key])panel.appendChild(byKey[key]); panelWrap.appendChild(panel);const btn=document.createElement('button');btn.type='button';btn.className='ux-tab-btn';btn.textContent=map.find(m=>m.key===key).label;btn.dataset.key=key;tabs.appendChild(btn);});
+  const firstCard=cards[0];firstCard.insertAdjacentElement('afterend',tabs);tabs.insertAdjacentElement('afterend',panelWrap);
+  const setTab=(key)=>{panelWrap.querySelectorAll('.ux-panel').forEach(p=>p.classList.toggle('active',p.dataset.key===key));tabs.querySelectorAll('.ux-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.key===key));sessionStorage.setItem('quotations:tab',key);};
+  tabs.addEventListener('click',(e)=>{const b=e.target.closest('.ux-tab-btn');if(!b)return;setTab(b.dataset.key);});
+  setTab(sessionStorage.getItem('quotations:tab')||'list');
+
+  const listPanel=panelWrap.querySelector('[data-key="list"]');
+  if(listPanel){listPanel.querySelectorAll('table').forEach(t=>t.classList.add('sticky-head'));}
+  const quoteForm=panelWrap.querySelector('[data-key="editor"] form input[name="action"][value="save_quote"]')?.form;
+  if(quoteForm){const bar=document.createElement('div');bar.className='sticky-mini-bar';bar.innerHTML='<button type="submit" class="btn">Save / Update</button><button type="button" class="btn secondary" data-back-list>Cancel / Back to list</button>';quoteForm.appendChild(bar);bar.querySelector('[data-back-list]').addEventListener('click',()=>setTab('list'));}
+
+  document.addEventListener('click',(e)=>{const link=e.target.closest('a'); if(!link)return; const href=link.getAttribute('href')||''; if(href.includes('quotation-view.php')){e.preventDefault();openModal(href,'Quotation Preview');} else if(href.includes('admin-quotations.php?edit=')){e.preventDefault();openModal(href,'Edit Quotation');} else if(href.includes('quotation-public.php')){e.preventDefault();openModal(href,'Share Link Preview');}});
+  const modal=document.getElementById('uxModal');const backdrop=document.getElementById('uxBackdrop');const frame=document.getElementById('uxModalFrame');const title=document.getElementById('uxModalTitle');
+  function openModal(url,t){title.textContent=t;frame.src=url;modal.classList.add('ux-open');backdrop.classList.add('ux-open');}
+  function closeModal(){modal.classList.remove('ux-open');backdrop.classList.remove('ux-open');frame.src='about:blank';}
+  document.getElementById('uxModalClose')?.addEventListener('click',closeModal);backdrop?.addEventListener('click',closeModal);
+})();
+</script>
 <script>
 window.quoteItemVariantsByComponent = <?= json_encode($variantsByComponent, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 document.addEventListener('click', function(e){
