@@ -143,6 +143,33 @@ $sanitizeHexColor = static function ($raw, string $fallback = ''): string {
     return $fallback;
 };
 
+$quotationExtractMobile = static function (array $quote): string {
+    $snapshot = is_array($quote['customer_snapshot'] ?? null) ? $quote['customer_snapshot'] : [];
+    $candidates = [
+        (string) ($snapshot['customer_mobile'] ?? ''),
+        (string) ($snapshot['mobile'] ?? ''),
+        (string) ($quote['customer_mobile'] ?? ''),
+        (string) ($quote['mobile'] ?? ''),
+        (string) ($quote['source']['lead_mobile'] ?? ''),
+    ];
+    foreach ($candidates as $candidate) {
+        $normalized = documents_normalize_mobile($candidate);
+        if ($normalized !== '') {
+            return $normalized;
+        }
+    }
+    return '';
+};
+
+$quotationPublicShareUrl = static function (array $quote): string {
+    $token = safe_text((string) ($quote['public_share_token'] ?? ''));
+    if ($token === '') {
+        return '';
+    }
+    $scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+    return $scheme . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/quotation-public.php?t=' . urlencode($token);
+};
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
         $redirectWith('error', 'Security validation failed.');
@@ -682,6 +709,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
 
+    if ($action === 'share_whatsapp_payload') {
+        header('Content-Type: application/json; charset=UTF-8');
+        $quoteId = safe_text($_POST['quote_id'] ?? '');
+        $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
+        if ($quote === null) {
+            echo json_encode(['ok' => false, 'message' => 'Quotation not found.']);
+            exit;
+        }
+
+        $mobile = $quotationExtractMobile($quote);
+        if ($mobile === '') {
+            echo json_encode(['ok' => false, 'message' => 'Customer mobile not available for this quotation.']);
+            exit;
+        }
+
+        if (safe_text((string) ($quote['public_share_token'] ?? '')) === '') {
+            $quote['public_share_token'] = documents_generate_quote_public_share_token();
+            $quote['public_share_created_at'] = date('c');
+        }
+        $quote['public_share_enabled'] = true;
+        $quote['public_share_revoked_at'] = null;
+        $quote['updated_at'] = date('c');
+        $saved = documents_save_quote($quote);
+        if (!($saved['ok'] ?? false)) {
+            echo json_encode(['ok' => false, 'message' => 'Unable to prepare quotation share link.']);
+            exit;
+        }
+
+        $shareUrl = $quotationPublicShareUrl($quote);
+        $customerName = safe_text((string) ($quote['customer_name'] ?? ''));
+        $greeting = $customerName !== '' ? 'Hello ' . $customerName . ', please find your quotation here: ' : 'Hello, please find your quotation here: ';
+        echo json_encode([
+            'ok' => true,
+            'mobile' => $mobile,
+            'share_url' => $shareUrl,
+            'message' => $greeting . $shareUrl,
+        ]);
+        exit;
+    }
+
     if ($action === 'toggle_public_share') {
         $quoteId = safe_text($_POST['quote_id'] ?? '');
         $shareMode = safe_text($_POST['share_mode'] ?? '');
@@ -899,11 +966,12 @@ if ($lookup !== null) {
 ?>
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Quotations</title>
-<style>body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px}.card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}label{font-size:12px;font-weight:700;display:block;margin-bottom:4px}input,select,textarea{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box}textarea{min-height:70px}.btn{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}.btn.secondary{background:#fff;color:#1f2937;border:1px solid #cbd5e1}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe1ea;padding:8px;text-align:left;font-size:13px}.muted{color:#64748b}.alert{padding:8px;border-radius:8px;margin-bottom:12px}.ok{background:#ecfdf5}.err{background:#fef2f2}.ux-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}.ux-tab-btn{border:1px solid #cbd5e1;background:#fff;border-radius:999px;padding:8px 14px;cursor:pointer;font-weight:600}.ux-tab-btn.active{background:#1d4ed8;color:#fff;border-color:#1d4ed8}.ux-panel{display:none}.ux-panel.active{display:block}.section-card{border:1px solid #e2e8f0;border-radius:10px;padding:12px;background:#fcfdff;margin-bottom:14px}.section-card h3{margin:0 0 10px}.sticky-mini-bar{position:sticky;bottom:8px;z-index:4;background:#ffffffd9;backdrop-filter:blur(2px);border:1px solid #dbe1ea;border-radius:10px;padding:10px;display:flex;gap:8px;justify-content:flex-end}.sticky-head th{position:sticky;top:0;background:#f8fafc;z-index:2}.ux-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.42);display:none;z-index:60}.ux-modal{position:fixed;inset:6vh 4vw;background:#fff;border-radius:12px;display:none;z-index:61;box-shadow:0 22px 56px rgba(0,0,0,.25);overflow:hidden}.ux-modal iframe{width:100%;height:100%;border:none}.ux-modal-head{padding:10px 12px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center}.ux-open{display:block}</style></head>
+<style>body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px}.card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}label{font-size:12px;font-weight:700;display:block;margin-bottom:4px}input,select,textarea{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box}textarea{min-height:70px}.btn{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}.btn.secondary{background:#fff;color:#1f2937;border:1px solid #cbd5e1}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe1ea;padding:8px;text-align:left;font-size:13px}.muted{color:#64748b}.alert{padding:8px;border-radius:8px;margin-bottom:12px}.ok{background:#ecfdf5}.err{background:#fef2f2}.ux-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}.ux-tab-btn{border:1px solid #cbd5e1;background:#fff;border-radius:999px;padding:8px 14px;cursor:pointer;font-weight:600}.ux-tab-btn.active{background:#1d4ed8;color:#fff;border-color:#1d4ed8}.ux-panel{display:none}.ux-panel.active{display:block}.section-card{border:1px solid #dbe2ee;border-radius:12px;padding:14px;background:#fcfdff;margin-bottom:14px}.section-card h3{margin:0 0 10px;font-size:16px}.section-grid{display:grid;grid-template-columns:repeat(4,minmax(170px,1fr));gap:12px}.section-grid .full-span{grid-column:1/-1}.section-card.savings{background:#f8fbff;border-color:#bfdbfe}.section-card .muted{margin-bottom:8px}.list-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.share-actions{margin-top:6px;padding:8px;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc}.sticky-mini-bar{position:sticky;bottom:8px;z-index:4;background:#ffffffd9;backdrop-filter:blur(2px);border:1px solid #dbe1ea;border-radius:10px;padding:10px;display:flex;gap:8px;justify-content:flex-end}.sticky-head th{position:sticky;top:0;background:#f8fafc;z-index:2}.ux-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.42);display:none;z-index:60}.ux-modal{position:fixed;inset:6vh 4vw;background:#fff;border-radius:12px;display:none;z-index:61;box-shadow:0 22px 56px rgba(0,0,0,.25);overflow:hidden}.ux-modal iframe{width:100%;height:100%;border:none}.ux-modal-head{padding:10px 12px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center}.ux-open{display:block}.toast{position:fixed;right:16px;top:16px;z-index:120;background:#111827;color:#fff;padding:10px 14px;border-radius:10px;display:none;max-width:420px}.toast.show{display:block}.toast.err{background:#b91c1c}@media (max-width:1100px){.section-grid{grid-template-columns:repeat(2,minmax(170px,1fr));}}@media (max-width:700px){.section-grid{grid-template-columns:1fr;}}</style></head>
 <body><main class="wrap">
 <div class="card"><h1>Quotations</h1><a class="btn secondary" href="admin-documents.php">Back to Documents</a> <a class="btn secondary" href="admin-quotations.php?tab=quotations">Quotations</a> <a class="btn secondary" href="admin-quotations.php?tab=archived">Archived</a> <a class="btn" href="admin-quotations.php?tab=settings">Settings</a> <a class="btn" href="admin-quotations.php?tab=quotations">Create New</a></div>
 <?php if ($message !== ''): ?><div class="alert <?= $status === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
 <?php if ($prefillMessage !== ''): ?><div class="alert ok"><?= htmlspecialchars($prefillMessage, ENT_QUOTES) ?></div><?php endif; ?>
+<div class="toast" id="uxToast" role="status" aria-live="polite"></div>
 <div class="card">
 <h2><?= $editing['id'] === '' ? 'Create Quotation' : 'Edit Quotation' ?></h2>
 <form method="get" style="margin-bottom:10px">
@@ -995,15 +1063,17 @@ if ($lookup !== null) {
 <?php foreach ($allQuotes as $q): ?><tr>
 <td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['created_by_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></td><td>₹<?= number_format((float)$q['calc']['grand_total'],2) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td>
 <td>
+<div class="list-actions">
 <a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a>
 <?php if (documents_quote_can_edit($q, 'admin')): ?><a class="btn secondary" href="admin-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?>
 <?php
 $publicShareToken = safe_text((string) ($q['public_share_token'] ?? ''));
 $publicShareEnabled = !empty($q['public_share_enabled']) && $publicShareToken !== '';
-$publicShareUrl = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/quotation-public.php?t=' . urlencode($publicShareToken);
-$waDraftMessage = rawurlencode('Please review this quotation: ' . $publicShareUrl);
+$publicShareUrl = $quotationPublicShareUrl($q);
+$quoteShareMobile = $quotationExtractMobile($q);
 ?>
-<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">🔗 Share</summary>
+<button class="btn secondary js-wa-share" type="button" data-quote-id="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars($quoteShareMobile, ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($q['customer_name'] ?? ''), ENT_QUOTES) ?>">Share</button>
+<details class="share-actions"><summary class="muted" style="cursor:pointer">🔗 Public Link</summary>
     <form method="post" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
         <input type="hidden" name="action" value="toggle_public_share">
@@ -1014,11 +1084,11 @@ $waDraftMessage = rawurlencode('Please review this quotation: ' . $publicShareUr
         <?php else: ?>
             <input id="public-share-link-<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>" type="text" readonly value="<?= htmlspecialchars($publicShareUrl, ENT_QUOTES) ?>" style="flex:1;min-width:260px">
             <button class="btn secondary" type="button" data-copy-target="public-share-link-<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>">Copy Link</button>
-            <a class="btn secondary" target="_blank" rel="noopener" href="https://wa.me/?text=<?= $waDraftMessage ?>">Send via WhatsApp draft</a>
             <button class="btn secondary" type="submit" name="share_mode" value="disable">Disable Public Link</button>
         <?php endif; ?>
     </form>
 </details>
+</div>
 <?php if (documents_quote_is_locked($q)): ?><details style="margin-top:6px"><summary class="muted" style="cursor:pointer">✅ Create Revision</summary><form method="post" style="margin-top:6px"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="create_revision"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><label>Revision reason (optional)</label><textarea name="revision_reason" placeholder="Reason for revision"></textarea><?php if (documents_quote_has_workflow_documents($q)): ?><p class="muted" style="margin:6px 0">Documents already exist for this accepted quotation. Creating a revision will not change existing PI/Invoice. New documents must be created under the revised quotation.</p><label><input type="checkbox" name="archive_existing_documents" value="1"> Archive existing PI/Invoice after creating revision</label><?php endif; ?><div style="margin-top:6px"><button class="btn" type="submit" onclick="return confirm('Create a new revision from this accepted quotation?');">Create Revision</button></div></form></details><?php endif; ?>
 </td>
 </tr><?php endforeach; if ($allQuotes===[]): ?><tr><td colspan="7">No quotations yet.</td></tr><?php endif; ?></tbody></table>
@@ -1038,34 +1108,119 @@ $waDraftMessage = rawurlencode('Please review this quotation: ' . $publicShareUr
 (function(){
   const wrap=document.querySelector('.wrap');
   if(!wrap)return;
+
+  const toast=document.getElementById('uxToast');
+  let toastTimer=0;
+  const showToast=(message,isError=false)=>{
+    if(!toast)return;
+    toast.textContent=message;
+    toast.classList.toggle('err',!!isError);
+    toast.classList.add('show');
+    window.clearTimeout(toastTimer);
+    toastTimer=window.setTimeout(()=>toast.classList.remove('show'),3000);
+  };
+
   const cards=[...wrap.querySelectorAll(':scope > .card')];
   if(cards.length<4)return;
   const tabs=document.createElement('div');tabs.className='ux-tabs';
-  const panels=document.createElement('div');
   const map=[
     {key:'list',label:'Quotation List',match:/Quotation List/i},
-    {key:'editor',label:'Create / Edit Quotation',match:/Create Quotation|Edit Quotation/i},
+    {key:'editor',label:'Create \/ Edit Quotation',match:/Create Quotation|Edit Quotation/i},
     {key:'bulk',label:'Bulk Actions',match:/Bulk Modify Quotations/i},
-    {key:'settings',label:'Settings / Helpers',match:/Settings/i}
+    {key:'settings',label:'Settings \/ Helpers',match:/Settings/i}
   ];
   const byKey={};
   cards.forEach((card)=>{const h=card.querySelector('h2');const t=(h&&h.textContent||'').trim(); map.forEach(m=>{if(!byKey[m.key]&&m.match.test(t)){byKey[m.key]=card;}});});
-  ['editor'].forEach(k=>{const c=byKey[k];if(c){const heads=[...c.querySelectorAll('.grid > div > label')];heads.forEach(lb=>{const name=(lb.textContent||'').trim();let section='';if(/Template Set|Party Type|Mobile|Name|Customer Lookup/i.test(name))section='Customer Lookup & Basic Identity';else if(/System Type|Main Solar|Complimentary|Total System|Quotation Date|Valid Until|Pricing Mode|Total system price/i.test(name))section='System & Pricing Basics';else if(/District|City|State|PIN|Address|Meter|Application|Consumer Account|Circle|Division|Sub Division|Sanction|Installed PV/i.test(name))section='Site & Customer Details';else if(/Monthly|Unit Rate|Annual|Interest|Tenure|Transportation|Discount/i.test(name))section='Customer Savings Inputs';if(!section)return;const holder=lb.closest('div');if(!holder)return;holder.setAttribute('data-ux-section',section);}); const grid=c.querySelector('.grid'); if(grid){const order=['Customer Lookup & Basic Identity','System & Pricing Basics','Site & Customer Details','Item Builder','Customer Savings Inputs','Typography / Watermark Overrides','Annexure Overrides']; order.forEach(sec=>{const block=document.createElement('div');block.className='section-card';block.style.gridColumn='1/-1';const h3=document.createElement('h3');h3.textContent=sec;block.appendChild(h3);const matches=[...grid.querySelectorAll('[data-ux-section="'+sec+'"]')];if(sec==='Item Builder'){matches.push(...[...grid.querySelectorAll('h3')].map(x=>x.parentElement).filter(Boolean));} if(matches.length){matches.forEach(m=>block.appendChild(m));grid.insertBefore(block,grid.firstChild);} }); }
-  });
-  const order=['list','editor','bulk','settings'];
+
+  const editorCard=byKey.editor;
+  if(editorCard){
+    const quoteForm=editorCard.querySelector('form input[name="action"][value="save_quote"]')?.form;
+    const grid=quoteForm?.querySelector('.grid');
+    if(grid){
+      const sections=[
+        {title:'Section 1 — Customer Lookup & Basic Details', names:['Template Set','Party Type','Mobile','Name']},
+        {title:'Section 2 — System & Quotation Basics', names:['System Type','Main Solar Size (kWp)','Complimentary Non-DCR Solar Size (kWp)','Total System Capacity (kWp)','Capacity kWp','Quotation Date','Valid Until']},
+        {title:'Section 3 — Customer & Site Details', names:['Billing Address','Site Address','District','City','State','PIN','Consumer Account No. (JBVNL)','Meter Number','Meter Serial Number','Application ID','Application Submitted Date','Sanction Load (kWp)','Installed PV Capacity (kWp)','Circle','Division','Sub Division']},
+        {title:'Section 4 — Item Builder', containsHeadings:['Items Table','Item Builder (Structured)']},
+        {title:'Section 5 — Customer Savings Inputs', names:['Monthly electricity bill (₹)','Unit rate (₹/kWh)','Annual generation per kW','Transportation ₹','Discount (₹)','Loan enabled','Loan interest %','Loan tenure years','Margin money ₹'], containsHeadings:['Customer Savings Inputs'], className:'savings'},
+        {title:'Section 6 — Typography / Watermark Overrides', containsHeadings:['Typography & Watermark Overrides']},
+        {title:'Section 7 — Annexure Overrides', containsHeadings:['Annexure Overrides']},
+      ];
+
+      const controls=[...grid.children];
+      const lookupForm=[...editorCard.querySelectorAll('form')][0];
+      const sectionCards=sections.map((sec)=>{const card=document.createElement('div');card.className='section-card'+(sec.className?' '+sec.className:'');card.style.gridColumn='1/-1';const h=document.createElement('h3');h.textContent=sec.title;card.appendChild(h);const inner=document.createElement('div');inner.className='section-grid';card.appendChild(inner);return {cfg:sec,el:card,inner};});
+      const saveCard=document.createElement('div');saveCard.className='section-card';saveCard.style.gridColumn='1/-1';saveCard.innerHTML='<h3>Section 8 — Save Actions</h3><div class="muted">Use Save Quotation to store changes, or return to list.</div>';
+      const saveInner=document.createElement('div');saveInner.className='section-grid';saveCard.appendChild(saveInner);
+
+      const getLabel=(node)=>{const label=node.querySelector(':scope > label');return (label?.textContent||'').trim();};
+      const isHeadingBlock=(node,texts)=>{const h=node.querySelector('h3');if(!h)return false;const t=(h.textContent||'').trim();return texts.some(x=>t.includes(x));};
+
+      controls.forEach((node)=>{
+        if(node.tagName==='INPUT' && node.type==='hidden')return;
+        const label=getLabel(node);
+        let target=sectionCards[2];
+        for(const sec of sectionCards){
+          if((sec.cfg.names||[]).includes(label)){target=sec;break;}
+          if((sec.cfg.containsHeadings||[]).length && isHeadingBlock(node,sec.cfg.containsHeadings)){target=sec;break;}
+        }
+        if(label==='Project Summary' || label==='Special Requests From Consumer (Inclusive in the rate)' || label==='Place of Supply State' || label==='Cover note paragraph' || label==='Pricing Mode' || label==='Total system price (including GST) ₹' || label==='Tax Profile' || label==='Notes for customer'){ target=sectionCards[2]; }
+        if((label.includes('Address') || label.includes('Summary') || label.includes('Special Requests') || label.startsWith('Notes for customer')) && node.style.gridColumn!=='1/-1'){node.classList.add('full-span');}
+        if(node.querySelector('table') || isHeadingBlock(node,['Item Builder (Structured)','Annexure Overrides']) || node.querySelector('textarea')){ if((sectionCards[3].inner===target.inner || sectionCards[6].inner===target.inner)){node.classList.add('full-span');} }
+        target.inner.appendChild(node);
+      });
+
+      grid.innerHTML='';
+      if(lookupForm){const lookupCard=document.createElement('div');lookupCard.className='section-card';lookupCard.style.gridColumn='1/-1';lookupCard.innerHTML='<h3>Section 1 — Customer Lookup & Basic Details</h3>';lookupCard.appendChild(lookupForm);grid.appendChild(lookupCard);}      
+      sectionCards.forEach((sec)=>{if(sec.inner.children.length){grid.appendChild(sec.el);}});
+      const submitBtn=quoteForm.querySelector('button[type="submit"]');
+      if(submitBtn){submitBtn.classList.add('btn');saveInner.appendChild(submitBtn);}      
+      grid.appendChild(saveCard);
+    }
+  }
+
   const panelWrap=document.createElement('div');panelWrap.id='uxTabPanels';
-  order.forEach((key)=>{const panel=document.createElement('section');panel.className='ux-panel';panel.dataset.key=key; if(byKey[key])panel.appendChild(byKey[key]); panelWrap.appendChild(panel);const btn=document.createElement('button');btn.type='button';btn.className='ux-tab-btn';btn.textContent=map.find(m=>m.key===key).label;btn.dataset.key=key;tabs.appendChild(btn);});
+  ['list','editor','bulk','settings'].forEach((key)=>{const panel=document.createElement('section');panel.className='ux-panel';panel.dataset.key=key;if(byKey[key])panel.appendChild(byKey[key]);panelWrap.appendChild(panel);const btn=document.createElement('button');btn.type='button';btn.className='ux-tab-btn';btn.textContent=map.find(m=>m.key===key).label;btn.dataset.key=key;tabs.appendChild(btn);});
   const firstCard=cards[0];firstCard.insertAdjacentElement('afterend',tabs);tabs.insertAdjacentElement('afterend',panelWrap);
   const setTab=(key)=>{panelWrap.querySelectorAll('.ux-panel').forEach(p=>p.classList.toggle('active',p.dataset.key===key));tabs.querySelectorAll('.ux-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.key===key));sessionStorage.setItem('quotations:tab',key);};
   tabs.addEventListener('click',(e)=>{const b=e.target.closest('.ux-tab-btn');if(!b)return;setTab(b.dataset.key);});
   setTab(sessionStorage.getItem('quotations:tab')||'list');
 
-  const listPanel=panelWrap.querySelector('[data-key="list"]');
-  if(listPanel){listPanel.querySelectorAll('table').forEach(t=>t.classList.add('sticky-head'));}
-  const quoteForm=panelWrap.querySelector('[data-key="editor"] form input[name="action"][value="save_quote"]')?.form;
-  if(quoteForm){const bar=document.createElement('div');bar.className='sticky-mini-bar';bar.innerHTML='<button type="submit" class="btn">Save / Update</button><button type="button" class="btn secondary" data-back-list>Cancel / Back to list</button>';quoteForm.appendChild(bar);bar.querySelector('[data-back-list]').addEventListener('click',()=>setTab('list'));}
+  panelWrap.querySelector('[data-key="list"]')?.querySelectorAll('table').forEach(t=>t.classList.add('sticky-head'));
 
-  document.addEventListener('click',(e)=>{const link=e.target.closest('a'); if(!link)return; const href=link.getAttribute('href')||''; if(href.includes('quotation-view.php')){e.preventDefault();openModal(href,'Quotation Preview');} else if(href.includes('admin-quotations.php?edit=')){e.preventDefault();openModal(href,'Edit Quotation');} else if(href.includes('quotation-public.php')){e.preventDefault();openModal(href,'Share Link Preview');}});
+  const quoteForm=panelWrap.querySelector('[data-key="editor"] form input[name="action"][value="save_quote"]')?.form;
+  if(quoteForm){const bar=document.createElement('div');bar.className='sticky-mini-bar';bar.innerHTML='<button type="submit" class="btn">Save Quotation</button><button type="button" class="btn secondary" data-back-list>Cancel / Back to list</button>';quoteForm.appendChild(bar);bar.querySelector('[data-back-list]').addEventListener('click',()=>setTab('list'));}
+
+  document.addEventListener('click',(e)=>{
+    const link=e.target.closest('a');
+    if(link){
+      const href=link.getAttribute('href')||'';
+      if(href.includes('quotation-view.php')){e.preventDefault();openModal(href,'Quotation Preview');return;}
+      if(href.includes('admin-quotations.php?edit=')){e.preventDefault();openModal(href,'Edit Quotation');return;}
+      if(href.includes('quotation-public.php')){e.preventDefault();openModal(href,'Share Link Preview');return;}
+    }
+    const waBtn=e.target.closest('.js-wa-share');
+    if(waBtn){
+      e.preventDefault();
+      const mobileRaw=String(waBtn.getAttribute('data-customer-mobile')||'').replace(/\D+/g,'');
+      if(!mobileRaw){showToast('Customer mobile not available for this quotation.',true);return;}
+      const formData=new URLSearchParams();
+      formData.set('csrf_token',<?= json_encode((string)($_SESSION['csrf_token'] ?? '')) ?>);
+      formData.set('action','share_whatsapp_payload');
+      formData.set('quote_id',String(waBtn.getAttribute('data-quote-id')||''));
+      fetch('admin-quotations.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:formData.toString()})
+        .then(r=>r.json())
+        .then(payload=>{
+          if(!payload || !payload.ok){showToast((payload && payload.message) ? payload.message : 'Unable to prepare WhatsApp share draft.',true);return;}
+          const mobile=String(payload.mobile||'').replace(/\D+/g,'');
+          if(!(mobile.length===12 && mobile.startsWith('91'))){showToast('Invalid customer mobile number for WhatsApp sharing.',true);return;}
+          const text=encodeURIComponent(String(payload.message||''));
+          window.open('https://wa.me/'+mobile+'?text='+text,'_blank','noopener');
+        })
+        .catch(()=>showToast('Unable to prepare WhatsApp share draft.',true));
+    }
+  });
+
   const modal=document.getElementById('uxModal');const backdrop=document.getElementById('uxBackdrop');const frame=document.getElementById('uxModalFrame');const title=document.getElementById('uxModalTitle');
   function openModal(url,t){title.textContent=t;frame.src=url;modal.classList.add('ux-open');backdrop.classList.add('ux-open');}
   function closeModal(){modal.classList.remove('ux-open');backdrop.classList.remove('ux-open');frame.src='about:blank';}
