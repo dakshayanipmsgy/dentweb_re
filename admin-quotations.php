@@ -146,14 +146,14 @@ $sanitizeHexColor = static function ($raw, string $fallback = ''): string {
 $quotationExtractMobile = static function (array $quote): string {
     $snapshot = is_array($quote['customer_snapshot'] ?? null) ? $quote['customer_snapshot'] : [];
     $candidates = [
-        (string) ($snapshot['customer_mobile'] ?? ''),
-        (string) ($snapshot['mobile'] ?? ''),
         (string) ($quote['customer_mobile'] ?? ''),
         (string) ($quote['mobile'] ?? ''),
+        (string) ($snapshot['customer_mobile'] ?? ''),
+        (string) ($snapshot['mobile'] ?? ''),
         (string) ($quote['source']['lead_mobile'] ?? ''),
     ];
     foreach ($candidates as $candidate) {
-        $normalized = documents_normalize_mobile($candidate);
+        $normalized = documents_normalize_whatsapp_mobile($candidate);
         if ($normalized !== '') {
             return $normalized;
         }
@@ -720,7 +720,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $mobile = $quotationExtractMobile($quote);
         if ($mobile === '') {
-            echo json_encode(['ok' => false, 'message' => 'Customer mobile not available for this quotation.']);
+            echo json_encode(['ok' => false, 'message' => 'Customer mobile number is missing or invalid for WhatsApp sharing.']);
             exit;
         }
 
@@ -1065,7 +1065,7 @@ if ($lookup !== null) {
 <td>
 <div class="list-actions">
 <a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a>
-<?php if (documents_quote_can_edit($q, 'admin')): ?><a class="btn secondary" href="admin-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?>
+<?php if (documents_quote_can_edit($q, 'admin')): ?><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?>
 <?php
 $publicShareToken = safe_text((string) ($q['public_share_token'] ?? ''));
 $publicShareEnabled = !empty($q['public_share_enabled']) && $publicShareToken !== '';
@@ -1182,9 +1182,13 @@ $quoteShareMobile = $quotationExtractMobile($q);
   const panelWrap=document.createElement('div');panelWrap.id='uxTabPanels';
   ['list','editor','bulk','settings'].forEach((key)=>{const panel=document.createElement('section');panel.className='ux-panel';panel.dataset.key=key;if(byKey[key])panel.appendChild(byKey[key]);panelWrap.appendChild(panel);const btn=document.createElement('button');btn.type='button';btn.className='ux-tab-btn';btn.textContent=map.find(m=>m.key===key).label;btn.dataset.key=key;tabs.appendChild(btn);});
   const firstCard=cards[0];firstCard.insertAdjacentElement('afterend',tabs);tabs.insertAdjacentElement('afterend',panelWrap);
+  const urlParams=new URLSearchParams(window.location.search);
+  const requestedTab=urlParams.get('tab');
+  const hasEditParam=urlParams.get('edit');
   const setTab=(key)=>{panelWrap.querySelectorAll('.ux-panel').forEach(p=>p.classList.toggle('active',p.dataset.key===key));tabs.querySelectorAll('.ux-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.key===key));sessionStorage.setItem('quotations:tab',key);};
   tabs.addEventListener('click',(e)=>{const b=e.target.closest('.ux-tab-btn');if(!b)return;setTab(b.dataset.key);});
-  setTab(sessionStorage.getItem('quotations:tab')||'list');
+  const initialTab=(hasEditParam ? 'editor' : (requestedTab||sessionStorage.getItem('quotations:tab')||'list'));
+  setTab(initialTab);
 
   panelWrap.querySelector('[data-key="list"]')?.querySelectorAll('table').forEach(t=>t.classList.add('sticky-head'));
 
@@ -1196,14 +1200,13 @@ $quoteShareMobile = $quotationExtractMobile($q);
     if(link){
       const href=link.getAttribute('href')||'';
       if(href.includes('quotation-view.php')){e.preventDefault();openModal(href,'Quotation Preview');return;}
-      if(href.includes('admin-quotations.php?edit=')){e.preventDefault();openModal(href,'Edit Quotation');return;}
       if(href.includes('quotation-public.php')){e.preventDefault();openModal(href,'Share Link Preview');return;}
     }
     const waBtn=e.target.closest('.js-wa-share');
     if(waBtn){
       e.preventDefault();
       const mobileRaw=String(waBtn.getAttribute('data-customer-mobile')||'').replace(/\D+/g,'');
-      if(!mobileRaw){showToast('Customer mobile not available for this quotation.',true);return;}
+      if(!mobileRaw){showToast('Customer mobile number is missing or invalid for WhatsApp sharing.',true);return;}
       const formData=new URLSearchParams();
       formData.set('csrf_token',<?= json_encode((string)($_SESSION['csrf_token'] ?? '')) ?>);
       formData.set('action','share_whatsapp_payload');
@@ -1213,7 +1216,7 @@ $quoteShareMobile = $quotationExtractMobile($q);
         .then(payload=>{
           if(!payload || !payload.ok){showToast((payload && payload.message) ? payload.message : 'Unable to prepare WhatsApp share draft.',true);return;}
           const mobile=String(payload.mobile||'').replace(/\D+/g,'');
-          if(!(mobile.length===12 && mobile.startsWith('91'))){showToast('Invalid customer mobile number for WhatsApp sharing.',true);return;}
+          if(!(mobile.length===12 && mobile.startsWith('91'))){showToast('Customer mobile number is missing or invalid for WhatsApp sharing.',true);return;}
           const text=encodeURIComponent(String(payload.message||''));
           window.open('https://wa.me/'+mobile+'?text='+text,'_blank','noopener');
         })
