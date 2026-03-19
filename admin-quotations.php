@@ -1139,10 +1139,10 @@ $quoteShareMobile = $quotationExtractMobile($q);
     if(grid){
       const sections=[
         {title:'Section 1 — Customer Lookup & Basic Details', names:['Template Set','Party Type','Mobile','Name']},
-        {title:'Section 2 — System & Quotation Basics', names:['System Type','Main Solar Size (kWp)','Complimentary Non-DCR Solar Size (kWp)','Total System Capacity (kWp)','Capacity kWp','Quotation Date','Valid Until']},
+        {title:'Section 2 — System & Quotation Basics', names:['System Type','Capacity kWp','Quotation Date','Valid Until']},
         {title:'Section 3 — Customer & Site Details', names:['Billing Address','Site Address','District','City','State','PIN','Consumer Account No. (JBVNL)','Meter Number','Meter Serial Number','Application ID','Application Submitted Date','Sanction Load (kWp)','Installed PV Capacity (kWp)','Circle','Division','Sub Division']},
         {title:'Section 4 — Item Builder', containsHeadings:['Items Table','Item Builder (Structured)']},
-        {title:'Section 5 — Customer Savings Inputs', names:['Monthly electricity bill (₹)','Unit rate (₹/kWh)','Annual generation per kW','Transportation ₹','Discount (₹)','Loan enabled','Loan interest %','Loan tenure years','Margin money ₹'], containsHeadings:['Customer Savings Inputs'], className:'savings'},
+        {title:'Section 5 — Customer Savings Inputs', names:['Main Solar Size (kWp)','Complimentary Non-DCR Solar Size (kWp)','Total System Capacity (kWp)','Total system price (including GST) ₹','Tax Profile','Pricing Mode','Monthly electricity bill (₹)','Unit rate (₹/kWh)','Annual generation per kW','Transportation ₹','Discount (₹)','Discount note','Subsidy ₹','Loan enabled','Loan interest %','Loan tenure years','Margin money ₹','Loan amount ₹'], containsHeadings:['Customer Savings Inputs'], className:'savings'},
         {title:'Section 6 — Typography / Watermark Overrides', containsHeadings:['Typography & Watermark Overrides']},
         {title:'Section 7 — Annexure Overrides', containsHeadings:['Annexure Overrides']},
       ];
@@ -1164,11 +1164,34 @@ $quoteShareMobile = $quotationExtractMobile($q);
           if((sec.cfg.names||[]).includes(label)){target=sec;break;}
           if((sec.cfg.containsHeadings||[]).length && isHeadingBlock(node,sec.cfg.containsHeadings)){target=sec;break;}
         }
-        if(label==='Project Summary' || label==='Special Requests From Consumer (Inclusive in the rate)' || label==='Place of Supply State' || label==='Cover note paragraph' || label==='Pricing Mode' || label==='Total system price (including GST) ₹' || label==='Tax Profile' || label==='Notes for customer'){ target=sectionCards[2]; }
+        if(label==='Project Summary' || label==='Special Requests From Consumer (Inclusive in the rate)' || label==='Place of Supply State' || label==='Cover note paragraph' || label==='Notes for customer'){ target=sectionCards[2]; }
         if((label.includes('Address') || label.includes('Summary') || label.includes('Special Requests') || label.startsWith('Notes for customer')) && node.style.gridColumn!=='1/-1'){node.classList.add('full-span');}
         if(node.querySelector('table') || isHeadingBlock(node,['Item Builder (Structured)','Annexure Overrides']) || node.querySelector('textarea')){ if((sectionCards[3].inner===target.inner || sectionCards[6].inner===target.inner)){node.classList.add('full-span');} }
         target.inner.appendChild(node);
       });
+
+      const savingsSection=sectionCards[4];
+      if(savingsSection && savingsSection.inner.children.length){
+        const groupA=new Set(['Main Solar Size (kWp)','Complimentary Non-DCR Solar Size (kWp)','Total System Capacity (kWp)','Total system price (including GST) ₹','Tax Profile','Pricing Mode']);
+        const groupB=new Set(['Monthly electricity bill (₹)','Unit rate (₹/kWh)','Annual generation per kW','Transportation ₹','Discount (₹)','Discount note','Subsidy ₹','Loan enabled','Loan interest %','Loan tenure years','Margin money ₹','Loan amount ₹']);
+        const groupANodes=[]; const groupBNodes=[]; const otherNodes=[];
+        [...savingsSection.inner.children].forEach((node)=>{
+          const label=getLabel(node);
+          if(groupA.has(label)){groupANodes.push(node);return;}
+          if(groupB.has(label)){groupBNodes.push(node);return;}
+          otherNodes.push(node);
+        });
+        const makeGroupTitle=(title)=>{
+          const wrap=document.createElement('div');
+          wrap.className='full-span';
+          wrap.innerHTML='<div class="muted" style="font-weight:700;margin:2px 0 4px">'+title+'</div>';
+          return wrap;
+        };
+        savingsSection.inner.innerHTML = '';
+        if(groupANodes.length){savingsSection.inner.appendChild(makeGroupTitle('Group A — System & Pricing Inputs')); groupANodes.forEach((node)=>savingsSection.inner.appendChild(node));}
+        if(groupBNodes.length){savingsSection.inner.appendChild(makeGroupTitle('Group B — Savings & Finance Inputs')); groupBNodes.forEach((node)=>savingsSection.inner.appendChild(node));}
+        otherNodes.forEach((node)=>savingsSection.inner.appendChild(node));
+      }
 
       grid.innerHTML='';
       if(lookupForm){const lookupCard=document.createElement('div');lookupCard.className='section-card';lookupCard.style.gridColumn='1/-1';lookupCard.innerHTML='<h3>Section 1 — Customer Lookup & Basic Details</h3>';lookupCard.appendChild(lookupForm);grid.appendChild(lookupCard);}      
