@@ -1153,6 +1153,9 @@ $quoteShareMobile = $quotationExtractMobile($q);
         if(node.tagName==='INPUT' && node.type==='hidden')return;
         const label=getLabel(node);
         let target=sectionCards[2];
+        if(node.id==='splitCapacityFields'){
+          target=sectionCards[4];
+        }
         for(const sec of sectionCards){
           if((sec.cfg.names||[]).includes(label)){target=sec;break;}
           if((sec.cfg.containsHeadings||[]).length && isHeadingBlock(node,sec.cfg.containsHeadings)){target=sec;break;}
@@ -1170,6 +1173,7 @@ $quoteShareMobile = $quotationExtractMobile($q);
         const groupANodes=[]; const groupBNodes=[]; const otherNodes=[];
         [...savingsSection.inner.children].forEach((node)=>{
           const label=getLabel(node);
+          if(node.id==='splitCapacityFields'){groupANodes.push(node);return;}
           if(groupA.has(label)){groupANodes.push(node);return;}
           if(groupB.has(label)){groupBNodes.push(node);return;}
           otherNodes.push(node);
