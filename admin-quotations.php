@@ -1058,6 +1058,7 @@ if ($lookup !== null) {
 <td>
 <div class="list-actions">
 <a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a>
+<a class="btn secondary js-open-new-tab" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>" target="_blank" rel="noopener">Print HTML</a>
 <?php if (documents_quote_can_edit($q, 'admin')): ?><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?>
 <?php
 $publicShareToken = safe_text((string) ($q['public_share_token'] ?? ''));
@@ -1234,6 +1235,7 @@ $quoteShareMobile = $quotationExtractMobile($q);
   document.addEventListener('click',(e)=>{
     const link=e.target.closest('a');
     if(link){
+      if(link.classList.contains('js-open-new-tab')){return;}
       const href=link.getAttribute('href')||'';
       if(href.includes('quotation-view.php')){e.preventDefault();openModal(href,'Quotation Preview');return;}
       if(href.includes('quotation-public.php')){e.preventDefault();openModal(href,'Share Link Preview');return;}
