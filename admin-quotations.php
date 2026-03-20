@@ -1058,6 +1058,7 @@ if ($lookup !== null) {
 <td>
 <div class="list-actions">
 <a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a>
+<a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>" target="_blank" rel="noopener">Print HTML</a>
 <?php if (documents_quote_can_edit($q, 'admin')): ?><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?>
 <?php
 $publicShareToken = safe_text((string) ($q['public_share_token'] ?? ''));
