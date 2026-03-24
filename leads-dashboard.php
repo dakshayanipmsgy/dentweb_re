@@ -269,6 +269,7 @@ function leads_sort_indicator(string $column, string $currentSortBy, string $cur
 function leads_standard_status_options(): array
 {
     return [
+        'Interested',
         'Site Visit Needed',
         'Quotation Sent',
         'Quotation required',
