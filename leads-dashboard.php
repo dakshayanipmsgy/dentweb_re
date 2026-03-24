@@ -316,6 +316,7 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
         $leadMobileNormalized = normalize_customer_mobile((string) ($lead['alt_mobile'] ?? ''));
     }
     $canCreateQuotation = !$isArchived && $hasLeadName && $leadMobileNormalized !== '';
+    $callNotPickedCount = max(0, (int) ($lead['call_not_picked_count'] ?? 0));
     $rowClass = leads_row_classes($lead, $today);
     ob_start();
     ?>
@@ -345,6 +346,7 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
       <td><?php echo leads_safe(trim(((string) ($lead['next_followup_date'] ?? '')) . ' ' . ((string) ($lead['next_followup_time'] ?? '')))); ?></td>
       <td><?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?></td>
       <td><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) $callNotPickedCount); ?></td>
       <td><?php echo leads_safe((string) ($lead['created_at'] ?? '')); ?></td>
       <td><?php echo leads_safe((string) ($lead['updated_at'] ?? '')); ?></td>
       <td>
@@ -360,6 +362,7 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
           <a class="btn-secondary lead-action" data-action="view_edit" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="lead-detail.php?id=<?php echo urlencode((string) ($lead['id'] ?? '')); ?>">View / Edit</a>
           <a class="btn-secondary lead-action" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">WhatsApp</a>
           <button type="button" class="btn lead-action" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#10b981;">Mark Contacted Now</button>
+          <button type="button" class="btn-secondary lead-action" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#fee2e2; color:#991b1b;">Call not Picked</button>
           <?php if ($canCreateQuotation): ?>
             <a class="btn lead-action" data-action="create_quotation" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#1d4ed8;" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
           <?php else: ?>
@@ -462,6 +465,14 @@ if ($isAjaxRequest) {
         $updates = ['archived_flag' => true, 'archived_at' => (string) (($lead['archived_at'] ?? '') !== '' ? $lead['archived_at'] : date('Y-m-d H:i:s'))];
         $message = 'Lead archived.';
         $removeRow = true;
+    } elseif ($ajaxAction === 'call_not_picked') {
+        $actor = leads_actor_details();
+        $updates = [
+            'call_not_picked_count' => max(0, (int) ($lead['call_not_picked_count'] ?? 0)) + 1,
+            'last_call_not_picked_at' => date('Y-m-d H:i:s'),
+            'last_call_not_picked_by' => trim((string) ($actor['name'] ?? '')) !== '' ? (string) $actor['name'] : 'Unknown',
+        ];
+        $message = 'Call-not-picked count updated.';
     } elseif ($ajaxAction === 'create_customer_from_lead') {
         $customerResult = leads_create_customer_from_lead($customerStore, $lead);
         if (($customerResult['mobile'] ?? '') !== '') {
@@ -887,7 +898,7 @@ $followupToday = isset($_GET['followup_today']) && $_GET['followup_today'] === '
 $followupOverdue = isset($_GET['followup_overdue']) && $_GET['followup_overdue'] === '1';
 $sortBy = strtolower(trim((string) ($_GET['sort_by'] ?? 'created_at')));
 $sortDir = strtolower(trim((string) ($_GET['sort_dir'] ?? 'desc')));
-$allowedSort = ['sr_no', 'name', 'mobile', 'email', 'city', 'monthly_bill', 'finance_subsidy', 'property_type', 'roof_type', 'best_time_to_call', 'area_pincode', 'status', 'rating', 'next_followup', 'assigned_to', 'last_contacted_at', 'created_at', 'updated_at'];
+$allowedSort = ['sr_no', 'name', 'mobile', 'email', 'city', 'monthly_bill', 'finance_subsidy', 'property_type', 'roof_type', 'best_time_to_call', 'area_pincode', 'status', 'rating', 'next_followup', 'assigned_to', 'last_contacted_at', 'call_not_picked_count', 'created_at', 'updated_at'];
 if (!in_array($sortBy, $allowedSort, true)) {
     $sortBy = 'created_at';
 }
@@ -1029,6 +1040,11 @@ usort($filteredLeads, static function (array $a, array $b) use ($sortBy, $sortDi
         $aTs = $toTimestamp((string) ($a['last_contacted_at'] ?? ''));
         $bTs = $toTimestamp((string) ($b['last_contacted_at'] ?? ''));
         return ($aTs <=> $bTs) * $direction;
+    }
+    if ($sortBy === 'call_not_picked_count') {
+        $aCount = max(0, (int) ($a['call_not_picked_count'] ?? 0));
+        $bCount = max(0, (int) ($b['call_not_picked_count'] ?? 0));
+        return ($aCount <=> $bCount) * $direction;
     }
     if ($sortBy === 'updated_at') {
         $aTs = $toTimestamp((string) ($a['updated_at'] ?? ''));
@@ -1380,6 +1396,7 @@ ksort($duplicateGroups);
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('next_followup', $sortBy, $sortDir)); ?>">Next Follow-Up<?php echo leads_safe(leads_sort_indicator('next_followup', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('assigned_to', $sortBy, $sortDir)); ?>">Assigned To<?php echo leads_safe(leads_sort_indicator('assigned_to', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('last_contacted_at', $sortBy, $sortDir)); ?>">Last Contacted<?php echo leads_safe(leads_sort_indicator('last_contacted_at', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('call_not_picked_count', $sortBy, $sortDir)); ?>">Call not Picked<?php echo leads_safe(leads_sort_indicator('call_not_picked_count', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('created_at', $sortBy, $sortDir)); ?>">Created At<?php echo leads_safe(leads_sort_indicator('created_at', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('updated_at', $sortBy, $sortDir)); ?>">Updated At<?php echo leads_safe(leads_sort_indicator('updated_at', $sortBy, $sortDir)); ?></a></th>
               <th>Campaign</th>
@@ -1388,7 +1405,7 @@ ksort($duplicateGroups);
           </thead>
           <tbody>
             <?php if ($filteredLeads === []): ?>
-              <tr><td colspan="21">No leads match the selected filters.</td></tr>
+              <tr><td colspan="22">No leads match the selected filters.</td></tr>
             <?php else: ?>
               <?php foreach ($filteredLeads as $index => $lead): ?>
                 <?php echo leads_render_row($lead, $index + 1, $today, $quotationCreatePath); ?>
@@ -1602,6 +1619,7 @@ ksort($duplicateGroups);
 
       const endpointMap = {
         mark_contacted: 'mark_contacted',
+        call_not_picked: 'call_not_picked',
         archive_lead: 'archive_lead',
         create_customer: 'create_customer_from_lead',
         mark_converted: 'mark_converted',
