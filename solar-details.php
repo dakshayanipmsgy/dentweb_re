@@ -37,9 +37,14 @@ function solar_details_defaults(): array
     return [
         'page_title' => 'Solar Rooftop Details',
         'hero_intro' => 'Aasaan bhaasha mein samjhiye rooftop solar, PM Surya Ghar Yojana, on-grid vs hybrid aur pura installation process.',
+        'what_is_solar_rooftop' => '',
         'pm_surya_ghar_text' => 'PM Surya Ghar: Muft Bijli Yojana ek residential-focused scheme hai jisme eligible gharon ko rooftop solar lagane par subsidy support mil sakta hai, policy aur eligibility ke hisaab se.',
+        'who_is_eligible' => '',
         'on_grid_text' => 'On-grid system mein aapka solar system direct grid ke saath kaam karta hai. Din mein solar power use hoti hai, extra power grid mein jaa sakti hai, aur billing net-metering rules ke hisaab se hoti hai.',
         'hybrid_text' => 'Hybrid system mein solar ke saath battery backup hota hai. Isse light cut hone par bhi selected load chalaya ja sakta hai. Initial cost on-grid se thodi zyada hoti hai.',
+        'which_one_is_suitable_for_whom' => '',
+        'benefits' => '',
+        'important_expectations' => '',
         'process_text' => "1) Site survey\n2) Load understanding & design\n3) Final proposal\n4) Installation\n5) Net-meter / testing\n6) Documentation & subsidy guidance (if applicable)",
         'faq_text' => "Q: Kitna bill kam ho sakta hai?\nA: Load, usage pattern, roof area aur system size par depend karta hai.\n\nQ: On-grid mein light chali gayi toh?\nA: Safety ke liye typical on-grid system blackout mein band hota hai.\n\nQ: Subsidy guaranteed hai?\nA: Nahi, subsidy policy, eligibility aur government process par depend karti hai.",
         'cta_text' => 'Apne ghar/business ke liye suitable solar option jaanne ke liye humse baat karein. Survey se quotation tak guided support milega.',
@@ -68,6 +73,12 @@ function solar_details_load_content(): array
     }
 
     return array_merge($defaults, $decoded);
+}
+
+function solar_details_resolve_text(array $content, string $key, string $fallback): string
+{
+    $value = trim((string) ($content[$key] ?? ''));
+    return $value !== '' ? $value : $fallback;
 }
 
 $content = solar_details_load_content();
@@ -117,7 +128,7 @@ $companyPhone = trim((string) ($settings['company_phone'] ?? ''));
     <section class="grid">
       <article class="card">
         <h2>A) What is Solar Rooftop?</h2>
-        <p class="text-block">Rooftop solar ka matlab hai aapki chhat par panels lagana jisse ghar/business ki electricity demand ka bada hissa solar se aa sake.</p>
+        <p class="text-block"><?php echo solar_details_safe(solar_details_resolve_text($content, 'what_is_solar_rooftop', 'Rooftop solar ka matlab hai aapki chhat par panels lagana jisse ghar/business ki electricity demand ka bada hissa solar se aa sake.')); ?></p>
       </article>
       <article class="card">
         <h2>B) PM Surya Ghar: Muft Bijli Yojana</h2>
@@ -125,7 +136,7 @@ $companyPhone = trim((string) ($settings['company_phone'] ?? ''));
       </article>
       <article class="card">
         <h2>C) Who is Eligible?</h2>
-        <p class="text-block">Generally residential consumers jinke paas suitable roof space aur DISCOM/net-metering eligibility ho. Final eligibility local policy aur documents par depend karti hai.</p>
+        <p class="text-block"><?php echo solar_details_safe(solar_details_resolve_text($content, 'who_is_eligible', 'Generally residential consumers jinke paas suitable roof space aur DISCOM/net-metering eligibility ho. Final eligibility local policy aur documents par depend karti hai.')); ?></p>
       </article>
     </section>
 
@@ -148,7 +159,7 @@ $companyPhone = trim((string) ($settings['company_phone'] ?? ''));
 
     <section class="card">
       <h2>E) Which one is suitable for whom?</h2>
-      <p class="text-block">Agar aapka goal monthly bill reduction hai aur power-cut concern kam hai, on-grid usually best value deta hai. Agar backup bhi chahiye, hybrid better ho sakta hai.</p>
+      <p class="text-block"><?php echo solar_details_safe(solar_details_resolve_text($content, 'which_one_is_suitable_for_whom', 'Agar aapka goal monthly bill reduction hai aur power-cut concern kam hai, on-grid usually best value deta hai. Agar backup bhi chahiye, hybrid better ho sakta hai.')); ?></p>
       <h2>F) Process (Inquiry to Installation)</h2>
       <p class="text-block"><?php echo solar_details_safe((string) $content['process_text']); ?></p>
       <?php if (trim((string) $content['process_flow_image']) !== ''): ?>
@@ -159,23 +170,14 @@ $companyPhone = trim((string) ($settings['company_phone'] ?? ''));
     <section class="grid">
       <article class="card">
         <h2>G) Benefits</h2>
-        <ul class="muted">
-          <li>Lower electricity bill</li>
-          <li>Environment friendly energy</li>
-          <li>Low maintenance</li>
-          <li>Long system life</li>
-        </ul>
+        <p class="text-block"><?php echo solar_details_safe(solar_details_resolve_text($content, 'benefits', "Lower electricity bill\nEnvironment friendly energy\nLow maintenance\nLong system life")); ?></p>
         <?php if (trim((string) $content['benefits_image']) !== ''): ?>
           <img class="image-slot" src="<?php echo solar_details_safe((string) $content['benefits_image']); ?>" alt="Solar benefits" />
         <?php endif; ?>
       </article>
       <article class="card">
         <h2>H) Important Expectations</h2>
-        <ul class="muted">
-          <li>On-grid system grid dependency ke saath kaam karta hai.</li>
-          <li>Hybrid system backup deta hai but cost higher ho sakti hai.</li>
-          <li>Subsidy policy/applicability time ke saath change ho sakti hai.</li>
-        </ul>
+        <p class="text-block"><?php echo solar_details_safe(solar_details_resolve_text($content, 'important_expectations', "On-grid system grid dependency ke saath kaam karta hai.\nHybrid system backup deta hai but cost higher ho sakti hai.\nSubsidy policy/applicability time ke saath change ho sakti hai.")); ?></p>
       </article>
     </section>
 
