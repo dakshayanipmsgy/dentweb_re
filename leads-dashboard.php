@@ -415,6 +415,7 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
           <a class="btn-secondary lead-action" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">WhatsApp</a>
           <a class="btn-secondary lead-action" data-action="email" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">Email</a>
           <button type="button" class="btn lead-action" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#10b981;">Mark Contacted Now</button>
+          <button type="button" class="btn lead-action" data-action="mark_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#2563eb;">Interested</button>
           <button type="button" class="btn-secondary lead-action" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#fee2e2; color:#991b1b;">Call not Picked</button>
           <?php if ($canCreateQuotation): ?>
             <a class="btn lead-action" data-action="create_quotation" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#1d4ed8;" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
@@ -538,6 +539,9 @@ if ($isAjaxRequest) {
             $updates['next_followup_date'] = date('Y-m-d', strtotime('+3 days'));
         }
         $message = 'Lead marked as contacted.';
+    } elseif ($ajaxAction === 'mark_interested') {
+        $updates = ['status' => 'Interested'];
+        $message = 'Lead marked as interested.';
     } elseif ($ajaxAction === 'archive_lead') {
         $updates = ['archived_flag' => true, 'archived_at' => (string) (($lead['archived_at'] ?? '') !== '' ? $lead['archived_at'] : date('Y-m-d H:i:s'))];
         $message = 'Lead archived.';
@@ -1773,6 +1777,7 @@ ksort($duplicateGroups);
 
       const endpointMap = {
         mark_contacted: 'mark_contacted',
+        mark_interested: 'mark_interested',
         call_not_picked: 'call_not_picked',
         archive_lead: 'archive_lead',
         create_customer: 'create_customer_from_lead',
