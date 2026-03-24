@@ -279,9 +279,14 @@ function leads_explainer_content_defaults(): array
     return [
         'page_title' => 'Solar Rooftop Details',
         'hero_intro' => 'Aasaan bhaasha mein samjhiye rooftop solar, PM Surya Ghar Yojana, on-grid vs hybrid aur pura installation process.',
+        'what_is_solar_rooftop' => '',
         'pm_surya_ghar_text' => 'PM Surya Ghar: Muft Bijli Yojana ek residential-focused scheme hai jisme eligible gharon ko rooftop solar lagane par subsidy support mil sakta hai, policy aur eligibility ke hisaab se.',
+        'who_is_eligible' => '',
         'on_grid_text' => 'On-grid system mein aapka solar system direct grid ke saath kaam karta hai. Din mein solar power use hoti hai, extra power grid mein jaa sakti hai, aur billing net-metering rules ke hisaab se hoti hai.',
         'hybrid_text' => 'Hybrid system mein solar ke saath battery backup hota hai. Isse light cut hone par bhi selected load chalaya ja sakta hai. Initial cost on-grid se thodi zyada hoti hai.',
+        'which_one_is_suitable_for_whom' => '',
+        'benefits' => '',
+        'important_expectations' => '',
         'process_text' => "1) Site survey\n2) Load understanding & design\n3) Final proposal\n4) Installation\n5) Net-meter / testing\n6) Documentation & subsidy guidance (if applicable)",
         'faq_text' => "Q: Kitna bill kam ho sakta hai?\nA: Load, usage pattern, roof area aur system size par depend karta hai.\n\nQ: On-grid mein light chali gayi toh?\nA: Safety ke liye typical on-grid system blackout mein band hota hai.\n\nQ: Subsidy guaranteed hai?\nA: Nahi, subsidy policy, eligibility aur government process par depend karti hai.",
         'cta_text' => 'Apne ghar/business ke liye suitable solar option jaanne ke liye humse baat karein. Survey se quotation tak guided support milega.',
@@ -858,9 +863,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $explainerPayload = [
                 'page_title' => trim((string) ($_POST['page_title'] ?? '')),
                 'hero_intro' => trim((string) ($_POST['hero_intro'] ?? '')),
+                'what_is_solar_rooftop' => trim((string) ($_POST['what_is_solar_rooftop'] ?? '')),
                 'pm_surya_ghar_text' => trim((string) ($_POST['pm_surya_ghar_text'] ?? '')),
+                'who_is_eligible' => trim((string) ($_POST['who_is_eligible'] ?? '')),
                 'on_grid_text' => trim((string) ($_POST['on_grid_text'] ?? '')),
                 'hybrid_text' => trim((string) ($_POST['hybrid_text'] ?? '')),
+                'which_one_is_suitable_for_whom' => trim((string) ($_POST['which_one_is_suitable_for_whom'] ?? '')),
+                'benefits' => trim((string) ($_POST['benefits'] ?? '')),
+                'important_expectations' => trim((string) ($_POST['important_expectations'] ?? '')),
                 'process_text' => trim((string) ($_POST['process_text'] ?? '')),
                 'faq_text' => trim((string) ($_POST['faq_text'] ?? '')),
                 'cta_text' => trim((string) ($_POST['cta_text'] ?? '')),
@@ -1589,12 +1599,22 @@ ksort($duplicateGroups);
           <input type="text" id="page_title" name="page_title" value="<?php echo leads_safe((string) ($explainerContent['page_title'] ?? '')); ?>" />
           <label for="hero_intro">Hero Intro</label>
           <textarea id="hero_intro" name="hero_intro" rows="3"><?php echo leads_safe((string) ($explainerContent['hero_intro'] ?? '')); ?></textarea>
+          <label for="what_is_solar_rooftop">What is Solar Rooftop</label>
+          <textarea id="what_is_solar_rooftop" name="what_is_solar_rooftop" rows="4"><?php echo leads_safe((string) ($explainerContent['what_is_solar_rooftop'] ?? '')); ?></textarea>
           <label for="pm_surya_ghar_text">PM Surya Ghar Explanation</label>
           <textarea id="pm_surya_ghar_text" name="pm_surya_ghar_text" rows="4"><?php echo leads_safe((string) ($explainerContent['pm_surya_ghar_text'] ?? '')); ?></textarea>
+          <label for="who_is_eligible">Who is Eligible</label>
+          <textarea id="who_is_eligible" name="who_is_eligible" rows="4"><?php echo leads_safe((string) ($explainerContent['who_is_eligible'] ?? '')); ?></textarea>
           <label for="on_grid_text">On-grid Block</label>
           <textarea id="on_grid_text" name="on_grid_text" rows="4"><?php echo leads_safe((string) ($explainerContent['on_grid_text'] ?? '')); ?></textarea>
           <label for="hybrid_text">Hybrid Block</label>
           <textarea id="hybrid_text" name="hybrid_text" rows="4"><?php echo leads_safe((string) ($explainerContent['hybrid_text'] ?? '')); ?></textarea>
+          <label for="which_one_is_suitable_for_whom">Which one is suitable for whom</label>
+          <textarea id="which_one_is_suitable_for_whom" name="which_one_is_suitable_for_whom" rows="4"><?php echo leads_safe((string) ($explainerContent['which_one_is_suitable_for_whom'] ?? '')); ?></textarea>
+          <label for="benefits">Benefits</label>
+          <textarea id="benefits" name="benefits" rows="4"><?php echo leads_safe((string) ($explainerContent['benefits'] ?? '')); ?></textarea>
+          <label for="important_expectations">Important Expectations</label>
+          <textarea id="important_expectations" name="important_expectations" rows="4"><?php echo leads_safe((string) ($explainerContent['important_expectations'] ?? '')); ?></textarea>
           <label for="process_text">Process Section</label>
           <textarea id="process_text" name="process_text" rows="5"><?php echo leads_safe((string) ($explainerContent['process_text'] ?? '')); ?></textarea>
           <label for="faq_text">FAQ</label>
