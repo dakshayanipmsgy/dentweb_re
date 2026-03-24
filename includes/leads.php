@@ -96,7 +96,14 @@ function lead_normalize_record(array $lead): array
         'email_sent' => false,
         'email_sent_at' => '',
         'email_sent_by' => '',
+        'whatsapp_details_sent' => false,
+        'whatsapp_details_sent_at' => '',
+        'whatsapp_details_sent_by' => '',
+        'email_details_sent' => false,
+        'email_details_sent_at' => '',
+        'email_details_sent_by' => '',
         'last_message_channel' => '',
+        'last_message_type' => '',
     ];
 
     $normalized = array_merge($defaults, $lead);

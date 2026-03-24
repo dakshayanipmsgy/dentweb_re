@@ -131,7 +131,7 @@ function leads_value_or_dash(array $lead, string $key): string
 function leads_merge_lead_records(array $primary, array $secondary): array
 {
     $merged = $primary;
-    $booleanKeys = ['archived_flag', 'customer_created_flag', 'whatsapp_sent', 'email_sent'];
+    $booleanKeys = ['archived_flag', 'customer_created_flag', 'whatsapp_sent', 'email_sent', 'whatsapp_details_sent', 'email_details_sent'];
 
     foreach ($secondary as $key => $value) {
         if ($key === 'id') {
@@ -197,6 +197,12 @@ function leads_message_settings_defaults(): array
         'default_whatsapp_message' => '',
         'default_email_subject' => '',
         'default_email_body' => '',
+        'default_whatsapp_details_message' => '',
+        'default_email_details_subject' => '',
+        'default_email_details_body' => '',
+        'details_page_url' => '/solar-details.php',
+        'company_name' => 'Dakshayani Enterprises',
+        'company_phone' => '',
         'updated_at' => '',
         'updated_by' => '',
     ];
@@ -227,12 +233,18 @@ function leads_load_message_settings(): array
         'default_whatsapp_message' => trim((string) ($decoded['default_whatsapp_message'] ?? '')),
         'default_email_subject' => trim((string) ($decoded['default_email_subject'] ?? '')),
         'default_email_body' => trim((string) ($decoded['default_email_body'] ?? '')),
+        'default_whatsapp_details_message' => trim((string) ($decoded['default_whatsapp_details_message'] ?? '')),
+        'default_email_details_subject' => trim((string) ($decoded['default_email_details_subject'] ?? '')),
+        'default_email_details_body' => trim((string) ($decoded['default_email_details_body'] ?? '')),
+        'details_page_url' => trim((string) ($decoded['details_page_url'] ?? '/solar-details.php')),
+        'company_name' => trim((string) ($decoded['company_name'] ?? 'Dakshayani Enterprises')),
+        'company_phone' => trim((string) ($decoded['company_phone'] ?? '')),
         'updated_at' => trim((string) ($decoded['updated_at'] ?? '')),
         'updated_by' => trim((string) ($decoded['updated_by'] ?? '')),
     ]);
 }
 
-function leads_save_message_settings(string $defaultWhatsappMessage, string $defaultEmailSubject, string $defaultEmailBody, string $updatedBy): bool
+function leads_save_message_settings(array $payload, string $updatedBy): bool
 {
     $path = leads_message_settings_path();
     $directory = dirname($path);
@@ -240,15 +252,88 @@ function leads_save_message_settings(string $defaultWhatsappMessage, string $def
         return false;
     }
 
-    $payload = [
-        'default_whatsapp_message' => trim($defaultWhatsappMessage),
-        'default_email_subject' => trim($defaultEmailSubject),
-        'default_email_body' => trim($defaultEmailBody),
+    $settingsPayload = [
+        'default_whatsapp_message' => trim((string) ($payload['default_whatsapp_message'] ?? '')),
+        'default_email_subject' => trim((string) ($payload['default_email_subject'] ?? '')),
+        'default_email_body' => trim((string) ($payload['default_email_body'] ?? '')),
+        'default_whatsapp_details_message' => trim((string) ($payload['default_whatsapp_details_message'] ?? '')),
+        'default_email_details_subject' => trim((string) ($payload['default_email_details_subject'] ?? '')),
+        'default_email_details_body' => trim((string) ($payload['default_email_details_body'] ?? '')),
+        'details_page_url' => trim((string) ($payload['details_page_url'] ?? '/solar-details.php')),
+        'company_name' => trim((string) ($payload['company_name'] ?? 'Dakshayani Enterprises')),
+        'company_phone' => trim((string) ($payload['company_phone'] ?? '')),
         'updated_at' => date('Y-m-d H:i:s'),
         'updated_by' => trim($updatedBy) !== '' ? trim($updatedBy) : 'Admin',
     ];
 
-    return file_put_contents($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) !== false;
+    return file_put_contents($path, json_encode($settingsPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) !== false;
+}
+
+function leads_explainer_content_path(): string
+{
+    return __DIR__ . '/data/leads/lead_explainer_content.json';
+}
+
+function leads_explainer_content_defaults(): array
+{
+    return [
+        'page_title' => 'Solar Rooftop Details',
+        'hero_intro' => 'Aasaan bhaasha mein samjhiye rooftop solar, PM Surya Ghar Yojana, on-grid vs hybrid aur pura installation process.',
+        'pm_surya_ghar_text' => 'PM Surya Ghar: Muft Bijli Yojana ek residential-focused scheme hai jisme eligible gharon ko rooftop solar lagane par subsidy support mil sakta hai, policy aur eligibility ke hisaab se.',
+        'on_grid_text' => 'On-grid system mein aapka solar system direct grid ke saath kaam karta hai. Din mein solar power use hoti hai, extra power grid mein jaa sakti hai, aur billing net-metering rules ke hisaab se hoti hai.',
+        'hybrid_text' => 'Hybrid system mein solar ke saath battery backup hota hai. Isse light cut hone par bhi selected load chalaya ja sakta hai. Initial cost on-grid se thodi zyada hoti hai.',
+        'process_text' => "1) Site survey\n2) Load understanding & design\n3) Final proposal\n4) Installation\n5) Net-meter / testing\n6) Documentation & subsidy guidance (if applicable)",
+        'faq_text' => "Q: Kitna bill kam ho sakta hai?\nA: Load, usage pattern, roof area aur system size par depend karta hai.\n\nQ: On-grid mein light chali gayi toh?\nA: Safety ke liye typical on-grid system blackout mein band hota hai.\n\nQ: Subsidy guaranteed hai?\nA: Nahi, subsidy policy, eligibility aur government process par depend karti hai.",
+        'cta_text' => 'Apne ghar/business ke liye suitable solar option jaanne ke liye humse baat karein. Survey se quotation tak guided support milega.',
+        'on_grid_image' => '',
+        'hybrid_image' => '',
+        'process_flow_image' => '',
+        'benefits_image' => '',
+        'updated_at' => '',
+        'updated_by' => '',
+    ];
+}
+
+function leads_load_explainer_content(): array
+{
+    $defaults = leads_explainer_content_defaults();
+    $path = leads_explainer_content_path();
+    if (!is_file($path)) {
+        return $defaults;
+    }
+
+    $raw = file_get_contents($path);
+    if ($raw === false || trim($raw) === '') {
+        return $defaults;
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return $defaults;
+    }
+
+    return array_merge($defaults, $decoded);
+}
+
+function leads_save_explainer_content(array $payload, string $updatedBy): bool
+{
+    $defaults = leads_explainer_content_defaults();
+    $path = leads_explainer_content_path();
+    $directory = dirname($path);
+    if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+        return false;
+    }
+
+    $content = [];
+    foreach ($defaults as $key => $value) {
+        if (in_array($key, ['updated_at', 'updated_by'], true)) {
+            continue;
+        }
+        $content[$key] = trim((string) ($payload[$key] ?? $value));
+    }
+    $content['updated_at'] = date('Y-m-d H:i:s');
+    $content['updated_by'] = trim($updatedBy) !== '' ? trim($updatedBy) : 'Admin';
+
+    return file_put_contents($path, json_encode($content, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) !== false;
 }
 
 function leads_build_sort_link(string $column, string $currentSortBy, string $currentSortDir): string
@@ -357,6 +442,8 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
     $callNotPickedCount = max(0, (int) ($lead['call_not_picked_count'] ?? 0));
     $whatsappSent = !empty($lead['whatsapp_sent']);
     $emailSent = !empty($lead['email_sent']);
+    $whatsappDetailsSent = !empty($lead['whatsapp_details_sent']);
+    $emailDetailsSent = !empty($lead['email_details_sent']);
     $rowClass = leads_row_classes($lead, $today);
     ob_start();
     ?>
@@ -389,12 +476,18 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
       <td><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
       <td class="lead-message-status-cell">
         <?php if ($whatsappSent): ?>
-          <span class="badge pill" style="background:#dcfce7;color:#166534;">WhatsApp Sent</span>
+          <span class="badge pill" style="background:#dcfce7;color:#166534;">WA Intro</span>
         <?php endif; ?>
         <?php if ($emailSent): ?>
-          <span class="badge pill" style="background:#dbeafe;color:#1e40af;">Email Sent</span>
+          <span class="badge pill" style="background:#dbeafe;color:#1e40af;">Email Intro</span>
         <?php endif; ?>
-        <?php if (!$whatsappSent && !$emailSent): ?>
+        <?php if ($whatsappDetailsSent): ?>
+          <span class="badge pill" style="background:#ede9fe;color:#5b21b6;">WA Details</span>
+        <?php endif; ?>
+        <?php if ($emailDetailsSent): ?>
+          <span class="badge pill" style="background:#ffe4e6;color:#9f1239;">Email Details</span>
+        <?php endif; ?>
+        <?php if (!$whatsappSent && !$emailSent && !$whatsappDetailsSent && !$emailDetailsSent): ?>
           <span style="color:#9ca3af;">&mdash;</span>
         <?php endif; ?>
       </td>
@@ -414,6 +507,8 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
           <a class="btn-secondary lead-action" data-action="view_edit" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="lead-detail.php?id=<?php echo urlencode((string) ($lead['id'] ?? '')); ?>">View / Edit</a>
           <a class="btn-secondary lead-action" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">WhatsApp</a>
           <a class="btn-secondary lead-action" data-action="email" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">Email</a>
+          <a class="btn-secondary lead-action" data-action="whatsapp_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#ede9fe; color:#4c1d95;" href="#">WhatsApp Details</a>
+          <a class="btn-secondary lead-action" data-action="email_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#ffe4e6; color:#881337;" href="#">Email Details</a>
           <button type="button" class="btn lead-action" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#10b981;">Mark Contacted Now</button>
           <button type="button" class="btn lead-action" data-action="mark_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#2563eb;">Interested</button>
           <button type="button" class="btn-secondary lead-action" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#fee2e2; color:#991b1b;">Call not Picked</button>
@@ -589,8 +684,9 @@ if ($isAjaxRequest) {
         $updates = [
             'whatsapp_sent' => true,
             'whatsapp_sent_at' => date('Y-m-d H:i:s'),
-            'whatsapp_sent_by' => trim((string) ($actor['id'] ?? '')),
+            'whatsapp_sent_by' => trim((string) ($actor['name'] ?? '')) !== '' ? trim((string) ($actor['name'] ?? '')) : trim((string) ($actor['id'] ?? '')),
             'last_message_channel' => 'whatsapp',
+            'last_message_type' => 'initial_whatsapp',
         ];
         $message = 'WhatsApp send attempt marked.';
     } elseif ($ajaxAction === 'mark_email_sent') {
@@ -598,10 +694,31 @@ if ($isAjaxRequest) {
         $updates = [
             'email_sent' => true,
             'email_sent_at' => date('Y-m-d H:i:s'),
-            'email_sent_by' => trim((string) ($actor['id'] ?? '')),
+            'email_sent_by' => trim((string) ($actor['name'] ?? '')) !== '' ? trim((string) ($actor['name'] ?? '')) : trim((string) ($actor['id'] ?? '')),
             'last_message_channel' => 'email',
+            'last_message_type' => 'initial_email',
         ];
         $message = 'Email draft open marked.';
+    } elseif ($ajaxAction === 'mark_whatsapp_details_sent') {
+        $actor = leads_actor_details();
+        $updates = [
+            'whatsapp_details_sent' => true,
+            'whatsapp_details_sent_at' => date('Y-m-d H:i:s'),
+            'whatsapp_details_sent_by' => trim((string) ($actor['name'] ?? '')) !== '' ? trim((string) ($actor['name'] ?? '')) : trim((string) ($actor['id'] ?? '')),
+            'last_message_channel' => 'whatsapp',
+            'last_message_type' => 'details_whatsapp',
+        ];
+        $message = 'Detailed WhatsApp send attempt marked.';
+    } elseif ($ajaxAction === 'mark_email_details_sent') {
+        $actor = leads_actor_details();
+        $updates = [
+            'email_details_sent' => true,
+            'email_details_sent_at' => date('Y-m-d H:i:s'),
+            'email_details_sent_by' => trim((string) ($actor['name'] ?? '')) !== '' ? trim((string) ($actor['name'] ?? '')) : trim((string) ($actor['id'] ?? '')),
+            'last_message_channel' => 'email',
+            'last_message_type' => 'details_email',
+        ];
+        $message = 'Detailed email draft open marked.';
     }
 
     if ($updates === []) {
@@ -716,13 +833,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messages[] = ['type' => 'error', 'text' => 'Only admin can update messaging draft settings.'];
         } else {
             $actorDetails = leads_actor_details();
-            $defaultWhatsappMessage = trim((string) ($_POST['default_whatsapp_message'] ?? ''));
-            $defaultEmailSubject = trim((string) ($_POST['default_email_subject'] ?? ''));
-            $defaultEmailBody = trim((string) ($_POST['default_email_body'] ?? ''));
-            if (leads_save_message_settings($defaultWhatsappMessage, $defaultEmailSubject, $defaultEmailBody, (string) ($actorDetails['name'] ?? 'Admin'))) {
+            $settingsPayload = [
+                'default_whatsapp_message' => trim((string) ($_POST['default_whatsapp_message'] ?? '')),
+                'default_email_subject' => trim((string) ($_POST['default_email_subject'] ?? '')),
+                'default_email_body' => trim((string) ($_POST['default_email_body'] ?? '')),
+                'default_whatsapp_details_message' => trim((string) ($_POST['default_whatsapp_details_message'] ?? '')),
+                'default_email_details_subject' => trim((string) ($_POST['default_email_details_subject'] ?? '')),
+                'default_email_details_body' => trim((string) ($_POST['default_email_details_body'] ?? '')),
+                'details_page_url' => trim((string) ($_POST['details_page_url'] ?? '/solar-details.php')),
+                'company_name' => trim((string) ($_POST['company_name'] ?? 'Dakshayani Enterprises')),
+                'company_phone' => trim((string) ($_POST['company_phone'] ?? '')),
+            ];
+            if (leads_save_message_settings($settingsPayload, (string) ($actorDetails['name'] ?? 'Admin'))) {
                 $messages[] = ['type' => 'success', 'text' => 'Messaging templates saved.'];
             } else {
                 $messages[] = ['type' => 'error', 'text' => 'Unable to save messaging templates.'];
+            }
+        }
+    } elseif ($intent === 'save_explainer_content') {
+        if (!$loggedInAdmin) {
+            $messages[] = ['type' => 'error', 'text' => 'Only admin can update explainer page content.'];
+        } else {
+            $actorDetails = leads_actor_details();
+            $explainerPayload = [
+                'page_title' => trim((string) ($_POST['page_title'] ?? '')),
+                'hero_intro' => trim((string) ($_POST['hero_intro'] ?? '')),
+                'pm_surya_ghar_text' => trim((string) ($_POST['pm_surya_ghar_text'] ?? '')),
+                'on_grid_text' => trim((string) ($_POST['on_grid_text'] ?? '')),
+                'hybrid_text' => trim((string) ($_POST['hybrid_text'] ?? '')),
+                'process_text' => trim((string) ($_POST['process_text'] ?? '')),
+                'faq_text' => trim((string) ($_POST['faq_text'] ?? '')),
+                'cta_text' => trim((string) ($_POST['cta_text'] ?? '')),
+                'on_grid_image' => trim((string) ($_POST['on_grid_image'] ?? '')),
+                'hybrid_image' => trim((string) ($_POST['hybrid_image'] ?? '')),
+                'process_flow_image' => trim((string) ($_POST['process_flow_image'] ?? '')),
+                'benefits_image' => trim((string) ($_POST['benefits_image'] ?? '')),
+            ];
+            if (leads_save_explainer_content($explainerPayload, (string) ($actorDetails['name'] ?? 'Admin'))) {
+                $messages[] = ['type' => 'success', 'text' => 'Explainer content saved.'];
+            } else {
+                $messages[] = ['type' => 'error', 'text' => 'Unable to save explainer content.'];
             }
         }
     } elseif ($intent === 'bulk_action') {
@@ -987,6 +1137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $leads = load_all_leads();
 $messageSettings = leads_load_message_settings();
+$explainerContent = leads_load_explainer_content();
 
 $view = $_GET['view'] ?? 'active';
 if (!in_array($view, ['active', 'archived', 'all'], true)) {
@@ -1393,15 +1544,29 @@ ksort($duplicateGroups);
     <?php if ($loggedInAdmin): ?>
       <div class="card">
         <h2 style="margin-top:0;">Messaging Templates</h2>
-        <p style="margin-top:0;color:#4b5563;">Use placeholders: <code>{{name}}</code>, <code>{{mobile}}</code>, <code>{{email}}</code>, <code>{{city}}</code>, <code>{{assigned_to}}</code>.</p>
+        <p style="margin-top:0;color:#4b5563;">Use placeholders: <code>{{name}}</code>, <code>{{mobile}}</code>, <code>{{email}}</code>, <code>{{city}}</code>, <code>{{assigned_to}}</code>, <code>{{details_page_url}}</code>, <code>{{company_name}}</code>, <code>{{company_phone}}</code>.</p>
         <form method="post" class="grid" style="gap:0.5rem;">
           <input type="hidden" name="intent" value="save_message_settings" />
-          <label for="default_whatsapp_message">Default WhatsApp Message</label>
+          <h3 style="margin:0.25rem 0;">Stage 1 — Intro / Attention Capture</h3>
+          <label for="default_whatsapp_message">Default WhatsApp Intro Message</label>
           <textarea id="default_whatsapp_message" name="default_whatsapp_message" rows="4" placeholder="Hello {{name}}, thank you for your interest in solar..."><?php echo leads_safe((string) ($messageSettings['default_whatsapp_message'] ?? '')); ?></textarea>
-          <label for="default_email_subject">Default Email Subject</label>
+          <label for="default_email_subject">Default Email Intro Subject</label>
           <input type="text" id="default_email_subject" name="default_email_subject" value="<?php echo leads_safe((string) ($messageSettings['default_email_subject'] ?? '')); ?>" placeholder="Solar Proposal for {{name}}" />
-          <label for="default_email_body">Default Email Body</label>
+          <label for="default_email_body">Default Email Intro Body</label>
           <textarea id="default_email_body" name="default_email_body" rows="5" placeholder="Hello {{name}}, ..."><?php echo leads_safe((string) ($messageSettings['default_email_body'] ?? '')); ?></textarea>
+          <h3 style="margin:0.5rem 0 0;">Stage 2 — Detailed Information</h3>
+          <label for="default_whatsapp_details_message">Default WhatsApp Details Message</label>
+          <textarea id="default_whatsapp_details_message" name="default_whatsapp_details_message" rows="4" placeholder="Hello {{name}}, here are complete details: {{details_page_url}}"><?php echo leads_safe((string) ($messageSettings['default_whatsapp_details_message'] ?? '')); ?></textarea>
+          <label for="default_email_details_subject">Default Email Details Subject</label>
+          <input type="text" id="default_email_details_subject" name="default_email_details_subject" value="<?php echo leads_safe((string) ($messageSettings['default_email_details_subject'] ?? '')); ?>" placeholder="Detailed Solar Information for {{name}}" />
+          <label for="default_email_details_body">Default Email Details Body</label>
+          <textarea id="default_email_details_body" name="default_email_details_body" rows="5" placeholder="Hello {{name}}, detailed information is available at {{details_page_url}}..."><?php echo leads_safe((string) ($messageSettings['default_email_details_body'] ?? '')); ?></textarea>
+          <label for="details_page_url">Details Page URL</label>
+          <input type="text" id="details_page_url" name="details_page_url" value="<?php echo leads_safe((string) ($messageSettings['details_page_url'] ?? '/solar-details.php')); ?>" placeholder="/solar-details.php" />
+          <label for="company_name">Company Name Placeholder Value</label>
+          <input type="text" id="company_name" name="company_name" value="<?php echo leads_safe((string) ($messageSettings['company_name'] ?? 'Dakshayani Enterprises')); ?>" />
+          <label for="company_phone">Company Phone Placeholder Value</label>
+          <input type="text" id="company_phone" name="company_phone" value="<?php echo leads_safe((string) ($messageSettings['company_phone'] ?? '')); ?>" />
           <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
             <small style="color:#6b7280;">
               Last updated:
@@ -1413,6 +1578,53 @@ ksort($duplicateGroups);
             <button type="submit" class="btn">Save Templates</button>
           </div>
         </form>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0;">Lead Explainer Content</h2>
+        <p style="margin-top:0;color:#4b5563;">This content appears on <a href="/solar-details.php" target="_blank" rel="noopener">/solar-details.php</a>. Use Media Library URLs for image slots if available.</p>
+        <form method="post" class="grid" style="gap:0.5rem;">
+          <input type="hidden" name="intent" value="save_explainer_content" />
+          <label for="page_title">Page Title</label>
+          <input type="text" id="page_title" name="page_title" value="<?php echo leads_safe((string) ($explainerContent['page_title'] ?? '')); ?>" />
+          <label for="hero_intro">Hero Intro</label>
+          <textarea id="hero_intro" name="hero_intro" rows="3"><?php echo leads_safe((string) ($explainerContent['hero_intro'] ?? '')); ?></textarea>
+          <label for="pm_surya_ghar_text">PM Surya Ghar Explanation</label>
+          <textarea id="pm_surya_ghar_text" name="pm_surya_ghar_text" rows="4"><?php echo leads_safe((string) ($explainerContent['pm_surya_ghar_text'] ?? '')); ?></textarea>
+          <label for="on_grid_text">On-grid Block</label>
+          <textarea id="on_grid_text" name="on_grid_text" rows="4"><?php echo leads_safe((string) ($explainerContent['on_grid_text'] ?? '')); ?></textarea>
+          <label for="hybrid_text">Hybrid Block</label>
+          <textarea id="hybrid_text" name="hybrid_text" rows="4"><?php echo leads_safe((string) ($explainerContent['hybrid_text'] ?? '')); ?></textarea>
+          <label for="process_text">Process Section</label>
+          <textarea id="process_text" name="process_text" rows="5"><?php echo leads_safe((string) ($explainerContent['process_text'] ?? '')); ?></textarea>
+          <label for="faq_text">FAQ</label>
+          <textarea id="faq_text" name="faq_text" rows="6"><?php echo leads_safe((string) ($explainerContent['faq_text'] ?? '')); ?></textarea>
+          <label for="cta_text">CTA Text</label>
+          <textarea id="cta_text" name="cta_text" rows="3"><?php echo leads_safe((string) ($explainerContent['cta_text'] ?? '')); ?></textarea>
+          <label for="on_grid_image">On-grid Diagram Image URL</label>
+          <input type="text" id="on_grid_image" name="on_grid_image" value="<?php echo leads_safe((string) ($explainerContent['on_grid_image'] ?? '')); ?>" placeholder="/uploads/.../on-grid.png" />
+          <label for="hybrid_image">Hybrid Diagram Image URL</label>
+          <input type="text" id="hybrid_image" name="hybrid_image" value="<?php echo leads_safe((string) ($explainerContent['hybrid_image'] ?? '')); ?>" />
+          <label for="process_flow_image">Process Flow Image URL</label>
+          <input type="text" id="process_flow_image" name="process_flow_image" value="<?php echo leads_safe((string) ($explainerContent['process_flow_image'] ?? '')); ?>" />
+          <label for="benefits_image">Benefits Image / Icons URL</label>
+          <input type="text" id="benefits_image" name="benefits_image" value="<?php echo leads_safe((string) ($explainerContent['benefits_image'] ?? '')); ?>" />
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+            <small style="color:#6b7280;">
+              Last updated:
+              <?php echo leads_safe((string) ($explainerContent['updated_at'] ?? 'Never')); ?>
+              <?php if (trim((string) ($explainerContent['updated_by'] ?? '')) !== ''): ?>
+                by <?php echo leads_safe((string) ($explainerContent['updated_by'] ?? '')); ?>
+              <?php endif; ?>
+            </small>
+            <button type="submit" class="btn">Save Explainer Content</button>
+          </div>
+        </form>
+      </div>
+    <?php else: ?>
+      <div class="card">
+        <h2 style="margin-top:0;">Messaging Templates (View)</h2>
+        <p style="margin-top:0;color:#4b5563;">Current details page link: <a href="<?php echo leads_safe((string) ($messageSettings['details_page_url'] ?? '/solar-details.php')); ?>" target="_blank" rel="noopener"><?php echo leads_safe((string) ($messageSettings['details_page_url'] ?? '/solar-details.php')); ?></a></p>
       </div>
     <?php endif; ?>
 
@@ -1503,7 +1715,7 @@ ksort($duplicateGroups);
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('next_followup', $sortBy, $sortDir)); ?>">Next Follow-Up<?php echo leads_safe(leads_sort_indicator('next_followup', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('assigned_to', $sortBy, $sortDir)); ?>">Assigned To<?php echo leads_safe(leads_sort_indicator('assigned_to', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('last_contacted_at', $sortBy, $sortDir)); ?>">Last Contacted<?php echo leads_safe(leads_sort_indicator('last_contacted_at', $sortBy, $sortDir)); ?></a></th>
-              <th>Message Sent</th>
+              <th>Message Sent (Intro + Details)</th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('call_not_picked_count', $sortBy, $sortDir)); ?>">Call not Picked<?php echo leads_safe(leads_sort_indicator('call_not_picked_count', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('created_at', $sortBy, $sortDir)); ?>">Created At<?php echo leads_safe(leads_sort_indicator('created_at', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('updated_at', $sortBy, $sortDir)); ?>">Updated At<?php echo leads_safe(leads_sort_indicator('updated_at', $sortBy, $sortDir)); ?></a></th>
@@ -1553,6 +1765,12 @@ ksort($duplicateGroups);
     const whatsappTemplate = <?php echo json_encode((string) ($messageSettings['default_whatsapp_message'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
     const emailSubjectTemplate = <?php echo json_encode((string) ($messageSettings['default_email_subject'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
     const emailBodyTemplate = <?php echo json_encode((string) ($messageSettings['default_email_body'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
+    const whatsappDetailsTemplate = <?php echo json_encode((string) ($messageSettings['default_whatsapp_details_message'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
+    const emailDetailsSubjectTemplate = <?php echo json_encode((string) ($messageSettings['default_email_details_subject'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
+    const emailDetailsBodyTemplate = <?php echo json_encode((string) ($messageSettings['default_email_details_body'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
+    const detailsPageUrl = <?php echo json_encode((string) ($messageSettings['details_page_url'] ?? '/solar-details.php'), JSON_UNESCAPED_UNICODE); ?>;
+    const companyName = <?php echo json_encode((string) ($messageSettings['company_name'] ?? 'Dakshayani Enterprises'), JSON_UNESCAPED_UNICODE); ?>;
+    const companyPhone = <?php echo json_encode((string) ($messageSettings['company_phone'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
 
     function showToast(message) {
       const el = document.createElement('div');
@@ -1596,15 +1814,22 @@ ksort($duplicateGroups);
     }
 
     function applyTemplate(template, row) {
+      let normalizedDetailsPageUrl = (detailsPageUrl || '/solar-details.php').trim();
+      if (normalizedDetailsPageUrl.startsWith('/')) {
+        normalizedDetailsPageUrl = `${window.location.origin}${normalizedDetailsPageUrl}`;
+      }
       const values = {
         name: row?.dataset?.name?.trim() || 'Customer',
         mobile: row?.dataset?.mobile?.trim() || '',
         email: row?.dataset?.email?.trim() || '',
         city: row?.dataset?.city?.trim() || '',
         assigned_to: row?.dataset?.assignedTo?.trim() || '',
+        details_page_url: normalizedDetailsPageUrl,
+        company_name: (companyName || 'Dakshayani Enterprises').trim(),
+        company_phone: (companyPhone || '').trim(),
       };
 
-      return (template || '').replace(/\{\{\s*(name|mobile|email|city|assigned_to)\s*\}\}/gi, (_, key) => values[key.toLowerCase()] || '');
+      return (template || '').replace(/\{\{\s*(name|mobile|email|city|assigned_to|details_page_url|company_name|company_phone)\s*\}\}/gi, (_, key) => values[key.toLowerCase()] || '');
     }
 
     function isValidEmail(email) {
@@ -1743,8 +1968,53 @@ ksort($duplicateGroups);
         const subject = applyTemplate(emailSubjectTemplate, row).trim();
         const body = applyTemplate(emailBodyTemplate, row).trim();
         const mailtoUrl = `mailto:${encodeURIComponent(leadEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-        window.location.href = mailtoUrl;
+        window.open(mailtoUrl, '_blank');
         const data = await ajaxAction('mark_email_sent', { lead_id: leadId, row_index: rowIndex });
+        if (data.success) {
+          refreshRowFromResponse(data, row);
+        }
+        return;
+      }
+
+      if (action === 'whatsapp_details') {
+        if (!whatsappDetailsTemplate || !whatsappDetailsTemplate.trim()) {
+          showToast('Detailed WhatsApp template is not set.');
+          return;
+        }
+        const normalizedMobile = normalizeWhatsappMobile(row?.dataset?.mobile || '');
+        if (!normalizedMobile) {
+          showToast('Lead mobile number is required for WhatsApp details.');
+          return;
+        }
+        const finalMessage = applyTemplate(whatsappDetailsTemplate, row).trim();
+        if (!finalMessage) {
+          showToast('Detailed WhatsApp template resolved to empty text.');
+          return;
+        }
+        const url = `https://wa.me/${normalizedMobile}?text=${encodeURIComponent(finalMessage)}`;
+        window.open(url, '_blank', 'noopener');
+        const data = await ajaxAction('mark_whatsapp_details_sent', { lead_id: leadId, row_index: rowIndex });
+        if (data.success) {
+          refreshRowFromResponse(data, row);
+        }
+        return;
+      }
+
+      if (action === 'email_details') {
+        if (!emailDetailsSubjectTemplate.trim() && !emailDetailsBodyTemplate.trim()) {
+          showToast('Detailed email template is not set.');
+          return;
+        }
+        const leadEmail = row?.dataset?.email?.trim() || '';
+        if (!isValidEmail(leadEmail)) {
+          showToast('Lead email not available or invalid.');
+          return;
+        }
+        const subject = applyTemplate(emailDetailsSubjectTemplate, row).trim();
+        const body = applyTemplate(emailDetailsBodyTemplate, row).trim();
+        const mailtoUrl = `mailto:${encodeURIComponent(leadEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        window.open(mailtoUrl, '_blank');
+        const data = await ajaxAction('mark_email_details_sent', { lead_id: leadId, row_index: rowIndex });
         if (data.success) {
           refreshRowFromResponse(data, row);
         }
