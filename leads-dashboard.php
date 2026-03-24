@@ -131,7 +131,7 @@ function leads_value_or_dash(array $lead, string $key): string
 function leads_merge_lead_records(array $primary, array $secondary): array
 {
     $merged = $primary;
-    $booleanKeys = ['archived_flag', 'customer_created_flag'];
+    $booleanKeys = ['archived_flag', 'customer_created_flag', 'whatsapp_sent', 'email_sent'];
 
     foreach ($secondary as $key => $value) {
         if ($key === 'id') {
@@ -186,56 +186,64 @@ function leads_group_duplicate_mobiles(array $leads): array
     });
 }
 
-function leads_whatsapp_settings_path(): string
+function leads_message_settings_path(): string
 {
-    return __DIR__ . '/data/leads/lead_whatsapp_settings.json';
+    return __DIR__ . '/data/leads/lead_message_settings.json';
 }
 
-function leads_load_whatsapp_settings(): array
+function leads_message_settings_defaults(): array
 {
-    $path = leads_whatsapp_settings_path();
+    return [
+        'default_whatsapp_message' => '',
+        'default_email_subject' => '',
+        'default_email_body' => '',
+        'updated_at' => '',
+        'updated_by' => '',
+    ];
+}
+
+function leads_load_message_settings(): array
+{
+    $defaults = leads_message_settings_defaults();
+    $path = leads_message_settings_path();
+    $legacyPath = __DIR__ . '/data/leads/lead_whatsapp_settings.json';
+    if (!is_file($path) && is_file($legacyPath)) {
+        $path = $legacyPath;
+    }
     if (!is_file($path)) {
-        return [
-            'default_whatsapp_message' => '',
-            'updated_at' => '',
-            'updated_by' => '',
-        ];
+        return $defaults;
     }
 
     $raw = file_get_contents($path);
     if ($raw === false || trim($raw) === '') {
-        return [
-            'default_whatsapp_message' => '',
-            'updated_at' => '',
-            'updated_by' => '',
-        ];
+        return $defaults;
     }
     $decoded = json_decode($raw, true);
     if (!is_array($decoded)) {
-        return [
-            'default_whatsapp_message' => '',
-            'updated_at' => '',
-            'updated_by' => '',
-        ];
+        return $defaults;
     }
 
-    return [
+    return array_merge($defaults, [
         'default_whatsapp_message' => trim((string) ($decoded['default_whatsapp_message'] ?? '')),
+        'default_email_subject' => trim((string) ($decoded['default_email_subject'] ?? '')),
+        'default_email_body' => trim((string) ($decoded['default_email_body'] ?? '')),
         'updated_at' => trim((string) ($decoded['updated_at'] ?? '')),
         'updated_by' => trim((string) ($decoded['updated_by'] ?? '')),
-    ];
+    ]);
 }
 
-function leads_save_whatsapp_settings(string $defaultMessage, string $updatedBy): bool
+function leads_save_message_settings(string $defaultWhatsappMessage, string $defaultEmailSubject, string $defaultEmailBody, string $updatedBy): bool
 {
-    $path = leads_whatsapp_settings_path();
+    $path = leads_message_settings_path();
     $directory = dirname($path);
     if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
         return false;
     }
 
     $payload = [
-        'default_whatsapp_message' => trim($defaultMessage),
+        'default_whatsapp_message' => trim($defaultWhatsappMessage),
+        'default_email_subject' => trim($defaultEmailSubject),
+        'default_email_body' => trim($defaultEmailBody),
         'updated_at' => date('Y-m-d H:i:s'),
         'updated_by' => trim($updatedBy) !== '' ? trim($updatedBy) : 'Admin',
     ];
@@ -347,6 +355,8 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
     }
     $canCreateQuotation = !$isArchived && $hasLeadName && $leadMobileNormalized !== '';
     $callNotPickedCount = max(0, (int) ($lead['call_not_picked_count'] ?? 0));
+    $whatsappSent = !empty($lead['whatsapp_sent']);
+    $emailSent = !empty($lead['email_sent']);
     $rowClass = leads_row_classes($lead, $today);
     ob_start();
     ?>
@@ -354,6 +364,7 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
         data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>"
         data-name="<?php echo leads_safe((string) ($lead['name'] ?? '')); ?>"
         data-mobile="<?php echo leads_safe($leadMobileRaw); ?>"
+        data-email="<?php echo leads_safe((string) ($lead['email'] ?? '')); ?>"
         data-city="<?php echo leads_safe((string) ($lead['city'] ?? '')); ?>"
         data-assigned-to="<?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?>"
         class="<?php echo leads_safe($rowClass); ?>">
@@ -376,6 +387,17 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
       <td><?php echo leads_safe(trim(((string) ($lead['next_followup_date'] ?? '')) . ' ' . ((string) ($lead['next_followup_time'] ?? '')))); ?></td>
       <td><?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?></td>
       <td><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
+      <td class="lead-message-status-cell">
+        <?php if ($whatsappSent): ?>
+          <span class="badge pill" style="background:#dcfce7;color:#166534;">WhatsApp Sent</span>
+        <?php endif; ?>
+        <?php if ($emailSent): ?>
+          <span class="badge pill" style="background:#dbeafe;color:#1e40af;">Email Sent</span>
+        <?php endif; ?>
+        <?php if (!$whatsappSent && !$emailSent): ?>
+          <span style="color:#9ca3af;">&mdash;</span>
+        <?php endif; ?>
+      </td>
       <td><?php echo leads_safe((string) $callNotPickedCount); ?></td>
       <td><?php echo leads_safe((string) ($lead['created_at'] ?? '')); ?></td>
       <td><?php echo leads_safe((string) ($lead['updated_at'] ?? '')); ?></td>
@@ -391,6 +413,7 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
         <div class="table-actions">
           <a class="btn-secondary lead-action" data-action="view_edit" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="lead-detail.php?id=<?php echo urlencode((string) ($lead['id'] ?? '')); ?>">View / Edit</a>
           <a class="btn-secondary lead-action" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">WhatsApp</a>
+          <a class="btn-secondary lead-action" data-action="email" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">Email</a>
           <button type="button" class="btn lead-action" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#10b981;">Mark Contacted Now</button>
           <button type="button" class="btn-secondary lead-action" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#fee2e2; color:#991b1b;">Call not Picked</button>
           <?php if ($canCreateQuotation): ?>
@@ -557,6 +580,24 @@ if ($isAjaxRequest) {
     } elseif ($ajaxAction === 'mark_quotation_sent') {
         $updates = ['status' => 'Quotation Sent'];
         $message = 'Lead marked as quotation sent.';
+    } elseif ($ajaxAction === 'mark_whatsapp_sent') {
+        $actor = leads_actor_details();
+        $updates = [
+            'whatsapp_sent' => true,
+            'whatsapp_sent_at' => date('Y-m-d H:i:s'),
+            'whatsapp_sent_by' => trim((string) ($actor['id'] ?? '')),
+            'last_message_channel' => 'whatsapp',
+        ];
+        $message = 'WhatsApp send attempt marked.';
+    } elseif ($ajaxAction === 'mark_email_sent') {
+        $actor = leads_actor_details();
+        $updates = [
+            'email_sent' => true,
+            'email_sent_at' => date('Y-m-d H:i:s'),
+            'email_sent_by' => trim((string) ($actor['id'] ?? '')),
+            'last_message_channel' => 'email',
+        ];
+        $message = 'Email draft open marked.';
     }
 
     if ($updates === []) {
@@ -666,16 +707,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $intent = isset($_POST['intent']) ? (string) $_POST['intent'] : '';
 
-    if ($intent === 'save_whatsapp_settings') {
+    if ($intent === 'save_message_settings' || $intent === 'save_whatsapp_settings') {
         if (!$loggedInAdmin) {
-            $messages[] = ['type' => 'error', 'text' => 'Only admin can update WhatsApp draft settings.'];
+            $messages[] = ['type' => 'error', 'text' => 'Only admin can update messaging draft settings.'];
         } else {
             $actorDetails = leads_actor_details();
-            $defaultMessage = trim((string) ($_POST['default_whatsapp_message'] ?? ''));
-            if (leads_save_whatsapp_settings($defaultMessage, (string) ($actorDetails['name'] ?? 'Admin'))) {
-                $messages[] = ['type' => 'success', 'text' => 'WhatsApp draft message saved.'];
+            $defaultWhatsappMessage = trim((string) ($_POST['default_whatsapp_message'] ?? ''));
+            $defaultEmailSubject = trim((string) ($_POST['default_email_subject'] ?? ''));
+            $defaultEmailBody = trim((string) ($_POST['default_email_body'] ?? ''));
+            if (leads_save_message_settings($defaultWhatsappMessage, $defaultEmailSubject, $defaultEmailBody, (string) ($actorDetails['name'] ?? 'Admin'))) {
+                $messages[] = ['type' => 'success', 'text' => 'Messaging templates saved.'];
             } else {
-                $messages[] = ['type' => 'error', 'text' => 'Unable to save WhatsApp draft settings.'];
+                $messages[] = ['type' => 'error', 'text' => 'Unable to save messaging templates.'];
             }
         }
     } elseif ($intent === 'bulk_action') {
@@ -939,7 +982,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $leads = load_all_leads();
-$whatsappSettings = leads_load_whatsapp_settings();
+$messageSettings = leads_load_message_settings();
 
 $view = $_GET['view'] ?? 'active';
 if (!in_array($view, ['active', 'archived', 'all'], true)) {
@@ -1345,21 +1388,25 @@ ksort($duplicateGroups);
 
     <?php if ($loggedInAdmin): ?>
       <div class="card">
-        <h2 style="margin-top:0;">WhatsApp Draft Message</h2>
-        <p style="margin-top:0;color:#4b5563;">Use placeholders: <code>{{name}}</code>, <code>{{mobile}}</code>, <code>{{city}}</code>, <code>{{assigned_to}}</code>.</p>
+        <h2 style="margin-top:0;">Messaging Templates</h2>
+        <p style="margin-top:0;color:#4b5563;">Use placeholders: <code>{{name}}</code>, <code>{{mobile}}</code>, <code>{{email}}</code>, <code>{{city}}</code>, <code>{{assigned_to}}</code>.</p>
         <form method="post" class="grid" style="gap:0.5rem;">
-          <input type="hidden" name="intent" value="save_whatsapp_settings" />
+          <input type="hidden" name="intent" value="save_message_settings" />
           <label for="default_whatsapp_message">Default WhatsApp Message</label>
-          <textarea id="default_whatsapp_message" name="default_whatsapp_message" rows="4" placeholder="Hello {{name}}, thank you for your interest in solar..."><?php echo leads_safe((string) ($whatsappSettings['default_whatsapp_message'] ?? '')); ?></textarea>
+          <textarea id="default_whatsapp_message" name="default_whatsapp_message" rows="4" placeholder="Hello {{name}}, thank you for your interest in solar..."><?php echo leads_safe((string) ($messageSettings['default_whatsapp_message'] ?? '')); ?></textarea>
+          <label for="default_email_subject">Default Email Subject</label>
+          <input type="text" id="default_email_subject" name="default_email_subject" value="<?php echo leads_safe((string) ($messageSettings['default_email_subject'] ?? '')); ?>" placeholder="Solar Proposal for {{name}}" />
+          <label for="default_email_body">Default Email Body</label>
+          <textarea id="default_email_body" name="default_email_body" rows="5" placeholder="Hello {{name}}, ..."><?php echo leads_safe((string) ($messageSettings['default_email_body'] ?? '')); ?></textarea>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
             <small style="color:#6b7280;">
               Last updated:
-              <?php echo leads_safe((string) ($whatsappSettings['updated_at'] ?? 'Never')); ?>
-              <?php if (trim((string) ($whatsappSettings['updated_by'] ?? '')) !== ''): ?>
-                by <?php echo leads_safe((string) ($whatsappSettings['updated_by'] ?? '')); ?>
+              <?php echo leads_safe((string) ($messageSettings['updated_at'] ?? 'Never')); ?>
+              <?php if (trim((string) ($messageSettings['updated_by'] ?? '')) !== ''): ?>
+                by <?php echo leads_safe((string) ($messageSettings['updated_by'] ?? '')); ?>
               <?php endif; ?>
             </small>
-            <button type="submit" class="btn">Save Draft</button>
+            <button type="submit" class="btn">Save Templates</button>
           </div>
         </form>
       </div>
@@ -1452,6 +1499,7 @@ ksort($duplicateGroups);
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('next_followup', $sortBy, $sortDir)); ?>">Next Follow-Up<?php echo leads_safe(leads_sort_indicator('next_followup', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('assigned_to', $sortBy, $sortDir)); ?>">Assigned To<?php echo leads_safe(leads_sort_indicator('assigned_to', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('last_contacted_at', $sortBy, $sortDir)); ?>">Last Contacted<?php echo leads_safe(leads_sort_indicator('last_contacted_at', $sortBy, $sortDir)); ?></a></th>
+              <th>Message Sent</th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('call_not_picked_count', $sortBy, $sortDir)); ?>">Call not Picked<?php echo leads_safe(leads_sort_indicator('call_not_picked_count', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('created_at', $sortBy, $sortDir)); ?>">Created At<?php echo leads_safe(leads_sort_indicator('created_at', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('updated_at', $sortBy, $sortDir)); ?>">Updated At<?php echo leads_safe(leads_sort_indicator('updated_at', $sortBy, $sortDir)); ?></a></th>
@@ -1461,7 +1509,7 @@ ksort($duplicateGroups);
           </thead>
           <tbody>
             <?php if ($filteredLeads === []): ?>
-              <tr><td colspan="22">No leads match the selected filters.</td></tr>
+              <tr><td colspan="23">No leads match the selected filters.</td></tr>
             <?php else: ?>
               <?php foreach ($filteredLeads as $index => $lead): ?>
                 <?php echo leads_render_row($lead, $index + 1, $today, $quotationCreatePath); ?>
@@ -1498,7 +1546,9 @@ ksort($duplicateGroups);
     const drawerBody = document.getElementById('ux-drawer-body');
     const drawerTitle = document.getElementById('ux-drawer-title');
     const toastWrap = document.getElementById('ux-toast-wrap');
-    const whatsappTemplate = <?php echo json_encode((string) ($whatsappSettings['default_whatsapp_message'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
+    const whatsappTemplate = <?php echo json_encode((string) ($messageSettings['default_whatsapp_message'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
+    const emailSubjectTemplate = <?php echo json_encode((string) ($messageSettings['default_email_subject'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
+    const emailBodyTemplate = <?php echo json_encode((string) ($messageSettings['default_email_body'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
 
     function showToast(message) {
       const el = document.createElement('div');
@@ -1541,15 +1591,20 @@ ksort($duplicateGroups);
       return '';
     }
 
-    function applyWhatsappTemplate(template, row) {
+    function applyTemplate(template, row) {
       const values = {
         name: row?.dataset?.name?.trim() || 'Customer',
         mobile: row?.dataset?.mobile?.trim() || '',
+        email: row?.dataset?.email?.trim() || '',
         city: row?.dataset?.city?.trim() || '',
         assigned_to: row?.dataset?.assignedTo?.trim() || '',
       };
 
-      return template.replace(/\{\{\s*(name|mobile|city|assigned_to)\s*\}\}/gi, (_, key) => values[key.toLowerCase()] || '');
+      return (template || '').replace(/\{\{\s*(name|mobile|email|city|assigned_to)\s*\}\}/gi, (_, key) => values[key.toLowerCase()] || '');
+    }
+
+    function isValidEmail(email) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((email || '').trim());
     }
 
     async function ajaxAction(action, payload = {}) {
@@ -1657,13 +1712,38 @@ ksort($duplicateGroups);
           showToast('Invalid lead mobile number for WhatsApp.');
           return;
         }
-        const finalMessage = applyWhatsappTemplate(whatsappTemplate, row).trim();
+        const finalMessage = applyTemplate(whatsappTemplate, row).trim();
         if (!finalMessage) {
           showToast('WhatsApp draft message resolved to empty text.');
           return;
         }
         const url = `https://wa.me/${normalizedMobile}?text=${encodeURIComponent(finalMessage)}`;
         window.open(url, '_blank', 'noopener');
+        const data = await ajaxAction('mark_whatsapp_sent', { lead_id: leadId, row_index: rowIndex });
+        if (data.success) {
+          refreshRowFromResponse(data, row);
+        }
+        return;
+      }
+
+      if (action === 'email') {
+        if (!emailSubjectTemplate.trim() && !emailBodyTemplate.trim()) {
+          showToast('Email template is not set.');
+          return;
+        }
+        const leadEmail = row?.dataset?.email?.trim() || '';
+        if (!isValidEmail(leadEmail)) {
+          showToast('Lead email not available or invalid.');
+          return;
+        }
+        const subject = applyTemplate(emailSubjectTemplate, row).trim();
+        const body = applyTemplate(emailBodyTemplate, row).trim();
+        const mailtoUrl = `mailto:${encodeURIComponent(leadEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        window.location.href = mailtoUrl;
+        const data = await ajaxAction('mark_email_sent', { lead_id: leadId, row_index: rowIndex });
+        if (data.success) {
+          refreshRowFromResponse(data, row);
+        }
         return;
       }
 
