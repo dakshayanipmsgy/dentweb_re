@@ -266,7 +266,7 @@ function leads_save_message_settings(array $payload, string $updatedBy): bool
         'updated_by' => trim($updatedBy) !== '' ? trim($updatedBy) : 'Admin',
     ];
 
-    return file_put_contents($path, json_encode($settingsPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) !== false;
+    return file_put_contents($path, json_encode($settingsPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) !== false;
 }
 
 function leads_explainer_content_path(): string
@@ -338,7 +338,7 @@ function leads_save_explainer_content(array $payload, string $updatedBy): bool
     $content['updated_at'] = date('Y-m-d H:i:s');
     $content['updated_by'] = trim($updatedBy) !== '' ? trim($updatedBy) : 'Admin';
 
-    return file_put_contents($path, json_encode($content, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) !== false;
+    return file_put_contents($path, json_encode($content, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) !== false;
 }
 
 function leads_build_sort_link(string $column, string $currentSortBy, string $currentSortDir): string
