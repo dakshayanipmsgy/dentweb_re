@@ -263,6 +263,36 @@ function leads_sort_indicator(string $column, string $currentSortBy, string $cur
     return $currentSortDir === 'desc' ? ' ↓' : ' ↑';
 }
 
+/**
+ * @return array<int, string>
+ */
+function leads_standard_status_options(): array
+{
+    return [
+        'Interested',
+        'Site Visit Needed',
+        'Quotation Sent',
+        'Quotation required',
+        'Converted',
+        'Contacted',
+        'Manual input',
+    ];
+}
+
+function leads_resolve_status_submission(string $selectedStatus, string $customStatus): string
+{
+    if ($selectedStatus !== 'Manual input') {
+        return $selectedStatus;
+    }
+
+    $customStatus = trim($customStatus);
+    if ($customStatus !== '') {
+        return $customStatus;
+    }
+
+    return 'Manual input';
+}
+
 
 function leads_json_response(array $payload, int $status = 200): void
 {
@@ -405,6 +435,19 @@ if ($isAjaxRequest) {
         if ($lead === null) {
             leads_json_response(['success' => false, 'message' => 'Lead not found.'], 404);
         }
+        $savedStatus = trim((string) ($lead['status'] ?? ''));
+        $statusOptions = leads_standard_status_options();
+        $selectStatusValue = '';
+        $customStatusValue = '';
+        if ($savedStatus !== '') {
+            if (in_array($savedStatus, $statusOptions, true)) {
+                $selectStatusValue = $savedStatus;
+            } else {
+                $selectStatusValue = 'Manual input';
+                $customStatusValue = $savedStatus;
+            }
+        }
+        $showCustomStatusInput = $selectStatusValue === 'Manual input';
         ob_start();
         ?>
         <form id="lead-edit-form" class="grid" style="gap:0.75rem;">
@@ -419,7 +462,15 @@ if ($isAjaxRequest) {
           <label>Roof Type <input type="text" name="roof_type" value="<?php echo leads_safe((string) ($lead['roof_type'] ?? '')); ?>"></label>
           <label>Best Time to Call <input type="text" name="best_time_to_call" value="<?php echo leads_safe((string) ($lead['best_time_to_call'] ?? '')); ?>"></label>
           <label>Area Pincode <input type="text" name="area_pincode" value="<?php echo leads_safe((string) ($lead['area_pincode'] ?? '')); ?>"></label>
-          <label>Status <input type="text" name="status" value="<?php echo leads_safe((string) ($lead['status'] ?? '')); ?>"></label>
+          <label>Status
+            <select name="status" id="lead-status-select">
+              <option value="" <?php echo $selectStatusValue === '' ? 'selected' : ''; ?>>-- Select status --</option>
+              <?php foreach ($statusOptions as $statusOption): ?>
+                <option value="<?php echo leads_safe($statusOption); ?>" <?php echo $selectStatusValue === $statusOption ? 'selected' : ''; ?>><?php echo leads_safe($statusOption); ?></option>
+              <?php endforeach; ?>
+            </select>
+          </label>
+          <label id="lead-status-custom-wrapper" style="<?php echo $showCustomStatusInput ? '' : 'display:none;'; ?>">Custom status <input type="text" name="custom_status" id="lead-status-custom-input" value="<?php echo leads_safe($customStatusValue); ?>"></label>
           <label>Rating <input type="text" name="rating" value="<?php echo leads_safe((string) ($lead['rating'] ?? '')); ?>"></label>
           <label>Next Follow-up Date <input type="date" name="next_followup_date" value="<?php echo leads_safe((string) ($lead['next_followup_date'] ?? '')); ?>"></label>
           <label>Notes <input type="text" name="notes" value="<?php echo leads_safe((string) ($lead['notes'] ?? '')); ?>"></label>
@@ -449,14 +500,17 @@ if ($isAjaxRequest) {
             'roof_type' => trim((string) ($_POST['roof_type'] ?? '')),
             'best_time_to_call' => trim((string) ($_POST['best_time_to_call'] ?? '')),
             'area_pincode' => trim((string) ($_POST['area_pincode'] ?? '')),
-            'status' => trim((string) ($_POST['status'] ?? '')),
+            'status' => leads_resolve_status_submission(
+                trim((string) ($_POST['status'] ?? '')),
+                trim((string) ($_POST['custom_status'] ?? ''))
+            ),
             'rating' => trim((string) ($_POST['rating'] ?? '')),
             'next_followup_date' => trim((string) ($_POST['next_followup_date'] ?? '')),
             'notes' => trim((string) ($_POST['notes'] ?? '')),
         ];
         $message = 'Lead updated successfully.';
     } elseif ($ajaxAction === 'mark_contacted') {
-        $updates = ['last_contacted_at' => date('Y-m-d H:i:s')];
+        $updates = ['last_contacted_at' => date('Y-m-d H:i:s'), 'status' => 'Contacted'];
         if (trim((string) ($lead['next_followup_date'] ?? '')) === '') {
             $updates['next_followup_date'] = date('Y-m-d', strtotime('+3 days'));
         }
@@ -677,6 +731,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif ($bulkAction === 'mark_contacted_now') {
                     $updates = [
                         'last_contacted_at' => date('Y-m-d H:i:s'),
+                        'status' => 'Contacted',
                     ];
                     if (trim((string) ($existingLead['next_followup_date'] ?? '')) === '') {
                         $updates['next_followup_date'] = date('Y-m-d', strtotime('+3 days'));
@@ -743,6 +798,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($existing !== null) {
                 $updates = [
                     'last_contacted_at' => date('Y-m-d H:i:s'),
+                    'status' => 'Contacted',
                 ];
                 if (trim((string) ($existing['next_followup_date'] ?? '')) === '') {
                     $updates['next_followup_date'] = date('Y-m-d', strtotime('+3 days'));
@@ -1519,6 +1575,23 @@ ksort($duplicateGroups);
       }
     }
 
+    function initLeadEditStatusField(container) {
+      if (!container) return;
+      const statusSelect = container.querySelector('#lead-status-select');
+      const customWrapper = container.querySelector('#lead-status-custom-wrapper');
+      const customInput = container.querySelector('#lead-status-custom-input');
+      if (!statusSelect || !customWrapper || !customInput) return;
+
+      const syncCustomVisibility = () => {
+        const isManualInput = statusSelect.value === 'Manual input';
+        customWrapper.style.display = isManualInput ? '' : 'none';
+        customInput.required = isManualInput;
+      };
+
+      statusSelect.addEventListener('change', syncCustomVisibility);
+      syncCustomVisibility();
+    }
+
     document.getElementById('ux-modal-close').addEventListener('click', closeModal);
     document.getElementById('ux-drawer-close').addEventListener('click', closeDrawer);
     modalBackdrop.addEventListener('click', closeModal);
@@ -1567,6 +1640,7 @@ ksort($duplicateGroups);
         const data = await ajaxAction('fetch_lead_form', { lead_id: leadId });
         if (data.success) {
           openDrawer('View / Edit Lead', data.html || '');
+          initLeadEditStatusField(document.getElementById('ux-drawer-body'));
         } else {
           showToast(data.message || 'Unable to load lead');
         }
