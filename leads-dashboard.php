@@ -122,6 +122,12 @@ function leads_parse_datetime(string $value): string
     return date('Y-m-d H:i:s', $timestamp);
 }
 
+function leads_value_or_dash(array $lead, string $key): string
+{
+    $value = trim((string) ($lead[$key] ?? ''));
+    return $value === '' ? '—' : $value;
+}
+
 function leads_merge_lead_records(array $primary, array $secondary): array
 {
     $merged = $primary;
@@ -326,7 +332,14 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
       <td class="lead-index"><?php echo $index; ?></td>
       <td><?php echo leads_safe((string) ($lead['name'] ?? '')); ?></td>
       <td><a href="tel:<?php echo leads_safe($leadMobileRaw); ?>"><?php echo leads_safe($leadMobileRaw); ?></a></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'email')); ?></td>
       <td><?php echo leads_safe((string) ($lead['city'] ?? '')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'monthly_bill')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'finance_subsidy')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'property_type')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'roof_type')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'best_time_to_call')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'area_pincode')); ?></td>
       <td><span class="badge pill"><?php echo leads_safe((string) ($lead['status'] ?? '')); ?></span></td>
       <td><?php echo leads_safe((string) ($lead['rating'] ?? '')); ?></td>
       <td><?php echo leads_safe(trim(((string) ($lead['next_followup_date'] ?? '')) . ' ' . ((string) ($lead['next_followup_time'] ?? '')))); ?></td>
@@ -395,7 +408,14 @@ if ($isAjaxRequest) {
           <input type="hidden" name="lead_id" value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" />
           <label>Name <input type="text" name="name" value="<?php echo leads_safe((string) ($lead['name'] ?? '')); ?>" required></label>
           <label>Mobile <input type="text" name="mobile" value="<?php echo leads_safe((string) ($lead['mobile'] ?? '')); ?>"></label>
+          <label>Email <input type="email" name="email" value="<?php echo leads_safe((string) ($lead['email'] ?? '')); ?>"></label>
           <label>City <input type="text" name="city" value="<?php echo leads_safe((string) ($lead['city'] ?? '')); ?>"></label>
+          <label>Monthly Bill <input type="text" name="monthly_bill" value="<?php echo leads_safe((string) ($lead['monthly_bill'] ?? '')); ?>"></label>
+          <label>Finance &amp; Subsidy <input type="text" name="finance_subsidy" value="<?php echo leads_safe((string) ($lead['finance_subsidy'] ?? '')); ?>"></label>
+          <label>Property Type <input type="text" name="property_type" value="<?php echo leads_safe((string) ($lead['property_type'] ?? '')); ?>"></label>
+          <label>Roof Type <input type="text" name="roof_type" value="<?php echo leads_safe((string) ($lead['roof_type'] ?? '')); ?>"></label>
+          <label>Best Time to Call <input type="text" name="best_time_to_call" value="<?php echo leads_safe((string) ($lead['best_time_to_call'] ?? '')); ?>"></label>
+          <label>Area Pincode <input type="text" name="area_pincode" value="<?php echo leads_safe((string) ($lead['area_pincode'] ?? '')); ?>"></label>
           <label>Status <input type="text" name="status" value="<?php echo leads_safe((string) ($lead['status'] ?? '')); ?>"></label>
           <label>Rating <input type="text" name="rating" value="<?php echo leads_safe((string) ($lead['rating'] ?? '')); ?>"></label>
           <label>Next Follow-up Date <input type="date" name="next_followup_date" value="<?php echo leads_safe((string) ($lead['next_followup_date'] ?? '')); ?>"></label>
@@ -418,7 +438,14 @@ if ($isAjaxRequest) {
         $updates = [
             'name' => trim((string) ($_POST['name'] ?? '')),
             'mobile' => trim((string) ($_POST['mobile'] ?? '')),
+            'email' => trim((string) ($_POST['email'] ?? '')),
             'city' => trim((string) ($_POST['city'] ?? '')),
+            'monthly_bill' => trim((string) ($_POST['monthly_bill'] ?? '')),
+            'finance_subsidy' => trim((string) ($_POST['finance_subsidy'] ?? '')),
+            'property_type' => trim((string) ($_POST['property_type'] ?? '')),
+            'roof_type' => trim((string) ($_POST['roof_type'] ?? '')),
+            'best_time_to_call' => trim((string) ($_POST['best_time_to_call'] ?? '')),
+            'area_pincode' => trim((string) ($_POST['area_pincode'] ?? '')),
             'status' => trim((string) ($_POST['status'] ?? '')),
             'rating' => trim((string) ($_POST['rating'] ?? '')),
             'next_followup_date' => trim((string) ($_POST['next_followup_date'] ?? '')),
@@ -484,6 +511,19 @@ if ($isAjaxRequest) {
         'remove_row' => $removeRow,
         'row_html' => leads_render_row($updatedLead, max(1, $rowIndex), $today, $quotationCreatePath),
     ]);
+}
+
+$downloadSampleCsv = isset($_GET['download']) && $_GET['download'] === 'lead_sample_csv';
+if ($downloadSampleCsv) {
+    $headers = ['#', 'name', 'mobile', 'email', 'city', 'area_pincode', 'monthly_bill', 'finance_subsidy', 'property_type', 'roof_type', 'best_time_to_call', 'status', 'rating', 'next follow-up', 'assigned to', 'last contacted', 'campaign', 'actions'];
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="leads-import-sample.csv"');
+    $output = fopen('php://output', 'w');
+    if ($output !== false) {
+        fputcsv($output, $headers);
+        fclose($output);
+    }
+    exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -649,7 +689,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($intent === 'quick_add') {
         $name = trim((string) ($_POST['name'] ?? ''));
         $mobile = trim((string) ($_POST['mobile'] ?? ''));
+        $email = trim((string) ($_POST['email'] ?? ''));
         $city = trim((string) ($_POST['city'] ?? ''));
+        $monthlyBill = trim((string) ($_POST['monthly_bill'] ?? ''));
+        $financeSubsidy = trim((string) ($_POST['finance_subsidy'] ?? ''));
+        $propertyType = trim((string) ($_POST['property_type'] ?? ''));
+        $roofType = trim((string) ($_POST['roof_type'] ?? ''));
+        $bestTimeToCall = trim((string) ($_POST['best_time_to_call'] ?? ''));
+        $areaPincode = trim((string) ($_POST['area_pincode'] ?? ''));
         $leadSource = trim((string) ($_POST['lead_source'] ?? 'Incoming Call'));
         $interestType = trim((string) ($_POST['interest_type'] ?? ''));
 
@@ -660,7 +707,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $record = add_lead([
                 'name' => $name,
                 'mobile' => $mobile,
+                'email' => $email,
                 'city' => $city,
+                'monthly_bill' => $monthlyBill,
+                'finance_subsidy' => $financeSubsidy,
+                'property_type' => $propertyType,
+                'roof_type' => $roofType,
+                'best_time_to_call' => $bestTimeToCall,
+                'area_pincode' => $areaPincode,
                 'lead_source' => $leadSource !== '' ? $leadSource : 'Incoming Call',
                 'interest_type' => $interestType,
                 'status' => 'New',
@@ -702,7 +756,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $headers = [];
                 $imported = 0;
                 $skipped = 0;
-                $defaultHeader = ['#', 'name', 'mobile', 'city', 'status', 'rating', 'next follow-up', 'assigned to', 'last contacted', 'campaign', 'actions'];
+                $defaultHeader = ['#', 'name', 'mobile', 'email', 'city', 'area_pincode', 'monthly_bill', 'finance_subsidy', 'property_type', 'roof_type', 'best_time_to_call', 'status', 'rating', 'next follow-up', 'assigned to', 'last contacted', 'campaign', 'actions'];
                 while (($row = fgetcsv($handle)) !== false) {
                     $rowIndex++;
                     if ($rowIndex === 1) {
@@ -720,30 +774,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     foreach ($headers as $index => $header) {
                         $rowData[$header] = $row[$index] ?? '';
                     }
+                    $lookup = static function (array $rowData, array $keys): string {
+                        foreach ($keys as $key) {
+                            if (array_key_exists($key, $rowData)) {
+                                return trim((string) $rowData[$key]);
+                            }
+                        }
+                        return '';
+                    };
 
-                    $mobile = trim((string) ($rowData['mobile'] ?? ''));
-                    $name = trim((string) ($rowData['name'] ?? ''));
+                    $mobile = $lookup($rowData, ['mobile']);
+                    $name = $lookup($rowData, ['name']);
                     if ($mobile === '' && $name === '') {
                         $skipped++;
                         continue;
                     }
 
-                    $status = trim((string) ($rowData['status'] ?? ''));
-                    $rating = trim((string) ($rowData['rating'] ?? ''));
-                    $assignedTo = trim((string) ($rowData['assigned to'] ?? ''));
+                    $status = $lookup($rowData, ['status']);
+                    $rating = $lookup($rowData, ['rating']);
+                    $assignedTo = $lookup($rowData, ['assigned to', 'assigned_to']);
 
                     $leadRecord = [
                         'name' => $name,
                         'mobile' => $mobile,
-                        'city' => trim((string) ($rowData['city'] ?? '')),
+                        'email' => $lookup($rowData, ['email']),
+                        'city' => $lookup($rowData, ['city']),
+                        'area_pincode' => $lookup($rowData, ['area_pincode', 'area pincode']),
+                        'monthly_bill' => $lookup($rowData, ['monthly_bill', 'monthly bill']),
+                        'finance_subsidy' => $lookup($rowData, ['finance_subsidy', 'finance & subsidy', 'finance and subsidy']),
+                        'property_type' => $lookup($rowData, ['property_type', 'property type']),
+                        'roof_type' => $lookup($rowData, ['roof_type', 'roof type']),
+                        'best_time_to_call' => $lookup($rowData, ['best_time_to_call', 'best time to call']),
                         'status' => $status !== '' ? $status : 'New',
                         'rating' => $rating !== '' ? $rating : 'Warm',
-                        'next_followup_date' => leads_parse_date((string) ($rowData['next follow-up'] ?? '')),
+                        'next_followup_date' => leads_parse_date($lookup($rowData, ['next follow-up', 'next_followup', 'next_followup_date'])),
                         'assigned_to_name' => $assignedTo !== '' ? $assignedTo : $actorDetails['name'],
                         'assigned_to_type' => $actorDetails['type'],
                         'assigned_to_id' => $actorDetails['id'],
-                        'last_contacted_at' => leads_parse_datetime((string) ($rowData['last contacted'] ?? '')),
-                        'source_campaign_name' => trim((string) ($rowData['campaign'] ?? '')),
+                        'last_contacted_at' => leads_parse_datetime($lookup($rowData, ['last contacted', 'last_contacted_at'])),
+                        'source_campaign_name' => $lookup($rowData, ['campaign']),
                         'lead_source' => 'CSV Import',
                     ];
 
@@ -818,7 +887,7 @@ $followupToday = isset($_GET['followup_today']) && $_GET['followup_today'] === '
 $followupOverdue = isset($_GET['followup_overdue']) && $_GET['followup_overdue'] === '1';
 $sortBy = strtolower(trim((string) ($_GET['sort_by'] ?? 'created_at')));
 $sortDir = strtolower(trim((string) ($_GET['sort_dir'] ?? 'desc')));
-$allowedSort = ['sr_no', 'name', 'mobile', 'city', 'status', 'rating', 'next_followup', 'assigned_to', 'last_contacted_at', 'created_at', 'updated_at'];
+$allowedSort = ['sr_no', 'name', 'mobile', 'email', 'city', 'monthly_bill', 'finance_subsidy', 'property_type', 'roof_type', 'best_time_to_call', 'area_pincode', 'status', 'rating', 'next_followup', 'assigned_to', 'last_contacted_at', 'created_at', 'updated_at'];
 if (!in_array($sortBy, $allowedSort, true)) {
     $sortBy = 'created_at';
 }
@@ -833,7 +902,14 @@ $filteredLeads = array_values(array_filter($leads, function (array $lead) use ($
         $haystacks = [
             strtolower((string) ($lead['name'] ?? '')),
             strtolower((string) ($lead['mobile'] ?? '')),
+            strtolower((string) ($lead['email'] ?? '')),
             strtolower((string) ($lead['city'] ?? '')),
+            strtolower((string) ($lead['monthly_bill'] ?? '')),
+            strtolower((string) ($lead['finance_subsidy'] ?? '')),
+            strtolower((string) ($lead['property_type'] ?? '')),
+            strtolower((string) ($lead['roof_type'] ?? '')),
+            strtolower((string) ($lead['best_time_to_call'] ?? '')),
+            strtolower((string) ($lead['area_pincode'] ?? '')),
         ];
         $matchesSearch = false;
         foreach ($haystacks as $haystack) {
@@ -903,6 +979,27 @@ usort($filteredLeads, static function (array $a, array $b) use ($sortBy, $sortDi
     }
     if ($sortBy === 'city') {
         return $textSort((string) ($a['city'] ?? ''), (string) ($b['city'] ?? ''));
+    }
+    if ($sortBy === 'email') {
+        return $textSort((string) ($a['email'] ?? ''), (string) ($b['email'] ?? ''));
+    }
+    if ($sortBy === 'monthly_bill') {
+        return $textSort((string) ($a['monthly_bill'] ?? ''), (string) ($b['monthly_bill'] ?? ''));
+    }
+    if ($sortBy === 'finance_subsidy') {
+        return $textSort((string) ($a['finance_subsidy'] ?? ''), (string) ($b['finance_subsidy'] ?? ''));
+    }
+    if ($sortBy === 'property_type') {
+        return $textSort((string) ($a['property_type'] ?? ''), (string) ($b['property_type'] ?? ''));
+    }
+    if ($sortBy === 'roof_type') {
+        return $textSort((string) ($a['roof_type'] ?? ''), (string) ($b['roof_type'] ?? ''));
+    }
+    if ($sortBy === 'best_time_to_call') {
+        return $textSort((string) ($a['best_time_to_call'] ?? ''), (string) ($b['best_time_to_call'] ?? ''));
+    }
+    if ($sortBy === 'area_pincode') {
+        return $textSort((string) ($a['area_pincode'] ?? ''), (string) ($b['area_pincode'] ?? ''));
     }
     if ($sortBy === 'status') {
         return $textSort((string) ($a['status'] ?? ''), (string) ($b['status'] ?? ''));
@@ -978,7 +1075,7 @@ ksort($duplicateGroups);
     .grid { display: grid; gap: 0.75rem; }
     .grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
     label { font-weight: 700; color: #374151; display: block; margin-bottom: 0.25rem; }
-    input[type=text], input[type=tel], input[type=date], select { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d1d5db; border-radius: 10px; font: inherit; }
+    input[type=text], input[type=tel], input[type=date], input[type=email], select { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d1d5db; border-radius: 10px; font: inherit; }
     button { font: inherit; cursor: pointer; }
     .btn { background: #2563eb; color: #fff; border: none; padding: 0.7rem 1.1rem; border-radius: 10px; font-weight: 700; }
     .btn-secondary { background: #eef2ff; color: #1f2937; }
@@ -1062,6 +1159,34 @@ ksort($duplicateGroups);
           <input type="text" id="city" name="city" />
         </div>
         <div>
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" />
+        </div>
+        <div>
+          <label for="area_pincode">Area Pincode</label>
+          <input type="text" id="area_pincode" name="area_pincode" />
+        </div>
+        <div>
+          <label for="monthly_bill">Monthly Bill</label>
+          <input type="text" id="monthly_bill" name="monthly_bill" />
+        </div>
+        <div>
+          <label for="finance_subsidy">Finance &amp; Subsidy</label>
+          <input type="text" id="finance_subsidy" name="finance_subsidy" />
+        </div>
+        <div>
+          <label for="property_type">Property Type</label>
+          <input type="text" id="property_type" name="property_type" />
+        </div>
+        <div>
+          <label for="roof_type">Roof Type</label>
+          <input type="text" id="roof_type" name="roof_type" />
+        </div>
+        <div>
+          <label for="best_time_to_call">Best Time to Call</label>
+          <input type="text" id="best_time_to_call" name="best_time_to_call" />
+        </div>
+        <div>
           <label for="lead_source">Lead Source</label>
           <select id="lead_source" name="lead_source">
             <?php foreach ($leadSources as $source): ?>
@@ -1086,7 +1211,10 @@ ksort($duplicateGroups);
 
     <div class="card">
       <h2 style="margin-top:0;">Import Leads (CSV)</h2>
-      <p style="margin-top:0;color:#4b5563;">Upload a CSV with columns: #, Name, Mobile, City, Status, Rating, Next Follow-Up, Assigned To, Last Contacted, Campaign, Actions.</p>
+      <p style="margin-top:0;color:#4b5563;">Upload a CSV with columns: #, Name, Mobile, Email, City, Area Pincode, Monthly Bill, Finance &amp; Subsidy, Property Type, Roof Type, Best Time to Call, Status, Rating, Next Follow-Up, Assigned To, Last Contacted, Campaign, Actions. Older CSV formats still work.</p>
+      <p style="margin:0.5rem 0 0.75rem;">
+        <a class="btn-secondary" href="/leads-dashboard.php?download=lead_sample_csv">Download Sample CSV</a>
+      </p>
       <form method="post" enctype="multipart/form-data" class="grid" style="grid-template-columns: 1fr auto; align-items:end;">
         <input type="hidden" name="intent" value="import_csv" />
         <div>
@@ -1239,7 +1367,14 @@ ksort($duplicateGroups);
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('sr_no', $sortBy, $sortDir)); ?>">#<?php echo leads_safe(leads_sort_indicator('sr_no', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('name', $sortBy, $sortDir)); ?>">Name<?php echo leads_safe(leads_sort_indicator('name', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('mobile', $sortBy, $sortDir)); ?>">Mobile<?php echo leads_safe(leads_sort_indicator('mobile', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('email', $sortBy, $sortDir)); ?>">Email<?php echo leads_safe(leads_sort_indicator('email', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('city', $sortBy, $sortDir)); ?>">City<?php echo leads_safe(leads_sort_indicator('city', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('monthly_bill', $sortBy, $sortDir)); ?>">Monthly Bill<?php echo leads_safe(leads_sort_indicator('monthly_bill', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('finance_subsidy', $sortBy, $sortDir)); ?>">Finance &amp; Subsidy<?php echo leads_safe(leads_sort_indicator('finance_subsidy', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('property_type', $sortBy, $sortDir)); ?>">Property Type<?php echo leads_safe(leads_sort_indicator('property_type', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('roof_type', $sortBy, $sortDir)); ?>">Roof Type<?php echo leads_safe(leads_sort_indicator('roof_type', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('best_time_to_call', $sortBy, $sortDir)); ?>">Best Time to Call<?php echo leads_safe(leads_sort_indicator('best_time_to_call', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('area_pincode', $sortBy, $sortDir)); ?>">Area Pincode<?php echo leads_safe(leads_sort_indicator('area_pincode', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('status', $sortBy, $sortDir)); ?>">Status<?php echo leads_safe(leads_sort_indicator('status', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('rating', $sortBy, $sortDir)); ?>">Rating<?php echo leads_safe(leads_sort_indicator('rating', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('next_followup', $sortBy, $sortDir)); ?>">Next Follow-Up<?php echo leads_safe(leads_sort_indicator('next_followup', $sortBy, $sortDir)); ?></a></th>
@@ -1253,7 +1388,7 @@ ksort($duplicateGroups);
           </thead>
           <tbody>
             <?php if ($filteredLeads === []): ?>
-              <tr><td colspan="14">No leads match the selected filters.</td></tr>
+              <tr><td colspan="21">No leads match the selected filters.</td></tr>
             <?php else: ?>
               <?php foreach ($filteredLeads as $index => $lead): ?>
                 <?php echo leads_render_row($lead, $index + 1, $today, $quotationCreatePath); ?>

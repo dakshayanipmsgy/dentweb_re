@@ -43,9 +43,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'name' => trim((string) ($_POST['name'] ?? $lead['name'])),
         'mobile' => trim((string) ($_POST['mobile'] ?? $lead['mobile'])),
         'alt_mobile' => trim((string) ($_POST['alt_mobile'] ?? $lead['alt_mobile'])),
+        'email' => trim((string) ($_POST['email'] ?? ($lead['email'] ?? ''))),
         'city' => trim((string) ($_POST['city'] ?? $lead['city'])),
         'area_or_locality' => trim((string) ($_POST['area_or_locality'] ?? $lead['area_or_locality'])),
+        'area_pincode' => trim((string) ($_POST['area_pincode'] ?? ($lead['area_pincode'] ?? ''))),
         'state' => trim((string) ($_POST['state'] ?? $lead['state'])),
+        'monthly_bill' => trim((string) ($_POST['monthly_bill'] ?? ($lead['monthly_bill'] ?? ''))),
+        'finance_subsidy' => trim((string) ($_POST['finance_subsidy'] ?? ($lead['finance_subsidy'] ?? ''))),
+        'property_type' => trim((string) ($_POST['property_type'] ?? ($lead['property_type'] ?? ''))),
+        'roof_type' => trim((string) ($_POST['roof_type'] ?? ($lead['roof_type'] ?? ''))),
+        'best_time_to_call' => trim((string) ($_POST['best_time_to_call'] ?? ($lead['best_time_to_call'] ?? ''))),
         'lead_source' => trim((string) ($_POST['lead_source'] ?? $lead['lead_source'])),
         'interest_type' => trim((string) ($_POST['interest_type'] ?? $lead['interest_type'])),
         'status' => trim((string) ($_POST['status'] ?? $lead['status'])),
@@ -142,7 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 1.5rem; box-shadow: 0 12px 40px rgba(0,0,0,0.06); margin-bottom: 1rem; }
     h1 { margin-top: 0; }
     label { font-weight: 700; color: #374151; display: block; margin-bottom: 0.25rem; }
-    input[type=text], input[type=tel], input[type=date], input[type=time], select, textarea { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d1d5db; border-radius: 10px; font: inherit; }
+    input[type=text], input[type=tel], input[type=date], input[type=time], input[type=email], select, textarea { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d1d5db; border-radius: 10px; font: inherit; }
     textarea { min-height: 120px; }
     .grid { display: grid; gap: 0.75rem; }
     .grid-3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
@@ -202,12 +209,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <input type="text" id="city" name="city" value="<?php echo lead_safe((string) $lead['city']); ?>" />
           </div>
           <div>
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" value="<?php echo lead_safe((string) ($lead['email'] ?? '')); ?>" />
+          </div>
+          <div>
             <label for="area_or_locality">Area / Locality</label>
             <input type="text" id="area_or_locality" name="area_or_locality" value="<?php echo lead_safe((string) $lead['area_or_locality']); ?>" />
           </div>
           <div>
+            <label for="area_pincode">Area Pincode</label>
+            <input type="text" id="area_pincode" name="area_pincode" value="<?php echo lead_safe((string) ($lead['area_pincode'] ?? '')); ?>" />
+          </div>
+          <div>
             <label for="state">State</label>
             <input type="text" id="state" name="state" value="<?php echo lead_safe((string) $lead['state']); ?>" />
+          </div>
+          <div>
+            <label for="monthly_bill">Monthly Bill</label>
+            <input type="text" id="monthly_bill" name="monthly_bill" value="<?php echo lead_safe((string) ($lead['monthly_bill'] ?? '')); ?>" />
+          </div>
+          <div>
+            <label for="finance_subsidy">Finance &amp; Subsidy</label>
+            <input type="text" id="finance_subsidy" name="finance_subsidy" value="<?php echo lead_safe((string) ($lead['finance_subsidy'] ?? '')); ?>" />
+          </div>
+          <div>
+            <label for="property_type">Property Type</label>
+            <input type="text" id="property_type" name="property_type" value="<?php echo lead_safe((string) ($lead['property_type'] ?? '')); ?>" />
+          </div>
+          <div>
+            <label for="roof_type">Roof Type</label>
+            <input type="text" id="roof_type" name="roof_type" value="<?php echo lead_safe((string) ($lead['roof_type'] ?? '')); ?>" />
+          </div>
+          <div>
+            <label for="best_time_to_call">Best Time to Call</label>
+            <input type="text" id="best_time_to_call" name="best_time_to_call" value="<?php echo lead_safe((string) ($lead['best_time_to_call'] ?? '')); ?>" />
           </div>
           <div>
             <label for="lead_source">Lead Source</label>
