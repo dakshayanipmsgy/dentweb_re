@@ -198,12 +198,12 @@ $companyPhone = trim((string) ($settings['company_phone'] ?? ''));
   <title><?php echo solar_details_safe((string) $content['page_title']); ?> | <?php echo solar_details_safe($companyName); ?></title>
   <style>
     body { margin: 0; font-family: Inter, system-ui, -apple-system, sans-serif; background: #f8fafc; color: #0f172a; line-height: 1.58; }
-    .wrap { max-width: 1050px; margin: 0 auto; padding: 1rem; }
+    .wrap { width: 100%; max-width: none; margin: 0; padding: 1rem 1rem; box-sizing: border-box; }
     .hero { background: linear-gradient(120deg, #1d4ed8, #0ea5e9); color: #fff; border-radius: 18px; padding: 1.2rem; }
     .hero h1 { margin: 0 0 0.4rem; }
     .hero p { line-height: 1.55; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem; align-items: start; }
-    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1rem; box-shadow: 0 8px 20px rgba(15,23,42,0.06); }
+    .card { width: 100%; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1rem; box-shadow: 0 8px 20px rgba(15,23,42,0.06); box-sizing: border-box; }
     .card h2, .card h3 { margin-top: 0; margin-bottom: 0.75rem; line-height: 1.35; }
     .text-block { color: #334155; }
     .text-block p { margin: 0 0 0.8rem; }
@@ -217,9 +217,15 @@ $companyPhone = trim((string) ($settings['company_phone'] ?? ''));
     .cta a { color: #93c5fd; text-decoration: none; font-weight: 700; }
     .chips { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.6rem; }
     .chip { padding: 0.3rem 0.55rem; border-radius: 999px; background: #dbeafe; color: #1e3a8a; font-size: 0.85rem; font-weight: 700; }
+    @media (min-width: 768px) {
+      .wrap { padding: 1.1rem 1.5rem; }
+    }
+    @media (min-width: 1200px) {
+      .wrap { padding: 1.25rem 2rem; }
+    }
     @media (max-width: 640px) {
       .hero { padding: 1rem; }
-      .wrap { padding: 0.75rem; }
+      .wrap { padding: 0.75rem 0.75rem; }
       .grid { grid-template-columns: 1fr; }
       .card { padding: 0.9rem; }
       .text-block { line-height: 1.62; }
