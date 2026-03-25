@@ -346,6 +346,22 @@ $schemaContext = [
       </div>
     </section>
 
+    <section class="section" aria-label="Solar and finance planner">
+      <div class="container">
+        <div style="background:#f8fbff;border:1px solid #dbeafe;border-radius:1.25rem;padding:1.5rem 1.25rem;display:flex;gap:1rem;flex-wrap:wrap;justify-content:space-between;align-items:center;">
+          <div style="max-width:700px;">
+            <p style="margin:0;color:#1d4ed8;font-weight:700;letter-spacing:.03em;text-transform:uppercase;">New customer guide</p>
+            <h2 style="margin:0.35rem 0 0.55rem;font-size:clamp(1.4rem,2.5vw,2rem);">Understand Solar &amp; Finance before you invest</h2>
+            <p style="margin:0;color:#334155;">Learn rooftop basics, compare on-grid vs hybrid, estimate savings, and see loan vs self-funded outcomes in one guided page.</p>
+          </div>
+          <a href="/solar-and-finance.php" class="btn btn-primary" style="white-space:nowrap;">
+            <i class="fa-solid fa-solar-panel"></i>
+            Understand Solar &amp; Finance
+          </a>
+        </div>
+      </div>
+    </section>
+
     <div data-home-sections hidden>
       <div data-home-sections-list></div>
     </div>

@@ -1,0 +1,91 @@
+{
+  "page_title": "Solar & Finance",
+  "page_subtitle": "Understand your solar need, savings, and financing in a simple way",
+  "hero_intro": "This guide helps you understand rooftop solar, compare on-grid vs hybrid options, estimate your possible savings, and take the next step confidently.",
+  "education_blocks": [
+    {
+      "icon": "fa-solar-panel",
+      "title": "What is solar rooftop",
+      "text": "A rooftop solar system uses your roof to generate electricity from sunlight. Power is used in your home or business, and extra units can be exported where net metering is available."
+    },
+    {
+      "icon": "fa-bolt",
+      "title": "PM Surya Ghar: Muft Bijli Yojana",
+      "text": "This government scheme supports residential rooftop solar through subsidy and process support. Final subsidy amount depends on system size and policy at the time of approval."
+    },
+    {
+      "icon": "fa-user-check",
+      "title": "Who is eligible",
+      "text": "Generally, homeowners with suitable roofs, a valid electricity connection, and required documents can apply. Final eligibility depends on DISCOM and policy rules."
+    },
+    {
+      "icon": "fa-network-wired",
+      "title": "On-grid",
+      "text": "On-grid systems are connected with the utility grid. They are usually best for reducing bills where daytime usage and net metering are available."
+    },
+    {
+      "icon": "fa-car-battery",
+      "title": "Hybrid",
+      "text": "Hybrid systems combine solar with battery backup. They are useful when you need power during outages, though initial cost is usually higher."
+    },
+    {
+      "icon": "fa-people-arrows",
+      "title": "Which one is suitable for whom",
+      "text": "On-grid is often preferred for lowest upfront cost and strong savings. Hybrid is better when backup during power cuts is important."
+    },
+    {
+      "icon": "fa-piggy-bank",
+      "title": "Benefits",
+      "text": "Lower electricity expenses, protection from tariff increases, cleaner energy, and better long-term control over your energy costs."
+    },
+    {
+      "icon": "fa-clipboard-list",
+      "title": "Important expectations",
+      "text": "Actual generation and savings vary with roof direction, shadow-free area, weather, usage timing, and billing rules. Site survey and bill analysis are essential."
+    }
+  ],
+  "faq": [
+    {
+      "q": "Will solar make my bill zero?",
+      "a": "Not always. Most customers still see fixed charges or minimum billing components. Solar mainly reduces energy charges."
+    },
+    {
+      "q": "What if I don't know my monthly units?",
+      "a": "You can still estimate using monthly bill and tariff. Entering units gives a more accurate recommendation."
+    },
+    {
+      "q": "Which is better: loan or self-funded?",
+      "a": "Self-funded often gives better lifetime savings, while a loan reduces upfront burden and helps adopt earlier."
+    },
+    {
+      "q": "Do I need a lot of roof area?",
+      "a": "Roughly 80-100 sq ft per kW is a common planning range, but actual design depends on module and layout."
+    }
+  ],
+  "defaults": {
+    "daily_generation": 5,
+    "unit_rate": 8,
+    "efficiency_factor": 1,
+    "system_size": 3,
+    "system_cost": 180000,
+    "subsidy": 78000,
+    "loan_interest": 8.5,
+    "loan_tenure_years": 7,
+    "tariff_escalation": 3,
+    "solar_degradation": 0.7,
+    "fixed_charge": 150,
+    "yearly_om": 3000,
+    "inverter_reserve": 35000,
+    "inverter_year": 12,
+    "roof_area_per_kw": 90
+  },
+  "green_factors": {
+    "co2_per_kwh_kg": 0.82,
+    "tree_kg_per_year": 21
+  },
+  "cta": {
+    "primary": "Request a Quotation",
+    "secondary": "Talk to Dakshayani Enterprises",
+    "tertiary": "Upload your electricity bill"
+  }
+}
