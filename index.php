@@ -350,6 +350,28 @@ $schemaContext = [
       <div data-home-sections-list></div>
     </div>
 
+
+
+    <section class="section solar-requirement-entry" id="solar-requirement-tool">
+      <div class="container solar-entry-wrap">
+        <div>
+          <p class="solar-entry-kicker">New: Decision Tool</p>
+          <h2>Understand Your Solar Requirement</h2>
+          <p>See how solar adoption would look for your home or business with monthly outflow comparison, payback, and 25-year savings projection.</p>
+        </div>
+        <div class="solar-entry-actions">
+          <a href="/solar-details.php" class="btn btn-primary">
+            <i class="fa-solid fa-chart-column"></i>
+            Check Savings &amp; Solar Suitability
+          </a>
+          <a href="/solar-details.php" class="btn btn-secondary">
+            <i class="fa-solid fa-solar-panel"></i>
+            Open Solar Requirement Page
+          </a>
+        </div>
+      </div>
+    </section>
+
     <section class="section offers-section" id="offers">
       <div class="container">
         <div class="head">
@@ -730,6 +752,11 @@ $schemaContext = [
   </main>
 
   <footer class="site-footer"></footer>
+
+  <a href="/solar-details.php" class="solar-floating-cta" aria-label="Open solar requirement and savings tool">
+    <i class="fa-solid fa-solar-panel"></i> Solar Requirement Tool
+  </a>
+
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
