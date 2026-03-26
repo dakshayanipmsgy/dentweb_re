@@ -31,6 +31,7 @@ const INLINE_PARTIALS = {
             </button>
             <div class="nav-dropdown-menu" role="menu">
               <a href="/solar-projects.html" class="nav-link" role="menuitem">Solar Projects</a>
+              <a href="/solar-and-finance.php" class="nav-link" role="menuitem">Solar and Finance</a>
               <a href="/govt-epc.html" class="nav-link" role="menuitem">Govt. EPC &amp; Infrastructure</a>
               <a href="/pm-surya-ghar.html" class="nav-link" role="menuitem">PM Surya Ghar Subsidy</a>
               <a href="/meera-gh2.html" class="nav-link" role="menuitem">Meera GH2 Initiative</a>
@@ -84,6 +85,7 @@ const INLINE_PARTIALS = {
         <div class="nav-mobile-section" aria-label="Solutions">
           <p class="nav-mobile-label">Solutions</p>
           <a href="/solar-projects.html">Solar Projects</a>
+          <a href="/solar-and-finance.php">Solar and Finance</a>
           <a href="/govt-epc.html">Govt. EPC &amp; Infrastructure</a>
           <a href="/pm-surya-ghar.html">PM Surya Ghar Subsidy</a>
           <a href="/meera-gh2.html">Meera GH2 Initiative</a>
@@ -161,6 +163,7 @@ const INLINE_PARTIALS = {
         <h4 class="font-bold text-lg">Solar &amp; Schemes</h4>
         <ul class="footer-links">
           <li><a href="/pm-surya-ghar.html">PM Surya Ghar Yojana</a></li>
+          <li><a href="/solar-and-finance.php">Solar and Finance</a></li>
           <li><a href="/financing.html">Financing &amp; Loans</a></li>
           <li><a href="/solar-projects.html#residential">Residential Solutions</a></li>
           <li><a href="/solar-projects.html#commercial">Commercial / Industrial</a></li>
@@ -186,6 +189,11 @@ const INLINE_PARTIALS = {
     Office: Maa Tara, Kilburn Colony, Hinoo, Ranchi, Jharkhand-834002.
   </p>
 </div>
+
+<a class="floating-solar-finance" href="/solar-and-finance.php" aria-label="Open Solar and Finance page">
+  <span class="floating-solar-finance__icon">☀️</span>
+  <span class="floating-solar-finance__text">Solar and Finance</span>
+</a>
 
 <div class="floating-support" data-floating-actions>
   <button
