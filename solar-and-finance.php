@@ -23,7 +23,7 @@ $defaults = $settings['defaults'] ?? [];
     .sf-inputs input,.sf-inputs select{padding:.55rem .65rem;border:1px solid #c6d1e2;border-radius:10px}.sf-results{margin-top:1.2rem}.sf-metric{background:#f5f8ff;border:1px solid #d4def1;border-radius:12px;padding:.85rem}
     .sf-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.7rem}.sf-finance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.8rem}
     .sf-finance-grid ul{margin:.4rem 0 0;padding-left:1rem}.sf-btn{background:#0f766e;color:#fff;padding:.7rem 1rem;border:none;border-radius:10px;font-weight:700;cursor:pointer}
-    .sf-btn[disabled]{opacity:.6;cursor:not-allowed}.sf-btn.alt{background:#1d4ed8}.sf-note{font-size:.85rem;color:#51607a}.sf-alert{margin-top:.75rem;padding:.65rem .75rem;border-radius:10px;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;font-size:.9rem}.sf-customer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.8rem;margin:.8rem 0}
+    .sf-btn.alt{background:#1d4ed8}.sf-note{font-size:.85rem;color:#51607a}
     @media(max-width:900px){.sf-wrap{padding:1rem}.sf-flex{grid-template-columns:1fr}}
   </style>
 </head>
@@ -84,17 +84,10 @@ $defaults = $settings['defaults'] ?? [];
           </div>
         </details>
         <p class="sf-note">If you enter only bill or only units, the other field auto-fills using unit rate.</p>
-        <h4 style="margin:.9rem 0 .3rem">Customer details (optional for calculation)</h4>
-        <div class="sf-customer-grid">
-          <label>Customer Name<input type="text" id="customerName" placeholder="Enter customer name"></label>
-          <label>Location<input type="text" id="customerLocation" placeholder="Enter location"></label>
-          <label>Mobile Number<input type="text" id="customerMobile" placeholder="e.g. 9999999999"></label>
-        </div>
         <div style="display:flex;gap:.6rem;flex-wrap:wrap">
           <button class="sf-btn" id="calcBtn">How solar adoption would look like</button>
           <button class="sf-btn alt" type="button" id="resetBtn">Reset All Fields</button>
         </div>
-        <p class="sf-note">Calculator works without customer details. Report generation requires name, location, and mobile number.</p>
       </div>
       <div class="sf-card">
         <h2>Generation Estimate</h2>
@@ -109,11 +102,7 @@ $defaults = $settings['defaults'] ?? [];
       </div>
       <article class="sf-card" style="margin-bottom:1rem"><h3>Payback meters</h3><div id="paybackMeters" class="sf-kpis"></div></article>
       <article class="sf-card"><h3>Financial Clarity</h3><div id="financeBoxes" class="sf-finance-grid"></div></article>
-      <div style="margin-top:1rem;display:flex;gap:.65rem;flex-wrap:wrap;align-items:center">
-        <button class="sf-btn" type="button" id="createReportBtn">Create Report</button>
-        <a class="sf-btn alt" target="_blank" id="waQuote" href="#"><i class="fa-brands fa-whatsapp"></i> <?= htmlspecialchars((string) ($content['cta_text'] ?? 'Request a quotation')) ?></a>
-      </div>
-      <div id="reportValidation" class="sf-alert" hidden></div>
+      <div style="margin-top:1rem"><a class="sf-btn alt" target="_blank" id="waQuote" href="#"><i class="fa-brands fa-whatsapp"></i> <?= htmlspecialchars((string) ($content['cta_text'] ?? 'Request a quotation')) ?></a></div>
     </section>
   </main>
 
@@ -141,14 +130,11 @@ $defaults = $settings['defaults'] ?? [];
       loanAmountAbove2:'',
       marginMoneyAbove2:'',
       interestRateAbove2:String(d.interest_above_2_lacs??8.15),
-      customerName:'',
-      customerLocation:'',
-      customerMobile:'',
     };
     let mChart,cChart,debounceTimer=null,isProgrammaticUpdate=false;
     const manualOverride=new Set();
-    const debouncedIds=['monthlyBill','monthlyUnits','solarSize','dailyGeneration','unitRate','subsidy','loanTenure','systemCostSelf','systemCostUp2','systemCostAbove2','loanAmountUp2','marginMoneyUp2','interestRateUp2','loanAmountAbove2','marginMoneyAbove2','interestRateAbove2','customerName','customerLocation','customerMobile'];
-    const ids=[...debouncedIds,'systemType','inverterKva','phase','batteryCount','loanAboveGroupWrap','createReportBtn','reportValidation'];
+    const debouncedIds=['monthlyBill','monthlyUnits','solarSize','dailyGeneration','unitRate','subsidy','loanTenure','systemCostSelf','systemCostUp2','systemCostAbove2','loanAmountUp2','marginMoneyUp2','interestRateUp2','loanAmountAbove2','marginMoneyAbove2','interestRateAbove2'];
+    const ids=[...debouncedIds,'systemType','inverterKva','phase','batteryCount','loanAboveGroupWrap'];
     const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
     const kpiPanel=document.getElementById('kpiPanel'),paybackMeters=document.getElementById('paybackMeters'),financeBoxes=document.getElementById('financeBoxes'),waQuote=document.getElementById('waQuote');
 
@@ -176,49 +162,11 @@ $defaults = $settings['defaults'] ?? [];
       return {up2,self:up2,above2:aboveRaw||up2};
     };
     const isHigherLoanApplicableForCost=cost=>Math.round(cost*0.8) >= 200000;
-    const MAX_MONTHS=25*12;
-    let lastComputed=null;
-
-    const normalizeIndianMobile=(raw)=>{
-      const cleaned=String(raw||'').trim().replace(/[\s\-()]/g,'');
-      if(!cleaned) return {valid:false,normalized:''};
-      if(/^\d{10}$/.test(cleaned)) return {valid:true,normalized:`+91${cleaned}`};
-      if(/^0\d{10}$/.test(cleaned)) return {valid:true,normalized:`+91${cleaned.slice(1)}`};
-      if(/^\+91\d{10}$/.test(cleaned)) return {valid:true,normalized:cleaned};
-      return {valid:false,normalized:''};
-    };
-    const getPaybackByCrossover=(monthlyBill, upfront, emiVal, residualVal, tenureYears)=>{
-      const tenureMonths=Math.max(Math.round(num(tenureYears)*12),0);
-      const start=Math.max(num(upfront),0);
-      const billMonthly=Math.max(num(monthlyBill),0);
-      const emiMonthly=Math.max(num(emiVal),0);
-      const residualMonthly=Math.max(num(residualVal),0);
-      const cumSolarAtMonth=(m)=>start+(m*residualMonthly)+(Math.min(m,tenureMonths)*emiMonthly);
-      const cumNoSolarAtMonth=(m)=>billMonthly*m;
-      for(let m=0;m<=MAX_MONTHS;m++){
-        if(cumSolarAtMonth(m)<=cumNoSolarAtMonth(m)){
-          return {month:m,years:m/12,cumSolar:cumSolarAtMonth(m),cumNoSolar:cumNoSolarAtMonth(m)};
-        }
-      }
-      return null;
-    };
-    const formatPayback=pb=>pb?`${pb.month} months (${pb.years.toFixed(1)} years)`:'Not within 25 years';
-    const cumulativeSeries=(upfront, emiVal, residualVal, tenureYears)=>{
-      const data=[];
-      const tenureMonths=Math.max(Math.round(num(tenureYears)*12),0);
-      for(let y=0;y<=25;y++){
-        const m=y*12;
-        const cum=Math.max(num(upfront),0)+(m*Math.max(num(residualVal),0))+(Math.min(m,tenureMonths)*Math.max(num(emiVal),0));
-        data.push(cum);
-      }
-      return data;
-    };
 
     function clearResults(){
       document.getElementById('results').hidden=true;
       kpiPanel.innerHTML=''; paybackMeters.innerHTML=''; financeBoxes.innerHTML='';
       if(mChart){mChart.destroy();mChart=null;} if(cChart){cChart.destroy();cChart=null;}
-      lastComputed=null;
     }
 
     function fillHybridSelectors(){
@@ -282,7 +230,6 @@ $defaults = $settings['defaults'] ?? [];
         if(above2Cost>0&&shouldAutofill('marginMoneyAbove2')) setField('marginMoneyAbove2', String(autoMarginAbove2));
       }
       render();
-      updateReportValidationUi();
     }
 
     function render(){const bill=Number(el.monthlyBill.value||0), units=Number(el.monthlyUnits.value||0); if(!bill&&!units){clearResults(); return;}
@@ -304,26 +251,22 @@ $defaults = $settings['defaults'] ?? [];
       monthlyLabels.push('Self Funded'); monthlyData.push(residual); monthlyColors.push('#f59e0b');
 
       const years=[...Array(26).keys()];
+      const cumul=(start,mEmi,mRes)=>years.map(y=>{const paidEmi=y*12<=tenure*12?y*12*mEmi:tenure*12*mEmi; const post=Math.max(y*12-tenure*12,0)*mRes; return start+paidEmi+post+Math.min(y*12,tenure*12)*mRes;});
       const cumulativeDatasets=[
         {label:'No Solar',data:years.map(y=>y*12*monthlyBill),borderColor:'#9ca3af'},
-        {label:'Loan ≤2L',data:cumulativeSeries(marginUp,emiUp,residual,tenure),borderColor:'#0f766e'}
+        {label:'Loan ≤2L',data:cumul(marginUp,emiUp,residual),borderColor:'#0f766e'}
       ];
-      if(higherLoanApplicable){cumulativeDatasets.push({label:'Loan >2L',data:cumulativeSeries(marginHigh,emiHigh,residual,tenure),borderColor:'#1d4ed8'});}
-      cumulativeDatasets.push({label:'Self Funded',data:cumulativeSeries(Math.max(costSelf-subsidy,0),0,residual,0),borderColor:'#f59e0b'});
-
-      const paybackUp2=getPaybackByCrossover(monthlyBill,marginUp,emiUp,residual,tenure);
-      const paybackHigh=higherLoanApplicable?getPaybackByCrossover(monthlyBill,marginHigh,emiHigh,residual,tenure):null;
-      const paybackSelf=getPaybackByCrossover(monthlyBill,Math.max(costSelf-subsidy,0),0,residual,0);
+      if(higherLoanApplicable){cumulativeDatasets.push({label:'Loan >2L',data:cumul(marginHigh,emiHigh,residual),borderColor:'#1d4ed8'});}
+      cumulativeDatasets.push({label:'Self Funded',data:years.map(y=>costSelf-subsidy+y*12*residual),borderColor:'#f59e0b'});
 
       document.getElementById('results').hidden=false;
-      const billOffset=Math.min((solarValue/Math.max(monthlyBill,1))*100,100);
-      const kpi=[['Expected monthly generation',`${solarUnits.toFixed(0)} units`],['Expected annual generation',`${(solarUnits*12).toFixed(0)} units`],['Units in 25 years',`${(solarUnits*12*25).toFixed(0)} units`],['Annual saving',INR(Math.max(monthlyBill-residual,0)*12)],['Estimated payback (self funded)',formatPayback(paybackSelf)],['Roof area needed',`${(size*Number(d.roof_area_sqft_per_kw||100)).toFixed(0)} sq.ft`],['Bill offset',`${billOffset.toFixed(1)}%`],['Annual CO₂ reduction',`${((solarUnits*12)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['25-year CO₂ reduction',`${((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['Tree equivalent',`${(((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82))/Number(d.tree_factor_kg_per_tree||21)).toFixed(0)} trees`]];
+      const kpi=[['Expected monthly generation',`${solarUnits.toFixed(0)} units`],['Expected annual generation',`${(solarUnits*12).toFixed(0)} units`],['Units in 25 years',`${(solarUnits*12*25).toFixed(0)} units`],['Annual saving',INR(Math.max(monthlyBill-residual,0)*12)],['Estimated payback (self funded)',`${((costSelf-subsidy)/Math.max((monthlyBill-residual)*12,1)).toFixed(1)} years`],['Roof area needed',`${(size*Number(d.roof_area_sqft_per_kw||100)).toFixed(0)} sq.ft`],['Bill offset',`${Math.min((solarValue/Math.max(monthlyBill,1))*100,100).toFixed(1)}%`],['Annual CO₂ reduction',`${((solarUnits*12)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['25-year CO₂ reduction',`${((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['Tree equivalent',`${(((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82))/Number(d.tree_factor_kg_per_tree||21)).toFixed(0)} trees`]];
       kpiPanel.innerHTML=kpi.map(([k,v])=>`<div class='sf-metric'><strong>${k}</strong><div>${v}</div></div>`).join('');
 
-      const payback=[['Loan up to 2 lacs',paybackUp2]];
-      if(higherLoanApplicable){payback.push(['Loan above 2 lacs',paybackHigh]);}
-      payback.push(['Self Funded',paybackSelf]);
-      paybackMeters.innerHTML=payback.map(([n,p])=>`<div class='sf-metric'><strong>${n}</strong><div>${formatPayback(p)}</div></div>`).join('');
+      const payback=[['Loan up to 2 lacs', (effUp/Math.max((monthlyBill-(emiUp+residual))*12,1))]];
+      if(higherLoanApplicable){payback.push(['Loan above 2 lacs',(effHigh/Math.max((monthlyBill-(emiHigh+residual))*12,1))]);}
+      payback.push(['Self Funded',((costSelf-subsidy)/Math.max((monthlyBill-residual)*12,1))]);
+      paybackMeters.innerHTML=payback.map(([n,p])=>`<div class='sf-metric'><strong>${n}</strong><div>${isFinite(p)?p.toFixed(1):'N/A'} years</div></div>`).join('');
 
       const finData=[
         ['No Solar',[['Monthly bill',INR(monthlyBill)],['25 year expense',INR(monthlyBill*12*25)]]],
@@ -342,48 +285,6 @@ $defaults = $settings['defaults'] ?? [];
       const hy=el.systemType.value==='Hybrid'?`Hybrid: ${el.inverterKva.value} kVA, ${el.phase.value}, ${el.batteryCount.value} batteries`:'N/A';
       const msg=`Hello Dakshayani, I want a solar quotation.%0A- Monthly bill: ${INR(monthlyBill)}%0A- Monthly units: ${units||Math.round(monthlyBill/rate)}%0A- System type: ${el.systemType.value}%0A- Solar size: ${size} kW%0A- System cost (Self): ${INR(costSelf)}%0A- System cost (Loan up to 2 lacs): ${INR(costUp2)}%0A- System cost (Loan above 2 lacs): ${INR(costAbove2)}%0A- Subsidy: ${INR(subsidy)}%0A- Loan amount (up to 2 lacs): ${INR(loanUp)}%0A- Margin money (up to 2 lacs): ${INR(marginUp)}%0A- Interest (up to 2 lacs): ${el.interestRateUp2.value||d.interest_upto_2_lacs||6}%0A- Loan amount (above 2 lacs): ${INR(loanHigh)}%0A- Margin money (above 2 lacs): ${INR(marginHigh)}%0A- Interest (above 2 lacs): ${el.interestRateAbove2.value||d.interest_above_2_lacs||8.15}%0A- Tenure: ${tenure} years%0A- Hybrid variation: ${hy}%0A- Monthly generation: ${solarUnits.toFixed(0)} units%0A- Annual saving: ${INR((monthlyBill-residual)*12)}`;
       waQuote.href=`https://wa.me/917070278178?text=${msg}`;
-      lastComputed={monthlyBill,units:units||Math.round(monthlyBill/rate),size,gen,rate,subsidy,costSelf,costUp2,costAbove2,loanUp,loanHigh,marginUp,marginHigh,emiUp,emiHigh,residual,tenure,solarUnits,higherLoanApplicable,paybackUp2,paybackHigh,paybackSelf,hybridSummary:hy,systemType:el.systemType.value,billOffset};
-      updateReportValidationUi();
-    }
-
-    function getReportValidationMessage(){
-      const name=String(el.customerName.value||'').trim();
-      const location=String(el.customerLocation.value||'').trim();
-      const mobile=String(el.customerMobile.value||'').trim();
-      if(!name || !location || !mobile){
-        return 'Customer name, location and mobile number are required to generate a report.';
-      }
-      const parsedMobile=normalizeIndianMobile(mobile);
-      if(!parsedMobile.valid){
-        return 'Enter a valid mobile number (9999999999, 09999999999, or +919999999999).';
-      }
-      return '';
-    }
-
-    function updateReportValidationUi(){
-      const msg=getReportValidationMessage();
-      el.reportValidation.hidden=!msg;
-      el.reportValidation.textContent=msg;
-      el.createReportBtn.disabled=Boolean(msg);
-    }
-
-    function generateReport(){
-      updateReportValidationUi();
-      if(el.createReportBtn.disabled || !lastComputed){return;}
-      const parsedMobile=normalizeIndianMobile(el.customerMobile.value);
-      const reportDate=new Date().toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'});
-      const chartMonthly=(mChart&&typeof mChart.toBase64Image==='function')?mChart.toBase64Image():'';
-      const chartCumulative=(cChart&&typeof cChart.toBase64Image==='function')?cChart.toBase64Image():'';
-      const payload={...lastComputed,customerName:el.customerName.value.trim(),customerLocation:el.customerLocation.value.trim(),customerMobile:parsedMobile.normalized,reportDate};
-      const payoffRows=[['Loan up to 2 lacs',formatPayback(payload.paybackUp2)]];
-      if(payload.higherLoanApplicable){payoffRows.push(['Loan above 2 lacs',formatPayback(payload.paybackHigh)]);}
-      payoffRows.push(['Self Funded',formatPayback(payload.paybackSelf)]);
-      const reportHtml=`<!doctype html><html><head><meta charset="utf-8"><title>Solar & Finance Report</title><style>body{font-family:Arial,sans-serif;margin:0;background:#f8fafc;color:#0f172a}.wrap{max-width:1000px;margin:0 auto;padding:20px}.card{background:#fff;border:1px solid #dbe4f0;border-radius:12px;padding:14px;margin-bottom:12px}h1,h2,h3{margin:.2rem 0 .7rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}.muted{color:#475569;font-size:13px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe4f0;padding:8px;text-align:left;font-size:14px}th{background:#f1f5f9}img{max-width:100%;border:1px solid #e2e8f0;border-radius:10px}.kpi{background:#f8fbff;border:1px solid #dbe4f0;border-radius:10px;padding:8px}.footer{font-size:12px;color:#475569;text-align:center;padding:12px 0}@media print{body{background:#fff}.wrap{padding:0}.card{break-inside:avoid}}</style></head><body><div class="wrap"><div class="card"><h1>Solar & Finance Customer Report</h1><div class="muted">Prepared for sharing and print (Ctrl + P)</div></div><div class="card"><h2>1) Customer details</h2><div class="grid"><div class="kpi"><b>Name</b><div>${payload.customerName}</div></div><div class="kpi"><b>Location</b><div>${payload.customerLocation}</div></div><div class="kpi"><b>Mobile</b><div>${payload.customerMobile}</div></div><div class="kpi"><b>Report generated on</b><div>${payload.reportDate}</div></div></div></div><div class="card"><h2>2) Inputs used</h2><table><tbody><tr><td>Monthly bill</td><td>${INR(payload.monthlyBill)}</td><td>Monthly units</td><td>${payload.units}</td></tr><tr><td>System type</td><td>${payload.systemType}</td><td>Recommended solar size</td><td>${payload.size} kW</td></tr><tr><td>Daily generation / kW</td><td>${payload.gen}</td><td>Unit rate</td><td>${INR(payload.rate)}</td></tr><tr><td>Costs (Self / Up2 / Above2)</td><td>${INR(payload.costSelf)} / ${INR(payload.costUp2)} / ${INR(payload.costAbove2)}</td><td>Subsidy</td><td>${INR(payload.subsidy)}</td></tr><tr><td>Loan amounts (Up2 / Above2)</td><td>${INR(payload.loanUp)} / ${INR(payload.loanHigh)}</td><td>Margin money (Up2 / Above2)</td><td>${INR(payload.marginUp)} / ${INR(payload.marginHigh)}</td></tr><tr><td>Interest (Up2 / Above2)</td><td>${el.interestRateUp2.value||d.interest_upto_2_lacs||6}% / ${el.interestRateAbove2.value||d.interest_above_2_lacs||8.15}%</td><td>Tenure</td><td>${payload.tenure} years</td></tr><tr><td>Hybrid configuration</td><td colspan="3">${payload.hybridSummary}</td></tr></tbody></table></div><div class="card"><h2>3) At a glance summary</h2><div class="grid"><div class="kpi"><b>No-solar monthly bill</b><div>${INR(payload.monthlyBill)}</div></div><div class="kpi"><b>Residual bill after solar</b><div>${INR(payload.residual)}</div></div><div class="kpi"><b>Recommended size</b><div>${payload.size} kW</div></div><div class="kpi"><b>Bill offset</b><div>${payload.billOffset.toFixed(1)}%</div></div></div></div><div class="card"><h2>4) Charts</h2>${chartMonthly?`<h3>Monthly outflow comparison</h3><img src="${chartMonthly}" alt="Monthly outflow comparison chart">`:''}${chartCumulative?`<h3 style="margin-top:10px">Cumulative expense over 25 years</h3><img src="${chartCumulative}" alt="Cumulative expense chart">`:''}<h3 style="margin-top:10px">Payback meters</h3><ul>${payoffRows.map(r=>`<li>${r[0]}: <b>${r[1]}</b></li>`).join('')}</ul></div><div class="card"><h2>5) Financial clarity</h2>${financeBoxes.innerHTML}</div><div class="card"><h2>6) Generation estimate</h2><div class="grid"><div class="kpi"><b>Monthly generation</b><div>${payload.solarUnits.toFixed(0)} units</div></div><div class="kpi"><b>Annual generation</b><div>${(payload.solarUnits*12).toFixed(0)} units</div></div><div class="kpi"><b>25-year generation</b><div>${(payload.solarUnits*12*25).toFixed(0)} units</div></div><div class="kpi"><b>Savings estimate (annual)</b><div>${INR(Math.max(payload.monthlyBill-payload.residual,0)*12)}</div></div><div class="kpi"><b>Roof area needed</b><div>${(payload.size*Number(d.roof_area_sqft_per_kw||100)).toFixed(0)} sq.ft</div></div><div class="kpi"><b>Bill offset</b><div>${payload.billOffset.toFixed(1)}%</div></div></div></div><div class="card"><h2>7) Green impact</h2><div class="grid"><div class="kpi"><b>Annual CO₂ reduction</b><div>${((payload.solarUnits*12)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg</div></div><div class="kpi"><b>25-year CO₂ reduction</b><div>${((payload.solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg</div></div><div class="kpi"><b>Trees equivalent</b><div>${(((payload.solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82))/Number(d.tree_factor_kg_per_tree||21)).toFixed(0)} trees</div></div></div></div><div class="card"><h2>8) Note & Contact</h2><p>This customer-facing estimate is indicative and prepared for quick decision support. Final values depend on site survey, approvals, and lender terms.</p><p><b>Dakshayani Enterprises</b> · Call/WhatsApp: +91 7070278178</p></div><div class="footer">Generated from Solar and Finance calculator.</div></div></body></html>`;
-      const reportTab=window.open('about:blank','_blank');
-      if(!reportTab){return;}
-      reportTab.document.open();
-      reportTab.document.write(reportHtml);
-      reportTab.document.close();
     }
 
     function resetAllFields(){
@@ -404,11 +305,10 @@ $defaults = $settings['defaults'] ?? [];
       });
     }
 
-    ['monthlyBill','monthlyUnits','solarSize','dailyGeneration','unitRate','subsidy','loanTenure','systemCostSelf','systemCostUp2','systemCostAbove2','loanAmountUp2','marginMoneyUp2','interestRateUp2','loanAmountAbove2','marginMoneyAbove2','interestRateAbove2','customerName','customerLocation','customerMobile'].forEach(id=>bindInput(id,'input'));
+    ['monthlyBill','monthlyUnits','solarSize','dailyGeneration','unitRate','subsidy','loanTenure','systemCostSelf','systemCostUp2','systemCostAbove2','loanAmountUp2','marginMoneyUp2','interestRateUp2','loanAmountAbove2','marginMoneyAbove2','interestRateAbove2'].forEach(id=>bindInput(id,'input'));
     ['systemType','inverterKva','phase','batteryCount'].forEach(id=>bindInput(id,'change'));
     document.getElementById('calcBtn').addEventListener('click',()=>recalculateSolarFinance({changedField:'manualTrigger'}));
     document.getElementById('resetBtn').addEventListener('click',resetAllFields);
-    el.createReportBtn.addEventListener('click',generateReport);
     resetAllFields();
   </script>
 
