@@ -822,7 +822,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } else {
                         $msg = 'Customer created from lead.';
                     }
-                    header('Location: leads-dashboard.php?msg=' . urlencode($msg));
+                    header('Location: leads-dashboard.php?section=leads&msg=' . urlencode($msg));
                     exit;
                 }
 
@@ -1138,7 +1138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'merged_ids' => $mergedIds,
                 ]);
 
-                header('Location: leads-dashboard.php?msg=' . urlencode('Merged ' . count($mergedIds) . ' duplicate lead(s) for ' . $mobileKey . '.'));
+                header('Location: leads-dashboard.php?section=leads&msg=' . urlencode('Merged ' . count($mergedIds) . ' duplicate lead(s) for ' . $mobileKey . '.'));
                 exit;
             }
         }
@@ -1168,6 +1168,14 @@ if (!in_array($sortBy, $allowedSort, true)) {
 }
 if (!in_array($sortDir, ['asc', 'desc'], true)) {
     $sortDir = 'desc';
+}
+$dashboardSections = ['leads', 'quick-add', 'import', 'settings'];
+$activeSection = (string) ($_GET['section'] ?? ($_POST['current_section'] ?? 'leads'));
+if (!in_array($activeSection, $dashboardSections, true)) {
+    $activeSection = 'leads';
+}
+if ($activeSection === 'settings' && !$loggedInAdmin) {
+    $activeSection = 'leads';
 }
 
 $today = date('Y-m-d');
@@ -1383,6 +1391,10 @@ ksort($duplicateGroups);
     .lead-filters { margin-bottom: 0.75rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
     .lead-filters a { padding: 0.4rem 0.75rem; border-radius: 999px; border: 1px solid #d1d5db; text-decoration: none; color: #1f2937; background: #fff; }
     .lead-filters a.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .section-tabs { display:flex; gap:0.6rem; flex-wrap:wrap; }
+    .section-tab { padding:0.55rem 0.95rem; border-radius:999px; border:1px solid #d1d5db; text-decoration:none; color:#1f2937; background:#fff; font-weight:700; }
+    .section-tab.active { background:#2563eb; color:#fff; border-color:#2563eb; }
+    .subsection-card { border:1px solid #e5e7eb; border-radius:12px; padding:1rem; margin-top:1rem; }
 
     .ux-modal-backdrop, .ux-drawer-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,0.45); z-index: 9998; display: none; }
     .ux-modal { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(940px, 96vw); max-height: 88vh; overflow: auto; background: #fff; border-radius: 14px; padding: 1rem; z-index: 9999; display: none; }
@@ -1412,6 +1424,21 @@ ksort($duplicateGroups);
       </div>
     </div>
 
+    <div class="card">
+      <div class="section-tabs">
+        <?php $sectionQuery = $_GET; $sectionQuery['section'] = 'leads'; ?>
+        <a class="section-tab <?php echo $activeSection === 'leads' ? 'active' : ''; ?>" href="/leads-dashboard.php?<?php echo leads_safe(http_build_query($sectionQuery)); ?>">Leads</a>
+        <?php $sectionQuery['section'] = 'quick-add'; ?>
+        <a class="section-tab <?php echo $activeSection === 'quick-add' ? 'active' : ''; ?>" href="/leads-dashboard.php?<?php echo leads_safe(http_build_query($sectionQuery)); ?>">Quick Add Lead</a>
+        <?php $sectionQuery['section'] = 'import'; ?>
+        <a class="section-tab <?php echo $activeSection === 'import' ? 'active' : ''; ?>" href="/leads-dashboard.php?<?php echo leads_safe(http_build_query($sectionQuery)); ?>">Import Lead</a>
+        <?php if ($loggedInAdmin): ?>
+          <?php $sectionQuery['section'] = 'settings'; ?>
+          <a class="section-tab <?php echo $activeSection === 'settings' ? 'active' : ''; ?>" href="/leads-dashboard.php?<?php echo leads_safe(http_build_query($sectionQuery)); ?>">Settings</a>
+        <?php endif; ?>
+      </div>
+    </div>
+
     <?php if ($messages !== []): ?>
       <div class="messages">
         <?php foreach ($messages as $message): ?>
@@ -1422,10 +1449,12 @@ ksort($duplicateGroups);
       </div>
     <?php endif; ?>
 
+    <?php if ($activeSection === 'quick-add'): ?>
     <div class="card">
       <h2 style="margin-top:0;">Quick Add Lead</h2>
       <form method="post" class="grid grid-3">
         <input type="hidden" name="intent" value="quick_add" />
+        <input type="hidden" name="current_section" value="quick-add" />
         <div>
           <label for="name">Name *</label>
           <input type="text" id="name" name="name" required />
@@ -1488,7 +1517,9 @@ ksort($duplicateGroups);
         </div>
       </form>
     </div>
+    <?php endif; ?>
 
+    <?php if ($activeSection === 'import'): ?>
     <div class="card">
       <h2 style="margin-top:0;">Import Leads (CSV)</h2>
       <p style="margin-top:0;color:#4b5563;">Upload a CSV with columns: #, Name, Mobile, Email, City, Area Pincode, Monthly Bill, Finance &amp; Subsidy, Property Type, Roof Type, Best Time to Call, Status, Rating, Next Follow-Up, Assigned To, Last Contacted, Campaign, Actions. Older CSV formats still work.</p>
@@ -1497,6 +1528,7 @@ ksort($duplicateGroups);
       </p>
       <form method="post" enctype="multipart/form-data" class="grid" style="grid-template-columns: 1fr auto; align-items:end;">
         <input type="hidden" name="intent" value="import_csv" />
+        <input type="hidden" name="current_section" value="import" />
         <div>
           <label for="csv_file">CSV File</label>
           <input type="file" id="csv_file" name="csv_file" accept=".csv,text/csv" required />
@@ -1506,7 +1538,9 @@ ksort($duplicateGroups);
         </div>
       </form>
     </div>
+    <?php endif; ?>
 
+    <?php if ($activeSection === 'leads'): ?>
     <div class="card">
       <h2 style="margin-top:0;">Duplicate Mobiles</h2>
       <p style="margin-top:0;color:#4b5563;">Review leads that share the same mobile number and merge them into one record.</p>
@@ -1539,6 +1573,7 @@ ksort($duplicateGroups);
                   <td>
                     <form method="post" style="margin:0;">
                       <input type="hidden" name="intent" value="merge_duplicates" />
+                      <input type="hidden" name="current_section" value="leads" />
                       <input type="hidden" name="mobile_key" value="<?php echo leads_safe((string) $mobileKey); ?>" />
                       <button type="submit" class="btn-secondary" onclick="return confirm('Merge all leads with this mobile number?');">Merge</button>
                     </form>
@@ -1550,51 +1585,58 @@ ksort($duplicateGroups);
         </div>
       <?php endif; ?>
     </div>
+    <?php endif; ?>
 
-    <?php if ($loggedInAdmin): ?>
+    <?php if ($loggedInAdmin && $activeSection === 'settings'): ?>
       <div class="card">
-        <h2 style="margin-top:0;">Messaging Templates</h2>
-        <p style="margin-top:0;color:#4b5563;">Use placeholders: <code>{{name}}</code>, <code>{{mobile}}</code>, <code>{{email}}</code>, <code>{{city}}</code>, <code>{{assigned_to}}</code>, <code>{{details_page_url}}</code>, <code>{{company_name}}</code>, <code>{{company_phone}}</code>.</p>
-        <form method="post" class="grid" style="gap:0.5rem;">
-          <input type="hidden" name="intent" value="save_message_settings" />
-          <h3 style="margin:0.25rem 0;">Stage 1 — Intro / Attention Capture</h3>
-          <label for="default_whatsapp_message">Default WhatsApp Intro Message</label>
-          <textarea id="default_whatsapp_message" name="default_whatsapp_message" rows="4" placeholder="Hello {{name}}, thank you for your interest in solar..."><?php echo leads_safe((string) ($messageSettings['default_whatsapp_message'] ?? '')); ?></textarea>
-          <label for="default_email_subject">Default Email Intro Subject</label>
-          <input type="text" id="default_email_subject" name="default_email_subject" value="<?php echo leads_safe((string) ($messageSettings['default_email_subject'] ?? '')); ?>" placeholder="Solar Proposal for {{name}}" />
-          <label for="default_email_body">Default Email Intro Body</label>
-          <textarea id="default_email_body" name="default_email_body" rows="5" placeholder="Hello {{name}}, ..."><?php echo leads_safe((string) ($messageSettings['default_email_body'] ?? '')); ?></textarea>
-          <h3 style="margin:0.5rem 0 0;">Stage 2 — Detailed Information</h3>
-          <label for="default_whatsapp_details_message">Default WhatsApp Details Message</label>
-          <textarea id="default_whatsapp_details_message" name="default_whatsapp_details_message" rows="4" placeholder="Hello {{name}}, here are complete details: {{details_page_url}}"><?php echo leads_safe((string) ($messageSettings['default_whatsapp_details_message'] ?? '')); ?></textarea>
-          <label for="default_email_details_subject">Default Email Details Subject</label>
-          <input type="text" id="default_email_details_subject" name="default_email_details_subject" value="<?php echo leads_safe((string) ($messageSettings['default_email_details_subject'] ?? '')); ?>" placeholder="Detailed Solar Information for {{name}}" />
-          <label for="default_email_details_body">Default Email Details Body</label>
-          <textarea id="default_email_details_body" name="default_email_details_body" rows="5" placeholder="Hello {{name}}, detailed information is available at {{details_page_url}}..."><?php echo leads_safe((string) ($messageSettings['default_email_details_body'] ?? '')); ?></textarea>
-          <label for="details_page_url">Details Page URL</label>
-          <input type="text" id="details_page_url" name="details_page_url" value="<?php echo leads_safe((string) ($messageSettings['details_page_url'] ?? '/solar-details.php')); ?>" placeholder="/solar-details.php" />
-          <label for="company_name">Company Name Placeholder Value</label>
-          <input type="text" id="company_name" name="company_name" value="<?php echo leads_safe((string) ($messageSettings['company_name'] ?? 'Dakshayani Enterprises')); ?>" />
-          <label for="company_phone">Company Phone Placeholder Value</label>
-          <input type="text" id="company_phone" name="company_phone" value="<?php echo leads_safe((string) ($messageSettings['company_phone'] ?? '')); ?>" />
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-            <small style="color:#6b7280;">
-              Last updated:
-              <?php echo leads_safe((string) ($messageSettings['updated_at'] ?? 'Never')); ?>
-              <?php if (trim((string) ($messageSettings['updated_by'] ?? '')) !== ''): ?>
-                by <?php echo leads_safe((string) ($messageSettings['updated_by'] ?? '')); ?>
-              <?php endif; ?>
-            </small>
-            <button type="submit" class="btn">Save Templates</button>
-          </div>
-        </form>
-      </div>
+        <h2 style="margin-top:0;">Settings</h2>
+        <p style="margin-top:0;color:#4b5563;">Admin-only controls for lead communication templates and /solar-details.php content.</p>
 
-      <div class="card">
-        <h2 style="margin-top:0;">Lead Explainer Content</h2>
-        <p style="margin-top:0;color:#4b5563;">This content appears on <a href="/solar-details.php" target="_blank" rel="noopener">/solar-details.php</a>. Use Media Library URLs for image slots if available.</p>
-        <form method="post" class="grid" style="gap:0.5rem;">
+        <div class="subsection-card">
+          <h3 style="margin-top:0;">Messaging Templates</h3>
+          <p style="margin-top:0;color:#4b5563;">Use placeholders: <code>{{name}}</code>, <code>{{mobile}}</code>, <code>{{email}}</code>, <code>{{city}}</code>, <code>{{assigned_to}}</code>, <code>{{details_page_url}}</code>, <code>{{company_name}}</code>, <code>{{company_phone}}</code>.</p>
+          <form method="post" class="grid" style="gap:0.5rem;">
+            <input type="hidden" name="intent" value="save_message_settings" />
+            <input type="hidden" name="current_section" value="settings" />
+            <h4 style="margin:0.25rem 0;">Stage 1 — Attention Capture</h4>
+            <label for="default_whatsapp_message">Default WhatsApp Intro Message</label>
+            <textarea id="default_whatsapp_message" name="default_whatsapp_message" rows="4" placeholder="Hello {{name}}, thank you for your interest in solar..."><?php echo leads_safe((string) ($messageSettings['default_whatsapp_message'] ?? '')); ?></textarea>
+            <label for="default_email_subject">Default Email Intro Subject</label>
+            <input type="text" id="default_email_subject" name="default_email_subject" value="<?php echo leads_safe((string) ($messageSettings['default_email_subject'] ?? '')); ?>" placeholder="Solar Proposal for {{name}}" />
+            <label for="default_email_body">Default Email Intro Body</label>
+            <textarea id="default_email_body" name="default_email_body" rows="5" placeholder="Hello {{name}}, ..."><?php echo leads_safe((string) ($messageSettings['default_email_body'] ?? '')); ?></textarea>
+            <h4 style="margin:0.5rem 0 0;">Stage 2 — Detailed Information</h4>
+            <label for="default_whatsapp_details_message">Default WhatsApp Details Message</label>
+            <textarea id="default_whatsapp_details_message" name="default_whatsapp_details_message" rows="4" placeholder="Hello {{name}}, here are complete details: {{details_page_url}}"><?php echo leads_safe((string) ($messageSettings['default_whatsapp_details_message'] ?? '')); ?></textarea>
+            <label for="default_email_details_subject">Default Email Details Subject</label>
+            <input type="text" id="default_email_details_subject" name="default_email_details_subject" value="<?php echo leads_safe((string) ($messageSettings['default_email_details_subject'] ?? '')); ?>" placeholder="Detailed Solar Information for {{name}}" />
+            <label for="default_email_details_body">Default Email Details Body</label>
+            <textarea id="default_email_details_body" name="default_email_details_body" rows="5" placeholder="Hello {{name}}, detailed information is available at {{details_page_url}}..."><?php echo leads_safe((string) ($messageSettings['default_email_details_body'] ?? '')); ?></textarea>
+            <label for="details_page_url">Details Page URL</label>
+            <input type="text" id="details_page_url" name="details_page_url" value="<?php echo leads_safe((string) ($messageSettings['details_page_url'] ?? '/solar-details.php')); ?>" placeholder="/solar-details.php" />
+            <label for="company_name">Company Name Placeholder Value</label>
+            <input type="text" id="company_name" name="company_name" value="<?php echo leads_safe((string) ($messageSettings['company_name'] ?? 'Dakshayani Enterprises')); ?>" />
+            <label for="company_phone">Company Phone Placeholder Value</label>
+            <input type="text" id="company_phone" name="company_phone" value="<?php echo leads_safe((string) ($messageSettings['company_phone'] ?? '')); ?>" />
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+              <small style="color:#6b7280;">
+                Last updated:
+                <?php echo leads_safe((string) ($messageSettings['updated_at'] ?? 'Never')); ?>
+                <?php if (trim((string) ($messageSettings['updated_by'] ?? '')) !== ''): ?>
+                  by <?php echo leads_safe((string) ($messageSettings['updated_by'] ?? '')); ?>
+                <?php endif; ?>
+              </small>
+              <button type="submit" class="btn">Save Templates</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="subsection-card">
+          <h3 style="margin-top:0;">Lead Explainer Content</h3>
+          <p style="margin-top:0;color:#4b5563;">This content appears on <a href="/solar-details.php" target="_blank" rel="noopener">/solar-details.php</a>. Use Media Library URLs for image slots if available.</p>
+          <form method="post" class="grid" style="gap:0.5rem;">
           <input type="hidden" name="intent" value="save_explainer_content" />
+          <input type="hidden" name="current_section" value="settings" />
           <label for="page_title">Page Title</label>
           <input type="text" id="page_title" name="page_title" value="<?php echo leads_safe((string) ($explainerContent['page_title'] ?? '')); ?>" />
           <label for="hero_intro">Hero Intro</label>
@@ -1629,25 +1671,27 @@ ksort($duplicateGroups);
           <input type="text" id="process_flow_image" name="process_flow_image" value="<?php echo leads_safe((string) ($explainerContent['process_flow_image'] ?? '')); ?>" />
           <label for="benefits_image">Benefits Image / Icons URL</label>
           <input type="text" id="benefits_image" name="benefits_image" value="<?php echo leads_safe((string) ($explainerContent['benefits_image'] ?? '')); ?>" />
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-            <small style="color:#6b7280;">
-              Last updated:
-              <?php echo leads_safe((string) ($explainerContent['updated_at'] ?? 'Never')); ?>
-              <?php if (trim((string) ($explainerContent['updated_by'] ?? '')) !== ''): ?>
-                by <?php echo leads_safe((string) ($explainerContent['updated_by'] ?? '')); ?>
-              <?php endif; ?>
-            </small>
-            <button type="submit" class="btn">Save Explainer Content</button>
-          </div>
-        </form>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+              <small style="color:#6b7280;">
+                Last updated:
+                <?php echo leads_safe((string) ($explainerContent['updated_at'] ?? 'Never')); ?>
+                <?php if (trim((string) ($explainerContent['updated_by'] ?? '')) !== ''): ?>
+                  by <?php echo leads_safe((string) ($explainerContent['updated_by'] ?? '')); ?>
+                <?php endif; ?>
+              </small>
+              <button type="submit" class="btn">Save Explainer Content</button>
+            </div>
+          </form>
+        </div>
       </div>
-    <?php else: ?>
+    <?php elseif (!$loggedInAdmin && $activeSection === 'settings'): ?>
       <div class="card">
         <h2 style="margin-top:0;">Messaging Templates (View)</h2>
         <p style="margin-top:0;color:#4b5563;">Current details page link: <a href="<?php echo leads_safe((string) ($messageSettings['details_page_url'] ?? '/solar-details.php')); ?>" target="_blank" rel="noopener"><?php echo leads_safe((string) ($messageSettings['details_page_url'] ?? '/solar-details.php')); ?></a></p>
       </div>
     <?php endif; ?>
 
+    <?php if ($activeSection === 'leads'): ?>
     <div class="card">
       <h2 style="margin-top:0;">Leads</h2>
       <div class="lead-filters">
@@ -1694,6 +1738,7 @@ ksort($duplicateGroups);
 
       <form method="post" id="bulk-actions-form" class="lead-filters" style="margin-top:0.75rem;">
         <input type="hidden" name="intent" value="bulk_action" />
+        <input type="hidden" name="current_section" value="leads" />
         <label style="display:flex;align-items:center;gap:0.5rem;">
           <span style="font-weight:700;">Bulk Actions</span>
         </label>
@@ -1755,6 +1800,7 @@ ksort($duplicateGroups);
         </table>
       </div>
     </div>
+    <?php endif; ?>
   </div>
   <div id="ux-modal-backdrop" class="ux-modal-backdrop"></div>
   <div id="ux-modal" class="ux-modal" role="dialog" aria-modal="true" aria-label="Lead modal">
