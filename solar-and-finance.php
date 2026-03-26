@@ -32,7 +32,12 @@ $defaults = $settings['defaults'] ?? [];
     .sf-glance-item:last-child{border-bottom:none;padding-bottom:0}
     .sf-glance-label{font-weight:600;color:#23324d;font-size:.9rem}
     .sf-glance-value{font-weight:700;color:#0f172a;text-align:right}
+    .sf-explainer-wrap{margin-top:2.25rem;padding:1.25rem;background:#f6f9ff;border:1px solid #dbe4f0;border-radius:18px}
+    .sf-explainer-wrap .sf-grid.cards{margin-bottom:0}
+    .sf-explainer-wrap .sf-card{height:100%}
+    .sf-explainer-wrap h2{margin:.1rem 0 .9rem}
     @media(max-width:900px){.sf-wrap{padding:1rem}.sf-flex{grid-template-columns:1fr}}
+    @media(max-width:640px){.sf-explainer-wrap{margin-top:1.75rem;padding:1rem}}
   </style>
 </head>
 <body>
@@ -125,10 +130,13 @@ $defaults = $settings['defaults'] ?? [];
       </div>
     </section>
 
-    <section class="sf-grid cards">
-      <?php foreach (($content['explainer_cards'] ?? []) as $card): ?>
-      <article class="sf-card"><i class="fa-solid <?= htmlspecialchars((string) ($card['icon'] ?? 'fa-solar-panel')) ?>"></i><h3><?= htmlspecialchars((string) ($card['title'] ?? '')) ?></h3><p><?= htmlspecialchars((string) ($card['text'] ?? '')) ?></p></article>
-      <?php endforeach; ?>
+    <section class="sf-explainer-wrap">
+      <h2>Explainer Cards</h2>
+      <div class="sf-grid cards">
+        <?php foreach (($content['explainer_cards'] ?? []) as $card): ?>
+        <article class="sf-card"><i class="fa-solid <?= htmlspecialchars((string) ($card['icon'] ?? 'fa-solar-panel')) ?>"></i><h3><?= htmlspecialchars((string) ($card['title'] ?? '')) ?></h3><p><?= htmlspecialchars((string) ($card['text'] ?? '')) ?></p></article>
+        <?php endforeach; ?>
+      </div>
     </section>
   </main>
 
