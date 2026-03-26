@@ -464,42 +464,42 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
         <input type="checkbox" class="lead-select" name="lead_ids[]" value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" form="bulk-actions-form" />
       </td>
       <td class="lead-index"><?php echo $index; ?></td>
-      <td data-column="name"><span class="cell-truncate" title="<?php echo leads_safe((string) ($lead['name'] ?? '')); ?>"><?php echo leads_safe((string) ($lead['name'] ?? '')); ?></span></td>
-      <td data-column="mobile"><a href="tel:<?php echo leads_safe($leadMobileRaw); ?>"><?php echo leads_safe($leadMobileRaw); ?></a></td>
-      <td data-column="email"><span class="cell-truncate" title="<?php echo leads_safe(leads_value_or_dash($lead, 'email')); ?>"><?php echo leads_safe(leads_value_or_dash($lead, 'email')); ?></span></td>
-      <td data-column="city"><span class="cell-truncate" title="<?php echo leads_safe((string) ($lead['city'] ?? '')); ?>"><?php echo leads_safe((string) ($lead['city'] ?? '')); ?></span></td>
-      <td data-column="monthly_bill"><?php echo leads_safe(leads_value_or_dash($lead, 'monthly_bill')); ?></td>
-      <td data-column="finance_subsidy"><span class="cell-truncate" title="<?php echo leads_safe(leads_value_or_dash($lead, 'finance_subsidy')); ?>"><?php echo leads_safe(leads_value_or_dash($lead, 'finance_subsidy')); ?></span></td>
-      <td data-column="property_type"><span class="cell-truncate" title="<?php echo leads_safe(leads_value_or_dash($lead, 'property_type')); ?>"><?php echo leads_safe(leads_value_or_dash($lead, 'property_type')); ?></span></td>
-      <td data-column="roof_type"><span class="cell-truncate" title="<?php echo leads_safe(leads_value_or_dash($lead, 'roof_type')); ?>"><?php echo leads_safe(leads_value_or_dash($lead, 'roof_type')); ?></span></td>
-      <td data-column="best_time_to_call"><span class="cell-truncate" title="<?php echo leads_safe(leads_value_or_dash($lead, 'best_time_to_call')); ?>"><?php echo leads_safe(leads_value_or_dash($lead, 'best_time_to_call')); ?></span></td>
-      <td data-column="area_pincode"><?php echo leads_safe(leads_value_or_dash($lead, 'area_pincode')); ?></td>
-      <td data-column="status"><span class="badge pill"><?php echo leads_safe((string) ($lead['status'] ?? '')); ?></span></td>
-      <td data-column="rating"><?php echo leads_safe((string) ($lead['rating'] ?? '')); ?></td>
-      <td data-column="next_followup"><?php echo leads_safe(trim(((string) ($lead['next_followup_date'] ?? '')) . ' ' . ((string) ($lead['next_followup_time'] ?? '')))); ?></td>
-      <td data-column="assigned_to"><span class="cell-truncate" title="<?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?>"><?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?></span></td>
-      <td data-column="last_contacted_at"><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
-      <td class="lead-message-status-cell" data-column="message_sent">
+      <td><?php echo leads_safe((string) ($lead['name'] ?? '')); ?></td>
+      <td><a href="tel:<?php echo leads_safe($leadMobileRaw); ?>"><?php echo leads_safe($leadMobileRaw); ?></a></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'email')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['city'] ?? '')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'monthly_bill')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'finance_subsidy')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'property_type')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'roof_type')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'best_time_to_call')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'area_pincode')); ?></td>
+      <td><span class="badge pill"><?php echo leads_safe((string) ($lead['status'] ?? '')); ?></span></td>
+      <td><?php echo leads_safe((string) ($lead['rating'] ?? '')); ?></td>
+      <td><?php echo leads_safe(trim(((string) ($lead['next_followup_date'] ?? '')) . ' ' . ((string) ($lead['next_followup_time'] ?? '')))); ?></td>
+      <td><?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
+      <td class="lead-message-status-cell">
         <?php if ($whatsappSent): ?>
-          <span class="badge compact-msg-badge" style="background:#dcfce7;color:#166534;" title="WhatsApp Intro sent">WA</span>
+          <span class="badge pill" style="background:#dcfce7;color:#166534;">WA Intro</span>
         <?php endif; ?>
         <?php if ($emailSent): ?>
-          <span class="badge compact-msg-badge" style="background:#dbeafe;color:#1e40af;" title="Email Intro sent">EM</span>
+          <span class="badge pill" style="background:#dbeafe;color:#1e40af;">Email Intro</span>
         <?php endif; ?>
         <?php if ($whatsappDetailsSent): ?>
-          <span class="badge compact-msg-badge" style="background:#ede9fe;color:#5b21b6;" title="WhatsApp Details sent">WA-D</span>
+          <span class="badge pill" style="background:#ede9fe;color:#5b21b6;">WA Details</span>
         <?php endif; ?>
         <?php if ($emailDetailsSent): ?>
-          <span class="badge compact-msg-badge" style="background:#ffe4e6;color:#9f1239;" title="Email Details sent">EM-D</span>
+          <span class="badge pill" style="background:#ffe4e6;color:#9f1239;">Email Details</span>
         <?php endif; ?>
         <?php if (!$whatsappSent && !$emailSent && !$whatsappDetailsSent && !$emailDetailsSent): ?>
           <span style="color:#9ca3af;">&mdash;</span>
         <?php endif; ?>
       </td>
-      <td data-column="call_not_picked_count"><?php echo leads_safe((string) $callNotPickedCount); ?></td>
-      <td data-column="created_at"><?php echo leads_safe((string) ($lead['created_at'] ?? '')); ?></td>
-      <td data-column="updated_at"><?php echo leads_safe((string) ($lead['updated_at'] ?? '')); ?></td>
-      <td data-column="campaign">
+      <td><?php echo leads_safe((string) $callNotPickedCount); ?></td>
+      <td><?php echo leads_safe((string) ($lead['created_at'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['updated_at'] ?? '')); ?></td>
+      <td>
         <?php if (($lead['source_campaign_name'] ?? '') !== ''): ?>
           <?php echo leads_safe((string) ($lead['source_campaign_name'] ?? '')); ?>
           <?php if (($lead['source_campaign_id'] ?? '') !== ''): ?>
@@ -507,39 +507,34 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
           <?php endif; ?>
         <?php else: ?>&ndash;<?php endif; ?>
       </td>
-      <td data-column="actions">
+      <td>
         <div class="table-actions">
-          <a class="btn-secondary lead-action compact-action-btn" data-action="view_edit" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" title="View / Edit" href="lead-detail.php?id=<?php echo urlencode((string) ($lead['id'] ?? '')); ?>">View</a>
-          <a class="btn-secondary lead-action compact-action-btn" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" title="Send WhatsApp" href="#">WA</a>
+          <a class="btn-secondary lead-action" data-action="view_edit" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="lead-detail.php?id=<?php echo urlencode((string) ($lead['id'] ?? '')); ?>">View / Edit</a>
+          <a class="btn-secondary lead-action" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">WhatsApp</a>
+          <a class="btn-secondary lead-action" data-action="email" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">Email</a>
+          <a class="btn-secondary lead-action" data-action="whatsapp_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#ede9fe; color:#4c1d95;" href="#">WhatsApp Details</a>
+          <a class="btn-secondary lead-action" data-action="email_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#ffe4e6; color:#881337;" href="#">Email Details</a>
+          <button type="button" class="btn lead-action" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#10b981;">Mark Contacted Now</button>
+          <button type="button" class="btn lead-action" data-action="mark_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#2563eb;">Interested</button>
+          <button type="button" class="btn-secondary lead-action" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#fee2e2; color:#991b1b;">Call not Picked</button>
           <?php if ($canCreateQuotation): ?>
-            <a class="btn lead-action compact-action-btn" data-action="create_quotation" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#1d4ed8;" title="Create Quotation" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Quote</a>
+            <a class="btn lead-action" data-action="create_quotation" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#1d4ed8;" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
           <?php else: ?>
             <?php $quotationDisabledReason = $isArchived ? 'Archived lead' : 'Missing name/mobile'; ?>
-            <button type="button" class="btn-secondary compact-action-btn" style="opacity:0.55; cursor:not-allowed;" disabled title="<?php echo leads_safe($quotationDisabledReason); ?>">Quote</button>
+            <button type="button" class="btn-secondary" style="padding:0.35rem 0.6rem; opacity:0.55; cursor:not-allowed;" disabled title="<?php echo leads_safe($quotationDisabledReason); ?>"><?php echo $isArchived ? 'Archived' : 'Create Quotation'; ?></button>
           <?php endif; ?>
-          <button type="button" class="btn lead-action compact-action-btn" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#10b981;" title="Mark Contacted Now">Contacted</button>
-          <details class="action-menu">
-            <summary class="btn-secondary compact-action-btn" title="More actions">&hellip;</summary>
-            <div class="action-menu-items">
-              <a class="btn-secondary lead-action compact-action-btn" data-action="email" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">Email</a>
-              <a class="btn-secondary lead-action compact-action-btn" data-action="whatsapp_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#ede9fe; color:#4c1d95;" href="#">WA Details</a>
-              <a class="btn-secondary lead-action compact-action-btn" data-action="email_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#ffe4e6; color:#881337;" href="#">EM Details</a>
-              <button type="button" class="btn lead-action compact-action-btn" data-action="mark_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#2563eb;">Interested</button>
-              <button type="button" class="btn-secondary lead-action compact-action-btn" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#fee2e2; color:#991b1b;">Call not Picked</button>
           <?php if (!$isArchived): ?>
-              <button type="button" class="btn-secondary lead-action compact-action-btn" data-action="archive_lead" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Archive</button>
+            <button type="button" class="btn-secondary lead-action" data-action="archive_lead" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;">Archive</button>
           <?php endif; ?>
           <?php if (!$customerCreated && $hasMobile): ?>
-              <button type="button" class="btn-secondary lead-action compact-action-btn" data-action="create_customer" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#e0f2fe; color:#0f172a;">Create Customer</button>
+            <button type="button" class="btn-secondary lead-action" data-action="create_customer" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#e0f2fe; color:#0f172a;">Create Customer</button>
           <?php endif; ?>
           <?php if (!$isConverted): ?>
-              <button type="button" class="btn lead-action compact-action-btn" data-action="mark_converted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#16a34a;">Converted</button>
+            <button type="button" class="btn lead-action" data-action="mark_converted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#16a34a;">Converted</button>
           <?php endif; ?>
           <?php if (!$isNotInterested): ?>
-              <button type="button" class="btn-secondary lead-action compact-action-btn" data-action="mark_not_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#fbbf24; color:#1f2937;">Not Interested</button>
+            <button type="button" class="btn-secondary lead-action" data-action="mark_not_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#fbbf24; color:#1f2937;">Not Interested</button>
           <?php endif; ?>
-            </div>
-          </details>
         </div>
       </td>
     </tr>
@@ -1167,7 +1162,7 @@ $followupToday = isset($_GET['followup_today']) && $_GET['followup_today'] === '
 $followupOverdue = isset($_GET['followup_overdue']) && $_GET['followup_overdue'] === '1';
 $sortBy = strtolower(trim((string) ($_GET['sort_by'] ?? 'created_at')));
 $sortDir = strtolower(trim((string) ($_GET['sort_dir'] ?? 'desc')));
-$allowedSort = ['sr_no', 'name', 'mobile', 'email', 'city', 'monthly_bill', 'finance_subsidy', 'property_type', 'roof_type', 'best_time_to_call', 'area_pincode', 'status', 'rating', 'next_followup', 'assigned_to', 'last_contacted_at', 'call_not_picked_count', 'created_at', 'updated_at', 'campaign'];
+$allowedSort = ['sr_no', 'name', 'mobile', 'email', 'city', 'monthly_bill', 'finance_subsidy', 'property_type', 'roof_type', 'best_time_to_call', 'area_pincode', 'status', 'rating', 'next_followup', 'assigned_to', 'last_contacted_at', 'call_not_picked_count', 'created_at', 'updated_at'];
 if (!in_array($sortBy, $allowedSort, true)) {
     $sortBy = 'created_at';
 }
@@ -1246,148 +1241,92 @@ $filteredLeads = array_values(array_filter($leads, function (array $lead) use ($
     return $matchesSearch && $matchesStatus && $matchesRating && $matchesAssigned && $matchesFollowup;
 }));
 
-$compareEmptyLast = static function (string $left, string $right, string $direction): ?int {
-    $leftEmpty = trim($left) === '';
-    $rightEmpty = trim($right) === '';
-    if ($leftEmpty && $rightEmpty) {
-        return 0;
-    }
-    if ($leftEmpty) {
-        return 1;
-    }
-    if ($rightEmpty) {
-        return -1;
-    }
-    return null;
-};
-
-$parseLooseNumber = static function (string $value): ?float {
-    $sanitized = preg_replace('/[^0-9\.\-]/', '', $value);
-    if ($sanitized === null || $sanitized === '' || !is_numeric($sanitized)) {
-        return null;
-    }
-    return (float) $sanitized;
-};
-
-$compareText = static function (string $left, string $right, string $direction) use ($compareEmptyLast): int {
-    $emptyCompare = $compareEmptyLast($left, $right, $direction);
-    if ($emptyCompare !== null) {
-        return $emptyCompare;
-    }
-    $factor = $direction === 'desc' ? -1 : 1;
-    return strnatcasecmp($left, $right) * $factor;
-};
-
-$compareNumber = static function (?float $left, ?float $right, string $direction): int {
-    $leftEmpty = $left === null;
-    $rightEmpty = $right === null;
-    if ($leftEmpty && $rightEmpty) {
-        return 0;
-    }
-    if ($leftEmpty) {
-        return 1;
-    }
-    if ($rightEmpty) {
-        return -1;
-    }
-    $factor = $direction === 'desc' ? -1 : 1;
-    return ($left <=> $right) * $factor;
-};
-
-$compareDate = static function (string $left, string $right, string $direction): int {
-    $leftTs = strtotime(trim($left));
-    $rightTs = strtotime(trim($right));
-    $leftVal = $leftTs === false ? null : $leftTs;
-    $rightVal = $rightTs === false ? null : $rightTs;
-    $leftEmpty = $leftVal === null;
-    $rightEmpty = $rightVal === null;
-    if ($leftEmpty && $rightEmpty) {
-        return 0;
-    }
-    if ($leftEmpty) {
-        return 1;
-    }
-    if ($rightEmpty) {
-        return -1;
-    }
-    $factor = $direction === 'desc' ? -1 : 1;
-    return ($leftVal <=> $rightVal) * $factor;
-};
-
-usort($filteredLeads, static function (array $a, array $b) use ($sortBy, $sortDir, $compareText, $compareNumber, $compareDate, $parseLooseNumber): int {
-    $direction = $sortDir === 'desc' ? 'desc' : 'asc';
+usort($filteredLeads, static function (array $a, array $b) use ($sortBy, $sortDir): int {
+    $direction = $sortDir === 'desc' ? -1 : 1;
     $indexA = (int) ($a['id'] ?? 0);
     $indexB = (int) ($b['id'] ?? 0);
 
     if ($sortBy === 'sr_no') {
-        return $direction === 'desc' ? ($indexB <=> $indexA) : ($indexA <=> $indexB);
+        return ($indexA <=> $indexB) * $direction;
     }
+
+    $textSort = static function (string $left, string $right) use ($direction): int {
+        return strnatcasecmp($left, $right) * $direction;
+    };
 
     if ($sortBy === 'name') {
-        return $compareText((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''), $direction);
+        return $textSort((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
     }
     if ($sortBy === 'mobile') {
-        return $compareText((string) ($a['mobile'] ?? ''), (string) ($b['mobile'] ?? ''), $direction);
+        return $textSort((string) ($a['mobile'] ?? ''), (string) ($b['mobile'] ?? ''));
     }
     if ($sortBy === 'city') {
-        return $compareText((string) ($a['city'] ?? ''), (string) ($b['city'] ?? ''), $direction);
+        return $textSort((string) ($a['city'] ?? ''), (string) ($b['city'] ?? ''));
     }
     if ($sortBy === 'email') {
-        return $compareText((string) ($a['email'] ?? ''), (string) ($b['email'] ?? ''), $direction);
+        return $textSort((string) ($a['email'] ?? ''), (string) ($b['email'] ?? ''));
     }
     if ($sortBy === 'monthly_bill') {
-        return $compareNumber(
-            $parseLooseNumber((string) ($a['monthly_bill'] ?? '')),
-            $parseLooseNumber((string) ($b['monthly_bill'] ?? '')),
-            $direction
-        );
+        return $textSort((string) ($a['monthly_bill'] ?? ''), (string) ($b['monthly_bill'] ?? ''));
     }
     if ($sortBy === 'finance_subsidy') {
-        return $compareText((string) ($a['finance_subsidy'] ?? ''), (string) ($b['finance_subsidy'] ?? ''), $direction);
+        return $textSort((string) ($a['finance_subsidy'] ?? ''), (string) ($b['finance_subsidy'] ?? ''));
     }
     if ($sortBy === 'property_type') {
-        return $compareText((string) ($a['property_type'] ?? ''), (string) ($b['property_type'] ?? ''), $direction);
+        return $textSort((string) ($a['property_type'] ?? ''), (string) ($b['property_type'] ?? ''));
     }
     if ($sortBy === 'roof_type') {
-        return $compareText((string) ($a['roof_type'] ?? ''), (string) ($b['roof_type'] ?? ''), $direction);
+        return $textSort((string) ($a['roof_type'] ?? ''), (string) ($b['roof_type'] ?? ''));
     }
     if ($sortBy === 'best_time_to_call') {
-        return $compareText((string) ($a['best_time_to_call'] ?? ''), (string) ($b['best_time_to_call'] ?? ''), $direction);
+        return $textSort((string) ($a['best_time_to_call'] ?? ''), (string) ($b['best_time_to_call'] ?? ''));
     }
     if ($sortBy === 'area_pincode') {
-        return $compareText((string) ($a['area_pincode'] ?? ''), (string) ($b['area_pincode'] ?? ''), $direction);
+        return $textSort((string) ($a['area_pincode'] ?? ''), (string) ($b['area_pincode'] ?? ''));
     }
     if ($sortBy === 'status') {
-        return $compareText((string) ($a['status'] ?? ''), (string) ($b['status'] ?? ''), $direction);
+        return $textSort((string) ($a['status'] ?? ''), (string) ($b['status'] ?? ''));
     }
     if ($sortBy === 'rating') {
-        return $compareText((string) ($a['rating'] ?? ''), (string) ($b['rating'] ?? ''), $direction);
+        return $textSort((string) ($a['rating'] ?? ''), (string) ($b['rating'] ?? ''));
     }
     if ($sortBy === 'assigned_to') {
-        return $compareText((string) ($a['assigned_to_name'] ?? ''), (string) ($b['assigned_to_name'] ?? ''), $direction);
-    }
-    if ($sortBy === 'campaign') {
-        return $compareText((string) ($a['source_campaign_name'] ?? ''), (string) ($b['source_campaign_name'] ?? ''), $direction);
+        return $textSort((string) ($a['assigned_to_name'] ?? ''), (string) ($b['assigned_to_name'] ?? ''));
     }
 
+    $toTimestamp = static function (string $date, string $time = '00:00:00'): int {
+        $value = trim($date . ' ' . $time);
+        if ($value === '') {
+            return 0;
+        }
+        $timestamp = strtotime($value);
+        return $timestamp === false ? 0 : $timestamp;
+    };
+
     if ($sortBy === 'next_followup') {
-        $aValue = trim(((string) ($a['next_followup_date'] ?? '')) . ' ' . ((string) ($a['next_followup_time'] ?? '')));
-        $bValue = trim(((string) ($b['next_followup_date'] ?? '')) . ' ' . ((string) ($b['next_followup_time'] ?? '')));
-        return $compareDate($aValue, $bValue, $direction);
+        $aTs = $toTimestamp((string) ($a['next_followup_date'] ?? ''), (string) ($a['next_followup_time'] ?? '00:00:00'));
+        $bTs = $toTimestamp((string) ($b['next_followup_date'] ?? ''), (string) ($b['next_followup_time'] ?? '00:00:00'));
+        return ($aTs <=> $bTs) * $direction;
     }
     if ($sortBy === 'last_contacted_at') {
-        return $compareDate((string) ($a['last_contacted_at'] ?? ''), (string) ($b['last_contacted_at'] ?? ''), $direction);
+        $aTs = $toTimestamp((string) ($a['last_contacted_at'] ?? ''));
+        $bTs = $toTimestamp((string) ($b['last_contacted_at'] ?? ''));
+        return ($aTs <=> $bTs) * $direction;
     }
     if ($sortBy === 'call_not_picked_count') {
         $aCount = max(0, (int) ($a['call_not_picked_count'] ?? 0));
         $bCount = max(0, (int) ($b['call_not_picked_count'] ?? 0));
-        return $compareNumber((float) $aCount, (float) $bCount, $direction);
+        return ($aCount <=> $bCount) * $direction;
     }
     if ($sortBy === 'updated_at') {
-        return $compareDate((string) ($a['updated_at'] ?? ''), (string) ($b['updated_at'] ?? ''), $direction);
+        $aTs = $toTimestamp((string) ($a['updated_at'] ?? ''));
+        $bTs = $toTimestamp((string) ($b['updated_at'] ?? ''));
+        return ($aTs <=> $bTs) * $direction;
     }
 
-    return $compareDate((string) ($a['created_at'] ?? ''), (string) ($b['created_at'] ?? ''), $direction);
+    $aTs = $toTimestamp((string) ($a['created_at'] ?? ''));
+    $bTs = $toTimestamp((string) ($b['created_at'] ?? ''));
+    return ($aTs <=> $bTs) * $direction;
 });
 
 $assignedNames = array_values(array_unique(array_filter(array_map(static function (array $lead): string {
@@ -1429,28 +1368,12 @@ ksort($duplicateGroups);
     .btn { background: #2563eb; color: #fff; border: none; padding: 0.7rem 1.1rem; border-radius: 10px; font-weight: 700; }
     .btn-secondary { background: #eef2ff; color: #1f2937; }
     table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 0.45rem 0.45rem; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
-    th { font-size: 0.9rem; color: #374151; background:#fff; position: sticky; top: 0; z-index: 5; }
+    th, td { text-align: left; padding: 0.65rem 0.5rem; border-bottom: 1px solid #e5e7eb; }
+    th { font-size: 0.9rem; color: #374151; }
     tr:hover { background: #f9fafb; }
     .badge { display: inline-block; padding: 0.25rem 0.55rem; border-radius: 999px; font-weight: 700; font-size: 0.85rem; }
     .pill { background: #eef2ff; color: #4338ca; }
-    .table-actions { display: flex; gap: 0.25rem; align-items: center; flex-wrap: nowrap; }
-    .compact-action-btn { padding: 0.22rem 0.45rem; border-radius: 8px; font-size: 0.74rem; font-weight: 700; border: 1px solid #d1d5db; line-height: 1.2; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
-    .action-menu { position: relative; }
-    .action-menu summary { list-style: none; cursor: pointer; }
-    .action-menu summary::-webkit-details-marker { display:none; }
-    .action-menu-items { position: absolute; right: 0; top: calc(100% + 0.25rem); background: #fff; border: 1px solid #d1d5db; border-radius: 10px; box-shadow: 0 10px 24px rgba(15,23,42,0.16); min-width: 170px; z-index: 30; padding: 0.35rem; display: flex; flex-direction: column; gap: 0.25rem; }
-    .action-menu:not([open]) .action-menu-items { display: none; }
-    .cell-truncate { display:inline-block; max-width: 160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
-    .lead-message-status-cell { white-space: nowrap; }
-    .compact-msg-badge { padding: 0.12rem 0.42rem; font-size: 0.72rem; margin-right: 0.2rem; }
-    .table-toolbar { display:flex; justify-content:flex-end; margin:0.4rem 0 0.55rem; position:relative; }
-    .columns-menu { position: relative; }
-    .columns-menu-dropdown { position:absolute; right:0; top:calc(100% + 0.35rem); background:#fff; border:1px solid #d1d5db; border-radius:10px; box-shadow:0 10px 24px rgba(15,23,42,0.16); padding:0.6rem; min-width:240px; z-index:40; display:none; }
-    .columns-menu.open .columns-menu-dropdown { display:block; }
-    .columns-menu-dropdown label { display:flex; align-items:center; gap:0.45rem; font-weight:500; margin-bottom:0.35rem; }
-    th[data-column], td[data-column] { white-space: nowrap; }
-    th.column-hidden, td.column-hidden { display:none; }
+    .table-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
     .messages { margin-bottom: 1rem; }
     .alert { padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 0.5rem; }
     .alert-success { background: #ecfdf3; color: #166534; border: 1px solid #bbf7d0; }
@@ -1831,23 +1754,8 @@ ksort($duplicateGroups);
         <button type="submit" class="btn-secondary" onclick="return confirm('Apply this action to selected leads?');">Apply</button>
       </form>
 
-      <div class="table-toolbar">
-        <div class="columns-menu" id="columns-menu">
-          <button type="button" class="btn-secondary compact-action-btn" id="columns-toggle">Columns</button>
-          <div class="columns-menu-dropdown" id="columns-menu-dropdown">
-            <label><input type="checkbox" class="column-toggle" value="email" /> Email</label>
-            <label><input type="checkbox" class="column-toggle" value="finance_subsidy" /> Finance &amp; Subsidy</label>
-            <label><input type="checkbox" class="column-toggle" value="property_type" /> Property Type</label>
-            <label><input type="checkbox" class="column-toggle" value="roof_type" /> Roof Type</label>
-            <label><input type="checkbox" class="column-toggle" value="best_time_to_call" /> Best Time to Call</label>
-            <label><input type="checkbox" class="column-toggle" value="area_pincode" /> Area Pincode</label>
-            <label><input type="checkbox" class="column-toggle" value="updated_at" /> Updated At</label>
-            <label><input type="checkbox" class="column-toggle" value="campaign" /> Campaign</label>
-          </div>
-        </div>
-      </div>
       <div style="overflow-x:auto;">
-        <table id="leads-table">
+        <table>
           <thead>
             <tr>
               <th>
@@ -1857,27 +1765,27 @@ ksort($duplicateGroups);
                 </label>
               </th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('sr_no', $sortBy, $sortDir)); ?>">#<?php echo leads_safe(leads_sort_indicator('sr_no', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="name"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('name', $sortBy, $sortDir)); ?>">Name<?php echo leads_safe(leads_sort_indicator('name', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="mobile"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('mobile', $sortBy, $sortDir)); ?>">Mobile<?php echo leads_safe(leads_sort_indicator('mobile', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="email"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('email', $sortBy, $sortDir)); ?>">Email<?php echo leads_safe(leads_sort_indicator('email', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="city"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('city', $sortBy, $sortDir)); ?>">City<?php echo leads_safe(leads_sort_indicator('city', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="monthly_bill"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('monthly_bill', $sortBy, $sortDir)); ?>">Monthly Bill<?php echo leads_safe(leads_sort_indicator('monthly_bill', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="finance_subsidy"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('finance_subsidy', $sortBy, $sortDir)); ?>">Finance &amp; Subsidy<?php echo leads_safe(leads_sort_indicator('finance_subsidy', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="property_type"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('property_type', $sortBy, $sortDir)); ?>">Property Type<?php echo leads_safe(leads_sort_indicator('property_type', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="roof_type"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('roof_type', $sortBy, $sortDir)); ?>">Roof Type<?php echo leads_safe(leads_sort_indicator('roof_type', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="best_time_to_call"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('best_time_to_call', $sortBy, $sortDir)); ?>">Best Time to Call<?php echo leads_safe(leads_sort_indicator('best_time_to_call', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="area_pincode"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('area_pincode', $sortBy, $sortDir)); ?>">Area Pincode<?php echo leads_safe(leads_sort_indicator('area_pincode', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="status"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('status', $sortBy, $sortDir)); ?>">Status<?php echo leads_safe(leads_sort_indicator('status', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="rating"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('rating', $sortBy, $sortDir)); ?>">Rating<?php echo leads_safe(leads_sort_indicator('rating', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="next_followup"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('next_followup', $sortBy, $sortDir)); ?>">Next Follow-Up<?php echo leads_safe(leads_sort_indicator('next_followup', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="assigned_to"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('assigned_to', $sortBy, $sortDir)); ?>">Assigned To<?php echo leads_safe(leads_sort_indicator('assigned_to', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="last_contacted_at"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('last_contacted_at', $sortBy, $sortDir)); ?>">Last Contacted<?php echo leads_safe(leads_sort_indicator('last_contacted_at', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="message_sent">Message Sent</th>
-              <th data-column="call_not_picked_count"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('call_not_picked_count', $sortBy, $sortDir)); ?>">Call not Picked<?php echo leads_safe(leads_sort_indicator('call_not_picked_count', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="created_at"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('created_at', $sortBy, $sortDir)); ?>">Created At<?php echo leads_safe(leads_sort_indicator('created_at', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="updated_at"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('updated_at', $sortBy, $sortDir)); ?>">Updated At<?php echo leads_safe(leads_sort_indicator('updated_at', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="campaign"><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('campaign', $sortBy, $sortDir)); ?>">Campaign<?php echo leads_safe(leads_sort_indicator('campaign', $sortBy, $sortDir)); ?></a></th>
-              <th data-column="actions">Actions</th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('name', $sortBy, $sortDir)); ?>">Name<?php echo leads_safe(leads_sort_indicator('name', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('mobile', $sortBy, $sortDir)); ?>">Mobile<?php echo leads_safe(leads_sort_indicator('mobile', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('email', $sortBy, $sortDir)); ?>">Email<?php echo leads_safe(leads_sort_indicator('email', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('city', $sortBy, $sortDir)); ?>">City<?php echo leads_safe(leads_sort_indicator('city', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('monthly_bill', $sortBy, $sortDir)); ?>">Monthly Bill<?php echo leads_safe(leads_sort_indicator('monthly_bill', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('finance_subsidy', $sortBy, $sortDir)); ?>">Finance &amp; Subsidy<?php echo leads_safe(leads_sort_indicator('finance_subsidy', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('property_type', $sortBy, $sortDir)); ?>">Property Type<?php echo leads_safe(leads_sort_indicator('property_type', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('roof_type', $sortBy, $sortDir)); ?>">Roof Type<?php echo leads_safe(leads_sort_indicator('roof_type', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('best_time_to_call', $sortBy, $sortDir)); ?>">Best Time to Call<?php echo leads_safe(leads_sort_indicator('best_time_to_call', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('area_pincode', $sortBy, $sortDir)); ?>">Area Pincode<?php echo leads_safe(leads_sort_indicator('area_pincode', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('status', $sortBy, $sortDir)); ?>">Status<?php echo leads_safe(leads_sort_indicator('status', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('rating', $sortBy, $sortDir)); ?>">Rating<?php echo leads_safe(leads_sort_indicator('rating', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('next_followup', $sortBy, $sortDir)); ?>">Next Follow-Up<?php echo leads_safe(leads_sort_indicator('next_followup', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('assigned_to', $sortBy, $sortDir)); ?>">Assigned To<?php echo leads_safe(leads_sort_indicator('assigned_to', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('last_contacted_at', $sortBy, $sortDir)); ?>">Last Contacted<?php echo leads_safe(leads_sort_indicator('last_contacted_at', $sortBy, $sortDir)); ?></a></th>
+              <th>Message Sent (Intro + Details)</th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('call_not_picked_count', $sortBy, $sortDir)); ?>">Call not Picked<?php echo leads_safe(leads_sort_indicator('call_not_picked_count', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('created_at', $sortBy, $sortDir)); ?>">Created At<?php echo leads_safe(leads_sort_indicator('created_at', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('updated_at', $sortBy, $sortDir)); ?>">Updated At<?php echo leads_safe(leads_sort_indicator('updated_at', $sortBy, $sortDir)); ?></a></th>
+              <th>Campaign</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -1929,10 +1837,6 @@ ksort($duplicateGroups);
     const detailsPageUrl = <?php echo json_encode((string) ($messageSettings['details_page_url'] ?? '/solar-details.php'), JSON_UNESCAPED_UNICODE); ?>;
     const companyName = <?php echo json_encode((string) ($messageSettings['company_name'] ?? 'Dakshayani Enterprises'), JSON_UNESCAPED_UNICODE); ?>;
     const companyPhone = <?php echo json_encode((string) ($messageSettings['company_phone'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
-    const columnsMenu = document.getElementById('columns-menu');
-    const columnsToggle = document.getElementById('columns-toggle');
-    const optionalColumns = ['email', 'finance_subsidy', 'property_type', 'roof_type', 'best_time_to_call', 'area_pincode', 'updated_at', 'campaign'];
-    const visibleColumnsStorageKey = 'leadsDashboardVisibleColumnsV1';
 
     function showToast(message) {
       const el = document.createElement('div');
@@ -2021,53 +1925,6 @@ ksort($duplicateGroups);
       }
     }
 
-    function setColumnVisibility(columnKey, visible) {
-      document.querySelectorAll(`[data-column="${columnKey}"]`).forEach((cell) => {
-        cell.classList.toggle('column-hidden', !visible);
-      });
-    }
-
-    function loadVisibleColumns() {
-      const defaultVisible = {
-        email: false,
-        finance_subsidy: false,
-        property_type: false,
-        roof_type: false,
-        best_time_to_call: false,
-        area_pincode: false,
-        updated_at: false,
-        campaign: false,
-      };
-      try {
-        const raw = window.localStorage.getItem(visibleColumnsStorageKey);
-        if (!raw) return defaultVisible;
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== 'object') return defaultVisible;
-        return { ...defaultVisible, ...parsed };
-      } catch (error) {
-        return defaultVisible;
-      }
-    }
-
-    function saveVisibleColumns(map) {
-      try {
-        window.localStorage.setItem(visibleColumnsStorageKey, JSON.stringify(map));
-      } catch (error) {
-        // Ignore localStorage failures.
-      }
-    }
-
-    function applyColumnPreferences() {
-      const visibleMap = loadVisibleColumns();
-      optionalColumns.forEach((columnKey) => {
-        const isVisible = visibleMap[columnKey] === true;
-        setColumnVisibility(columnKey, isVisible);
-      });
-      document.querySelectorAll('.column-toggle').forEach((checkbox) => {
-        checkbox.checked = visibleMap[checkbox.value] === true;
-      });
-    }
-
     function initLeadEditStatusField(container) {
       if (!container) return;
       const statusSelect = container.querySelector('#lead-status-select');
@@ -2098,22 +1955,6 @@ ksort($duplicateGroups);
       });
     }
 
-    applyColumnPreferences();
-
-    columnsToggle?.addEventListener('click', (event) => {
-      event.preventDefault();
-      columnsMenu?.classList.toggle('open');
-    });
-
-    document.querySelectorAll('.column-toggle').forEach((checkbox) => {
-      checkbox.addEventListener('change', () => {
-        const current = loadVisibleColumns();
-        current[checkbox.value] = checkbox.checked;
-        saveVisibleColumns(current);
-        setColumnVisibility(checkbox.value, checkbox.checked);
-      });
-    });
-
     document.addEventListener('submit', async (event) => {
       if (event.target && event.target.id === 'lead-edit-form') {
         event.preventDefault();
@@ -2137,15 +1978,6 @@ ksort($duplicateGroups);
     });
 
     document.addEventListener('click', async (event) => {
-      if (columnsMenu && !event.target.closest('#columns-menu')) {
-        columnsMenu.classList.remove('open');
-      }
-      if (!event.target.closest('.action-menu')) {
-        document.querySelectorAll('.action-menu[open]').forEach((menu) => {
-          menu.removeAttribute('open');
-        });
-      }
-
       const actionEl = event.target.closest('.lead-action');
       if (!actionEl) return;
       event.preventDefault();
