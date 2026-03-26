@@ -350,20 +350,6 @@ $schemaContext = [
       <div data-home-sections-list></div>
     </div>
 
-
-    <section class="section" id="solar-finance-entry">
-      <div class="container">
-        <a href="/solar-and-finance.php" class="solar-finance-promo" aria-label="Open Solar and Finance page">
-          <span class="solar-finance-promo__tag">New</span>
-          <div>
-            <h2>Solar and Finance</h2>
-            <p>Check your likely solar requirement, monthly savings, finance impact, and request quotation in one guided page.</p>
-          </div>
-          <span class="solar-finance-promo__cta">Open <i class="fa-solid fa-arrow-right"></i></span>
-        </a>
-      </div>
-    </section>
-
     <section class="section offers-section" id="offers">
       <div class="container">
         <div class="head">
