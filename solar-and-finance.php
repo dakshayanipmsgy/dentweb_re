@@ -56,16 +56,31 @@ $defaults = $settings['defaults'] ?? [];
             <label>Solar Size (kW)<input type="number" step="0.1" id="solarSize"></label>
             <label>Daily Generation per kW<input type="number" step="0.1" id="dailyGeneration" value="<?= htmlspecialchars((string) ($defaults['daily_generation_per_kw'] ?? 5)) ?>"></label>
             <label>Unit Rate (₹/kWh)<input type="number" step="0.01" id="unitRate" value="<?= htmlspecialchars((string) ($defaults['unit_rate'] ?? 8)) ?>"></label>
-            <label>System Cost (₹)<input type="number" id="systemCost"></label>
             <label>Subsidy (₹)<input type="number" id="subsidy" value="78000"></label>
-            <label>Loan amount (₹)<input type="number" id="loanAmount"></label>
-            <label>Margin money (₹)<input type="number" id="marginMoney"></label>
-            <label>Interest (%)<input type="number" step="0.01" id="interestRate" value="<?= htmlspecialchars((string) ($defaults['interest_upto_2_lacs'] ?? 6)) ?>"></label>
             <label>Tenure (years)<input type="number" id="loanTenure" value="<?= htmlspecialchars((string) ($defaults['loan_tenure_years'] ?? 10)) ?>"></label>
-            <label>Loan - Subsidy (₹)<input type="number" id="effectiveLoan" readonly></label>
             <label>Hybrid Inverter (kVA)<select id="inverterKva"></select></label>
             <label>Phase<select id="phase"></select></label>
             <label>Battery count<select id="batteryCount"></select></label>
+          </div>
+          <h4 style="margin:.9rem 0 .4rem">Group A — Pricing</h4>
+          <div class="sf-inputs">
+            <label>System Cost (Self Funded) (₹)<input type="number" id="systemCostSelf"></label>
+            <label>System Cost (Loan up to 2 lacs) (₹)<input type="number" id="systemCostUp2"></label>
+            <label>System Cost (Loan above 2 lacs) (₹)<input type="number" id="systemCostAbove2"></label>
+          </div>
+          <h4 style="margin:.9rem 0 .4rem">Group B — Loan up to 2 lacs</h4>
+          <div class="sf-inputs">
+            <label>Loan amount (Loan up to 2 lacs) (₹)<input type="number" id="loanAmountUp2"></label>
+            <label>Interest % (Loan up to 2 lacs)<input type="number" step="0.01" id="interestRateUp2" value="<?= htmlspecialchars((string) ($defaults['interest_upto_2_lacs'] ?? 6)) ?>"></label>
+            <label>Margin money (Loan up to 2 lacs) (₹)<input type="number" id="marginMoneyUp2"></label>
+          </div>
+          <div id="loanAboveGroupWrap">
+            <h4 style="margin:.9rem 0 .4rem">Group C — Loan above 2 lacs</h4>
+            <div class="sf-inputs">
+              <label>Loan amount (Loan above 2 lacs) (₹)<input type="number" id="loanAmountAbove2"></label>
+              <label>Interest % (Loan above 2 lacs)<input type="number" step="0.01" id="interestRateAbove2" value="<?= htmlspecialchars((string) ($defaults['interest_above_2_lacs'] ?? 8.15)) ?>"></label>
+              <label>Margin money (Loan above 2 lacs) (₹)<input type="number" id="marginMoneyAbove2"></label>
+            </div>
           </div>
         </details>
         <p class="sf-note">If you enter only bill or only units, the other field auto-fills using unit rate.</p>
@@ -97,11 +112,29 @@ $defaults = $settings['defaults'] ?? [];
     const INR=n=>`₹${Math.round(n||0).toLocaleString('en-IN')}`;
     const settings=JSON.parse(document.querySelector('main').dataset.settings||'{}');
     const onGrid=(settings.on_grid_prices||[]),hybrid=(settings.hybrid_prices||[]),d=settings.defaults||{};
-    const defaultState={monthlyBill:'',monthlyUnits:'',systemType:'On-Grid',solarSize:'',dailyGeneration:String(d.daily_generation_per_kw??5),unitRate:String(d.unit_rate??8),systemCost:'',subsidy:String(d.default_subsidy??78000),loanAmount:'',marginMoney:'',interestRate:String(d.interest_upto_2_lacs??6),loanTenure:String(d.loan_tenure_years??10),effectiveLoan:''};
+    const defaultState={
+      monthlyBill:'',
+      monthlyUnits:'',
+      systemType:'On-Grid',
+      solarSize:'',
+      dailyGeneration:String(d.daily_generation_per_kw??5),
+      unitRate:String(d.unit_rate??8),
+      subsidy:String(d.default_subsidy??78000),
+      loanTenure:String(d.loan_tenure_years??10),
+      systemCostSelf:'',
+      systemCostUp2:'',
+      systemCostAbove2:'',
+      loanAmountUp2:'',
+      marginMoneyUp2:'',
+      interestRateUp2:String(d.interest_upto_2_lacs??6),
+      loanAmountAbove2:'',
+      marginMoneyAbove2:'',
+      interestRateAbove2:String(d.interest_above_2_lacs??8.15),
+    };
     let mChart,cChart,debounceTimer=null,isProgrammaticUpdate=false;
     const manualOverride=new Set();
-    const debouncedIds=['monthlyBill','monthlyUnits','solarSize','dailyGeneration','unitRate','systemCost','subsidy','loanAmount','marginMoney','interestRate','loanTenure'];
-    const ids=[...debouncedIds,'systemType','effectiveLoan','inverterKva','phase','batteryCount'];
+    const debouncedIds=['monthlyBill','monthlyUnits','solarSize','dailyGeneration','unitRate','subsidy','loanTenure','systemCostSelf','systemCostUp2','systemCostAbove2','loanAmountUp2','marginMoneyUp2','interestRateUp2','loanAmountAbove2','marginMoneyAbove2','interestRateAbove2'];
+    const ids=[...debouncedIds,'systemType','inverterKva','phase','batteryCount','loanAboveGroupWrap'];
     const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
     const kpiPanel=document.getElementById('kpiPanel'),paybackMeters=document.getElementById('paybackMeters'),financeBoxes=document.getElementById('financeBoxes'),waQuote=document.getElementById('waQuote');
 
@@ -112,8 +145,13 @@ $defaults = $settings['defaults'] ?? [];
     const hybridRowsForSize=size=>hybrid.filter(r=>Number(r.size_kw)===Math.round(size));
     const setField=(id,val)=>{if(!el[id])return; isProgrammaticUpdate=true; el[id].value=val; isProgrammaticUpdate=false;};
     const shouldAutofill=id=>!manualOverride.has(id)||String(el[id]?.value||'').trim()==='';
-    const priceForRow=row=>{if(!row)return 0; const up2=num(row.loan_upto_2_lacs),high=num(row.loan_above_2_lacs); return up2<=200000&&up2>0?up2:Math.max(up2,high);};
-    const refreshEffectiveLoan=()=>setField('effectiveLoan', String(Math.max(num(el.loanAmount.value)-num(el.subsidy.value),0).toFixed(0)));
+    const getScenarioPrices=row=>{
+      if(!row){return {up2:0,self:0,above2:0};}
+      const up2=Math.max(num(row.loan_upto_2_lacs),0);
+      const aboveRaw=Math.max(num(row.loan_above_2_lacs),0);
+      return {up2,self:up2,above2:aboveRaw||up2};
+    };
+    const isHigherLoanApplicableForCost=cost=>Math.round(cost*0.8) >= 200000;
 
     function clearResults(){
       document.getElementById('results').hidden=true;
@@ -158,30 +196,45 @@ $defaults = $settings['defaults'] ?? [];
       if(el.systemType.value==='Hybrid'&&!selectedRow){selectedRow=fillHybridSelectors();}
       if(el.systemType.value==='Hybrid'&&selectedRow===null){selectedRow=findOnGrid(num(el.solarSize.value));}
 
-      const recommendedCost=priceForRow(selectedRow||findOnGrid(num(el.solarSize.value)));
-      if(recommendedCost>0&&shouldAutofill('systemCost')) setField('systemCost', String(Math.round(recommendedCost)));
-      const cost=Math.max(num(el.systemCost.value),0);
+      const prices=getScenarioPrices(selectedRow||findOnGrid(num(el.solarSize.value)));
+      if(prices.up2>0&&shouldAutofill('systemCostUp2')) setField('systemCostUp2', String(Math.round(prices.up2)));
+      if(prices.self>0&&shouldAutofill('systemCostSelf')) setField('systemCostSelf', String(Math.round(prices.self)));
+      if(prices.above2>0&&shouldAutofill('systemCostAbove2')) setField('systemCostAbove2', String(Math.round(prices.above2)));
 
-      const autoLoan=Math.min(200000,Math.round(cost*0.9));
-      const loanAmount=Math.max(num(el.loanAmount.value,autoLoan),0);
-      if(cost>0&&shouldAutofill('loanAmount')) setField('loanAmount', String(autoLoan));
-      const autoMargin=Math.max(cost-num(el.loanAmount.value,autoLoan), Math.round(cost*0.1));
-      if(cost>0&&shouldAutofill('marginMoney')) setField('marginMoney', String(autoMargin));
-      refreshEffectiveLoan();
+      const subsidy=Math.max(num(el.subsidy.value),0);
+      const up2Cost=Math.max(num(el.systemCostUp2.value),0);
+      const autoLoanUp2=Math.min(200000,Math.round(up2Cost*0.9));
+      if(up2Cost>0&&shouldAutofill('loanAmountUp2')) setField('loanAmountUp2', String(autoLoanUp2));
+      const currentLoanUp2=Math.max(num(el.loanAmountUp2.value,autoLoanUp2),0);
+      const autoMarginUp2=Math.max(up2Cost-currentLoanUp2, Math.round(up2Cost*0.1));
+      if(up2Cost>0&&shouldAutofill('marginMoneyUp2')) setField('marginMoneyUp2', String(autoMarginUp2));
+
+      const above2Cost=Math.max(num(el.systemCostAbove2.value),0);
+      const higherLoanApplicable=isHigherLoanApplicableForCost(above2Cost);
+      if(el.loanAboveGroupWrap){el.loanAboveGroupWrap.style.display=higherLoanApplicable?'block':'none';}
+      if(higherLoanApplicable){
+        const autoLoanAbove2=Math.round(above2Cost*0.8);
+        if(above2Cost>0&&shouldAutofill('loanAmountAbove2')) setField('loanAmountAbove2', String(autoLoanAbove2));
+        const currentLoanAbove2=Math.max(num(el.loanAmountAbove2.value,autoLoanAbove2),0);
+        const autoMarginAbove2=Math.max(above2Cost-currentLoanAbove2, Math.round(above2Cost*0.2));
+        if(above2Cost>0&&shouldAutofill('marginMoneyAbove2')) setField('marginMoneyAbove2', String(autoMarginAbove2));
+      }
       render();
     }
 
     function render(){const bill=Number(el.monthlyBill.value||0), units=Number(el.monthlyUnits.value||0); if(!bill&&!units){clearResults(); return;}
-      const size=Number(el.solarSize.value||0), gen=Number(el.dailyGeneration.value||5), rate=Number(el.unitRate.value||8), cost=Number(el.systemCost.value||0), subsidy=Number(el.subsidy.value||0);
-      if(!size||!gen||!rate||!cost){clearResults(); return;}
+      const size=Number(el.solarSize.value||0), gen=Number(el.dailyGeneration.value||5), rate=Number(el.unitRate.value||8), subsidy=Number(el.subsidy.value||0);
+      const costSelf=Math.max(num(el.systemCostSelf.value),0), costUp2=Math.max(num(el.systemCostUp2.value),0), costAbove2=Math.max(num(el.systemCostAbove2.value),0);
+      if(!size||!gen||!rate||!costSelf||!costUp2||!costAbove2){clearResults(); return;}
       const monthlyBill=bill||size*gen*30*rate; const solarUnits=size*gen*30; const solarValue=solarUnits*rate; const residual=Math.max(monthlyBill-solarValue,0);
-      const loanUp=Math.max(num(el.loanAmount.value),0)||Math.min(200000,Math.round(cost*0.9));
-      const marginUp=Math.max(num(el.marginMoney.value),0)||Math.max(cost-loanUp,Math.round(cost*0.1));
-      const higherLoanApplicable=Math.round(cost*0.8) >= 200000;
-      const loanHigh=higherLoanApplicable?Math.round(cost*0.8):0; const marginHigh=higherLoanApplicable?Math.max(cost-loanHigh,Math.round(cost*0.2)):0;
+      const loanUp=Math.max(num(el.loanAmountUp2.value),0)||Math.min(200000,Math.round(costUp2*0.9));
+      const marginUp=Math.max(num(el.marginMoneyUp2.value),0)||Math.max(costUp2-loanUp,Math.round(costUp2*0.1));
+      const higherLoanApplicable=isHigherLoanApplicableForCost(costAbove2);
+      const loanHigh=higherLoanApplicable?(Math.max(num(el.loanAmountAbove2.value),0)||Math.round(costAbove2*0.8)):0;
+      const marginHigh=higherLoanApplicable?(Math.max(num(el.marginMoneyAbove2.value),0)||Math.max(costAbove2-loanHigh,Math.round(costAbove2*0.2))):0;
       const effUp=Math.max(loanUp-subsidy,0), effHigh=higherLoanApplicable?Math.max(loanHigh-subsidy,0):0;
-      const tenure=num(el.loanTenure.value,10); const emiUp=emi(effUp,num(el.interestRate.value,d.interest_upto_2_lacs||6),tenure);
-      const emiHigh=higherLoanApplicable?emi(effHigh,Number(d.interest_above_2_lacs||8.15),tenure):0;
+      const tenure=num(el.loanTenure.value,10); const emiUp=emi(effUp,num(el.interestRateUp2.value,d.interest_upto_2_lacs||6),tenure);
+      const emiHigh=higherLoanApplicable?emi(effHigh,num(el.interestRateAbove2.value,d.interest_above_2_lacs||8.15),tenure):0;
 
       const monthlyLabels=['No Solar','Loan ≤2L']; const monthlyData=[monthlyBill,emiUp+residual]; const monthlyColors=['#9ca3af','#0f766e'];
       if(higherLoanApplicable){monthlyLabels.push('Loan >2L'); monthlyData.push(emiHigh+residual); monthlyColors.push('#1d4ed8');}
@@ -194,25 +247,25 @@ $defaults = $settings['defaults'] ?? [];
         {label:'Loan ≤2L',data:cumul(marginUp,emiUp,residual),borderColor:'#0f766e'}
       ];
       if(higherLoanApplicable){cumulativeDatasets.push({label:'Loan >2L',data:cumul(marginHigh,emiHigh,residual),borderColor:'#1d4ed8'});}
-      cumulativeDatasets.push({label:'Self Funded',data:years.map(y=>cost-subsidy+y*12*residual),borderColor:'#f59e0b'});
+      cumulativeDatasets.push({label:'Self Funded',data:years.map(y=>costSelf-subsidy+y*12*residual),borderColor:'#f59e0b'});
 
       document.getElementById('results').hidden=false;
-      const kpi=[['Expected monthly generation',`${solarUnits.toFixed(0)} units`],['Expected annual generation',`${(solarUnits*12).toFixed(0)} units`],['Units in 25 years',`${(solarUnits*12*25).toFixed(0)} units`],['Annual saving',INR(Math.max(monthlyBill-residual,0)*12)],['Estimated payback (self funded)',`${((cost-subsidy)/Math.max((monthlyBill-residual)*12,1)).toFixed(1)} years`],['Roof area needed',`${(size*Number(d.roof_area_sqft_per_kw||100)).toFixed(0)} sq.ft`],['Bill offset',`${Math.min((solarValue/Math.max(monthlyBill,1))*100,100).toFixed(1)}%`],['Annual CO₂ reduction',`${((solarUnits*12)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['25-year CO₂ reduction',`${((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['Tree equivalent',`${(((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82))/Number(d.tree_factor_kg_per_tree||21)).toFixed(0)} trees`]];
+      const kpi=[['Expected monthly generation',`${solarUnits.toFixed(0)} units`],['Expected annual generation',`${(solarUnits*12).toFixed(0)} units`],['Units in 25 years',`${(solarUnits*12*25).toFixed(0)} units`],['Annual saving',INR(Math.max(monthlyBill-residual,0)*12)],['Estimated payback (self funded)',`${((costSelf-subsidy)/Math.max((monthlyBill-residual)*12,1)).toFixed(1)} years`],['Roof area needed',`${(size*Number(d.roof_area_sqft_per_kw||100)).toFixed(0)} sq.ft`],['Bill offset',`${Math.min((solarValue/Math.max(monthlyBill,1))*100,100).toFixed(1)}%`],['Annual CO₂ reduction',`${((solarUnits*12)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['25-year CO₂ reduction',`${((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['Tree equivalent',`${(((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82))/Number(d.tree_factor_kg_per_tree||21)).toFixed(0)} trees`]];
       kpiPanel.innerHTML=kpi.map(([k,v])=>`<div class='sf-metric'><strong>${k}</strong><div>${v}</div></div>`).join('');
 
       const payback=[['Loan up to 2 lacs', (effUp/Math.max((monthlyBill-(emiUp+residual))*12,1))]];
       if(higherLoanApplicable){payback.push(['Loan above 2 lacs',(effHigh/Math.max((monthlyBill-(emiHigh+residual))*12,1))]);}
-      payback.push(['Self Funded',((cost-subsidy)/Math.max((monthlyBill-residual)*12,1))]);
+      payback.push(['Self Funded',((costSelf-subsidy)/Math.max((monthlyBill-residual)*12,1))]);
       paybackMeters.innerHTML=payback.map(([n,p])=>`<div class='sf-metric'><strong>${n}</strong><div>${isFinite(p)?p.toFixed(1):'N/A'} years</div></div>`).join('');
 
       const finData=[
         ['No Solar',[['Monthly bill',INR(monthlyBill)],['25 year expense',INR(monthlyBill*12*25)]]],
-        ['Loan up to 2 lacs',[['System cost',INR(cost)],['Subsidy',INR(subsidy)],['Loan amount',INR(loanUp)],['Loan - subsidy',INR(effUp)],['Margin',INR(marginUp)],['Interest',`${el.interestRate.value||d.interest_upto_2_lacs||6}%`],['Tenure',`${tenure} years`],['EMI',INR(emiUp)],['Residual bill',INR(residual)],['Total monthly outflow',INR(emiUp+residual)]]],
+        ['Loan up to 2 lacs',[['System cost',INR(costUp2)],['Subsidy',INR(subsidy)],['Loan amount',INR(loanUp)],['Loan - subsidy',INR(effUp)],['Margin',INR(marginUp)],['Interest',`${el.interestRateUp2.value||d.interest_upto_2_lacs||6}%`],['Tenure',`${tenure} years`],['EMI',INR(emiUp)],['Residual bill',INR(residual)],['Total monthly outflow',INR(emiUp+residual)]]],
       ];
       if(higherLoanApplicable){
-        finData.push(['Loan above 2 lacs',[['System cost',INR(cost)],['Subsidy',INR(subsidy)],['Loan amount',INR(loanHigh)],['Loan - subsidy',INR(effHigh)],['Margin',INR(marginHigh)],['Interest',`${d.interest_above_2_lacs||8.15}%`],['Tenure',`${tenure} years`],['EMI',INR(emiHigh)],['Residual bill',INR(residual)],['Total monthly outflow',INR(emiHigh+residual)]]]);
+        finData.push(['Loan above 2 lacs',[['System cost',INR(costAbove2)],['Subsidy',INR(subsidy)],['Loan amount',INR(loanHigh)],['Loan - subsidy',INR(effHigh)],['Margin',INR(marginHigh)],['Interest',`${el.interestRateAbove2.value||d.interest_above_2_lacs||8.15}%`],['Tenure',`${tenure} years`],['EMI',INR(emiHigh)],['Residual bill',INR(residual)],['Total monthly outflow',INR(emiHigh+residual)]]]);
       }
-      finData.push(['Self Funded',[['System cost',INR(cost)],['Subsidy',INR(subsidy)],['Net investment',INR(cost-subsidy)],['Residual bill',INR(residual)],['Monthly saving',INR(monthlyBill-residual)],['Annual saving',INR((monthlyBill-residual)*12)]]]);
+      finData.push(['Self Funded',[['System cost',INR(costSelf)],['Subsidy',INR(subsidy)],['Net investment',INR(costSelf-subsidy)],['Residual bill',INR(residual)],['Monthly saving',INR(monthlyBill-residual)],['Annual saving',INR((monthlyBill-residual)*12)]]]);
       financeBoxes.innerHTML=finData.map(([t,rows])=>`<div class='sf-metric'><strong>${t}</strong><ul>${rows.map(r=>`<li>${r[0]}: <b>${r[1]}</b></li>`).join('')}</ul></div>`).join('');
 
       if(mChart) mChart.destroy(); if(cChart) cChart.destroy();
@@ -220,7 +273,7 @@ $defaults = $settings['defaults'] ?? [];
       cChart=new Chart(cumulativeChart,{type:'line',data:{labels:years,datasets:cumulativeDatasets},options:{scales:{x:{title:{display:true,text:'Years'}},y:{title:{display:true,text:'Cumulative Expense (₹)'}}}}});
 
       const hy=el.systemType.value==='Hybrid'?`Hybrid: ${el.inverterKva.value} kVA, ${el.phase.value}, ${el.batteryCount.value} batteries`:'N/A';
-      const msg=`Hello Dakshayani, I want a solar quotation.%0A- Monthly bill: ${INR(monthlyBill)}%0A- Monthly units: ${units||Math.round(monthlyBill/rate)}%0A- System type: ${el.systemType.value}%0A- Solar size: ${size} kW%0A- System cost: ${INR(cost)}%0A- Subsidy: ${INR(subsidy)}%0A- Loan amount: ${INR(loanUp)}%0A- Margin money: ${INR(marginUp)}%0A- Interest: ${el.interestRate.value||d.interest_upto_2_lacs||6}% / ${d.interest_above_2_lacs||8.15}%0A- Tenure: ${tenure} years%0A- Hybrid variation: ${hy}%0A- Monthly generation: ${solarUnits.toFixed(0)} units%0A- Annual saving: ${INR((monthlyBill-residual)*12)}`;
+      const msg=`Hello Dakshayani, I want a solar quotation.%0A- Monthly bill: ${INR(monthlyBill)}%0A- Monthly units: ${units||Math.round(monthlyBill/rate)}%0A- System type: ${el.systemType.value}%0A- Solar size: ${size} kW%0A- System cost (Self): ${INR(costSelf)}%0A- System cost (Loan up to 2 lacs): ${INR(costUp2)}%0A- System cost (Loan above 2 lacs): ${INR(costAbove2)}%0A- Subsidy: ${INR(subsidy)}%0A- Loan amount (up to 2 lacs): ${INR(loanUp)}%0A- Margin money (up to 2 lacs): ${INR(marginUp)}%0A- Interest (up to 2 lacs): ${el.interestRateUp2.value||d.interest_upto_2_lacs||6}%0A- Loan amount (above 2 lacs): ${INR(loanHigh)}%0A- Margin money (above 2 lacs): ${INR(marginHigh)}%0A- Interest (above 2 lacs): ${el.interestRateAbove2.value||d.interest_above_2_lacs||8.15}%0A- Tenure: ${tenure} years%0A- Hybrid variation: ${hy}%0A- Monthly generation: ${solarUnits.toFixed(0)} units%0A- Annual saving: ${INR((monthlyBill-residual)*12)}`;
       waQuote.href=`https://wa.me/917070278178?text=${msg}`;
     }
 
@@ -234,14 +287,14 @@ $defaults = $settings['defaults'] ?? [];
 
     function bindInput(id, eventName){
       el[id].addEventListener(eventName,()=>{
-        if(!isProgrammaticUpdate && id!=='effectiveLoan') manualOverride.add(id);
+        if(!isProgrammaticUpdate) manualOverride.add(id);
         const run=()=>recalculateSolarFinance({changedField:id});
         if(eventName==='input' && debouncedIds.includes(id) && id!=='systemType'){clearTimeout(debounceTimer); debounceTimer=setTimeout(run,220); return;}
         run();
       });
     }
 
-    ['monthlyBill','monthlyUnits','solarSize','dailyGeneration','unitRate','systemCost','subsidy','loanAmount','marginMoney','interestRate','loanTenure'].forEach(id=>bindInput(id,'input'));
+    ['monthlyBill','monthlyUnits','solarSize','dailyGeneration','unitRate','subsidy','loanTenure','systemCostSelf','systemCostUp2','systemCostAbove2','loanAmountUp2','marginMoneyUp2','interestRateUp2','loanAmountAbove2','marginMoneyAbove2','interestRateAbove2'].forEach(id=>bindInput(id,'input'));
     ['systemType','inverterKva','phase','batteryCount'].forEach(id=>bindInput(id,'change'));
     document.getElementById('calcBtn').addEventListener('click',()=>recalculateSolarFinance({changedField:'manualTrigger'}));
     document.getElementById('resetBtn').addEventListener('click',resetAllFields);
