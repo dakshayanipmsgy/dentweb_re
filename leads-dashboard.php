@@ -463,21 +463,12 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
       <td>
         <input type="checkbox" class="lead-select" name="lead_ids[]" value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" form="bulk-actions-form" />
       </td>
-      <td class="lead-index"><?php echo $index; ?></td>
       <td><?php echo leads_safe((string) ($lead['name'] ?? '')); ?></td>
       <td><a href="tel:<?php echo leads_safe($leadMobileRaw); ?>"><?php echo leads_safe($leadMobileRaw); ?></a></td>
-      <td><?php echo leads_safe(leads_value_or_dash($lead, 'email')); ?></td>
       <td><?php echo leads_safe((string) ($lead['city'] ?? '')); ?></td>
       <td><?php echo leads_safe(leads_value_or_dash($lead, 'monthly_bill')); ?></td>
-      <td><?php echo leads_safe(leads_value_or_dash($lead, 'finance_subsidy')); ?></td>
-      <td><?php echo leads_safe(leads_value_or_dash($lead, 'property_type')); ?></td>
-      <td><?php echo leads_safe(leads_value_or_dash($lead, 'roof_type')); ?></td>
-      <td><?php echo leads_safe(leads_value_or_dash($lead, 'best_time_to_call')); ?></td>
-      <td><?php echo leads_safe(leads_value_or_dash($lead, 'area_pincode')); ?></td>
       <td><span class="badge pill"><?php echo leads_safe((string) ($lead['status'] ?? '')); ?></span></td>
-      <td><?php echo leads_safe((string) ($lead['rating'] ?? '')); ?></td>
       <td><?php echo leads_safe(trim(((string) ($lead['next_followup_date'] ?? '')) . ' ' . ((string) ($lead['next_followup_time'] ?? '')))); ?></td>
-      <td><?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?></td>
       <td><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
       <td class="lead-message-status-cell">
         <?php if ($whatsappSent): ?>
@@ -497,17 +488,7 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
         <?php endif; ?>
       </td>
       <td><?php echo leads_safe((string) $callNotPickedCount); ?></td>
-      <td><?php echo leads_safe((string) ($lead['created_at'] ?? '')); ?></td>
-      <td><?php echo leads_safe((string) ($lead['updated_at'] ?? '')); ?></td>
-      <td>
-        <?php if (($lead['source_campaign_name'] ?? '') !== ''): ?>
-          <?php echo leads_safe((string) ($lead['source_campaign_name'] ?? '')); ?>
-          <?php if (($lead['source_campaign_id'] ?? '') !== ''): ?>
-            <span class="badge" style="background:#e2e8f0;color:#0f172a;">#<?php echo leads_safe((string) ($lead['source_campaign_id'] ?? '')); ?></span>
-          <?php endif; ?>
-        <?php else: ?>&ndash;<?php endif; ?>
-      </td>
-      <td>
+      <td class="lead-actions-cell">
         <div class="table-actions">
           <a class="btn-secondary lead-action action-btn" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">WhatsApp</a>
           <button type="button" class="btn lead-action action-btn" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#10b981;">Mark Contacted Now</button>
@@ -545,6 +526,25 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
             </div>
           </div>
         </div>
+      </td>
+      <td class="lead-index"><?php echo $index; ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'email')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'finance_subsidy')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'property_type')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'roof_type')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'best_time_to_call')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'area_pincode')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['rating'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['created_at'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['updated_at'] ?? '')); ?></td>
+      <td>
+        <?php if (($lead['source_campaign_name'] ?? '') !== ''): ?>
+          <?php echo leads_safe((string) ($lead['source_campaign_name'] ?? '')); ?>
+          <?php if (($lead['source_campaign_id'] ?? '') !== ''): ?>
+            <span class="badge" style="background:#e2e8f0;color:#0f172a;">#<?php echo leads_safe((string) ($lead['source_campaign_id'] ?? '')); ?></span>
+          <?php endif; ?>
+        <?php else: ?>&ndash;<?php endif; ?>
       </td>
     </tr>
     <?php
@@ -1452,15 +1452,16 @@ ksort($duplicateGroups);
     tr:hover { background: #f9fafb; }
     .badge { display: inline-block; padding: 0.25rem 0.55rem; border-radius: 999px; font-weight: 700; font-size: 0.85rem; }
     .pill { background: #eef2ff; color: #4338ca; }
-    .table-actions { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; max-width: 460px; }
+    .lead-actions-cell { min-width: 420px; }
+    .table-actions { display: flex; gap: 0.25rem; flex-wrap: nowrap; align-items: center; white-space: nowrap; }
     .table-actions .action-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 0.22rem 0.5rem;
-      min-height: 1.7rem;
-      border-radius: 8px;
-      font-size: 0.74rem;
+      padding: 0.18rem 0.45rem;
+      min-height: 1.55rem;
+      border-radius: 7px;
+      font-size: 0.72rem;
       line-height: 1.1;
       font-weight: 600;
       border: none;
@@ -1500,6 +1501,10 @@ ksort($duplicateGroups);
     }
     .action-more-item:hover { background: #f3f4f6; }
     .action-more-item:disabled { opacity: 0.5; cursor: not-allowed; }
+    @media (max-width: 1280px) {
+      .lead-actions-cell { min-width: 340px; }
+      .table-actions { flex-wrap: wrap; white-space: normal; }
+    }
     .messages { margin-bottom: 1rem; }
     .alert { padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 0.5rem; }
     .alert-success { background: #ecfdf3; color: #166534; border: 1px solid #bbf7d0; }
@@ -1890,28 +1895,28 @@ ksort($duplicateGroups);
                   All
                 </label>
               </th>
-              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('sr_no', $sortBy, $sortDir)); ?>">#<?php echo leads_safe(leads_sort_indicator('sr_no', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('name', $sortBy, $sortDir)); ?>">Name<?php echo leads_safe(leads_sort_indicator('name', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('mobile', $sortBy, $sortDir)); ?>">Mobile<?php echo leads_safe(leads_sort_indicator('mobile', $sortBy, $sortDir)); ?></a></th>
-              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('email', $sortBy, $sortDir)); ?>">Email<?php echo leads_safe(leads_sort_indicator('email', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('city', $sortBy, $sortDir)); ?>">City<?php echo leads_safe(leads_sort_indicator('city', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('monthly_bill', $sortBy, $sortDir)); ?>">Monthly Bill<?php echo leads_safe(leads_sort_indicator('monthly_bill', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('status', $sortBy, $sortDir)); ?>">Status<?php echo leads_safe(leads_sort_indicator('status', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('next_followup', $sortBy, $sortDir)); ?>">Next Follow-Up<?php echo leads_safe(leads_sort_indicator('next_followup', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('last_contacted_at', $sortBy, $sortDir)); ?>">Last Contacted<?php echo leads_safe(leads_sort_indicator('last_contacted_at', $sortBy, $sortDir)); ?></a></th>
+              <th>Message Sent (Intro + Details)</th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('call_not_picked_count', $sortBy, $sortDir)); ?>">Call not Picked<?php echo leads_safe(leads_sort_indicator('call_not_picked_count', $sortBy, $sortDir)); ?></a></th>
+              <th>Actions</th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('sr_no', $sortBy, $sortDir)); ?>">#<?php echo leads_safe(leads_sort_indicator('sr_no', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('email', $sortBy, $sortDir)); ?>">Email<?php echo leads_safe(leads_sort_indicator('email', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('finance_subsidy', $sortBy, $sortDir)); ?>">Finance &amp; Subsidy<?php echo leads_safe(leads_sort_indicator('finance_subsidy', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('property_type', $sortBy, $sortDir)); ?>">Property Type<?php echo leads_safe(leads_sort_indicator('property_type', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('roof_type', $sortBy, $sortDir)); ?>">Roof Type<?php echo leads_safe(leads_sort_indicator('roof_type', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('best_time_to_call', $sortBy, $sortDir)); ?>">Best Time to Call<?php echo leads_safe(leads_sort_indicator('best_time_to_call', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('area_pincode', $sortBy, $sortDir)); ?>">Area Pincode<?php echo leads_safe(leads_sort_indicator('area_pincode', $sortBy, $sortDir)); ?></a></th>
-              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('status', $sortBy, $sortDir)); ?>">Status<?php echo leads_safe(leads_sort_indicator('status', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('rating', $sortBy, $sortDir)); ?>">Rating<?php echo leads_safe(leads_sort_indicator('rating', $sortBy, $sortDir)); ?></a></th>
-              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('next_followup', $sortBy, $sortDir)); ?>">Next Follow-Up<?php echo leads_safe(leads_sort_indicator('next_followup', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('assigned_to', $sortBy, $sortDir)); ?>">Assigned To<?php echo leads_safe(leads_sort_indicator('assigned_to', $sortBy, $sortDir)); ?></a></th>
-              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('last_contacted_at', $sortBy, $sortDir)); ?>">Last Contacted<?php echo leads_safe(leads_sort_indicator('last_contacted_at', $sortBy, $sortDir)); ?></a></th>
-              <th>Message Sent (Intro + Details)</th>
-              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('call_not_picked_count', $sortBy, $sortDir)); ?>">Call not Picked<?php echo leads_safe(leads_sort_indicator('call_not_picked_count', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('created_at', $sortBy, $sortDir)); ?>">Created At<?php echo leads_safe(leads_sort_indicator('created_at', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('updated_at', $sortBy, $sortDir)); ?>">Updated At<?php echo leads_safe(leads_sort_indicator('updated_at', $sortBy, $sortDir)); ?></a></th>
               <th>Campaign</th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
