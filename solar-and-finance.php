@@ -43,6 +43,12 @@ $defaults = $settings['defaults'] ?? [];
       <p><?= htmlspecialchars((string) ($content['hero_text'] ?? 'Simple solar guidance and finance clarity.')) ?></p>
     </section>
 
+    <section class="sf-grid cards">
+      <?php foreach (($content['explainer_cards'] ?? []) as $card): ?>
+      <article class="sf-card"><i class="fa-solid <?= htmlspecialchars((string) ($card['icon'] ?? 'fa-solar-panel')) ?>"></i><h3><?= htmlspecialchars((string) ($card['title'] ?? '')) ?></h3><p><?= htmlspecialchars((string) ($card['text'] ?? '')) ?></p></article>
+      <?php endforeach; ?>
+    </section>
+
     <section class="sf-flex">
       <div class="sf-card">
         <h2>Enter your details</h2>
@@ -93,20 +99,13 @@ $defaults = $settings['defaults'] ?? [];
       </div>
     </section>
 
-    <section class="sf-results" id="results" hidden>
-      <div class="sf-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));margin-bottom:1rem">
-        <article class="sf-card"><h3>Monthly Outflow Comparison</h3><canvas id="monthlyChart" height="180"></canvas></article>
-        <article class="sf-card"><h3>Cumulative Expense Over 25 Years</h3><canvas id="cumulativeChart" height="180"></canvas></article>
-      </div>
-      <article class="sf-card" style="margin-bottom:1rem"><h3>Payback meters</h3><div id="paybackMeters" class="sf-kpis"></div></article>
-      <article class="sf-card"><h3>Financial Clarity</h3><div id="financeBoxes" class="sf-finance-grid"></div></article>
-    </section>
-
     <section class="sf-card sf-glance">
       <h2>Solar at a Glance</h2>
       <p class="sf-note">A quick summary of your system, pricing, generation, savings, payback, and green impact.</p>
       <div id="glancePanel" class="sf-glance-grid"></div>
     </section>
+
+
 
     <section class="sf-card sf-customer">
       <h2>Customer details (for report generation)</h2>
@@ -119,18 +118,17 @@ $defaults = $settings['defaults'] ?? [];
       <div id="customerError" class="sf-error" role="alert" aria-live="polite"></div>
     </section>
 
-    <section class="sf-card" style="margin-top:1rem">
-      <button class="sf-btn report" type="button" id="generateReportBtn">Generate Report</button>
-    </section>
-
-    <section class="sf-card" style="margin-top:1rem">
-      <a class="sf-btn alt" target="_blank" id="waQuote" href="#"><i class="fa-brands fa-whatsapp"></i> <?= htmlspecialchars((string) ($content['cta_text'] ?? 'Request a quotation')) ?></a>
-    </section>
-
-    <section class="sf-grid cards">
-      <?php foreach (($content['explainer_cards'] ?? []) as $card): ?>
-      <article class="sf-card"><i class="fa-solid <?= htmlspecialchars((string) ($card['icon'] ?? 'fa-solar-panel')) ?>"></i><h3><?= htmlspecialchars((string) ($card['title'] ?? '')) ?></h3><p><?= htmlspecialchars((string) ($card['text'] ?? '')) ?></p></article>
-      <?php endforeach; ?>
+    <section class="sf-results" id="results" hidden>
+      <div class="sf-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));margin-bottom:1rem">
+        <article class="sf-card"><h3>Monthly Outflow Comparison</h3><canvas id="monthlyChart" height="180"></canvas></article>
+        <article class="sf-card"><h3>Cumulative Expense Over 25 Years</h3><canvas id="cumulativeChart" height="180"></canvas></article>
+      </div>
+      <article class="sf-card" style="margin-bottom:1rem"><h3>Payback meters</h3><div id="paybackMeters" class="sf-kpis"></div></article>
+      <article class="sf-card"><h3>Financial Clarity</h3><div id="financeBoxes" class="sf-finance-grid"></div></article>
+      <div style="margin-top:1rem;display:flex;gap:.6rem;flex-wrap:wrap">
+        <button class="sf-btn report" type="button" id="generateReportBtn">Generate Report</button>
+        <a class="sf-btn alt" target="_blank" id="waQuote" href="#"><i class="fa-brands fa-whatsapp"></i> <?= htmlspecialchars((string) ($content['cta_text'] ?? 'Request a quotation')) ?></a>
+      </div>
     </section>
   </main>
 
