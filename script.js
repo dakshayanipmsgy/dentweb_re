@@ -24,7 +24,6 @@ const INLINE_PARTIALS = {
         <nav class="nav-desktop" aria-label="Primary navigation">
           <a href="/index.php" class="nav-link">Home</a>
           <a href="/about.html" class="nav-link">About Us</a>
-          <a href="/solar-and-finance.php" class="nav-link">Solar and Finance</a>
           <div class="nav-dropdown">
             <button type="button" class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
               Solutions
@@ -80,7 +79,6 @@ const INLINE_PARTIALS = {
         <div class="nav-mobile-section" aria-label="Primary pages">
           <a href="/index.php">Home</a>
           <a href="/about.html">About Us</a>
-          <a href="/solar-and-finance.php">Solar and Finance</a>
         </div>
         <div class="nav-mobile-divider" role="presentation"></div>
         <div class="nav-mobile-section" aria-label="Solutions">
@@ -164,7 +162,6 @@ const INLINE_PARTIALS = {
         <ul class="footer-links">
           <li><a href="/pm-surya-ghar.html">PM Surya Ghar Yojana</a></li>
           <li><a href="/financing.html">Financing &amp; Loans</a></li>
-          <li><a href="/solar-and-finance.php">Solar and Finance</a></li>
           <li><a href="/solar-projects.html#residential">Residential Solutions</a></li>
           <li><a href="/solar-projects.html#commercial">Commercial / Industrial</a></li>
       <li><a href="/calculator.html">Solar Savings Calculator</a></li>
@@ -290,11 +287,6 @@ const INLINE_PARTIALS = {
       </div>
     </div>
   </div>
-
-<a class="floating-solar-finance" href="/solar-and-finance.php" aria-label="Open Solar and Finance">
-  <i class="fa-solid fa-chart-line" aria-hidden="true"></i>
-  <span>Solar &amp; Finance</span>
-</a>
 </div>
   `.trim(),
 };
