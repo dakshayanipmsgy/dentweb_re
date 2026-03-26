@@ -346,6 +346,20 @@ $schemaContext = [
       </div>
     </section>
 
+
+    <section class="section solar-finance-spotlight" id="solar-finance-spotlight">
+      <div class="container">
+        <a class="solar-finance-spotlight-card" href="/solar-and-finance.php">
+          <div>
+            <span class="capability-kicker">New public planner</span>
+            <h2>Solar and Finance</h2>
+            <p>Know your recommended solar size, compare loan vs self-funded outflow, and request your quotation in one flow.</p>
+          </div>
+          <span class="solar-finance-spotlight-cta">Open planner <i class="fa-solid fa-arrow-right"></i></span>
+        </a>
+      </div>
+    </section>
+
     <div data-home-sections hidden>
       <div data-home-sections-list></div>
     </div>

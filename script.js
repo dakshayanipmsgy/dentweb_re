@@ -47,6 +47,7 @@ const INLINE_PARTIALS = {
           <a href="/innovation-tech.html" class="nav-link" role="menuitem">Innovation &amp; Tech</a>
           <a href="/blog/index.php" class="nav-link" role="menuitem">Blog &amp; Insights</a>
           <a href="/calculator.html" class="nav-link" role="menuitem">Solar Calculator</a>
+          <a href="/solar-and-finance.php" class="nav-link" role="menuitem">Solar &amp; Finance</a>
           <a href="/policies.html" class="nav-link" role="menuitem">Policies &amp; Compliance</a>
             </div>
           </div>
@@ -96,6 +97,7 @@ const INLINE_PARTIALS = {
       <a href="/innovation-tech.html">Innovation &amp; Tech</a>
       <a href="/blog/index.php">Blog &amp; Insights</a>
       <a href="/calculator.html">Solar Calculator</a>
+      <a href="/solar-and-finance.php">Solar &amp; Finance</a>
       <a href="/policies.html">Policies &amp; Compliance</a>
         </div>
         <div class="nav-mobile-divider" role="presentation"></div>
@@ -165,6 +167,7 @@ const INLINE_PARTIALS = {
           <li><a href="/solar-projects.html#residential">Residential Solutions</a></li>
           <li><a href="/solar-projects.html#commercial">Commercial / Industrial</a></li>
       <li><a href="/calculator.html">Solar Savings Calculator</a></li>
+      <li><a href="/solar-and-finance.php">Solar &amp; Finance</a></li>
     </ul>
   </div>
 
@@ -186,6 +189,8 @@ const INLINE_PARTIALS = {
     Office: Maa Tara, Kilburn Colony, Hinoo, Ranchi, Jharkhand-834002.
   </p>
 </div>
+
+<a class="public-solar-left-fab" href="/solar-and-finance.php" aria-label="Open Solar and Finance planner">Solar &amp; Finance</a>
 
 <div class="floating-support" data-floating-actions>
   <button
