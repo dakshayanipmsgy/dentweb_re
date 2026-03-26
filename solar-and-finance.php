@@ -144,7 +144,17 @@ $defaults = $settings['defaults'] ?? [];
     const findOnGrid=size=>onGrid.find(r=>Number(r.size_kw)===Math.round(size))||onGrid[0]||null;
     const hybridRowsForSize=size=>hybrid.filter(r=>Number(r.size_kw)===Math.round(size));
     const setField=(id,val)=>{if(!el[id])return; isProgrammaticUpdate=true; el[id].value=val; isProgrammaticUpdate=false;};
-    const shouldAutofill=id=>!manualOverride.has(id)||String(el[id]?.value||'').trim()==='';
+    const markUserEdited=(id)=>{
+      if(!el[id]) return;
+      manualOverride.add(id);
+      el[id].dataset.userEdited='true';
+    };
+    const clearUserEdited=(id)=>{
+      if(!el[id]) return;
+      manualOverride.delete(id);
+      el[id].dataset.userEdited='false';
+    };
+    const shouldAutofill=id=>!manualOverride.has(id);
     const getScenarioPrices=row=>{
       if(!row){return {up2:0,self:0,above2:0};}
       const up2=Math.max(num(row.loan_upto_2_lacs),0);
@@ -280,6 +290,7 @@ $defaults = $settings['defaults'] ?? [];
     function resetAllFields(){
       manualOverride.clear();
       Object.entries(defaultState).forEach(([key,val])=>setField(key,val));
+      debouncedIds.forEach(clearUserEdited);
       [el.inverterKva,el.phase,el.batteryCount].forEach(node=>{node.innerHTML='';});
       clearResults();
       recalculateSolarFinance({changedField:'reset'});
@@ -287,7 +298,7 @@ $defaults = $settings['defaults'] ?? [];
 
     function bindInput(id, eventName){
       el[id].addEventListener(eventName,()=>{
-        if(!isProgrammaticUpdate) manualOverride.add(id);
+        if(!isProgrammaticUpdate) markUserEdited(id);
         const run=()=>recalculateSolarFinance({changedField:id});
         if(eventName==='input' && debouncedIds.includes(id) && id!=='systemType'){clearTimeout(debounceTimer); debounceTimer=setTimeout(run,220); return;}
         run();
