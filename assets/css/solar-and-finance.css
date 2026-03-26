@@ -1,0 +1,12 @@
+.solar-finance-page{width:100%;max-width:none;padding:1rem 1rem 3rem;background:#f8fafc;font-family:Poppins,system-ui,sans-serif}
+.sf-hero,.sf-section{width:100%;max-width:none;border-radius:18px;background:#fff;padding:1.2rem 1.25rem;margin-bottom:1rem;box-shadow:0 8px 20px rgba(15,23,42,.06)}
+.sf-hero{background:linear-gradient(135deg,#0f172a,#1d4ed8);color:#fff}
+.sf-hero-pills{display:flex;flex-wrap:wrap;gap:.6rem}.sf-hero-pills span{background:rgba(255,255,255,.15);padding:.35rem .75rem;border-radius:999px}
+.sf-grid{display:grid;gap:1rem}.sf-grid-2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}.sf-grid-3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}.sf-grid-4{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.sf-card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:1rem;display:grid;gap:.55rem}
+.sf-form-grid{display:grid;gap:1rem}.sf-form-grid label{display:grid;gap:.35rem;font-size:.94rem;color:#334155}.sf-form-grid input,.sf-form-grid select{border:1px solid #cbd5e1;border-radius:10px;padding:.58rem .65rem;font:inherit}
+.sf-action-row{display:flex;justify-content:flex-start}.sf-note{margin:0;color:#64748b;font-size:.85rem}.sf-summary{background:#ecfeff;border:1px solid #a5f3fc;padding:.8rem;border-radius:12px;margin-bottom:1rem}
+.sf-advanced summary{cursor:pointer;font-weight:600}.sf-advanced-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.8rem;margin-top:.8rem}
+.sf-cta{text-align:center}
+.solar-fab-left{position:fixed;left:14px;bottom:80px;z-index:1000;background:#0ea5e9;color:#fff;padding:.7rem .9rem;border-radius:999px;box-shadow:0 12px 24px rgba(14,165,233,.35);text-decoration:none;font-weight:700;font-size:.85rem}
+@media(min-width:1200px){.solar-finance-page{padding:1.25rem 2rem 3rem}}
