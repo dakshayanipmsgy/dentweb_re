@@ -346,19 +346,6 @@ $schemaContext = [
       </div>
     </section>
 
-    <section class="section">
-      <div class="container">
-        <div class="capability-card" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;background:linear-gradient(120deg,#0f172a,#1d4ed8);color:#fff;">
-          <div>
-            <span class="capability-kicker" style="color:#bfdbfe;">New Public Tool</span>
-            <h3 style="color:#fff;margin-bottom:.35rem;">Solar and Finance</h3>
-            <p style="color:#dbeafe;max-width:760px;">Know your suitable solar size, compare finance options, view 25-year impact, and request a quotation on WhatsApp.</p>
-          </div>
-          <a class="btn btn-secondary" href="/solar-and-finance.php" style="white-space:nowrap;"><i class="fa-solid fa-solar-panel"></i> Open Solar &amp; Finance</a>
-        </div>
-      </div>
-    </section>
-
     <div data-home-sections hidden>
       <div data-home-sections-list></div>
     </div>

@@ -515,10 +515,6 @@ $cardConfigs[] = [
           <i class="fa-solid fa-newspaper" aria-hidden="true"></i>
           Blog Manager
         </a>
-        <a href="<?= htmlspecialchars($pathFor('admin-solar-finance-settings.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
-          <i class="fa-solid fa-solar-panel" aria-hidden="true"></i>
-          Solar &amp; Finance
-        </a>
         <button type="button" class="btn btn-ghost" data-theme-toggle>
           <i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i>
           Theme
