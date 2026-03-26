@@ -408,10 +408,11 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
 ?>
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quotation</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 :root{--color-primary:<?= htmlspecialchars((string)($colors['primary'] ?? '#0ea5e9'), ENT_QUOTES) ?>;--color-accent:<?= htmlspecialchars((string)($colors['accent'] ?? '#22c55e'), ENT_QUOTES) ?>;--color-text:<?= htmlspecialchars((string)($colors['text'] ?? '#0f172a'), ENT_QUOTES) ?>;--color-muted:<?= htmlspecialchars((string)($colors['muted_text'] ?? '#475569'), ENT_QUOTES) ?>;--page-bg:<?= htmlspecialchars((string)($colors['page_bg'] ?? '#f8fafc'), ENT_QUOTES) ?>;--card-bg:<?= htmlspecialchars((string)($colors['card_bg'] ?? '#ffffff'), ENT_QUOTES) ?>;--border-color:<?= htmlspecialchars((string)($colors['border'] ?? '#e2e8f0'), ENT_QUOTES) ?>;--base-font-size:<?= (int)($typo['base_px'] ?? 14) ?>px;--h1-size:<?= (int)($typo['h1_px'] ?? 24) ?>px;--h2-size:<?= (int)($typo['h2_px'] ?? 18) ?>px;--h3-size:<?= (int)($typo['h3_px'] ?? 16) ?>px;--line-height:<?= (float)($typo['line_height'] ?? 1.6) ?>;--shadow-preset:<?= quotation_shadow_css((string)($tokens['shadow'] ?? 'soft')) ?>;--header-bg:<?= htmlspecialchars($headerBg, ENT_QUOTES) ?>;--footer-bg:<?= htmlspecialchars($footerBg, ENT_QUOTES) ?>;--header-text-color:<?= htmlspecialchars($headerText, ENT_QUOTES) ?>;--footer-text-color:<?= htmlspecialchars($footerText, ENT_QUOTES) ?>}
 body{font-family:Inter,Arial,sans-serif;background:var(--page-bg);margin:0;color:var(--color-text);font-size:var(--base-font-size);line-height:var(--line-height)}
-h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-size)}.wrap{max-width:1100px;margin:0 auto;padding:12px}.card{background:var(--card-bg);border:1px solid var(--border-color);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow-preset)}.h{font-weight:700}.sec{border-bottom:2px solid var(--color-primary);padding-bottom:5px;margin-bottom:8px}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bank-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.metric{background:var(--page-bg);border:1px solid var(--border-color);border-radius:10px;padding:8px}.hero{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.hero .metric b{display:block;font-size:1.2rem;margin-top:4px}.save-line{margin-top:10px;padding:10px 12px;border:1px solid #86efac;background:#f0fdf4;color:#166534;border-radius:10px;font-weight:700}.chip{background:#ccfbf1;color:#134e4a;border-radius:99px;padding:5px 10px;display:inline-block;margin:3px 6px 0 0}.quote-status-row{display:flex;justify-content:flex-end;align-items:center;padding-top:10px;padding-bottom:10px}.quote-status-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 11px;font-size:.86em;font-weight:700;letter-spacing:.01em;border:1px solid transparent}.quote-status-badge.draft{background:#fff7ed;color:#9a3412;border-color:#fed7aa}.quote-status-badge.accepted{background:#ecfdf3;color:#166534;border-color:#bbf7d0}.quote-meta-dates{margin-top:4px;font-size:.85em;line-height:1.5;text-align:right}.quote-meta-dates div{margin-top:2px}.muted{color:var(--color-muted)}.item-master-description{color:var(--color-muted);font-size:.88em;line-height:1.45;margin-top:2px;white-space:normal;word-break:break-word}.item-custom-description{color:#1e293b;font-size:.9em;line-height:1.5;margin-top:4px;font-weight:600;white-space:normal;word-break:break-word}table{width:100%;border-collapse:collapse}th,td{border:1px solid var(--border-color);padding:8px;text-align:left}th{background:#f8fafc}.right{text-align:right}.center{text-align:center}.pricing-gross-row td{font-weight:700;font-size:1.1em}.footer{background:var(--footer-bg);color:var(--footer-text-color)}.footer a,.footer a:visited{color:var(--footer-text-color)}.footer-brand-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}.footer-logo{display:inline-flex;align-items:center;justify-content:center}.footer-logo img{max-height:38px;width:auto;display:block}.footer-brand-name{color:var(--footer-text-color);font-size:1.1em;font-weight:700;line-height:1.3}.header{background:var(--header-bg);color:var(--header-text-color)}.header a,.header a:visited{color:var(--header-text-color)}.header-top{display:flex;align-items:center;gap:12px}.header-logo{background:rgba(255,255,255,.18);padding:4px 8px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center}.header-logo img{max-height:50px;width:auto;display:block}.header-main{min-width:0}.screen-only{display:block}.hide-print{display:block}.chart-block{margin-bottom:12px;break-inside:avoid;page-break-inside:avoid}.chart-title{font-weight:700;margin:2px 0 8px}.chart-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}.legend-item{display:flex;align-items:center;gap:6px;font-size:.92rem}.legend-swatch{width:12px;height:12px;border-radius:3px;display:inline-block}.bar-chart,.bar-chart *{box-sizing:border-box}.bar-chart{position:relative;overflow:hidden;display:flex;align-items:flex-end;justify-content:space-around;gap:10px;min-height:220px;padding:10px 12px 14px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.bar-wrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;min-width:0}.bar-area{height:160px;width:100%;padding:8px 8px 0;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}.bar{width:min(52px,100%);max-height:100%;border-radius:8px 8px 4px 4px;min-height:2px}.bar-label{font-size:.82rem;text-align:center;line-height:1.35;width:100%;overflow-wrap:anywhere}.axis-label{font-size:.82rem;color:var(--color-muted);text-align:center;margin-top:6px}.line-chart svg{width:100%;height:220px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.chart-print-img{display:none;width:100%;height:auto;max-width:100%;border:1px solid var(--border-color);border-radius:10px;background:#fff}.payback-meter{width:100%;height:16px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px}.payback-meter-fill{height:100%;background:linear-gradient(to right,var(--color-primary),var(--color-accent));width:0}.scenario-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}@media (max-width:700px){.header-top{flex-direction:column;align-items:flex-start}.footer-brand-row{align-items:flex-start}.scenario-grid{grid-template-columns:1fr}.bank-grid{grid-template-columns:1fr}.quote-status-row{justify-content:flex-start}}@media print{.hide-print,.screen-only{display:none!important}.card{break-inside:avoid;box-shadow:none}.chart-block,.bar-chart,.line-chart{overflow:visible!important;height:auto!important}.bar-chart,.line-chart svg{display:none!important}.chart-print-img{display:block!important}.item-master-description,.item-custom-description{white-space:normal;word-break:break-word;line-height:1.45}}</style>
+h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-size)}.wrap{max-width:1100px;margin:0 auto;padding:12px}.card{background:var(--card-bg);border:1px solid var(--border-color);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow-preset)}.h{font-weight:700}.sec{border-bottom:2px solid var(--color-primary);padding-bottom:5px;margin-bottom:8px}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bank-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.metric{background:var(--page-bg);border:1px solid var(--border-color);border-radius:10px;padding:8px}.hero{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.hero .metric b{display:block;font-size:1.2rem;margin-top:4px}.save-line{margin-top:10px;padding:10px 12px;border:1px solid #86efac;background:#f0fdf4;color:#166534;border-radius:10px;font-weight:700}.chip{background:#ccfbf1;color:#134e4a;border-radius:99px;padding:5px 10px;display:inline-block;margin:3px 6px 0 0}.quote-status-row{display:flex;justify-content:flex-end;align-items:center;padding-top:10px;padding-bottom:10px}.quote-status-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 11px;font-size:.86em;font-weight:700;letter-spacing:.01em;border:1px solid transparent}.quote-status-badge.draft{background:#fff7ed;color:#9a3412;border-color:#fed7aa}.quote-status-badge.accepted{background:#ecfdf3;color:#166534;border-color:#bbf7d0}.quote-meta-dates{margin-top:4px;font-size:.85em;line-height:1.5;text-align:right}.quote-meta-dates div{margin-top:2px}.muted{color:var(--color-muted)}.item-master-description{color:var(--color-muted);font-size:.88em;line-height:1.45;margin-top:2px;white-space:normal;word-break:break-word}.item-custom-description{color:#1e293b;font-size:.9em;line-height:1.5;margin-top:4px;font-weight:600;white-space:normal;word-break:break-word}table{width:100%;border-collapse:collapse}th,td{border:1px solid var(--border-color);padding:8px;text-align:left}th{background:#f8fafc}.right{text-align:right}.center{text-align:center}.pricing-gross-row td{font-weight:700;font-size:1.1em}.footer{background:var(--footer-bg);color:var(--footer-text-color)}.footer a,.footer a:visited{color:var(--footer-text-color)}.footer-brand-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}.footer-logo{display:inline-flex;align-items:center;justify-content:center}.footer-logo img{max-height:38px;width:auto;display:block}.footer-brand-name{color:var(--footer-text-color);font-size:1.1em;font-weight:700;line-height:1.3}.header{background:var(--header-bg);color:var(--header-text-color)}.header a,.header a:visited{color:var(--header-text-color)}.header-top{display:flex;align-items:center;gap:12px}.header-logo{background:rgba(255,255,255,.18);padding:4px 8px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center}.header-logo img{max-height:50px;width:auto;display:block}.header-main{min-width:0}.screen-only{display:block}.hide-print{display:block}.chart-block{margin-bottom:12px;break-inside:avoid;page-break-inside:avoid}.chart-title{font-weight:700;margin:2px 0 8px}.chart-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}.legend-item{display:flex;align-items:center;gap:6px;font-size:.92rem}.legend-swatch{width:12px;height:12px;border-radius:3px;display:inline-block}.bar-chart,.bar-chart *{box-sizing:border-box}.bar-chart{position:relative;overflow:hidden;display:flex;align-items:flex-end;justify-content:space-around;gap:10px;min-height:220px;padding:10px 12px 14px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.bar-wrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;min-width:0}.bar-area{height:160px;width:100%;padding:8px 8px 0;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}.bar{width:min(52px,100%);max-height:100%;border-radius:8px 8px 4px 4px;min-height:2px}.bar-label{font-size:.82rem;text-align:center;line-height:1.35;width:100%;overflow-wrap:anywhere}.axis-label{font-size:.82rem;color:var(--color-muted);text-align:center;margin-top:6px}.line-chart svg{width:100%;height:220px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.chart-print-img{display:none;width:100%;height:auto;max-width:100%;border:1px solid var(--border-color);border-radius:10px;background:#fff}.sf-glance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}.sf-glance-group{background:#f8faff;border:1px solid #dbe6f7;border-radius:12px;padding:10px}.sf-glance-group h3{margin:0 0 8px;font-size:1rem}.sf-glance-list{display:grid;gap:4px}.sf-glance-item{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px dashed #d8e1ef}.sf-glance-item:last-child{border-bottom:none}.sf-glance-label{font-weight:600;color:#23324d;font-size:.88rem}.sf-glance-value{font-weight:700;text-align:right}.sf-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}.sf-finance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px}.sf-finance-grid ul{margin:.4rem 0 0;padding-left:1rem}.payback-meter{width:100%;height:16px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px}.payback-meter-fill{height:100%;background:linear-gradient(to right,var(--color-primary),var(--color-accent));width:0}.scenario-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}@media (max-width:700px){.header-top{flex-direction:column;align-items:flex-start}.footer-brand-row{align-items:flex-start}.scenario-grid{grid-template-columns:1fr}.bank-grid{grid-template-columns:1fr}.quote-status-row{justify-content:flex-start}}@media print{.hide-print,.screen-only{display:none!important}.card{break-inside:avoid;box-shadow:none}.chart-block,.bar-chart,.line-chart{overflow:visible!important;height:auto!important}canvas{display:none!important}.chart-print-img{display:block!important}.item-master-description,.item-custom-description{white-space:normal;word-break:break-word;line-height:1.45}}</style>
 </head><body><div id="quotation-root" class="wrap">
 <section class="card header"><div class="header-top"><?php if ($hasLogo): ?><div class="header-logo"><img src="<?= htmlspecialchars($logoSrc, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($companyName, ENT_QUOTES) ?> logo" /></div><?php endif; ?><div class="header-main"><div class="h"><?= htmlspecialchars($companyName, ENT_QUOTES) ?></div><div><?= htmlspecialchars((string)($company['address_line'] ?? ''), ENT_QUOTES) ?>, <?= htmlspecialchars((string)($company['city'] ?? ''), ENT_QUOTES) ?></div><div><?= implode(' | ', $phoneBits) ?><?= $phoneBits !== [] ? ' | ' : '' ?>✉️ <?= htmlspecialchars((string)($company['email_primary'] ?? ''), ENT_QUOTES) ?> · 🌐 <?= htmlspecialchars($website, ENT_QUOTES) ?><?= $waLink !== '' ? ' · <a href="' . htmlspecialchars($waLink, ENT_QUOTES) . '">Chat</a>' : '' ?></div><div>GSTIN <?= htmlspecialchars((string)($company['gstin'] ?? ''), ENT_QUOTES) ?> · UDYAM <?= htmlspecialchars((string)($company['udyam'] ?? ''), ENT_QUOTES) ?> · PAN <?= htmlspecialchars((string)($company['pan'] ?? ''), ENT_QUOTES) ?></div><div>Quote No <b><?= htmlspecialchars((string)($quote['quote_no'] ?? ''), ENT_QUOTES) ?></b></div></div></div></section>
 <section class="card quote-status-row"><div><span class="quote-status-badge <?= htmlspecialchars($statusBadgeClass, ENT_QUOTES) ?>">Status: <?= htmlspecialchars($statusBadgeLabel, ENT_QUOTES) ?></span><div class="quote-meta-dates muted"><div>Quotation Date: <?= htmlspecialchars($quotationDateDisplay, ENT_QUOTES) ?></div><div>Valid Until: <?= htmlspecialchars($validUntilDisplay, ENT_QUOTES) ?></div></div></div></section>
@@ -422,31 +423,11 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <section class="card"><div class="h sec">📦 Item summary</div><table><thead><tr><th>Sr No</th><th>Item and Description</th><th>HSN</th><th class="center">Quantity</th><th class="center">Unit</th></tr></thead><tbody><?php if ($itemRows === []): ?><tr><td colspan="5" class="center muted">No line items added.</td></tr><?php else: foreach ($itemRows as $idx => $item): ?><tr><td><?= (int)$idx + 1 ?></td><td><div><?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?></div><?php $itemDesc=(string)($item['description'] ?? ''); if (trim($itemDesc) !== ''): ?><div class="item-master-description"><?= nl2br(htmlspecialchars($itemDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?><?php $customDesc=(string)($item['custom_description'] ?? ''); if (trim($customDesc) !== ''): ?><div class="item-custom-description">📝 <?= nl2br(htmlspecialchars($customDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?></td><td><?= htmlspecialchars((string)($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['qty'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
 <?php if($specialReq!==''): ?><section class="card"><div class="h sec">✍️ Special Requests From Consumer (Inclusive in the rate)</div><div><?= quotation_sanitize_html($specialReq) ?></div><div><i>In case of conflict between annexures and special requests, special requests will be prioritized.</i></div></section><?php endif; ?>
 <section class="card"><div class="h sec">💰 Pricing summary</div><table><thead><tr><th>#</th><th>Particular</th><th class="right">Amount</th></tr></thead><tbody><tr><td>1</td><td>Total system price incl GST</td><td class="right"><?= quotation_format_inr_indian((float)($calc['system_total_incl_gst_rs'] ?? $quote['input_total_gst_inclusive'] ?? 0), $showDecimals) ?></td></tr><tr><td>2</td><td>Transportation</td><td class="right"><?= quotation_format_inr_indian((float)($calc['transportation_rs'] ?? 0), $showDecimals) ?></td></tr><?php if ($discountApplicable): ?><tr><td>3</td><td>Discount<?php $discountNote=(string)($calc['discount_note'] ?? ''); if(trim($discountNote)!==''): ?><div class="muted" style="font-size:.85em;margin-top:2px"><?= htmlspecialchars($discountNote, ENT_QUOTES) ?></div><?php endif; ?></td><td class="right">- <?= quotation_format_inr_indian($discountRsDisplay, $showDecimals) ?></td></tr><?php endif; ?><tr class="pricing-gross-row"><td><?= $discountApplicable ? '4' : '3' ?></td><td><?= htmlspecialchars($grossPayableLabel, ENT_QUOTES) ?></td><td class="right" id="upfront"></td></tr><tr><td><?= $discountApplicable ? '5' : '4' ?></td><td>Subsidy expected</td><td class="right"><?= quotation_format_inr_indian((float)($calc['subsidy_expected_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td><?= $discountApplicable ? '6' : '5' ?></td><td><b>Net Investment/Cost After Subsidy Credit</b></td><td class="right"><b id="upfrontNet"></b></td></tr></tbody></table></section>
-<section class="card"><div class="h sec">📊 Charts &amp; graphics</div>
-<div class="chart-block">
-<div class="chart-title">Monthly Outflow Comparison</div>
-<div id="monthlyOutflowChart" class="bar-chart"></div><img id="monthlyOutflowChartPrint" class="chart-print-img" alt="Monthly outflow comparison chart for print">
-<div class="axis-label">Scenario</div>
-<div class="axis-label">Monthly Outflow (₹)</div>
-<div id="monthlyOutflowLegend" class="chart-legend"></div>
-</div>
-<div class="chart-block">
-<div class="chart-title">Cumulative Expense Over 25 Years</div>
-<div id="cumulativeLegend" class="chart-legend"></div>
-<div class="line-chart"><svg id="cumulativeExpenseChart" viewBox="0 0 920 220" preserveAspectRatio="none"></svg><img id="cumulativeExpenseChartPrint" class="chart-print-img" alt="Cumulative expense chart for print"></div>
-<div class="axis-label">Years</div>
-<div class="axis-label">Cumulative Expense (₹)</div>
-</div>
-<div class="chart-block">
-<div class="chart-title">Payback Meter</div>
-<div class="scenario-grid">
-<div class="metric">Payback meter (Solar — Loan)<b id="paybackLoan">-</b><div class="payback-meter"><div class="payback-meter-fill" id="paybackLoanMeterFill"></div></div></div>
-<div class="metric">Payback meter (Self Funded)<b id="paybackSelf">-</b><div class="payback-meter"><div class="payback-meter-fill" id="paybackSelfMeterFill"></div></div></div>
-</div>
-</div>
-</section>
-<section class="card"><div class="h sec">🏦 Finance clarity</div><div class="muted" style="font-size:.85em;margin-bottom:8px">Assumptions: ₹<?= number_format((float)($financialClarity['unit_rate_rs_per_kwh'] ?? 0), 2) ?>/unit, <?= number_format((float)($financialClarity['annual_generation_kwh_per_kw'] ?? 0), 0) ?> kWh/kWp/year, <?= number_format((float)($financialClarity['loan_interest_rate_percent'] ?? 0), 2) ?>% for <?= (int)($financialClarity['loan_tenure_months'] ?? 0) ?> months, loan cap ₹<?= number_format((float)($financialClarity['loan_cap_rs'] ?? 0), 0) ?></div><div class="scenario-grid"><div class="metric"><b>With Loan</b><div style="margin-top:6px">Margin<b id="margin">-</b></div><div>Loan eligible<b id="loan">-</b></div><div>Effective principal<b id="loanEff">-</b></div><div>EMI<b id="emi">-</b></div><div>Residual bill<b id="residual">-</b></div><div>Total outflow<b id="outflow">-</b></div></div><div class="metric"><b>Self Funded</b><div style="margin-top:6px">Upfront investment<b id="upfrontFinance">-</b></div><div>Investment minus subsidy<b id="upfrontNetFinance">-</b></div><div>Residual bill<b id="selfResidual">-</b></div></div></div></section>
-<section class="card"><div class="h sec">🔆 Generation estimate</div><table><tbody><tr><th>Expected monthly generation (units)</th><td class="right" id="genMonthly">-</td></tr><tr><th>Expected annual generation (units)</th><td class="right" id="genAnnual">-</td></tr><tr><th>Estimated payback period (years)</th><td class="right" id="genPayback">-</td></tr><tr><th>Units produced in 25 years (units)</th><td class="right" id="gen25">-</td></tr><tr><th>₹ saved in 25 years (today’s rate)</th><td class="right" id="gen25Savings">-</td></tr></tbody></table></section>
+<section class="card sf-glance-wrap"><div class="h sec">☀️ Solar at a Glance</div><div class="sf-glance-grid" id="glancePanel"></div></section>
+<section class="card"><div class="h sec">📊 Monthly Outflow Comparison</div><canvas id="monthlyChart" height="130"></canvas><img id="monthlyChartPrint" class="chart-print-img" alt="Monthly outflow chart for print"></section>
+<section class="card"><div class="h sec">📈 Cumulative Expense Over 25 Years</div><canvas id="cumulativeChart" height="130"></canvas><img id="cumulativeChartPrint" class="chart-print-img" alt="Cumulative expense chart for print"></section>
+<section class="card"><div class="h sec">⏱️ Payback Meters</div><div id="paybackMeters" class="sf-kpis"></div></section>
+<section class="card"><div class="h sec">🏦 Financial Clarity</div><div class="muted" style="font-size:.85em;margin-bottom:8px">Assumptions: ₹<?= number_format((float)($financialClarity['unit_rate_rs_per_kwh'] ?? 0), 2) ?>/unit, <?= number_format((float)($financialClarity['annual_generation_kwh_per_kw'] ?? 0), 0) ?> kWh/kWp/year, <?= number_format((float)($financialClarity['loan_interest_rate_percent'] ?? 0), 2) ?>% for <?= (int)($financialClarity['loan_tenure_months'] ?? 0) ?> months.</div><div id="financeBoxes" class="sf-finance-grid"></div></section>
 <section class="card"><div class="h sec">🌱 Your Green Impact</div><div class="grid4"><div class="metric">CO₂/year<b id="co2y">-</b></div><div class="metric">Trees/year<b id="treey">-</b></div><div class="metric">CO₂ over 25 years<b id="co225">-</b></div><div class="metric">Trees over 25 years<b id="tree25">-</b></div></div></section>
 <section class="card"><div class="h sec">⭐ Why <?= htmlspecialchars($companyName, ENT_QUOTES) ?></div><ul><?php foreach ($whyPoints as $point): ?><li><?= htmlspecialchars((string)$point, ENT_QUOTES) ?></li><?php endforeach; ?></ul></section>
 <section class="card"><div class="h sec">📑 Annexures</div><?php foreach(['warranty'=>'Warranty','system_inclusions'=>'System inclusions','pm_subsidy_info'=>'PM subsidy info','completion_milestones'=>'Completion milestones','payment_terms'=>'Payment terms','system_type_explainer'=>'System Type explainer (ongrid vs hybrid vs offgrid)','transportation'=>'Transportation','terms_conditions'=>'Terms and conditions'] as $k=>$label): ?><?php $annVal = trim((string)($ann[$k] ?? '')); if ($annVal === '') { continue; } ?><div class="metric"><div class="h"><?= htmlspecialchars($label, ENT_QUOTES) ?></div><div><?= quotation_sanitize_html($annVal) ?></div></div><?php endforeach; ?></section>
@@ -470,136 +451,165 @@ const q={
   loanEff:<?= json_encode((float)($financialClarity['effective_principal_rs'] ?? 0)) ?>,
   emi:<?= json_encode((float)($financialClarity['emi_rs'] ?? 0)) ?>,
   residual:<?= json_encode((float)($financialClarity['residual_bill'] ?? 0)) ?>,
-  out:<?= json_encode((float)($financialClarity['loan_total_outflow_rs'] ?? 0)) ?>
+  out:<?= json_encode((float)($financialClarity['loan_total_outflow_rs'] ?? 0)) ?>,
+  systemType:<?= json_encode((string)($quote['system_type'] ?? 'Ongrid')) ?>,
+  mainSolar:<?= json_encode($hasMainSolarSplit ? $mainSolarKwp : null) ?>,
+  complimentarySolar:<?= json_encode($hasMainSolarSplit ? $complimentarySolarKwp : null) ?>,
+  loanEnabled:<?= json_encode((bool)($savingsSnapshot['bank_loan_enabled'] ?? true)) ?>,
+  loanTenureMonths:<?= json_encode($loanTenureMonths) ?>,
+  loanInterest:<?= json_encode($loanInterest) ?>,
+  inverterKva:<?= json_encode((string)($quote['hybrid_inverter_kva'] ?? $quote['inverter_kva'] ?? '')) ?>,
+  batteryCount:<?= json_encode((string)($quote['hybrid_battery_count'] ?? $quote['battery_count'] ?? '')) ?>,
+  phase:<?= json_encode((string)($quote['hybrid_phase'] ?? $quote['phase'] ?? '')) ?>,
+  transport:<?= json_encode((float)($calc['transportation_rs'] ?? 0)) ?>,
+  discount:<?= json_encode((float)($calc['discount_rs'] ?? 0)) ?>,
+  loanAmountRaw:<?= json_encode((float)($quote['finance_inputs']['loan']['loan_amount'] ?? 0)) ?>,
+  annualGenerationPerKw:<?= json_encode($annualGeneration) ?>
 };
 const showDecimals=<?= json_encode($showDecimals) ?>;
-const r=x=>'₹'+Number(x).toLocaleString('en-IN',{minimumFractionDigits:showDecimals?2:0,maximumFractionDigits:showDecimals?2:0});
-const nUnits=x=>Number(x).toLocaleString('en-IN',{maximumFractionDigits:0});
-const setMetric=(id,value,formatter)=>{
-  const el=document.getElementById(id);
-  if(!el){return;}
-  if(!Number.isFinite(value)){el.textContent='—';return;}
-  el.textContent=formatter(value);
+const r=x=>'₹'+Number(x||0).toLocaleString('en-IN',{minimumFractionDigits:showDecimals?2:0,maximumFractionDigits:showDecimals?2:0});
+const nUnits=x=>Number(x||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+const num=v=>{const n=Number(v);return Number.isFinite(n)?n:0;};
+const monthlyBill=Math.max(0,num(q.monthly));
+const residual=Math.max(0,num(q.residual));
+const gross=Math.max(0,num(q.gross));
+const subsidy=Math.max(0,num(q.subsidy));
+const loanEligible=Math.max(0,num(q.loan));
+const margin=Math.max(0,num(q.margin));
+const emi=Math.max(0,num(q.emi));
+const outflowLoan=Math.max(0,num(q.out));
+const tenureMonths=Math.max(1,Math.round(num(q.loanTenureMonths)||120));
+const upfrontNet=Math.max(0,gross-subsidy);
+const monthlySaving=Math.max(0,monthlyBill-residual);
+const annualSaving=monthlySaving*12;
+const saving25=annualSaving*25;
+const annualUnits=Math.max(0,num(q.cap)*num(q.annualGenerationPerKw));
+const monthlyUnits=annualUnits/12;
+const units25=annualUnits*25;
+const roofArea= Math.max(0,num(q.cap)*100);
+const billOffset=Math.min(100,(monthlyBill>0?(monthlyUnits*num(q.unit))/monthlyBill*100:0));
+const annualCo2=annualUnits*<?= json_encode($emissionFactor) ?>;
+const co225=annualCo2*25;
+const treeFactor=Math.max(0.1,<?= json_encode($treeAbsorption) ?>);
+const annualTrees=annualCo2/treeFactor;
+const trees25=co225/treeFactor;
+const loanBaseline=Math.max(0,margin>0?margin:Math.max(0,gross-loanEligible));
+const monthlyOutflowSelf=residual;
+const hasLoanScenario=!!q.loanEnabled && (loanEligible>0 || emi>0 || outflowLoan>0);
+
+const setText=(id,val)=>{const node=document.getElementById(id);if(node){node.textContent=val;}};
+setText('upfront',r(gross));
+setText('upfrontNet',r(upfrontNet));
+setText('heroOutflowBank',hasLoanScenario?r(outflowLoan):'—');
+setText('heroOutflowSelf',r(monthlyOutflowSelf));
+setText('heroSaving',r(monthlySaving));
+
+const fmtMonths=(months)=>{
+  if(!Number.isFinite(months)||months<0) return '—';
+  if(months>25*12) return 'Not within 25 years';
+  const y=Math.floor(months/12);
+  const m=months%12;
+  if(y===0) return `${m} month${m===1?'':'s'}`;
+  if(m===0) return `${y} year${y===1?'':'s'}`;
+  return `${y} year${y===1?'':'s'} ${m} month${m===1?'':'s'}`;
 };
-const margin=q.margin,loan=q.loan,loanEff=q.loanEff,emi=q.emi,res=q.residual,out=q.out;
-const loanMarginBaseline=(Number.isFinite(margin)&&margin>0)?margin:Math.max(0,q.gross-loan);
-['margin','loan','loanEff','emi','residual','outflow','selfResidual'].forEach((id)=>{const map={margin,loan,loanEff,emi,residual:res,outflow:out,selfResidual:res};const el=document.getElementById(id);if(el)el.textContent=r(map[id]);});
-const upfrontNet=Math.max(0,q.gross-q.subsidy);
-const financeMap={upfront:q.gross,upfrontNet,upfrontFinance:q.gross,upfrontNetFinance:upfrontNet};
-Object.keys(financeMap).forEach((id)=>{const el=document.getElementById(id);if(el)el.textContent=r(financeMap[id]);});
-const heroSaving=Math.max(0,q.monthly-res);document.getElementById('heroOutflowBank').textContent=r(out);document.getElementById('heroOutflowSelf').textContent=r(res);document.getElementById('heroSaving').textContent=r(heroSaving);
-const invested=q.subsidyProvided?Math.max(0,upfrontNet):q.gross;
-const monthlySavingsSelf=q.monthly-res;
-const monthlySavingsLoan=q.monthly-out;
-const upfrontLoan=Math.max(0,loanMarginBaseline);
-const paybackSelfYears=Number.isFinite(monthlySavingsSelf)&&monthlySavingsSelf>0?(invested/monthlySavingsSelf)/12:NaN;
-const paybackLoanYears=Number.isFinite(monthlySavingsLoan)&&monthlySavingsLoan>0?(upfrontLoan/monthlySavingsLoan)/12:NaN;
-const paybackSelfEl=document.getElementById('paybackSelf');
-if(paybackSelfEl){paybackSelfEl.textContent=Number.isFinite(paybackSelfYears)?'~'+paybackSelfYears.toFixed(1)+' years':'—';}
-const paybackLoanEl=document.getElementById('paybackLoan');
-if(paybackLoanEl){paybackLoanEl.textContent=Number.isFinite(paybackLoanYears)?'~'+paybackLoanYears.toFixed(1)+' years':'—';}
-const genPaybackEl=document.getElementById('genPayback');if(genPaybackEl){genPaybackEl.textContent=Number.isFinite(paybackSelfYears)?paybackSelfYears.toFixed(1):'—';}
-const paybackSelfFill=document.getElementById('paybackSelfMeterFill');if(paybackSelfFill){const pct=Number.isFinite(paybackSelfYears)?Math.max(0,Math.min(100,(paybackSelfYears/25)*100)):0;paybackSelfFill.style.width=pct.toFixed(1)+'%';}
-const paybackLoanFill=document.getElementById('paybackLoanMeterFill');if(paybackLoanFill){const pct=Number.isFinite(paybackLoanYears)?Math.max(0,Math.min(100,(paybackLoanYears/25)*100)):0;paybackLoanFill.style.width=pct.toFixed(1)+'%';}
-
-const monthlySeries=[
-  {label:'No Solar',value:Math.max(0,q.monthly),color:'#ef4444'},
-  {label:'With Solar (Loan)',value:Math.max(0,out),color:'#0ea5e9'},
-  {label:'With Solar (Self funded)',value:Math.max(0,res),color:'#22c55e'}
-];
-const monthlyChart=document.getElementById('monthlyOutflowChart');
-const monthlyLegend=document.getElementById('monthlyOutflowLegend');
-if(monthlyChart&&monthlyLegend){
-  const maxVal=Math.max(1,...monthlySeries.map((x)=>x.value));
-  monthlyChart.innerHTML=monthlySeries.map((item)=>{const h=Math.max(2,(item.value/maxVal)*100);return `<div class="bar-wrap"><div class="bar-area"><div class="bar" style="background:${item.color};height:${h}%"></div></div><div class="bar-label">${item.label}<br>${r(item.value)}</div></div>`;}).join('');
-  monthlyLegend.innerHTML=monthlySeries.map((item)=>`<span class="legend-item"><span class="legend-swatch" style="background:${item.color}"></span>${item.label}</span>`).join('');
+const selfPaybackMonths=monthlySaving>0?Math.round((upfrontNet/monthlySaving)):Infinity;
+let loanPaybackMonth=null;
+if(hasLoanScenario){
+  let cumLoan=loanBaseline, cumNoSolar=0;
+  for(let m=1;m<=25*12;m++){cumLoan+=outflowLoan;cumNoSolar+=monthlyBill;if(cumLoan<=cumNoSolar){loanPaybackMonth=m;break;}}
 }
 
-const cumSeries=[
-  {label:'No Solar',color:'#ef4444',points:[]},
-  {label:'With Solar (Loan)',color:'#0ea5e9',points:[]},
-  {label:'With Solar (Self funded)',color:'#22c55e',points:[]}
+const glanceGroups=[
+  {title:'System',rows:[
+    ['Solar system type',q.systemType||'—'],
+    ['Main solar size',q.mainSolar!==null?`${num(q.mainSolar).toFixed(2)} kWp`:`${num(q.cap).toFixed(2)} kWp`],
+    ...(num(q.complimentarySolar)>0?[['Complimentary Non-DCR solar size',`${num(q.complimentarySolar).toFixed(2)} kWp`]]:[]),
+    ['Total capacity',`${num(q.cap).toFixed(2)} kWp`],
+    ...((String(q.systemType).toLowerCase()==='hybrid'&&q.inverterKva)?[['Inverter',`${q.inverterKva} kVA`]]:[]),
+    ...((String(q.systemType).toLowerCase()==='hybrid'&&q.batteryCount)?[['Battery count',String(q.batteryCount)]]:[]),
+    ...((String(q.systemType).toLowerCase()==='hybrid'&&q.phase)?[['Phase',String(q.phase)]]:[]),
+  ]},
+  {title:'Price taken into consideration',rows:[
+    ['Self Funded price',r(gross)],
+    ...(hasLoanScenario?[['Loan price used in quotation',r(gross)]]:[]),
+    ['Subsidy',r(subsidy)],
+    ['Transportation',r(num(q.transport))],
+    ...(num(q.discount)>0?[['Discount',r(num(q.discount))]]:[])
+  ]},
+  {title:'Generation & Savings',rows:[
+    ['Expected monthly generation',`${nUnits(monthlyUnits)} units`],
+    ['Expected annual generation',`${nUnits(annualUnits)} units`],
+    ['Expected generation in 25 years',`${nUnits(units25)} units`],
+    ['Estimated monthly savings',r(monthlySaving)],
+    ['Estimated annual savings',r(annualSaving)],
+    ['Estimated savings in 25 years',r(saving25)]
+  ]},
+  {title:'Payback & Monthly Outflow',rows:[
+    ...(hasLoanScenario?[['Estimated payback period — Loan',fmtMonths(loanPaybackMonth)]]:[]),
+    ['Estimated payback period — Self Funded',fmtMonths(selfPaybackMonths)],
+    ['No Solar',r(monthlyBill)],
+    ...(hasLoanScenario?[['With Solar (Loan)',r(outflowLoan)]]:[]),
+    ['With Solar (Self Funded)',r(monthlyOutflowSelf)]
+  ]},
+  {title:'Feasibility / Impact',rows:[
+    ['Roof area needed',`${roofArea.toFixed(0)} sq.ft`],
+    ['Bill offset %',`${billOffset.toFixed(1)}%`],
+    ['Annual CO₂ reduction',`${annualCo2.toFixed(0)} kg`],
+    ['25-year CO₂ reduction',`${co225.toFixed(0)} kg`],
+    ['Annual trees equivalent',`${annualTrees.toFixed(0)} trees`],
+    ['25-year trees equivalent',`${trees25.toFixed(0)} trees`]
+  ]}
 ];
-for(let y=0;y<=25;y+=1){const m=y*12;cumSeries[0].points.push({x:y,y:m*q.monthly});cumSeries[1].points.push({x:y,y:loanMarginBaseline+(m*out)});cumSeries[2].points.push({x:y,y:q.gross+(m*res)});}
-const svg=document.getElementById('cumulativeExpenseChart');
-const cumLegend=document.getElementById('cumulativeLegend');
-if(svg&&cumLegend){
-  const w=920,h=220,p=26;
-  const allY=cumSeries.flatMap((s)=>s.points.map((pt)=>pt.y));
-  const maxY=Math.max(1,...allY);
-  const xToPx=(x)=>p+((w-(2*p))*x/25);
-  const yToPx=(y)=>h-p-((h-(2*p))*y/maxY);
-  let lines=`<line x1="${p}" y1="${h-p}" x2="${w-p}" y2="${h-p}" stroke="#94a3b8" stroke-width="1"/><line x1="${p}" y1="${p}" x2="${p}" y2="${h-p}" stroke="#94a3b8" stroke-width="1"/>`;
-  for(let yr=0;yr<=25;yr+=5){const x=xToPx(yr);lines+=`<text x="${x}" y="${h-6}" text-anchor="middle" font-size="10" fill="#64748b">${yr}</text>`;}
-  [0,0.25,0.5,0.75,1].forEach((tick)=>{const yVal=maxY*tick;const yy=yToPx(yVal);lines+=`<line x1="${p}" y1="${yy}" x2="${w-p}" y2="${yy}" stroke="#e2e8f0" stroke-width="1"/>`;});
-  cumSeries.forEach((series)=>{const d=series.points.map((pt,i)=>`${i===0?'M':'L'} ${xToPx(pt.x)} ${yToPx(pt.y)}`).join(' ');lines+=`<path d="${d}" fill="none" stroke="${series.color}" stroke-width="2.5"/>`;});
-  svg.innerHTML=lines;
-  cumLegend.innerHTML=cumSeries.map((item)=>`<span class="legend-item"><span class="legend-swatch" style="background:${item.color}"></span>${item.label}</span>`).join('');
+const glancePanel=document.getElementById('glancePanel');
+if(glancePanel){
+  glancePanel.innerHTML=glanceGroups.map(g=>`<article class="sf-glance-group"><h3>${g.title}</h3><div class="sf-glance-list">${g.rows.filter(([,v])=>v!==''&&v!==null&&v!==undefined).map(([l,v])=>`<div class="sf-glance-item"><span class="sf-glance-label">${l}</span><span class="sf-glance-value">${v}</span></div>`).join('')}</div></article>`).join('');
 }
 
+const monthlyLabels=['No Solar'];const monthlyData=[monthlyBill];const monthlyColors=['#9ca3af'];
+if(hasLoanScenario){monthlyLabels.push('With Solar (Loan)');monthlyData.push(outflowLoan);monthlyColors.push('#0f766e');}
+monthlyLabels.push('With Solar (Self Funded)');monthlyData.push(monthlyOutflowSelf);monthlyColors.push('#f59e0b');
+const years=[...Array(26).keys()];
+const cumulativeDatasets=[
+  {label:'No Solar',data:years.map(y=>y*12*monthlyBill),borderColor:'#9ca3af',backgroundColor:'#9ca3af'},
+  ...(hasLoanScenario?[{label:'With Solar (Loan)',data:years.map(y=>{const m=y*12;const emiPart=Math.min(m,tenureMonths)*emi;const residualPart=m*residual;return loanBaseline+emiPart+residualPart;}),borderColor:'#0f766e',backgroundColor:'#0f766e'}]:[]),
+  {label:'With Solar (Self Funded)',data:years.map(y=>gross+y*12*residual),borderColor:'#f59e0b',backgroundColor:'#f59e0b'}
+];
+
+const paybackMeters=document.getElementById('paybackMeters');
+if(paybackMeters){
+  const meterItems=[];
+  if(hasLoanScenario){meterItems.push(['Payback meter (Loan)',fmtMonths(loanPaybackMonth),loanPaybackMonth]);}
+  meterItems.push(['Payback meter (Self Funded)',fmtMonths(selfPaybackMonths),selfPaybackMonths]);
+  paybackMeters.innerHTML=meterItems.map(([label,val,months])=>{const pct=Number.isFinite(months)?Math.max(0,Math.min(100,(months/(25*12))*100)):0;return `<div class="sf-metric"><strong>${label}</strong><div>${val}</div><div class="payback-meter"><div class="payback-meter-fill" style="width:${pct.toFixed(1)}%"></div></div></div>`;}).join('');
+}
+
+const financeBoxes=document.getElementById('financeBoxes');
+if(financeBoxes){
+  const cards=[[ 'No Solar', [['Monthly bill',r(monthlyBill)],['25 year expense',r(monthlyBill*12*25)]] ]];
+  if(hasLoanScenario){cards.push(['Loan scenario',[['System cost',r(gross)],['Subsidy',r(subsidy)],['Margin money',r(loanBaseline)],['Loan amount / effective principal',r(Math.max(0,loanEligible-subsidy))],['EMI',r(emi)],['Residual bill',r(residual)],['Total monthly outflow',r(outflowLoan)],['Monthly saving',r(Math.max(0,monthlyBill-outflowLoan))],['Annual saving',r(Math.max(0,monthlyBill-outflowLoan)*12)]]]);}
+  cards.push(['Self Funded',[['System cost',r(gross)],['Subsidy',r(subsidy)],['Net investment',r(upfrontNet)],['Residual bill',r(residual)],['Total monthly outflow',r(monthlyOutflowSelf)],['Monthly saving',r(monthlySaving)],['Annual saving',r(annualSaving)]]]);
+  financeBoxes.innerHTML=cards.map(([t,rows])=>`<div class='sf-metric'><strong>${t}</strong><ul>${rows.map(([k,v])=>`<li>${k}: <b>${v}</b></li>`).join('')}</ul></div>`).join('');
+}
+
+let monthlyChart=null,cumulativeChart=null;
+const mctx=document.getElementById('monthlyChart');
+if(mctx&&window.Chart){monthlyChart=new Chart(mctx,{type:'bar',data:{labels:monthlyLabels,datasets:[{label:'Monthly Outflow (₹)',data:monthlyData,backgroundColor:monthlyColors}]},options:{plugins:{legend:{display:true}},scales:{x:{title:{display:true,text:'Scenario'}},y:{title:{display:true,text:'Monthly Outflow (₹)'}}}}});}
+const cctx=document.getElementById('cumulativeChart');
+if(cctx&&window.Chart){cumulativeChart=new Chart(cctx,{type:'line',data:{labels:years,datasets:cumulativeDatasets.map(ds=>({...ds,tension:0.2,fill:false,borderWidth:2}))},options:{plugins:{legend:{display:true}},scales:{x:{title:{display:true,text:'Years'}},y:{title:{display:true,text:'Cumulative Expense (₹)'}}}}});}
 
 const buildChartPrintImages=()=>{
-  const monthlyPrintImg=document.getElementById('monthlyOutflowChartPrint');
-  if(monthlyPrintImg){
-    const canvas=document.createElement('canvas');
-    canvas.width=920;
-    canvas.height=320;
-    const ctx=canvas.getContext('2d');
-    if(ctx){
-      ctx.fillStyle='#ffffff';
-      ctx.fillRect(0,0,canvas.width,canvas.height);
-      const maxVal=Math.max(1,...monthlySeries.map((x)=>x.value));
-      const baseY=245;
-      const chartTop=36;
-      const slotW=canvas.width/monthlySeries.length;
-      const barW=72;
-      ctx.strokeStyle='#94a3b8';
-      ctx.lineWidth=1;
-      ctx.beginPath();
-      ctx.moveTo(32,baseY);
-      ctx.lineTo(canvas.width-32,baseY);
-      ctx.stroke();
-      monthlySeries.forEach((item,index)=>{
-        const h=Math.max(2,((item.value/maxVal)*(baseY-chartTop)));
-        const x=(index*slotW)+(slotW/2)-(barW/2);
-        const y=baseY-h;
-        ctx.fillStyle=item.color;
-        ctx.fillRect(x,y,barW,h);
-        ctx.fillStyle='#0f172a';
-        ctx.font='14px Arial';
-        ctx.textAlign='center';
-        ctx.fillText(item.label,(index*slotW)+(slotW/2),275);
-        ctx.fillText(r(item.value),(index*slotW)+(slotW/2),296);
-      });
-      monthlyPrintImg.src=canvas.toDataURL('image/png');
-    }
-  }
-
-  const cumulativeSvg=document.getElementById('cumulativeExpenseChart');
-  const cumulativePrintImg=document.getElementById('cumulativeExpenseChartPrint');
-  if(cumulativeSvg&&cumulativePrintImg){
-    const svgData=new XMLSerializer().serializeToString(cumulativeSvg);
-    const encoded='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svgData);
-    cumulativePrintImg.src=encoded;
-  }
+  const mImg=document.getElementById('monthlyChartPrint');
+  if(mImg&&mctx&&mctx.toDataURL){mImg.src=mctx.toDataURL('image/png');}
+  const cImg=document.getElementById('cumulativeChartPrint');
+  if(cImg&&cctx&&cctx.toDataURL){cImg.src=cctx.toDataURL('image/png');}
 };
-if(document.readyState==='complete'){
-  buildChartPrintImages();
-}else{
-  window.addEventListener('load',buildChartPrintImages,{once:true});
-}
+if(document.readyState==='complete'){setTimeout(buildChartPrintImages,200);}else{window.addEventListener('load',()=>setTimeout(buildChartPrintImages,200),{once:true});}
 window.addEventListener('beforeprint',buildChartPrintImages);
-
-const yearly=q.cap*q.gen;
-const solar=yearly/12;
-const units25=yearly*25;
-const saved25=units25*q.unit;
-const co2=yearly*<?= json_encode($emissionFactor) ?>,tree=co2/Math.max(0.1,<?= json_encode($treeAbsorption) ?>);
-document.getElementById('co2y').textContent=co2.toFixed(0)+' kg';document.getElementById('treey').textContent=tree.toFixed(1);document.getElementById('co225').textContent=(co2*25).toFixed(0)+' kg';document.getElementById('tree25').textContent=(tree*25).toFixed(1);
-setMetric('genMonthly',solar,nUnits);
-setMetric('genAnnual',yearly,nUnits);
-setMetric('gen25',units25,nUnits);
-setMetric('gen25Savings',saved25,r);
+const co2YearEl=document.getElementById('co2y');if(co2YearEl){co2YearEl.textContent=annualCo2.toFixed(0)+' kg';}
+const treeYearEl=document.getElementById('treey');if(treeYearEl){treeYearEl.textContent=annualTrees.toFixed(1);}
+const co225El=document.getElementById('co225');if(co225El){co225El.textContent=co225.toFixed(0)+' kg';}
+const tree25El=document.getElementById('tree25');if(tree25El){tree25El.textContent=trees25.toFixed(1);}
 </script>
 </body></html>
 <?php
