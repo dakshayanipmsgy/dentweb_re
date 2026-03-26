@@ -464,44 +464,42 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
         <input type="checkbox" class="lead-select" name="lead_ids[]" value="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" form="bulk-actions-form" />
       </td>
       <td class="lead-index"><?php echo $index; ?></td>
-      <td class="lead-name-cell">
-        <a href="#" class="lead-name-trigger lead-action" data-action="view_edit" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>"><?php echo leads_safe((string) ($lead['name'] ?? '')); ?></a>
-      </td>
+      <td><?php echo leads_safe((string) ($lead['name'] ?? '')); ?></td>
       <td><a href="tel:<?php echo leads_safe($leadMobileRaw); ?>"><?php echo leads_safe($leadMobileRaw); ?></a></td>
-      <td class="col-secondary"><?php echo leads_safe(leads_value_or_dash($lead, 'email')); ?></td>
-      <td class="col-secondary"><?php echo leads_safe((string) ($lead['city'] ?? '')); ?></td>
-      <td class="col-secondary"><?php echo leads_safe(leads_value_or_dash($lead, 'monthly_bill')); ?></td>
-      <td class="col-secondary"><span class="tag-chip"><?php echo leads_safe(leads_value_or_dash($lead, 'finance_subsidy')); ?></span></td>
-      <td class="col-secondary"><span class="tag-chip"><?php echo leads_safe(leads_value_or_dash($lead, 'property_type')); ?></span></td>
-      <td class="col-secondary"><span class="tag-chip"><?php echo leads_safe(leads_value_or_dash($lead, 'roof_type')); ?></span></td>
-      <td class="col-secondary"><?php echo leads_safe(leads_value_or_dash($lead, 'best_time_to_call')); ?></td>
-      <td class="col-secondary"><?php echo leads_safe(leads_value_or_dash($lead, 'area_pincode')); ?></td>
-      <td class="col-status"><span class="badge pill"><?php echo leads_safe((string) ($lead['status'] ?? '')); ?></span></td>
-      <td class="col-secondary"><?php echo leads_safe((string) ($lead['rating'] ?? '')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'email')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['city'] ?? '')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'monthly_bill')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'finance_subsidy')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'property_type')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'roof_type')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'best_time_to_call')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'area_pincode')); ?></td>
+      <td><span class="badge pill"><?php echo leads_safe((string) ($lead['status'] ?? '')); ?></span></td>
+      <td><?php echo leads_safe((string) ($lead['rating'] ?? '')); ?></td>
       <td><?php echo leads_safe(trim(((string) ($lead['next_followup_date'] ?? '')) . ' ' . ((string) ($lead['next_followup_time'] ?? '')))); ?></td>
       <td><?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?></td>
-      <td class="col-secondary"><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
       <td class="lead-message-status-cell">
         <?php if ($whatsappSent): ?>
-          <span class="badge pill msg-chip" style="background:#dcfce7;color:#166534;">WA</span>
+          <span class="badge pill" style="background:#dcfce7;color:#166534;">WA Intro</span>
         <?php endif; ?>
         <?php if ($emailSent): ?>
-          <span class="badge pill msg-chip" style="background:#dbeafe;color:#1e40af;">EM</span>
+          <span class="badge pill" style="background:#dbeafe;color:#1e40af;">Email Intro</span>
         <?php endif; ?>
         <?php if ($whatsappDetailsSent): ?>
-          <span class="badge pill msg-chip" style="background:#ede9fe;color:#5b21b6;">WA-D</span>
+          <span class="badge pill" style="background:#ede9fe;color:#5b21b6;">WA Details</span>
         <?php endif; ?>
         <?php if ($emailDetailsSent): ?>
-          <span class="badge pill msg-chip" style="background:#ffe4e6;color:#9f1239;">EM-D</span>
+          <span class="badge pill" style="background:#ffe4e6;color:#9f1239;">Email Details</span>
         <?php endif; ?>
         <?php if (!$whatsappSent && !$emailSent && !$whatsappDetailsSent && !$emailDetailsSent): ?>
           <span style="color:#9ca3af;">&mdash;</span>
         <?php endif; ?>
       </td>
       <td><?php echo leads_safe((string) $callNotPickedCount); ?></td>
-      <td class="col-secondary"><?php echo leads_safe((string) ($lead['created_at'] ?? '')); ?></td>
-      <td class="col-secondary"><?php echo leads_safe((string) ($lead['updated_at'] ?? '')); ?></td>
-      <td class="col-secondary">
+      <td><?php echo leads_safe((string) ($lead['created_at'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['updated_at'] ?? '')); ?></td>
+      <td>
         <?php if (($lead['source_campaign_name'] ?? '') !== ''): ?>
           <?php echo leads_safe((string) ($lead['source_campaign_name'] ?? '')); ?>
           <?php if (($lead['source_campaign_id'] ?? '') !== ''): ?>
@@ -511,37 +509,32 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
       </td>
       <td>
         <div class="table-actions">
-          <a class="action-chip primary lead-action" data-action="view_edit" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="lead-detail.php?id=<?php echo urlencode((string) ($lead['id'] ?? '')); ?>">View / Edit</a>
-          <a class="action-chip success lead-action" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">WhatsApp</a>
+          <a class="btn-secondary lead-action" data-action="view_edit" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="lead-detail.php?id=<?php echo urlencode((string) ($lead['id'] ?? '')); ?>">View / Edit</a>
+          <a class="btn-secondary lead-action" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">WhatsApp</a>
+          <a class="btn-secondary lead-action" data-action="email" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">Email</a>
+          <a class="btn-secondary lead-action" data-action="whatsapp_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#ede9fe; color:#4c1d95;" href="#">WhatsApp Details</a>
+          <a class="btn-secondary lead-action" data-action="email_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#ffe4e6; color:#881337;" href="#">Email Details</a>
+          <button type="button" class="btn lead-action" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#10b981;">Mark Contacted Now</button>
+          <button type="button" class="btn lead-action" data-action="mark_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#2563eb;">Interested</button>
+          <button type="button" class="btn-secondary lead-action" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#fee2e2; color:#991b1b;">Call not Picked</button>
           <?php if ($canCreateQuotation): ?>
-            <a class="action-chip primary lead-action" data-action="create_quotation" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
+            <a class="btn lead-action" data-action="create_quotation" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#1d4ed8;" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
           <?php else: ?>
             <?php $quotationDisabledReason = $isArchived ? 'Archived lead' : 'Missing name/mobile'; ?>
-            <button type="button" class="action-chip" disabled title="<?php echo leads_safe($quotationDisabledReason); ?>"><?php echo $isArchived ? 'Archived' : 'Create Quotation'; ?></button>
+            <button type="button" class="btn-secondary" style="padding:0.35rem 0.6rem; opacity:0.55; cursor:not-allowed;" disabled title="<?php echo leads_safe($quotationDisabledReason); ?>"><?php echo $isArchived ? 'Archived' : 'Create Quotation'; ?></button>
           <?php endif; ?>
-          <details class="lead-more-menu">
-            <summary class="action-chip">More ▾</summary>
-            <div class="lead-more-list">
-              <a class="action-chip lead-action" data-action="email" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">Email</a>
-              <a class="action-chip lead-action" data-action="whatsapp_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">WhatsApp Details</a>
-              <a class="action-chip lead-action" data-action="email_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">Email Details</a>
-              <button type="button" class="action-chip lead-action" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Mark Contacted Now</button>
-              <button type="button" class="action-chip lead-action" data-action="mark_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Interested</button>
-              <button type="button" class="action-chip warn lead-action" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Call not Picked</button>
-              <?php if (!$customerCreated && $hasMobile): ?>
-                <button type="button" class="action-chip lead-action" data-action="create_customer" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Create Customer</button>
-              <?php endif; ?>
-              <?php if (!$isConverted): ?>
-                <button type="button" class="action-chip success lead-action" data-action="mark_converted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Converted</button>
-              <?php endif; ?>
-              <?php if (!$isNotInterested): ?>
-                <button type="button" class="action-chip lead-action" data-action="mark_not_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Not Interested</button>
-              <?php endif; ?>
-              <?php if (!$isArchived): ?>
-                <button type="button" class="action-chip lead-action" data-action="archive_lead" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Archive</button>
-              <?php endif; ?>
-            </div>
-          </details>
+          <?php if (!$isArchived): ?>
+            <button type="button" class="btn-secondary lead-action" data-action="archive_lead" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;">Archive</button>
+          <?php endif; ?>
+          <?php if (!$customerCreated && $hasMobile): ?>
+            <button type="button" class="btn-secondary lead-action" data-action="create_customer" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#e0f2fe; color:#0f172a;">Create Customer</button>
+          <?php endif; ?>
+          <?php if (!$isConverted): ?>
+            <button type="button" class="btn lead-action" data-action="mark_converted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#16a34a;">Converted</button>
+          <?php endif; ?>
+          <?php if (!$isNotInterested): ?>
+            <button type="button" class="btn-secondary lead-action" data-action="mark_not_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#fbbf24; color:#1f2937;">Not Interested</button>
+          <?php endif; ?>
         </div>
       </td>
     </tr>
@@ -1258,17 +1251,7 @@ usort($filteredLeads, static function (array $a, array $b) use ($sortBy, $sortDi
     }
 
     $textSort = static function (string $left, string $right) use ($direction): int {
-        return strcasecmp(trim($left), trim($right)) * $direction;
-    };
-    $numberSort = static function ($left, $right) use ($direction): int {
-        $toNumber = static function ($value): float {
-            $clean = preg_replace('/[^0-9.\-]/', '', (string) $value);
-            if ($clean === '' || $clean === '-' || $clean === '.') {
-                return 0.0;
-            }
-            return (float) $clean;
-        };
-        return ($toNumber($left) <=> $toNumber($right)) * $direction;
+        return strnatcasecmp($left, $right) * $direction;
     };
 
     if ($sortBy === 'name') {
@@ -1284,13 +1267,9 @@ usort($filteredLeads, static function (array $a, array $b) use ($sortBy, $sortDi
         return $textSort((string) ($a['email'] ?? ''), (string) ($b['email'] ?? ''));
     }
     if ($sortBy === 'monthly_bill') {
-        return $numberSort($a['monthly_bill'] ?? '', $b['monthly_bill'] ?? '');
+        return $textSort((string) ($a['monthly_bill'] ?? ''), (string) ($b['monthly_bill'] ?? ''));
     }
     if ($sortBy === 'finance_subsidy') {
-        $looksNumeric = preg_match('/\d/', (string) ($a['finance_subsidy'] ?? '')) || preg_match('/\d/', (string) ($b['finance_subsidy'] ?? ''));
-        if ($looksNumeric) {
-            return $numberSort($a['finance_subsidy'] ?? '', $b['finance_subsidy'] ?? '');
-        }
         return $textSort((string) ($a['finance_subsidy'] ?? ''), (string) ($b['finance_subsidy'] ?? ''));
     }
     if ($sortBy === 'property_type') {
@@ -1303,13 +1282,13 @@ usort($filteredLeads, static function (array $a, array $b) use ($sortBy, $sortDi
         return $textSort((string) ($a['best_time_to_call'] ?? ''), (string) ($b['best_time_to_call'] ?? ''));
     }
     if ($sortBy === 'area_pincode') {
-        return $numberSort($a['area_pincode'] ?? '', $b['area_pincode'] ?? '');
+        return $textSort((string) ($a['area_pincode'] ?? ''), (string) ($b['area_pincode'] ?? ''));
     }
     if ($sortBy === 'status') {
         return $textSort((string) ($a['status'] ?? ''), (string) ($b['status'] ?? ''));
     }
     if ($sortBy === 'rating') {
-        return $numberSort($a['rating'] ?? '', $b['rating'] ?? '');
+        return $textSort((string) ($a['rating'] ?? ''), (string) ($b['rating'] ?? ''));
     }
     if ($sortBy === 'assigned_to') {
         return $textSort((string) ($a['assigned_to_name'] ?? ''), (string) ($b['assigned_to_name'] ?? ''));
@@ -1388,25 +1367,13 @@ ksort($duplicateGroups);
     button { font: inherit; cursor: pointer; }
     .btn { background: #2563eb; color: #fff; border: none; padding: 0.7rem 1.1rem; border-radius: 10px; font-weight: 700; }
     .btn-secondary { background: #eef2ff; color: #1f2937; }
-    table { width: 100%; border-collapse: separate; border-spacing: 0; }
-    th, td { text-align: left; padding: 0.5rem 0.45rem; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
-    th { font-size: 0.83rem; color: #374151; background: #f8fafc; position: sticky; top: 0; z-index: 3; }
-    td { font-size: 0.82rem; white-space: nowrap; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 0.65rem 0.5rem; border-bottom: 1px solid #e5e7eb; }
+    th { font-size: 0.9rem; color: #374151; }
     tr:hover { background: #f9fafb; }
     .badge { display: inline-block; padding: 0.25rem 0.55rem; border-radius: 999px; font-weight: 700; font-size: 0.85rem; }
     .pill { background: #eef2ff; color: #4338ca; }
-    .table-actions { display: flex; gap: 0.28rem; align-items: center; white-space: nowrap; }
-    .action-chip { border: 1px solid #cbd5e1; background: #f8fafc; color: #0f172a; border-radius: 999px; padding: 0.2rem 0.48rem; font-size: 0.72rem; font-weight: 700; text-decoration: none; line-height: 1.1; display: inline-flex; align-items: center; gap: 0.2rem; cursor: pointer; }
-    .action-chip.primary { background: #dbeafe; border-color: #93c5fd; color: #1e3a8a; }
-    .action-chip.success { background: #dcfce7; border-color: #86efac; color: #166534; }
-    .action-chip.warn { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
-    .action-chip[disabled] { opacity: 0.5; cursor: not-allowed; }
-    .lead-more-menu { position: relative; }
-    .lead-more-menu > summary { list-style: none; }
-    .lead-more-menu > summary::-webkit-details-marker { display: none; }
-    .lead-more-menu[open] .lead-more-list { display: flex; }
-    .lead-more-list { display: none; position: absolute; right: 0; top: calc(100% + 0.25rem); min-width: 200px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.15); padding: 0.35rem; flex-direction: column; gap: 0.2rem; z-index: 20; }
-    .lead-more-list .action-chip { width: 100%; justify-content: flex-start; border-radius: 8px; font-size: 0.74rem; }
+    .table-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
     .messages { margin-bottom: 1rem; }
     .alert { padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 0.5rem; }
     .alert-success { background: #ecfdf3; color: #166534; border: 1px solid #bbf7d0; }
@@ -1437,23 +1404,8 @@ ksort($duplicateGroups);
     .ux-panel-body { overflow:auto; }
     .ux-toast-wrap { position: fixed; right: 1rem; bottom: 1rem; display: flex; flex-direction: column; gap: 0.5rem; z-index: 10000; }
     .ux-toast { background: #111827; color: #fff; padding: 0.65rem 0.85rem; border-radius: 10px; box-shadow: 0 10px 24px rgba(0,0,0,0.2); }
-    .sort-link { color: inherit; text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 0.25rem; }
+    .sort-link { color: inherit; text-decoration: none; white-space: nowrap; }
     .sort-link:hover { text-decoration: underline; }
-    .leads-table-wrap { overflow: auto; max-width: 100%; border: 1px solid #e5e7eb; border-radius: 12px; }
-    .leads-table { min-width: 2160px; table-layout: fixed; }
-    .leads-table th, .leads-table td { overflow: hidden; text-overflow: ellipsis; }
-    .col-secondary { color: #64748b; font-size: 0.76rem; }
-    .col-status { min-width: 130px; }
-    .msg-chip { font-size: 0.66rem; padding: 0.14rem 0.38rem; }
-    .tag-chip { font-size: 0.7rem; padding: 0.14rem 0.42rem; background: #f1f5f9; color: #334155; border-radius: 999px; display: inline-block; }
-    .lead-name-cell .lead-name-trigger { font-weight: 700; color: #1d4ed8; text-decoration: none; cursor: pointer; }
-    .lead-name-cell .lead-name-trigger:hover { text-decoration: underline; }
-    .leads-table th:nth-child(1), .leads-table td:nth-child(1) { position: sticky; left: 0; z-index: 5; background: inherit; min-width: 52px; }
-    .leads-table th:nth-child(2), .leads-table td:nth-child(2) { min-width: 54px; }
-    .leads-table th:nth-child(3), .leads-table td:nth-child(3) { position: sticky; left: 52px; z-index: 5; background: inherit; min-width: 170px; max-width: 170px; }
-    .leads-table th:nth-child(4), .leads-table td:nth-child(4) { position: sticky; left: 222px; z-index: 5; background: inherit; min-width: 140px; max-width: 140px; }
-    .leads-table th:nth-child(23), .leads-table td:nth-child(23) { position: sticky; right: 0; z-index: 6; background: inherit; min-width: 260px; max-width: 260px; }
-    .leads-table th:nth-child(13), .leads-table td:nth-child(13) { position: sticky; right: 260px; z-index: 6; background: inherit; min-width: 130px; max-width: 130px; }
     textarea { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d1d5db; border-radius: 10px; font: inherit; }
   </style>
 </head>
@@ -1802,8 +1754,8 @@ ksort($duplicateGroups);
         <button type="submit" class="btn-secondary" onclick="return confirm('Apply this action to selected leads?');">Apply</button>
       </form>
 
-      <div id="leads-table-wrap" class="leads-table-wrap">
-        <table class="leads-table">
+      <div style="overflow-x:auto;">
+        <table>
           <thead>
             <tr>
               <th>
@@ -1838,7 +1790,7 @@ ksort($duplicateGroups);
           </thead>
           <tbody>
             <?php if ($filteredLeads === []): ?>
-              <tr><td colspan="23" style="padding:0.8rem;">No leads match the selected filters.</td></tr>
+              <tr><td colspan="23">No leads match the selected filters.</td></tr>
             <?php else: ?>
               <?php foreach ($filteredLeads as $index => $lead): ?>
                 <?php echo leads_render_row($lead, $index + 1, $today, $quotationCreatePath); ?>
@@ -1960,31 +1912,6 @@ ksort($duplicateGroups);
       return response.json();
     }
 
-    async function refreshLeadsTable(url) {
-      const tableWrap = document.getElementById('leads-table-wrap');
-      if (!tableWrap) return;
-      const preserveScrollX = tableWrap.scrollLeft;
-      const preserveScrollY = window.scrollY;
-      const response = await fetch(url, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-      });
-      const html = await response.text();
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const newWrap = doc.getElementById('leads-table-wrap');
-      if (!newWrap) {
-        window.location.href = url;
-        return;
-      }
-      tableWrap.replaceWith(newWrap);
-      const query = new URL(url, window.location.origin).searchParams;
-      document.querySelector('input[name="sort_by"]')?.setAttribute('value', query.get('sort_by') || '');
-      document.querySelector('input[name="sort_dir"]')?.setAttribute('value', query.get('sort_dir') || '');
-      window.history.replaceState({}, '', url);
-      newWrap.scrollLeft = preserveScrollX;
-      window.scrollTo({ top: preserveScrollY, behavior: 'auto' });
-    }
-
     function refreshRowFromResponse(data, row) {
       if (!row || !data) return;
       if (data.remove_row) {
@@ -2051,17 +1978,6 @@ ksort($duplicateGroups);
     });
 
     document.addEventListener('click', async (event) => {
-      const sortLink = event.target.closest('.sort-link');
-      if (sortLink) {
-        event.preventDefault();
-        await refreshLeadsTable(sortLink.href);
-        return;
-      }
-
-      if (!event.target.closest('.lead-more-menu')) {
-        document.querySelectorAll('.lead-more-menu[open]').forEach((openMenu) => openMenu.removeAttribute('open'));
-      }
-
       const actionEl = event.target.closest('.lead-action');
       if (!actionEl) return;
       event.preventDefault();
