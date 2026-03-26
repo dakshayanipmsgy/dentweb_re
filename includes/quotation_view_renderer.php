@@ -523,22 +523,6 @@ if(hasLoanScenario){
 }
 
 const glanceGroups=[
-  {title:'System',rows:[
-    ['Solar system type',q.systemType||'—'],
-    ['Main solar size',q.mainSolar!==null?`${num(q.mainSolar).toFixed(2)} kWp`:`${num(q.cap).toFixed(2)} kWp`],
-    ...(num(q.complimentarySolar)>0?[['Complimentary Non-DCR solar size',`${num(q.complimentarySolar).toFixed(2)} kWp`]]:[]),
-    ['Total capacity',`${num(q.cap).toFixed(2)} kWp`],
-    ...((String(q.systemType).toLowerCase()==='hybrid'&&q.inverterKva)?[['Inverter',`${q.inverterKva} kVA`]]:[]),
-    ...((String(q.systemType).toLowerCase()==='hybrid'&&q.batteryCount)?[['Battery count',String(q.batteryCount)]]:[]),
-    ...((String(q.systemType).toLowerCase()==='hybrid'&&q.phase)?[['Phase',String(q.phase)]]:[]),
-  ]},
-  {title:'Price taken into consideration',rows:[
-    ['Self Funded price',r(gross)],
-    ...(hasLoanScenario?[['Loan price used in quotation',r(gross)]]:[]),
-    ['Subsidy',r(subsidy)],
-    ['Transportation',r(num(q.transport))],
-    ...(num(q.discount)>0?[['Discount',r(num(q.discount))]]:[])
-  ]},
   {title:'Generation & Savings',rows:[
     ['Expected monthly generation',`${nUnits(monthlyUnits)} units`],
     ['Expected annual generation',`${nUnits(annualUnits)} units`],
