@@ -15074,9 +15074,3 @@ body.smart-guide-open {
     grid-template-columns: repeat(2, 1fr);
   }
 }
-.solar-finance-spotlight-card{display:flex;justify-content:space-between;align-items:center;gap:1rem;background:linear-gradient(120deg,#0f172a,#1d4ed8);color:#fff;text-decoration:none;padding:1.2rem 1.3rem;border-radius:16px;box-shadow:0 14px 26px rgba(29,78,216,.25)}
-.solar-finance-spotlight-card h2{margin:.2rem 0 .35rem;font-size:1.5rem}
-.solar-finance-spotlight-card p{margin:0;color:rgba(255,255,255,.88)}
-.solar-finance-spotlight-cta{font-weight:700;white-space:nowrap}
-.public-solar-left-fab{position:fixed;left:14px;bottom:88px;z-index:1080;background:#0ea5e9;color:#fff;text-decoration:none;padding:.7rem .9rem;border-radius:999px;font-weight:700;font-size:.86rem;box-shadow:0 12px 24px rgba(14,165,233,.36)}
-@media(max-width:768px){.solar-finance-spotlight-card{flex-direction:column;align-items:flex-start}.public-solar-left-fab{bottom:78px;font-size:.8rem;padding:.62rem .75rem}}
