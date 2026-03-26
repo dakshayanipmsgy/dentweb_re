@@ -441,6 +441,7 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 const q={
   gross:<?= json_encode((float)($financialClarity['gross'] ?? 0)) ?>,
   subsidy:<?= json_encode((float)($financialClarity['subsidy'] ?? 0)) ?>,
+  selfUpfrontNet:<?= json_encode((float)($financialClarity['self_upfront_net_rs'] ?? 0)) ?>,
   subsidyProvided:<?= json_encode($subsidyProvided) ?>,
   monthly:<?= json_encode((float)($financialClarity['monthly_bill_before_rs'] ?? 0)) ?>,
   unit:<?= json_encode((float)($financialClarity['unit_rate_rs_per_kwh'] ?? 0)) ?>,
@@ -479,7 +480,8 @@ const margin=Math.max(0,num(q.margin));
 const emi=Math.max(0,num(q.emi));
 const outflowLoan=Math.max(0,num(q.out));
 const tenureMonths=Math.max(1,Math.round(num(q.loanTenureMonths)||120));
-const upfrontNet=Math.max(0,gross-subsidy);
+const upfrontNetRaw=num(q.selfUpfrontNet);
+const upfrontNet=Math.max(0,upfrontNetRaw>0?upfrontNetRaw:(gross-subsidy));
 const monthlySaving=Math.max(0,monthlyBill-residual);
 const annualSaving=monthlySaving*12;
 const saving25=annualSaving*25;
@@ -573,7 +575,7 @@ const years=[...Array(26).keys()];
 const cumulativeDatasets=[
   {label:'No Solar',data:years.map(y=>y*12*monthlyBill),borderColor:'#9ca3af',backgroundColor:'#9ca3af'},
   ...(hasLoanScenario?[{label:'With Solar (Loan)',data:years.map(y=>{const m=y*12;const emiPart=Math.min(m,tenureMonths)*emi;const residualPart=m*residual;return loanBaseline+emiPart+residualPart;}),borderColor:'#0f766e',backgroundColor:'#0f766e'}]:[]),
-  {label:'With Solar (Self Funded)',data:years.map(y=>gross+y*12*residual),borderColor:'#f59e0b',backgroundColor:'#f59e0b'}
+  {label:'With Solar (Self Funded)',data:years.map(y=>upfrontNet+y*12*residual),borderColor:'#f59e0b',backgroundColor:'#f59e0b'}
 ];
 
 const paybackMeters=document.getElementById('paybackMeters');
