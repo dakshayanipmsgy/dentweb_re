@@ -7,6 +7,7 @@ require_once __DIR__ . '/user_storage.php';
 require_once __DIR__ . '/customer_records.php';
 require_once __DIR__ . '/portal_file_storage.php';
 require_once __DIR__ . '/website_settings.php';
+require_once __DIR__ . '/solar_finance_settings.php';
 
 if (date_default_timezone_get() !== 'Asia/Kolkata') {
     date_default_timezone_set('Asia/Kolkata');
