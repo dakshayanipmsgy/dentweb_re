@@ -509,32 +509,41 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
       </td>
       <td>
         <div class="table-actions">
-          <a class="btn-secondary lead-action" data-action="view_edit" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="lead-detail.php?id=<?php echo urlencode((string) ($lead['id'] ?? '')); ?>">View / Edit</a>
-          <a class="btn-secondary lead-action" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">WhatsApp</a>
-          <a class="btn-secondary lead-action" data-action="email" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">Email</a>
-          <a class="btn-secondary lead-action" data-action="whatsapp_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#ede9fe; color:#4c1d95;" href="#">WhatsApp Details</a>
-          <a class="btn-secondary lead-action" data-action="email_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#ffe4e6; color:#881337;" href="#">Email Details</a>
-          <button type="button" class="btn lead-action" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#10b981;">Mark Contacted Now</button>
-          <button type="button" class="btn lead-action" data-action="mark_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#2563eb;">Interested</button>
-          <button type="button" class="btn-secondary lead-action" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#fee2e2; color:#991b1b;">Call not Picked</button>
-          <?php if ($canCreateQuotation): ?>
-            <a class="btn lead-action" data-action="create_quotation" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#1d4ed8;" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
-          <?php else: ?>
-            <?php $quotationDisabledReason = $isArchived ? 'Archived lead' : 'Missing name/mobile'; ?>
-            <button type="button" class="btn-secondary" style="padding:0.35rem 0.6rem; opacity:0.55; cursor:not-allowed;" disabled title="<?php echo leads_safe($quotationDisabledReason); ?>"><?php echo $isArchived ? 'Archived' : 'Create Quotation'; ?></button>
-          <?php endif; ?>
-          <?php if (!$isArchived): ?>
-            <button type="button" class="btn-secondary lead-action" data-action="archive_lead" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;">Archive</button>
-          <?php endif; ?>
-          <?php if (!$customerCreated && $hasMobile): ?>
-            <button type="button" class="btn-secondary lead-action" data-action="create_customer" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#e0f2fe; color:#0f172a;">Create Customer</button>
-          <?php endif; ?>
-          <?php if (!$isConverted): ?>
-            <button type="button" class="btn lead-action" data-action="mark_converted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#16a34a;">Converted</button>
-          <?php endif; ?>
-          <?php if (!$isNotInterested): ?>
-            <button type="button" class="btn-secondary lead-action" data-action="mark_not_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#fbbf24; color:#1f2937;">Not Interested</button>
-          <?php endif; ?>
+          <a class="btn-secondary lead-action action-btn" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">WhatsApp</a>
+          <button type="button" class="btn lead-action action-btn" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#10b981;">Mark Contacted Now</button>
+          <button type="button" class="btn lead-action action-btn" data-action="mark_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#2563eb;">Interested</button>
+          <button type="button" class="btn-secondary lead-action action-btn" data-action="mark_not_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#fbbf24; color:#1f2937;" <?php echo $isNotInterested ? 'disabled title="Already marked Not Interested"' : ''; ?>>Not Interested</button>
+          <button type="button" class="btn-secondary lead-action action-btn" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#fee2e2; color:#991b1b;">Call not Picked</button>
+          <div class="action-more">
+            <button type="button" class="btn-secondary action-btn more-toggle">More ▾</button>
+            <div class="action-more-menu">
+              <a class="lead-action action-more-item" data-action="view_edit" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="lead-detail.php?id=<?php echo urlencode((string) ($lead['id'] ?? '')); ?>">View / Edit</a>
+              <a class="lead-action action-more-item" data-action="email" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">Email</a>
+              <a class="lead-action action-more-item" data-action="whatsapp_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">WhatsApp Details</a>
+              <a class="lead-action action-more-item" data-action="email_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">Email Details</a>
+              <?php if ($canCreateQuotation): ?>
+                <a class="lead-action action-more-item" data-action="create_quotation" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
+              <?php else: ?>
+                <?php $quotationDisabledReason = $isArchived ? 'Archived lead' : 'Missing name/mobile'; ?>
+                <button type="button" class="action-more-item" disabled title="<?php echo leads_safe($quotationDisabledReason); ?>">Create Quotation</button>
+              <?php endif; ?>
+              <?php if (!$isArchived): ?>
+                <button type="button" class="lead-action action-more-item" data-action="archive_lead" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Archive</button>
+              <?php else: ?>
+                <button type="button" class="action-more-item" disabled title="Already archived">Archive</button>
+              <?php endif; ?>
+              <?php if (!$customerCreated && $hasMobile): ?>
+                <button type="button" class="lead-action action-more-item" data-action="create_customer" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Create Customer</button>
+              <?php else: ?>
+                <button type="button" class="action-more-item" disabled title="<?php echo $customerCreated ? 'Customer already created' : 'Missing mobile number'; ?>">Create Customer</button>
+              <?php endif; ?>
+              <?php if (!$isConverted): ?>
+                <button type="button" class="lead-action action-more-item" data-action="mark_converted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Converted</button>
+              <?php else: ?>
+                <button type="button" class="action-more-item" disabled title="Already converted">Converted</button>
+              <?php endif; ?>
+            </div>
+          </div>
         </div>
       </td>
     </tr>
@@ -1245,88 +1254,158 @@ usort($filteredLeads, static function (array $a, array $b) use ($sortBy, $sortDi
     $direction = $sortDir === 'desc' ? -1 : 1;
     $indexA = (int) ($a['id'] ?? 0);
     $indexB = (int) ($b['id'] ?? 0);
+    $fallbackCompare = $indexA <=> $indexB;
+
+    $isEmpty = static function (string $value): bool {
+        return trim($value) === '' || trim($value) === '—';
+    };
+
+    $compareText = static function (string $left, string $right) use ($direction, $isEmpty, $fallbackCompare): int {
+        $left = trim($left);
+        $right = trim($right);
+        $leftEmpty = $isEmpty($left);
+        $rightEmpty = $isEmpty($right);
+        if ($leftEmpty && $rightEmpty) {
+            return $fallbackCompare;
+        }
+        if ($leftEmpty) {
+            return 1;
+        }
+        if ($rightEmpty) {
+            return -1;
+        }
+        $comparison = strnatcasecmp($left, $right);
+        if ($comparison === 0) {
+            return $fallbackCompare;
+        }
+        return $comparison * $direction;
+    };
+
+    $parseNumber = static function (string $value): ?float {
+        $cleaned = preg_replace('/[^0-9.\-]/', '', $value) ?? '';
+        if ($cleaned === '' || $cleaned === '-' || $cleaned === '.' || $cleaned === '-.') {
+            return null;
+        }
+        if (!is_numeric($cleaned)) {
+            return null;
+        }
+        return (float) $cleaned;
+    };
+
+    $compareNumber = static function (string $left, string $right) use ($direction, $fallbackCompare, $parseNumber): int {
+        $leftNumber = $parseNumber($left);
+        $rightNumber = $parseNumber($right);
+        if ($leftNumber === null && $rightNumber === null) {
+            return $fallbackCompare;
+        }
+        if ($leftNumber === null) {
+            return 1;
+        }
+        if ($rightNumber === null) {
+            return -1;
+        }
+        $comparison = $leftNumber <=> $rightNumber;
+        if ($comparison === 0) {
+            return $fallbackCompare;
+        }
+        return $comparison * $direction;
+    };
+
+    $parseTimestamp = static function (string $date, string $time = ''): ?int {
+        $value = trim($date . ' ' . $time);
+        if ($value === '') {
+            return null;
+        }
+        $timestamp = strtotime($value);
+        if ($timestamp === false) {
+            return null;
+        }
+        return $timestamp;
+    };
+
+    $compareTimestamp = static function (?int $left, ?int $right) use ($direction, $fallbackCompare): int {
+        if ($left === null && $right === null) {
+            return $fallbackCompare;
+        }
+        if ($left === null) {
+            return 1;
+        }
+        if ($right === null) {
+            return -1;
+        }
+        $comparison = $left <=> $right;
+        if ($comparison === 0) {
+            return $fallbackCompare;
+        }
+        return $comparison * $direction;
+    };
 
     if ($sortBy === 'sr_no') {
         return ($indexA <=> $indexB) * $direction;
     }
 
-    $textSort = static function (string $left, string $right) use ($direction): int {
-        return strnatcasecmp($left, $right) * $direction;
-    };
-
     if ($sortBy === 'name') {
-        return $textSort((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+        return $compareText((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
     }
     if ($sortBy === 'mobile') {
-        return $textSort((string) ($a['mobile'] ?? ''), (string) ($b['mobile'] ?? ''));
+        return $compareText((string) ($a['mobile'] ?? ''), (string) ($b['mobile'] ?? ''));
     }
     if ($sortBy === 'city') {
-        return $textSort((string) ($a['city'] ?? ''), (string) ($b['city'] ?? ''));
+        return $compareText((string) ($a['city'] ?? ''), (string) ($b['city'] ?? ''));
     }
     if ($sortBy === 'email') {
-        return $textSort((string) ($a['email'] ?? ''), (string) ($b['email'] ?? ''));
+        return $compareText((string) ($a['email'] ?? ''), (string) ($b['email'] ?? ''));
     }
     if ($sortBy === 'monthly_bill') {
-        return $textSort((string) ($a['monthly_bill'] ?? ''), (string) ($b['monthly_bill'] ?? ''));
+        return $compareNumber((string) ($a['monthly_bill'] ?? ''), (string) ($b['monthly_bill'] ?? ''));
     }
     if ($sortBy === 'finance_subsidy') {
-        return $textSort((string) ($a['finance_subsidy'] ?? ''), (string) ($b['finance_subsidy'] ?? ''));
+        return $compareNumber((string) ($a['finance_subsidy'] ?? ''), (string) ($b['finance_subsidy'] ?? ''));
     }
     if ($sortBy === 'property_type') {
-        return $textSort((string) ($a['property_type'] ?? ''), (string) ($b['property_type'] ?? ''));
+        return $compareText((string) ($a['property_type'] ?? ''), (string) ($b['property_type'] ?? ''));
     }
     if ($sortBy === 'roof_type') {
-        return $textSort((string) ($a['roof_type'] ?? ''), (string) ($b['roof_type'] ?? ''));
+        return $compareText((string) ($a['roof_type'] ?? ''), (string) ($b['roof_type'] ?? ''));
     }
     if ($sortBy === 'best_time_to_call') {
-        return $textSort((string) ($a['best_time_to_call'] ?? ''), (string) ($b['best_time_to_call'] ?? ''));
+        return $compareText((string) ($a['best_time_to_call'] ?? ''), (string) ($b['best_time_to_call'] ?? ''));
     }
     if ($sortBy === 'area_pincode') {
-        return $textSort((string) ($a['area_pincode'] ?? ''), (string) ($b['area_pincode'] ?? ''));
+        return $compareText((string) ($a['area_pincode'] ?? ''), (string) ($b['area_pincode'] ?? ''));
     }
     if ($sortBy === 'status') {
-        return $textSort((string) ($a['status'] ?? ''), (string) ($b['status'] ?? ''));
+        return $compareText((string) ($a['status'] ?? ''), (string) ($b['status'] ?? ''));
     }
     if ($sortBy === 'rating') {
-        return $textSort((string) ($a['rating'] ?? ''), (string) ($b['rating'] ?? ''));
+        return $compareText((string) ($a['rating'] ?? ''), (string) ($b['rating'] ?? ''));
     }
     if ($sortBy === 'assigned_to') {
-        return $textSort((string) ($a['assigned_to_name'] ?? ''), (string) ($b['assigned_to_name'] ?? ''));
+        return $compareText((string) ($a['assigned_to_name'] ?? ''), (string) ($b['assigned_to_name'] ?? ''));
     }
-
-    $toTimestamp = static function (string $date, string $time = '00:00:00'): int {
-        $value = trim($date . ' ' . $time);
-        if ($value === '') {
-            return 0;
-        }
-        $timestamp = strtotime($value);
-        return $timestamp === false ? 0 : $timestamp;
-    };
 
     if ($sortBy === 'next_followup') {
-        $aTs = $toTimestamp((string) ($a['next_followup_date'] ?? ''), (string) ($a['next_followup_time'] ?? '00:00:00'));
-        $bTs = $toTimestamp((string) ($b['next_followup_date'] ?? ''), (string) ($b['next_followup_time'] ?? '00:00:00'));
-        return ($aTs <=> $bTs) * $direction;
+        $aTs = $parseTimestamp((string) ($a['next_followup_date'] ?? ''), (string) ($a['next_followup_time'] ?? '00:00:00'));
+        $bTs = $parseTimestamp((string) ($b['next_followup_date'] ?? ''), (string) ($b['next_followup_time'] ?? '00:00:00'));
+        return $compareTimestamp($aTs, $bTs);
     }
     if ($sortBy === 'last_contacted_at') {
-        $aTs = $toTimestamp((string) ($a['last_contacted_at'] ?? ''));
-        $bTs = $toTimestamp((string) ($b['last_contacted_at'] ?? ''));
-        return ($aTs <=> $bTs) * $direction;
+        $aTs = $parseTimestamp((string) ($a['last_contacted_at'] ?? ''));
+        $bTs = $parseTimestamp((string) ($b['last_contacted_at'] ?? ''));
+        return $compareTimestamp($aTs, $bTs);
     }
     if ($sortBy === 'call_not_picked_count') {
-        $aCount = max(0, (int) ($a['call_not_picked_count'] ?? 0));
-        $bCount = max(0, (int) ($b['call_not_picked_count'] ?? 0));
-        return ($aCount <=> $bCount) * $direction;
+        return $compareNumber((string) ($a['call_not_picked_count'] ?? ''), (string) ($b['call_not_picked_count'] ?? ''));
     }
     if ($sortBy === 'updated_at') {
-        $aTs = $toTimestamp((string) ($a['updated_at'] ?? ''));
-        $bTs = $toTimestamp((string) ($b['updated_at'] ?? ''));
-        return ($aTs <=> $bTs) * $direction;
+        $aTs = $parseTimestamp((string) ($a['updated_at'] ?? ''));
+        $bTs = $parseTimestamp((string) ($b['updated_at'] ?? ''));
+        return $compareTimestamp($aTs, $bTs);
     }
 
-    $aTs = $toTimestamp((string) ($a['created_at'] ?? ''));
-    $bTs = $toTimestamp((string) ($b['created_at'] ?? ''));
-    return ($aTs <=> $bTs) * $direction;
+    $aTs = $parseTimestamp((string) ($a['created_at'] ?? ''));
+    $bTs = $parseTimestamp((string) ($b['created_at'] ?? ''));
+    return $compareTimestamp($aTs, $bTs);
 });
 
 $assignedNames = array_values(array_unique(array_filter(array_map(static function (array $lead): string {
@@ -1373,7 +1452,54 @@ ksort($duplicateGroups);
     tr:hover { background: #f9fafb; }
     .badge { display: inline-block; padding: 0.25rem 0.55rem; border-radius: 999px; font-weight: 700; font-size: 0.85rem; }
     .pill { background: #eef2ff; color: #4338ca; }
-    .table-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+    .table-actions { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; max-width: 460px; }
+    .table-actions .action-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.22rem 0.5rem;
+      min-height: 1.7rem;
+      border-radius: 8px;
+      font-size: 0.74rem;
+      line-height: 1.1;
+      font-weight: 600;
+      border: none;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .table-actions .action-btn.btn-secondary { border: 1px solid #dbe2f3; }
+    .table-actions .action-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .action-more { position: relative; }
+    .action-more-menu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 0.2rem);
+      min-width: 170px;
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+      padding: 0.25rem;
+      display: none;
+      z-index: 25;
+    }
+    .action-more.open .action-more-menu { display: block; }
+    .action-more-item {
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      color: #1f2937;
+      padding: 0.38rem 0.5rem;
+      font-size: 0.76rem;
+      line-height: 1.2;
+      text-decoration: none;
+      display: block;
+      cursor: pointer;
+    }
+    .action-more-item:hover { background: #f3f4f6; }
+    .action-more-item:disabled { opacity: 0.5; cursor: not-allowed; }
     .messages { margin-bottom: 1rem; }
     .alert { padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 0.5rem; }
     .alert-success { background: #ecfdf3; color: #166534; border: 1px solid #bbf7d0; }
@@ -1872,6 +1998,12 @@ ksort($duplicateGroups);
       drawerBody.innerHTML = '';
     }
 
+    function closeAllMoreMenus() {
+      document.querySelectorAll('.action-more.open').forEach((menuWrap) => {
+        menuWrap.classList.remove('open');
+      });
+    }
+
     function normalizeWhatsappMobile(rawMobile) {
       const digits = (rawMobile || '').replace(/\D+/g, '');
       if (digits.length === 10) return `91${digits}`;
@@ -1978,9 +2110,27 @@ ksort($duplicateGroups);
     });
 
     document.addEventListener('click', async (event) => {
+      const toggleButton = event.target.closest('.more-toggle');
+      if (toggleButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const wrapper = toggleButton.closest('.action-more');
+        const shouldOpen = wrapper && !wrapper.classList.contains('open');
+        closeAllMoreMenus();
+        if (wrapper && shouldOpen) {
+          wrapper.classList.add('open');
+        }
+        return;
+      }
+
+      if (!event.target.closest('.action-more')) {
+        closeAllMoreMenus();
+      }
+
       const actionEl = event.target.closest('.lead-action');
       if (!actionEl) return;
       event.preventDefault();
+      closeAllMoreMenus();
       const action = actionEl.dataset.action;
       const leadId = actionEl.dataset.leadId;
       const row = document.getElementById(`lead-row-${leadId}`);
