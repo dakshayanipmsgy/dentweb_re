@@ -156,7 +156,11 @@ $defaults = $settings['defaults'] ?? [];
     let latestSnapshot=null, latestReportUrl='';
 
     const num=(v,fallback=0)=>{const n=Number(v); return Number.isFinite(n)?n:fallback;};
-    const roundSize=v=>Math.max(1,Math.round(v*10)/10);
+    const floorRecommendedSize=v=>{
+      const n=Number(v);
+      if(!Number.isFinite(n)||n<=0) return 0;
+      return Math.floor(n);
+    };
     const emi=(p,r,y)=>{const n=y*12,i=(r/100)/12; if(!n||!p)return 0; if(!i)return p/n; return (p*i*Math.pow(1+i,n))/(Math.pow(1+i,n)-1);};
     const findOnGrid=size=>onGrid.find(r=>Number(r.size_kw)===Math.round(size))||onGrid[0]||null;
     const hybridRowsForSize=size=>hybrid.filter(r=>Number(r.size_kw)===Math.round(size));
@@ -226,7 +230,7 @@ $defaults = $settings['defaults'] ?? [];
       if(changedField==='monthlyUnits'&&rate>0){setField('monthlyBill', units>0?(units*rate).toFixed(2):'');}
 
       const currentUnits=num(el.monthlyUnits.value);
-      const recommendedSize=(currentUnits>0&&gen>0)?roundSize(currentUnits/(gen*30)):0;
+      const recommendedSize=(currentUnits>0&&gen>0)?floorRecommendedSize(currentUnits/(gen*30)):0;
       if(recommendedSize>0&&(changedField==='monthlyUnits'||changedField==='monthlyBill'||changedField==='systemType'||shouldAutofill('solarSize'))){
         setField('solarSize', String(recommendedSize));
       }
