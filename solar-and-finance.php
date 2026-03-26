@@ -43,12 +43,6 @@ $defaults = $settings['defaults'] ?? [];
       <p><?= htmlspecialchars((string) ($content['hero_text'] ?? 'Simple solar guidance and finance clarity.')) ?></p>
     </section>
 
-    <section class="sf-grid cards">
-      <?php foreach (($content['explainer_cards'] ?? []) as $card): ?>
-      <article class="sf-card"><i class="fa-solid <?= htmlspecialchars((string) ($card['icon'] ?? 'fa-solar-panel')) ?>"></i><h3><?= htmlspecialchars((string) ($card['title'] ?? '')) ?></h3><p><?= htmlspecialchars((string) ($card['text'] ?? '')) ?></p></article>
-      <?php endforeach; ?>
-    </section>
-
     <section class="sf-flex">
       <div class="sf-card">
         <h2>Enter your details</h2>
@@ -129,6 +123,12 @@ $defaults = $settings['defaults'] ?? [];
         <button class="sf-btn report" type="button" id="generateReportBtn">Generate Report</button>
         <a class="sf-btn alt" target="_blank" id="waQuote" href="#"><i class="fa-brands fa-whatsapp"></i> <?= htmlspecialchars((string) ($content['cta_text'] ?? 'Request a quotation')) ?></a>
       </div>
+    </section>
+
+    <section class="sf-grid cards">
+      <?php foreach (($content['explainer_cards'] ?? []) as $card): ?>
+      <article class="sf-card"><i class="fa-solid <?= htmlspecialchars((string) ($card['icon'] ?? 'fa-solar-panel')) ?>"></i><h3><?= htmlspecialchars((string) ($card['title'] ?? '')) ?></h3><p><?= htmlspecialchars((string) ($card['text'] ?? '')) ?></p></article>
+      <?php endforeach; ?>
     </section>
   </main>
 
