@@ -96,80 +96,78 @@ $defaults = $settings['defaults'] ?? [];
   <script>
     const INR=n=>`₹${Math.round(n||0).toLocaleString('en-IN')}`;
     const settings=JSON.parse(document.querySelector('main').dataset.settings||'{}');
-    const onGrid=(settings.on_grid_prices||[]); const hybrid=(settings.hybrid_prices||[]); const d=settings.defaults||{};
-    const defaultState={
-      monthlyBill:'', monthlyUnits:'', systemType:'On-Grid', solarSize:'',
-      dailyGeneration:String(d.daily_generation_per_kw ?? 5),
-      unitRate:String(d.unit_rate ?? 8),
-      systemCost:'', subsidy:String(d.default_subsidy ?? 78000), loanAmount:'', marginMoney:'',
-      interestRate:String(d.interest_upto_2_lacs ?? 6), loanTenure:String(d.loan_tenure_years ?? 10),
-      effectiveLoan:''
-    };
-    let mChart,cChart,debounceTimer=null,syncing=false;
-    const ids=['monthlyBill','monthlyUnits','systemType','solarSize','dailyGeneration','unitRate','systemCost','subsidy','loanAmount','marginMoney','interestRate','loanTenure','effectiveLoan','inverterKva','phase','batteryCount'];
+    const onGrid=(settings.on_grid_prices||[]),hybrid=(settings.hybrid_prices||[]),d=settings.defaults||{};
+    const defaultState={monthlyBill:'',monthlyUnits:'',systemType:'On-Grid',solarSize:'',dailyGeneration:String(d.daily_generation_per_kw??5),unitRate:String(d.unit_rate??8),systemCost:'',subsidy:String(d.default_subsidy??78000),loanAmount:'',marginMoney:'',interestRate:String(d.interest_upto_2_lacs??6),loanTenure:String(d.loan_tenure_years??10),effectiveLoan:''};
+    let mChart,cChart,debounceTimer=null,isProgrammaticUpdate=false;
+    const manualOverride=new Set();
+    const debouncedIds=['monthlyBill','monthlyUnits','solarSize','dailyGeneration','unitRate','systemCost','subsidy','loanAmount','marginMoney','interestRate','loanTenure'];
+    const ids=[...debouncedIds,'systemType','effectiveLoan','inverterKva','phase','batteryCount'];
     const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
+    const kpiPanel=document.getElementById('kpiPanel'),paybackMeters=document.getElementById('paybackMeters'),financeBoxes=document.getElementById('financeBoxes'),waQuote=document.getElementById('waQuote');
 
-    function emi(p,r,y){const n=y*12; const i=(r/100)/12; if(!n||!p)return 0; if(!i)return p/n; return (p*i*Math.pow(1+i,n))/(Math.pow(1+i,n)-1)}
-    function roundSize(v){return Math.max(1,Math.round(v*10)/10)}
-    function findOnGrid(size){const s=Math.round(size); return onGrid.find(r=>Number(r.size_kw)===s)||onGrid[0]}
-    function hybridRowsForSize(size){const s=Math.round(size); return hybrid.filter(r=>Number(r.size_kw)===s)}
-    function fillHybridSelectors(){const rows=hybridRowsForSize(Number(el.solarSize.value||0)); const vals=(arr,key)=>[...new Set(arr.map(r=>String(r[key])))]
-      const set=(node,list)=>{node.innerHTML=list.map(v=>`<option>${v}</option>`).join('')};
-      if(!rows.length){[el.inverterKva,el.phase,el.batteryCount].forEach(node=>node.innerHTML=''); return;}
-      set(el.inverterKva,vals(rows,'inverter_kva')); set(el.phase,vals(rows,'phase')); set(el.batteryCount,vals(rows,'battery_count'));
-    }
-    function selectedHybridRow(){const rows=hybridRowsForSize(Number(el.solarSize.value||0)); if(!rows.length)return null;
-      return rows.find(r=>String(r.inverter_kva)===el.inverterKva.value&&String(r.phase)===el.phase.value&&String(r.battery_count)===el.batteryCount.value) || rows[0]; }
-
-    function isHigherLoanApplicable(cost){return Math.round(Number(cost||0)*0.8) >= 200000;}
+    const num=(v,fallback=0)=>{const n=Number(v); return Number.isFinite(n)?n:fallback;};
+    const roundSize=v=>Math.max(1,Math.round(v*10)/10);
+    const emi=(p,r,y)=>{const n=y*12,i=(r/100)/12; if(!n||!p)return 0; if(!i)return p/n; return (p*i*Math.pow(1+i,n))/(Math.pow(1+i,n)-1);};
+    const findOnGrid=size=>onGrid.find(r=>Number(r.size_kw)===Math.round(size))||onGrid[0]||null;
+    const hybridRowsForSize=size=>hybrid.filter(r=>Number(r.size_kw)===Math.round(size));
+    const setField=(id,val)=>{if(!el[id])return; isProgrammaticUpdate=true; el[id].value=val; isProgrammaticUpdate=false;};
+    const shouldAutofill=id=>!manualOverride.has(id)||String(el[id]?.value||'').trim()==='';
+    const priceForRow=row=>{if(!row)return 0; const up2=num(row.loan_upto_2_lacs),high=num(row.loan_above_2_lacs); return up2<=200000&&up2>0?up2:Math.max(up2,high);};
+    const refreshEffectiveLoan=()=>setField('effectiveLoan', String(Math.max(num(el.loanAmount.value)-num(el.subsidy.value),0).toFixed(0)));
 
     function clearResults(){
       document.getElementById('results').hidden=true;
-      kpiPanel.innerHTML='';
-      paybackMeters.innerHTML='';
-      financeBoxes.innerHTML='';
-      if(mChart){mChart.destroy();mChart=null;}
-      if(cChart){cChart.destroy();cChart=null;}
+      kpiPanel.innerHTML=''; paybackMeters.innerHTML=''; financeBoxes.innerHTML='';
+      if(mChart){mChart.destroy();mChart=null;} if(cChart){cChart.destroy();cChart=null;}
     }
 
-    function syncMandatoryFields(changed){
-      if(syncing) return;
-      const rate=Number(el.unitRate.value||d.unit_rate||8);
-      if(!rate) return;
-      syncing=true;
-      if(changed==='bill'){
-        const bill=Number(el.monthlyBill.value);
-        el.monthlyUnits.value=bill>0?(bill/rate).toFixed(2):'';
-      }else if(changed==='units'){
-        const units=Number(el.monthlyUnits.value);
-        el.monthlyBill.value=units>0?(units*rate).toFixed(2):'';
+    function fillHybridSelectors(){
+      const rows=hybridRowsForSize(num(el.solarSize.value));
+      if(!rows.length){['inverterKva','phase','batteryCount'].forEach(id=>setField(id,'')); [el.inverterKva,el.phase,el.batteryCount].forEach(node=>node.innerHTML=''); return null;}
+      const vals=(key)=>[...new Set(rows.map(r=>String(r[key])))];
+      const options={inverterKva:vals('inverter_kva'),phase:vals('phase'),batteryCount:vals('battery_count')};
+      Object.entries(options).forEach(([id,list])=>{
+        const node=el[id],current=node.value;
+        node.innerHTML=list.map(v=>`<option>${v}</option>`).join('');
+        setField(id, list.includes(current)?current:list[0]);
+      });
+      return rows.find(r=>String(r.inverter_kva)===el.inverterKva.value&&String(r.phase)===el.phase.value&&String(r.battery_count)===el.batteryCount.value) || rows[0];
+    }
+
+    function recalculateSolarFinance(meta={}){
+      const {changedField=''}=meta;
+      const rate=Math.max(num(el.unitRate.value,d.unit_rate||8),0);
+      const gen=Math.max(num(el.dailyGeneration.value,d.daily_generation_per_kw||5),0);
+      const units=num(el.monthlyUnits.value), bill=num(el.monthlyBill.value);
+
+      if(changedField==='monthlyBill'&&rate>0){setField('monthlyUnits', bill>0?(bill/rate).toFixed(2):'');}
+      if(changedField==='monthlyUnits'&&rate>0){setField('monthlyBill', units>0?(units*rate).toFixed(2):'');}
+
+      const currentUnits=num(el.monthlyUnits.value);
+      const recommendedSize=(currentUnits>0&&gen>0)?roundSize(currentUnits/(gen*30)):0;
+      if(recommendedSize>0&&(changedField==='monthlyUnits'||changedField==='monthlyBill'||changedField==='systemType'||shouldAutofill('solarSize'))){
+        setField('solarSize', String(recommendedSize));
       }
-      syncing=false;
-    }
 
-    function applyPriceRefs(){const size=Number(el.solarSize.value||0); if(!size){el.effectiveLoan.value=''; return;} let ref;
-      if(el.systemType.value==='On-Grid'){ref=findOnGrid(size);} else {ref=selectedHybridRow();}
-      if(!ref) return;
-      const loan2=Number(ref.loan_upto_2_lacs||0), loanHigh=Number(ref.loan_above_2_lacs||0);
-      const chosen=loan2<=200000?loan2:loanHigh;
-      if(!Number(el.systemCost.value)) el.systemCost.value=chosen>0?String(chosen):'';
-      const systemCost=Number(el.systemCost.value||0);
-      if(!Number(el.loanAmount.value)) el.loanAmount.value=systemCost?String(Math.min(200000,Math.round(systemCost*0.9))):'';
-      if(!Number(el.marginMoney.value)) el.marginMoney.value=systemCost?String(Math.max(systemCost-Number(el.loanAmount.value||0), Math.round(systemCost*0.1))):'';
-      el.effectiveLoan.value=Math.max(Number(el.loanAmount.value||0)-Number(el.subsidy.value||0),0).toFixed(0);
-    }
+      let selectedRow=null;
+      if(el.systemType.value==='Hybrid'){selectedRow=fillHybridSelectors();}
+      else {
+        [el.inverterKva,el.phase,el.batteryCount].forEach(node=>node.innerHTML='');
+        selectedRow=findOnGrid(num(el.solarSize.value));
+      }
+      if(el.systemType.value==='Hybrid'&&!selectedRow){selectedRow=fillHybridSelectors();}
+      if(el.systemType.value==='Hybrid'&&selectedRow===null){selectedRow=findOnGrid(num(el.solarSize.value));}
 
-    function scheduleRender(){
-      clearTimeout(debounceTimer);
-      debounceTimer=setTimeout(()=>{autosyncAndRender();},320);
-    }
+      const recommendedCost=priceForRow(selectedRow||findOnGrid(num(el.solarSize.value)));
+      if(recommendedCost>0&&shouldAutofill('systemCost')) setField('systemCost', String(Math.round(recommendedCost)));
+      const cost=Math.max(num(el.systemCost.value),0);
 
-    function autosyncAndRender(changed=''){
-      if(changed==='bill'||changed==='units') syncMandatoryFields(changed);
-      const units=Number(el.monthlyUnits.value||0);
-      if(units>0 && !Number(el.solarSize.value)){el.solarSize.value=roundSize(units/(Number(el.dailyGeneration.value||5)*30));}
-      fillHybridSelectors();
-      applyPriceRefs();
+      const autoLoan=Math.min(200000,Math.round(cost*0.9));
+      const loanAmount=Math.max(num(el.loanAmount.value,autoLoan),0);
+      if(cost>0&&shouldAutofill('loanAmount')) setField('loanAmount', String(autoLoan));
+      const autoMargin=Math.max(cost-num(el.loanAmount.value,autoLoan), Math.round(cost*0.1));
+      if(cost>0&&shouldAutofill('marginMoney')) setField('marginMoney', String(autoMargin));
+      refreshEffectiveLoan();
       render();
     }
 
@@ -177,11 +175,12 @@ $defaults = $settings['defaults'] ?? [];
       const size=Number(el.solarSize.value||0), gen=Number(el.dailyGeneration.value||5), rate=Number(el.unitRate.value||8), cost=Number(el.systemCost.value||0), subsidy=Number(el.subsidy.value||0);
       if(!size||!gen||!rate||!cost){clearResults(); return;}
       const monthlyBill=bill||size*gen*30*rate; const solarUnits=size*gen*30; const solarValue=solarUnits*rate; const residual=Math.max(monthlyBill-solarValue,0);
-      const loanUp=Math.min(200000,Math.round(cost*0.9)); const marginUp=Math.max(cost-loanUp,Math.round(cost*0.1));
-      const higherLoanApplicable=isHigherLoanApplicable(cost);
+      const loanUp=Math.max(num(el.loanAmount.value),0)||Math.min(200000,Math.round(cost*0.9));
+      const marginUp=Math.max(num(el.marginMoney.value),0)||Math.max(cost-loanUp,Math.round(cost*0.1));
+      const higherLoanApplicable=Math.round(cost*0.8) >= 200000;
       const loanHigh=higherLoanApplicable?Math.round(cost*0.8):0; const marginHigh=higherLoanApplicable?Math.max(cost-loanHigh,Math.round(cost*0.2)):0;
       const effUp=Math.max(loanUp-subsidy,0), effHigh=higherLoanApplicable?Math.max(loanHigh-subsidy,0):0;
-      const tenure=Number(el.loanTenure.value||10); const emiUp=emi(effUp,Number(el.interestRate.value||d.interest_upto_2_lacs||6),tenure);
+      const tenure=num(el.loanTenure.value,10); const emiUp=emi(effUp,num(el.interestRate.value,d.interest_upto_2_lacs||6),tenure);
       const emiHigh=higherLoanApplicable?emi(effHigh,Number(d.interest_above_2_lacs||8.15),tenure):0;
 
       const monthlyLabels=['No Solar','Loan ≤2L']; const monthlyData=[monthlyBill,emiUp+residual]; const monthlyColors=['#9ca3af','#0f766e'];
@@ -226,21 +225,25 @@ $defaults = $settings['defaults'] ?? [];
     }
 
     function resetAllFields(){
-      Object.entries(defaultState).forEach(([key,val])=>{if(el[key])el[key].value=val;});
-      [el.inverterKva,el.phase,el.batteryCount].forEach(node=>node.innerHTML='');
+      manualOverride.clear();
+      Object.entries(defaultState).forEach(([key,val])=>setField(key,val));
+      [el.inverterKva,el.phase,el.batteryCount].forEach(node=>{node.innerHTML='';});
       clearResults();
-      autosyncAndRender();
+      recalculateSolarFinance({changedField:'reset'});
     }
 
-    ['solarSize','dailyGeneration','unitRate','systemCost','subsidy','loanAmount','marginMoney','interestRate','loanTenure'].forEach(id=>{
-      el[id].addEventListener('input',()=>scheduleRender());
-    });
-    ['systemType','inverterKva','phase','batteryCount'].forEach(id=>{
-      el[id].addEventListener('change',()=>scheduleRender());
-    });
-    el.monthlyBill.addEventListener('input',()=>{clearTimeout(debounceTimer);debounceTimer=setTimeout(()=>autosyncAndRender('bill'),320);});
-    el.monthlyUnits.addEventListener('input',()=>{clearTimeout(debounceTimer);debounceTimer=setTimeout(()=>autosyncAndRender('units'),320);});
-    document.getElementById('calcBtn').addEventListener('click',()=>autosyncAndRender());
+    function bindInput(id, eventName){
+      el[id].addEventListener(eventName,()=>{
+        if(!isProgrammaticUpdate && id!=='effectiveLoan') manualOverride.add(id);
+        const run=()=>recalculateSolarFinance({changedField:id});
+        if(eventName==='input' && debouncedIds.includes(id) && id!=='systemType'){clearTimeout(debounceTimer); debounceTimer=setTimeout(run,220); return;}
+        run();
+      });
+    }
+
+    ['monthlyBill','monthlyUnits','solarSize','dailyGeneration','unitRate','systemCost','subsidy','loanAmount','marginMoney','interestRate','loanTenure'].forEach(id=>bindInput(id,'input'));
+    ['systemType','inverterKva','phase','batteryCount'].forEach(id=>bindInput(id,'change'));
+    document.getElementById('calcBtn').addEventListener('click',()=>recalculateSolarFinance({changedField:'manualTrigger'}));
     document.getElementById('resetBtn').addEventListener('click',resetAllFields);
     resetAllFields();
   </script>
