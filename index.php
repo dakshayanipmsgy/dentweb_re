@@ -346,6 +346,14 @@ $schemaContext = [
       </div>
     </section>
 
+    <section class="section" aria-label="Solar and Finance quick access">
+      <div class="container" style="max-width:none;">
+        <a href="/solar-and-finance.php" class="btn btn-primary" style="display:flex;justify-content:center;gap:.6rem;padding:1rem 1.2rem;font-size:1.05rem;">
+          <i class="fa-solid fa-chart-line" aria-hidden="true"></i> Explore Solar &amp; Finance (25-year view)
+        </a>
+      </div>
+    </section>
+
     <div data-home-sections hidden>
       <div data-home-sections-list></div>
     </div>

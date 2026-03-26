@@ -15074,3 +15074,34 @@ body.smart-guide-open {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+.floating-solar-finance {
+  position: fixed;
+  left: 18px;
+  bottom: 130px;
+  z-index: 980;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  background: linear-gradient(135deg, #0f766e, #1d4ed8);
+  color: #fff;
+  border-radius: 999px;
+  padding: 10px 14px;
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.3);
+  font-weight: 700;
+}
+
+.floating-solar-finance:hover,
+.floating-solar-finance:focus-visible {
+  transform: translateY(-2px);
+  color: #fff;
+}
+
+@media (max-width: 768px) {
+  .floating-solar-finance {
+    left: 10px;
+    bottom: 92px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+}

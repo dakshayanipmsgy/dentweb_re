@@ -47,6 +47,7 @@ const INLINE_PARTIALS = {
           <a href="/innovation-tech.html" class="nav-link" role="menuitem">Innovation &amp; Tech</a>
           <a href="/blog/index.php" class="nav-link" role="menuitem">Blog &amp; Insights</a>
           <a href="/calculator.html" class="nav-link" role="menuitem">Solar Calculator</a>
+          <a href="/solar-and-finance.php" class="nav-link" role="menuitem">Solar &amp; Finance</a>
           <a href="/policies.html" class="nav-link" role="menuitem">Policies &amp; Compliance</a>
             </div>
           </div>
@@ -96,6 +97,7 @@ const INLINE_PARTIALS = {
       <a href="/innovation-tech.html">Innovation &amp; Tech</a>
       <a href="/blog/index.php">Blog &amp; Insights</a>
       <a href="/calculator.html">Solar Calculator</a>
+      <a href="/solar-and-finance.php">Solar &amp; Finance</a>
       <a href="/policies.html">Policies &amp; Compliance</a>
         </div>
         <div class="nav-mobile-divider" role="presentation"></div>
@@ -288,6 +290,8 @@ const INLINE_PARTIALS = {
     </div>
   </div>
 </div>
+
+<a href="/solar-and-finance.php" class="floating-solar-finance" aria-label="Open Solar and Finance page"><i class="fa-solid fa-chart-line"></i><span>Solar &amp; Finance</span></a>
   `.trim(),
 };
 
