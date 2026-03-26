@@ -346,20 +346,6 @@ $schemaContext = [
       </div>
     </section>
 
-    <section class="section solar-finance-highlight">
-      <div class="container">
-        <a class="solar-finance-promo" href="/solar-and-finance.php">
-          <div class="solar-finance-promo__icon" aria-hidden="true">☀️</div>
-          <div class="solar-finance-promo__text">
-            <p class="solar-finance-promo__kicker">New customer tool</p>
-            <h2>Solar and Finance</h2>
-            <p>Understand your likely solar requirement, savings, on-grid vs hybrid options, and request a quotation instantly.</p>
-          </div>
-          <span class="solar-finance-promo__cta">Explore now <i class="fa-solid fa-arrow-right"></i></span>
-        </a>
-      </div>
-    </section>
-
     <div data-home-sections hidden>
       <div data-home-sections-list></div>
     </div>
