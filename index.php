@@ -294,16 +294,6 @@ $schemaContext = [
   <?php endif; ?>
 
   <main>
-    <section class="home-solar-finance-cta" aria-label="Solar and Finance quick access">
-      <div class="container home-solar-finance-cta__inner">
-        <div>
-          <p class="home-solar-finance-cta__kicker">New for homeowners</p>
-          <h2>Solar and Finance</h2>
-          <p>Understand solar in simple language and compare loan vs self-funded monthly outflow in minutes.</p>
-        </div>
-        <a class="btn btn-primary" href="/solar-and-finance.php">Open Solar and Finance</a>
-      </div>
-    </section>
     <section id="hero" class="hero section" data-hero-section hidden>
       <div class="container hero-grid">
         <div class="hero-content">
