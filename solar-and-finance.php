@@ -18,12 +18,20 @@ $defaults = $settings['defaults'] ?? [];
   <style>
     .sf-wrap{width:100%;max-width:none;padding:2rem 2rem 4rem;background:#f8fbff}.sf-hero,.sf-card{background:#fff;border:1px solid #dbe4f0;border-radius:18px;box-shadow:0 10px 28px rgba(2,6,23,.06)}
     .sf-hero{padding:2rem;margin-bottom:1.5rem}.sf-grid{display:grid;gap:1rem}.sf-grid.cards{grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-bottom:1.8rem}
-    .sf-card{padding:1.1rem}.sf-card h3{margin:.4rem 0}.sf-flex{display:grid;grid-template-columns:1.3fr 1fr;gap:1rem}.sf-pro{margin-top:1rem}
+    .sf-card{padding:1.1rem}.sf-card h3{margin:.4rem 0}.sf-flex{display:grid;grid-template-columns:1fr;gap:1rem}.sf-pro{margin-top:1rem}
     .sf-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.8rem}.sf-inputs label{display:flex;flex-direction:column;gap:.35rem;font-weight:600;font-size:.92rem}
     .sf-inputs input,.sf-inputs select{padding:.55rem .65rem;border:1px solid #c6d1e2;border-radius:10px}.sf-results{margin-top:1.2rem}.sf-metric{background:#f5f8ff;border:1px solid #d4def1;border-radius:12px;padding:.85rem}
     .sf-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.7rem}.sf-finance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.8rem}
     .sf-finance-grid ul{margin:.4rem 0 0;padding-left:1rem}.sf-btn{background:#0f766e;color:#fff;padding:.7rem 1rem;border:none;border-radius:10px;font-weight:700;cursor:pointer}
     .sf-btn.alt{background:#1d4ed8}.sf-btn.report{background:#0b5ed7}.sf-note{font-size:.85rem;color:#51607a}.sf-customer{margin-top:1rem}.sf-error{font-size:.82rem;color:#b91c1c;margin-top:.35rem}
+    .sf-glance{margin-top:1rem}.sf-glance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem}
+    .sf-glance-group{background:#f8faff;border:1px solid #dbe6f7;border-radius:14px;padding:1rem}
+    .sf-glance-group h3{margin:0 0 .7rem;font-size:1rem}
+    .sf-glance-list{display:grid;gap:.45rem}
+    .sf-glance-item{display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;padding:.35rem 0;border-bottom:1px dashed #d8e1ef}
+    .sf-glance-item:last-child{border-bottom:none;padding-bottom:0}
+    .sf-glance-label{font-weight:600;color:#23324d;font-size:.9rem}
+    .sf-glance-value{font-weight:700;color:#0f172a;text-align:right}
     @media(max-width:900px){.sf-wrap{padding:1rem}.sf-flex{grid-template-columns:1fr}}
   </style>
 </head>
@@ -89,10 +97,12 @@ $defaults = $settings['defaults'] ?? [];
           <button class="sf-btn alt" type="button" id="resetBtn">Reset All Fields</button>
         </div>
       </div>
-      <div class="sf-card">
-        <h2>Generation Estimate</h2>
-        <div class="sf-kpis" id="kpiPanel"></div>
-      </div>
+    </section>
+
+    <section class="sf-card sf-glance">
+      <h2>Solar at a Glance</h2>
+      <p class="sf-note">A quick summary of your system, pricing, generation, savings, payback, and green impact.</p>
+      <div id="glancePanel" class="sf-glance-grid"></div>
     </section>
 
 
@@ -152,7 +162,7 @@ $defaults = $settings['defaults'] ?? [];
     const debouncedIds=['monthlyBill','monthlyUnits','solarSize','dailyGeneration','unitRate','subsidy','loanTenure','systemCostSelf','systemCostUp2','systemCostAbove2','loanAmountUp2','marginMoneyUp2','interestRateUp2','loanAmountAbove2','marginMoneyAbove2','interestRateAbove2'];
     const ids=[...debouncedIds,'systemType','inverterKva','phase','batteryCount','loanAboveGroupWrap','customerName','customerLocation','customerMobile','customerError','generateReportBtn'];
     const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
-    const kpiPanel=document.getElementById('kpiPanel'),paybackMeters=document.getElementById('paybackMeters'),financeBoxes=document.getElementById('financeBoxes'),waQuote=document.getElementById('waQuote');
+    const glancePanel=document.getElementById('glancePanel'),paybackMeters=document.getElementById('paybackMeters'),financeBoxes=document.getElementById('financeBoxes'),waQuote=document.getElementById('waQuote');
     let latestSnapshot=null, latestReportUrl='';
 
     const num=(v,fallback=0)=>{const n=Number(v); return Number.isFinite(n)?n:fallback;};
@@ -203,7 +213,7 @@ $defaults = $settings['defaults'] ?? [];
 
     function clearResults(){
       document.getElementById('results').hidden=true;
-      kpiPanel.innerHTML=''; paybackMeters.innerHTML=''; financeBoxes.innerHTML='';
+      glancePanel.innerHTML=''; paybackMeters.innerHTML=''; financeBoxes.innerHTML='';
       if(mChart){mChart.destroy();mChart=null;} if(cChart){cChart.destroy();cChart=null;}
     }
 
@@ -325,13 +335,77 @@ $defaults = $settings['defaults'] ?? [];
       };
 
       document.getElementById('results').hidden=false;
-      const kpi=[['Expected monthly generation',`${solarUnits.toFixed(0)} units`],['Expected annual generation',`${(solarUnits*12).toFixed(0)} units`],['Units in 25 years',`${(solarUnits*12*25).toFixed(0)} units`],['Annual saving',INR(Math.max(monthlyBill-residual,0)*12)],['Estimated payback (self funded)',formatSelfFundedPayback(selfFundedPaybackYears)],['Roof area needed',`${(size*Number(d.roof_area_sqft_per_kw||100)).toFixed(0)} sq.ft`],['Bill offset',`${Math.min((solarValue/Math.max(monthlyBill,1))*100,100).toFixed(1)}%`],['Annual CO₂ reduction',`${((solarUnits*12)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['25-year CO₂ reduction',`${((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['Tree equivalent',`${(((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82))/Number(d.tree_factor_kg_per_tree||21)).toFixed(0)} trees`]];
-      kpiPanel.innerHTML=kpi.map(([k,v])=>`<div class='sf-metric'><strong>${k}</strong><div>${v}</div></div>`).join('');
-
+      const monthlySaving=Math.max(monthlyBill-residual,0);
+      const annualSaving=monthlySaving*12;
+      const saving25=annualSaving*25;
       const monthlyOutflowLoanUp2=emiUp+residual;
+      const monthlyOutflowLoanHigh=emiHigh+residual;
+      const roofArea=(size*Number(d.roof_area_sqft_per_kw||100)).toFixed(0);
+      const billOffset=Math.min((solarValue/Math.max(monthlyBill,1))*100,100).toFixed(1);
+      const annualCo2=((solarUnits*12)*Number(d.co2_factor_kg_per_unit||0.82));
+      const co225=annualCo2*25;
+      const treeFactor=Number(d.tree_factor_kg_per_tree||21);
+      const annualTrees=annualCo2/Math.max(treeFactor,1);
+      const trees25=co225/Math.max(treeFactor,1);
+
+      const groupedGlanceData=[
+        {
+          title:'Group 1 — System',
+          rows:[
+            ['Solar system type',el.systemType.value||'—'],
+            ['Solar size (kW / kWp)',`${size.toFixed(1)} kW`],
+            ...(el.systemType.value==='Hybrid'&&el.inverterKva.value?[['Inverter',`${el.inverterKva.value} kVA`]]:[]),
+            ...(el.systemType.value==='Hybrid'&&el.batteryCount.value?[['Battery count',`${el.batteryCount.value}`]]:[]),
+            ...(el.systemType.value==='Hybrid'&&el.phase.value?[['Phase',el.phase.value]]:[]),
+          ]
+        },
+        {
+          title:'Group 2 — Pricing',
+          rows:[
+            ['Self Funded price',INR(costSelf)],
+            ['Loan up to 2 lacs price',INR(costUp2)],
+            ...(higherLoanApplicable?[['Loan above 2 lacs price',INR(costAbove2)]]:[])
+          ]
+        },
+        {
+          title:'Group 3 — Generation & Savings',
+          rows:[
+            ['Expected monthly generation',`${solarUnits.toFixed(0)} units`],
+            ['Expected annual generation',`${(solarUnits*12).toFixed(0)} units`],
+            ['Expected generation in 25 years',`${(solarUnits*12*25).toFixed(0)} units`],
+            ['Estimated monthly savings',INR(monthlySaving)],
+            ['Estimated annual savings',INR(annualSaving)],
+            ['Estimated savings in 25 years',INR(saving25)]
+          ]
+        },
+        {
+          title:'Group 4 — Payback & Outflow',
+          rows:[
+            ['Estimated payback period — Self Funded',formatSelfFundedPayback(selfFundedPaybackYears)],
+            ['Estimated payback period — Loan up to 2 lacs',formatLoanPayback(findLoanPaybackMonth(marginUp,monthlyOutflowLoanUp2,monthlyBill))],
+            ...(higherLoanApplicable?[['Estimated payback period — Loan above 2 lacs',formatLoanPayback(findLoanPaybackMonth(marginHigh,monthlyOutflowLoanHigh,monthlyBill))]]:[]),
+            ['Monthly outflow — No Solar',INR(monthlyBill)],
+            ['Monthly outflow — Self Funded',INR(residual)],
+            ['Monthly outflow — Loan up to 2 lacs',INR(monthlyOutflowLoanUp2)],
+            ...(higherLoanApplicable?[['Monthly outflow — Loan above 2 lacs',INR(monthlyOutflowLoanHigh)]]:[])
+          ]
+        },
+        {
+          title:'Group 5 — Feasibility & Green Impact',
+          rows:[
+            ['Roof area needed',`${roofArea} sq.ft`],
+            ['Bill offset (%)',`${billOffset}%`],
+            ['Annual CO₂ reduction',`${annualCo2.toFixed(0)} kg`],
+            ['25-year CO₂ reduction',`${co225.toFixed(0)} kg`],
+            ['Annual trees equivalent',`${annualTrees.toFixed(0)} trees`],
+            ['25-year trees equivalent',`${trees25.toFixed(0)} trees`]
+          ]
+        }
+      ];
+      glancePanel.innerHTML=groupedGlanceData.map(group=>`<article class="sf-glance-group"><h3>${group.title}</h3><div class="sf-glance-list">${group.rows.filter(([,v])=>v!==''&&v!==null&&v!==undefined).map(([label,value])=>`<div class="sf-glance-item"><span class="sf-glance-label">${label}</span><span class="sf-glance-value">${value}</span></div>`).join('')}</div></article>`).join('');
+
       const payback=[['Loan up to 2 lacs',formatLoanPayback(findLoanPaybackMonth(marginUp,monthlyOutflowLoanUp2,monthlyBill))]];
       if(higherLoanApplicable){
-        const monthlyOutflowLoanHigh=emiHigh+residual;
         payback.push(['Loan above 2 lacs',formatLoanPayback(findLoanPaybackMonth(marginHigh,monthlyOutflowLoanHigh,monthlyBill))]);
       }
       payback.push(['Self Funded',formatSelfFundedPayback(selfFundedPaybackYears)]);
