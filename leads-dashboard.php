@@ -489,6 +489,7 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
         <?php endif; ?>
       </td>
       <td><?php echo leads_safe((string) $callNotPickedCount); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'best_time_to_call')); ?></td>
       <td>
         <div class="table-actions">
           <a class="btn-secondary lead-action action-btn" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">WhatsApp</a>
@@ -532,7 +533,6 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
       <td><?php echo leads_safe(leads_value_or_dash($lead, 'finance_subsidy')); ?></td>
       <td><?php echo leads_safe(leads_value_or_dash($lead, 'property_type')); ?></td>
       <td><?php echo leads_safe(leads_value_or_dash($lead, 'roof_type')); ?></td>
-      <td><?php echo leads_safe(leads_value_or_dash($lead, 'best_time_to_call')); ?></td>
       <td><?php echo leads_safe(leads_value_or_dash($lead, 'area_pincode')); ?></td>
       <td><?php echo leads_safe((string) ($lead['rating'] ?? '')); ?></td>
       <td><?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?></td>
@@ -1908,12 +1908,12 @@ ksort($duplicateGroups);
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('last_contacted_at', $sortBy, $sortDir)); ?>">Last Contacted<?php echo leads_safe(leads_sort_indicator('last_contacted_at', $sortBy, $sortDir)); ?></a></th>
               <th>Message Sent (Intro + Details)</th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('call_not_picked_count', $sortBy, $sortDir)); ?>">Call not Picked<?php echo leads_safe(leads_sort_indicator('call_not_picked_count', $sortBy, $sortDir)); ?></a></th>
+              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('best_time_to_call', $sortBy, $sortDir)); ?>">Best Time to Call<?php echo leads_safe(leads_sort_indicator('best_time_to_call', $sortBy, $sortDir)); ?></a></th>
               <th>Actions</th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('email', $sortBy, $sortDir)); ?>">Email<?php echo leads_safe(leads_sort_indicator('email', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('finance_subsidy', $sortBy, $sortDir)); ?>">Finance &amp; Subsidy<?php echo leads_safe(leads_sort_indicator('finance_subsidy', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('property_type', $sortBy, $sortDir)); ?>">Property Type<?php echo leads_safe(leads_sort_indicator('property_type', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('roof_type', $sortBy, $sortDir)); ?>">Roof Type<?php echo leads_safe(leads_sort_indicator('roof_type', $sortBy, $sortDir)); ?></a></th>
-              <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('best_time_to_call', $sortBy, $sortDir)); ?>">Best Time to Call<?php echo leads_safe(leads_sort_indicator('best_time_to_call', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('area_pincode', $sortBy, $sortDir)); ?>">Area Pincode<?php echo leads_safe(leads_sort_indicator('area_pincode', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('rating', $sortBy, $sortDir)); ?>">Rating<?php echo leads_safe(leads_sort_indicator('rating', $sortBy, $sortDir)); ?></a></th>
               <th><a class="sort-link" href="<?php echo leads_safe(leads_build_sort_link('assigned_to', $sortBy, $sortDir)); ?>">Assigned To<?php echo leads_safe(leads_sort_indicator('assigned_to', $sortBy, $sortDir)); ?></a></th>
