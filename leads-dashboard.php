@@ -466,40 +466,40 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
       <td class="lead-index"><?php echo $index; ?></td>
       <td><?php echo leads_safe((string) ($lead['name'] ?? '')); ?></td>
       <td><a href="tel:<?php echo leads_safe($leadMobileRaw); ?>"><?php echo leads_safe($leadMobileRaw); ?></a></td>
-      <td class="muted-col cell-clip"><?php echo leads_safe(leads_value_or_dash($lead, 'email')); ?></td>
-      <td class="muted-col cell-clip"><?php echo leads_safe((string) ($lead['city'] ?? '')); ?></td>
-      <td class="muted-col cell-clip"><?php echo leads_safe(leads_value_or_dash($lead, 'monthly_bill')); ?></td>
-      <td class="muted-col cell-clip"><?php echo leads_safe(leads_value_or_dash($lead, 'finance_subsidy')); ?></td>
-      <td class="muted-col"><span class="mini-tag"><?php echo leads_safe(leads_value_or_dash($lead, 'property_type')); ?></span></td>
-      <td class="muted-col"><span class="mini-tag"><?php echo leads_safe(leads_value_or_dash($lead, 'roof_type')); ?></span></td>
-      <td class="muted-col cell-clip"><?php echo leads_safe(leads_value_or_dash($lead, 'best_time_to_call')); ?></td>
-      <td class="muted-col cell-clip"><?php echo leads_safe(leads_value_or_dash($lead, 'area_pincode')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'email')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['city'] ?? '')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'monthly_bill')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'finance_subsidy')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'property_type')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'roof_type')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'best_time_to_call')); ?></td>
+      <td><?php echo leads_safe(leads_value_or_dash($lead, 'area_pincode')); ?></td>
       <td><span class="badge pill"><?php echo leads_safe((string) ($lead['status'] ?? '')); ?></span></td>
-      <td class="muted-col cell-clip"><?php echo leads_safe((string) ($lead['rating'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['rating'] ?? '')); ?></td>
       <td><?php echo leads_safe(trim(((string) ($lead['next_followup_date'] ?? '')) . ' ' . ((string) ($lead['next_followup_time'] ?? '')))); ?></td>
       <td><?php echo leads_safe((string) ($lead['assigned_to_name'] ?? '')); ?></td>
-      <td class="muted-col cell-clip"><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
       <td class="lead-message-status-cell">
         <?php if ($whatsappSent): ?>
-          <span class="badge tiny-badge" style="background:#dcfce7;color:#166534;">WA</span>
+          <span class="badge pill" style="background:#dcfce7;color:#166534;">WA Intro</span>
         <?php endif; ?>
         <?php if ($emailSent): ?>
-          <span class="badge tiny-badge" style="background:#dbeafe;color:#1e40af;">EM</span>
+          <span class="badge pill" style="background:#dbeafe;color:#1e40af;">Email Intro</span>
         <?php endif; ?>
         <?php if ($whatsappDetailsSent): ?>
-          <span class="badge tiny-badge" style="background:#ede9fe;color:#5b21b6;">WA-D</span>
+          <span class="badge pill" style="background:#ede9fe;color:#5b21b6;">WA Details</span>
         <?php endif; ?>
         <?php if ($emailDetailsSent): ?>
-          <span class="badge tiny-badge" style="background:#ffe4e6;color:#9f1239;">EM-D</span>
+          <span class="badge pill" style="background:#ffe4e6;color:#9f1239;">Email Details</span>
         <?php endif; ?>
         <?php if (!$whatsappSent && !$emailSent && !$whatsappDetailsSent && !$emailDetailsSent): ?>
           <span style="color:#9ca3af;">&mdash;</span>
         <?php endif; ?>
       </td>
       <td><?php echo leads_safe((string) $callNotPickedCount); ?></td>
-      <td class="muted-col cell-clip"><?php echo leads_safe((string) ($lead['created_at'] ?? '')); ?></td>
-      <td class="muted-col cell-clip"><?php echo leads_safe((string) ($lead['updated_at'] ?? '')); ?></td>
-      <td class="muted-col cell-clip">
+      <td><?php echo leads_safe((string) ($lead['created_at'] ?? '')); ?></td>
+      <td><?php echo leads_safe((string) ($lead['updated_at'] ?? '')); ?></td>
+      <td>
         <?php if (($lead['source_campaign_name'] ?? '') !== ''): ?>
           <?php echo leads_safe((string) ($lead['source_campaign_name'] ?? '')); ?>
           <?php if (($lead['source_campaign_id'] ?? '') !== ''): ?>
@@ -509,37 +509,32 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
       </td>
       <td>
         <div class="table-actions">
-          <a class="btn-secondary lead-action action-chip" data-action="view_edit" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="lead-detail.php?id=<?php echo urlencode((string) ($lead['id'] ?? '')); ?>">View / Edit</a>
-          <a class="btn-secondary lead-action action-chip" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">WhatsApp</a>
+          <a class="btn-secondary lead-action" data-action="view_edit" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="lead-detail.php?id=<?php echo urlencode((string) ($lead['id'] ?? '')); ?>">View / Edit</a>
+          <a class="btn-secondary lead-action" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">WhatsApp</a>
+          <a class="btn-secondary lead-action" data-action="email" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;" href="#">Email</a>
+          <a class="btn-secondary lead-action" data-action="whatsapp_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#ede9fe; color:#4c1d95;" href="#">WhatsApp Details</a>
+          <a class="btn-secondary lead-action" data-action="email_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#ffe4e6; color:#881337;" href="#">Email Details</a>
+          <button type="button" class="btn lead-action" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#10b981;">Mark Contacted Now</button>
+          <button type="button" class="btn lead-action" data-action="mark_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#2563eb;">Interested</button>
+          <button type="button" class="btn-secondary lead-action" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#fee2e2; color:#991b1b;">Call not Picked</button>
           <?php if ($canCreateQuotation): ?>
-            <a class="btn lead-action action-chip" data-action="create_quotation" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#1d4ed8;" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
+            <a class="btn lead-action" data-action="create_quotation" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#1d4ed8;" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
           <?php else: ?>
             <?php $quotationDisabledReason = $isArchived ? 'Archived lead' : 'Missing name/mobile'; ?>
-            <button type="button" class="btn-secondary action-chip" style="opacity:0.55; cursor:not-allowed;" disabled title="<?php echo leads_safe($quotationDisabledReason); ?>"><?php echo $isArchived ? 'Archived' : 'Create Quotation'; ?></button>
+            <button type="button" class="btn-secondary" style="padding:0.35rem 0.6rem; opacity:0.55; cursor:not-allowed;" disabled title="<?php echo leads_safe($quotationDisabledReason); ?>"><?php echo $isArchived ? 'Archived' : 'Create Quotation'; ?></button>
           <?php endif; ?>
-          <div class="action-more">
-            <button type="button" class="btn-secondary action-chip action-more-toggle" aria-expanded="false">More ▾</button>
-            <div class="action-more-menu">
-              <a class="btn-secondary lead-action action-chip" data-action="email" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">Email</a>
-              <a class="btn-secondary lead-action action-chip" data-action="whatsapp_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#ede9fe; color:#4c1d95;" href="#">WhatsApp Details</a>
-              <a class="btn-secondary lead-action action-chip" data-action="email_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#ffe4e6; color:#881337;" href="#">Email Details</a>
-              <button type="button" class="btn lead-action action-chip" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#10b981;">Mark Contacted Now</button>
-              <button type="button" class="btn lead-action action-chip" data-action="mark_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#2563eb;">Interested</button>
-              <button type="button" class="btn-secondary lead-action action-chip" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#fee2e2; color:#991b1b;">Call not Picked</button>
-              <?php if (!$customerCreated && $hasMobile): ?>
-                <button type="button" class="btn-secondary lead-action action-chip" data-action="create_customer" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#e0f2fe; color:#0f172a;">Create Customer</button>
-              <?php endif; ?>
-              <?php if (!$isConverted): ?>
-                <button type="button" class="btn lead-action action-chip" data-action="mark_converted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#16a34a;">Converted</button>
-              <?php endif; ?>
-              <?php if (!$isNotInterested): ?>
-                <button type="button" class="btn-secondary lead-action action-chip" data-action="mark_not_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#fbbf24; color:#1f2937;">Not Interested</button>
-              <?php endif; ?>
-              <?php if (!$isArchived): ?>
-                <button type="button" class="btn-secondary lead-action action-chip" data-action="archive_lead" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Archive</button>
-              <?php endif; ?>
-            </div>
-          </div>
+          <?php if (!$isArchived): ?>
+            <button type="button" class="btn-secondary lead-action" data-action="archive_lead" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem;">Archive</button>
+          <?php endif; ?>
+          <?php if (!$customerCreated && $hasMobile): ?>
+            <button type="button" class="btn-secondary lead-action" data-action="create_customer" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#e0f2fe; color:#0f172a;">Create Customer</button>
+          <?php endif; ?>
+          <?php if (!$isConverted): ?>
+            <button type="button" class="btn lead-action" data-action="mark_converted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#16a34a;">Converted</button>
+          <?php endif; ?>
+          <?php if (!$isNotInterested): ?>
+            <button type="button" class="btn-secondary lead-action" data-action="mark_not_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="padding:0.35rem 0.6rem; background:#fbbf24; color:#1f2937;">Not Interested</button>
+          <?php endif; ?>
         </div>
       </td>
     </tr>
@@ -1258,30 +1253,6 @@ usort($filteredLeads, static function (array $a, array $b) use ($sortBy, $sortDi
     $textSort = static function (string $left, string $right) use ($direction): int {
         return strnatcasecmp($left, $right) * $direction;
     };
-    $numberFromValue = static function (string $value): ?float {
-        $cleaned = preg_replace('/[^0-9.\-]+/', '', $value);
-        if ($cleaned === null || $cleaned === '' || $cleaned === '-' || $cleaned === '.') {
-            return null;
-        }
-        if (!is_numeric($cleaned)) {
-            return null;
-        }
-        return (float) $cleaned;
-    };
-    $numberSort = static function (string $left, string $right) use ($direction, $numberFromValue, $textSort): int {
-        $leftNumber = $numberFromValue($left);
-        $rightNumber = $numberFromValue($right);
-        if ($leftNumber !== null && $rightNumber !== null) {
-            return ($leftNumber <=> $rightNumber) * $direction;
-        }
-        if ($leftNumber !== null) {
-            return -1 * $direction;
-        }
-        if ($rightNumber !== null) {
-            return 1 * $direction;
-        }
-        return $textSort($left, $right);
-    };
 
     if ($sortBy === 'name') {
         return $textSort((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
@@ -1296,10 +1267,10 @@ usort($filteredLeads, static function (array $a, array $b) use ($sortBy, $sortDi
         return $textSort((string) ($a['email'] ?? ''), (string) ($b['email'] ?? ''));
     }
     if ($sortBy === 'monthly_bill') {
-        return $numberSort((string) ($a['monthly_bill'] ?? ''), (string) ($b['monthly_bill'] ?? ''));
+        return $textSort((string) ($a['monthly_bill'] ?? ''), (string) ($b['monthly_bill'] ?? ''));
     }
     if ($sortBy === 'finance_subsidy') {
-        return $numberSort((string) ($a['finance_subsidy'] ?? ''), (string) ($b['finance_subsidy'] ?? ''));
+        return $textSort((string) ($a['finance_subsidy'] ?? ''), (string) ($b['finance_subsidy'] ?? ''));
     }
     if ($sortBy === 'property_type') {
         return $textSort((string) ($a['property_type'] ?? ''), (string) ($b['property_type'] ?? ''));
@@ -1311,13 +1282,13 @@ usort($filteredLeads, static function (array $a, array $b) use ($sortBy, $sortDi
         return $textSort((string) ($a['best_time_to_call'] ?? ''), (string) ($b['best_time_to_call'] ?? ''));
     }
     if ($sortBy === 'area_pincode') {
-        return $numberSort((string) ($a['area_pincode'] ?? ''), (string) ($b['area_pincode'] ?? ''));
+        return $textSort((string) ($a['area_pincode'] ?? ''), (string) ($b['area_pincode'] ?? ''));
     }
     if ($sortBy === 'status') {
         return $textSort((string) ($a['status'] ?? ''), (string) ($b['status'] ?? ''));
     }
     if ($sortBy === 'rating') {
-        return $numberSort((string) ($a['rating'] ?? ''), (string) ($b['rating'] ?? ''));
+        return $textSort((string) ($a['rating'] ?? ''), (string) ($b['rating'] ?? ''));
     }
     if ($sortBy === 'assigned_to') {
         return $textSort((string) ($a['assigned_to_name'] ?? ''), (string) ($b['assigned_to_name'] ?? ''));
@@ -1396,25 +1367,13 @@ ksort($duplicateGroups);
     button { font: inherit; cursor: pointer; }
     .btn { background: #2563eb; color: #fff; border: none; padding: 0.7rem 1.1rem; border-radius: 10px; font-weight: 700; }
     .btn-secondary { background: #eef2ff; color: #1f2937; }
-    table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
-    th, td { text-align: left; padding: 0.45rem 0.45rem; border-bottom: 1px solid #e5e7eb; white-space: nowrap; vertical-align: middle; background:#fff; }
-    th { font-size: 0.82rem; color: #374151; position: sticky; top: 0; z-index: 3; background: #f8fafc; }
-    td { font-size: 0.82rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 0.65rem 0.5rem; border-bottom: 1px solid #e5e7eb; }
+    th { font-size: 0.9rem; color: #374151; }
     tr:hover { background: #f9fafb; }
-    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 700; font-size: 0.72rem; line-height: 1.2; }
+    .badge { display: inline-block; padding: 0.25rem 0.55rem; border-radius: 999px; font-weight: 700; font-size: 0.85rem; }
     .pill { background: #eef2ff; color: #4338ca; }
-    .table-actions { display: flex; gap: 0.25rem; flex-wrap: nowrap; align-items:center; }
-    .action-chip { font-size: 0.74rem; line-height: 1.1; padding: 0.28rem 0.5rem; border-radius: 999px; text-decoration:none; border: 1px solid #dbe4ff; display:inline-flex; align-items:center; }
-    .btn.action-chip { border-color: transparent; }
-    .action-more { position: relative; }
-    .action-more-menu { display: none; position: absolute; right: 0; top: calc(100% + 4px); z-index: 8; min-width: 180px; background: #fff; border: 1px solid #d1d5db; border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.15); padding: 0.35rem; }
-    .action-more.open .action-more-menu { display: grid; gap: 0.3rem; }
-    .action-more-menu .action-chip { width: 100%; justify-content: flex-start; }
-    .tiny-badge { margin-right: 0.15rem; }
-    .muted-col { color: #6b7280; font-size: 0.76rem; }
-    .cell-clip { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
-    .mini-tag { display:inline-block; padding: 0.12rem 0.45rem; border-radius:999px; background:#f1f5f9; color:#475569; font-size:0.72rem; }
-    .lead-message-status-cell { min-width: 95px; }
+    .table-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
     .messages { margin-bottom: 1rem; }
     .alert { padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 0.5rem; }
     .alert-success { background: #ecfdf3; color: #166534; border: 1px solid #bbf7d0; }
@@ -1447,14 +1406,6 @@ ksort($duplicateGroups);
     .ux-toast { background: #111827; color: #fff; padding: 0.65rem 0.85rem; border-radius: 10px; box-shadow: 0 10px 24px rgba(0,0,0,0.2); }
     .sort-link { color: inherit; text-decoration: none; white-space: nowrap; }
     .sort-link:hover { text-decoration: underline; }
-    .sort-link.active { color:#1d4ed8; font-weight:700; }
-    .leads-table-scroll { overflow-x:auto; position: relative; border:1px solid #e5e7eb; border-radius: 10px; }
-    .leads-table-scroll th:nth-child(1), .leads-table-scroll td:nth-child(1) { position: sticky; left: 0; z-index: 4; min-width: 56px; }
-    .leads-table-scroll th:nth-child(2), .leads-table-scroll td:nth-child(2) { position: sticky; left: 56px; z-index: 4; min-width: 56px; }
-    .leads-table-scroll th:nth-child(3), .leads-table-scroll td:nth-child(3) { position: sticky; left: 112px; z-index: 4; min-width: 160px; }
-    .leads-table-scroll th:nth-child(4), .leads-table-scroll td:nth-child(4) { position: sticky; left: 272px; z-index: 4; min-width: 120px; }
-    .leads-table-scroll th:nth-child(13), .leads-table-scroll td:nth-child(13) { position: sticky; left: 392px; z-index: 4; min-width: 120px; }
-    .leads-table-scroll th:nth-child(23), .leads-table-scroll td:nth-child(23) { position: sticky; right: 0; z-index: 5; min-width: 350px; box-shadow: -8px 0 12px rgba(148,163,184,0.2); }
     textarea { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d1d5db; border-radius: 10px; font: inherit; }
   </style>
 </head>
@@ -1803,7 +1754,7 @@ ksort($duplicateGroups);
         <button type="submit" class="btn-secondary" onclick="return confirm('Apply this action to selected leads?');">Apply</button>
       </form>
 
-      <div id="leads-table-region" class="leads-table-scroll">
+      <div style="overflow-x:auto;">
         <table>
           <thead>
             <tr>
@@ -1877,7 +1828,6 @@ ksort($duplicateGroups);
     const drawerBody = document.getElementById('ux-drawer-body');
     const drawerTitle = document.getElementById('ux-drawer-title');
     const toastWrap = document.getElementById('ux-toast-wrap');
-    const leadsTableRegion = document.getElementById('leads-table-region');
     const whatsappTemplate = <?php echo json_encode((string) ($messageSettings['default_whatsapp_message'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
     const emailSubjectTemplate = <?php echo json_encode((string) ($messageSettings['default_email_subject'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
     const emailBodyTemplate = <?php echo json_encode((string) ($messageSettings['default_email_body'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
@@ -1894,30 +1844,6 @@ ksort($duplicateGroups);
       el.textContent = message;
       toastWrap.appendChild(el);
       setTimeout(() => el.remove(), 3000);
-    }
-
-    async function replaceLeadsTableFromUrl(url, shouldPushState = true) {
-      const scrollX = leadsTableRegion ? leadsTableRegion.scrollLeft : 0;
-      const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-      const html = await response.text();
-      const parser = new DOMParser();
-      const nextDoc = parser.parseFromString(html, 'text/html');
-      const nextRegion = nextDoc.getElementById('leads-table-region');
-      if (!nextRegion || !leadsTableRegion) {
-        window.location.href = url;
-        return;
-      }
-      leadsTableRegion.innerHTML = nextRegion.innerHTML;
-      const sortByInput = document.querySelector('form.filters input[name="sort_by"]');
-      const sortDirInput = document.querySelector('form.filters input[name="sort_dir"]');
-      const nextSortBy = new URL(url, window.location.origin).searchParams.get('sort_by') || '';
-      const nextSortDir = new URL(url, window.location.origin).searchParams.get('sort_dir') || '';
-      if (sortByInput) sortByInput.value = nextSortBy;
-      if (sortDirInput) sortDirInput.value = nextSortDir;
-      leadsTableRegion.scrollLeft = scrollX;
-      if (shouldPushState) {
-        window.history.pushState({ leadsUrl: url }, '', url);
-      }
     }
 
     function openModal(title, html) {
@@ -2052,36 +1978,6 @@ ksort($duplicateGroups);
     });
 
     document.addEventListener('click', async (event) => {
-      const sortLink = event.target.closest('.sort-link');
-      if (sortLink) {
-        event.preventDefault();
-        await replaceLeadsTableFromUrl(sortLink.href);
-        return;
-      }
-      const moreToggle = event.target.closest('.action-more-toggle');
-      if (moreToggle) {
-        event.preventDefault();
-        const menuWrap = moreToggle.closest('.action-more');
-        document.querySelectorAll('.action-more.open').forEach((menu) => {
-          if (menu !== menuWrap) {
-            menu.classList.remove('open');
-            const toggle = menu.querySelector('.action-more-toggle');
-            if (toggle) toggle.setAttribute('aria-expanded', 'false');
-          }
-        });
-        if (menuWrap) {
-          menuWrap.classList.toggle('open');
-          moreToggle.setAttribute('aria-expanded', menuWrap.classList.contains('open') ? 'true' : 'false');
-        }
-        return;
-      }
-      if (!event.target.closest('.action-more')) {
-        document.querySelectorAll('.action-more.open').forEach((menu) => {
-          menu.classList.remove('open');
-          const toggle = menu.querySelector('.action-more-toggle');
-          if (toggle) toggle.setAttribute('aria-expanded', 'false');
-        });
-      }
       const actionEl = event.target.closest('.lead-action');
       if (!actionEl) return;
       event.preventDefault();
@@ -2234,23 +2130,6 @@ ksort($duplicateGroups);
       } else {
         showToast(data.message || 'Action failed');
       }
-    });
-
-    document.addEventListener('click', async (event) => {
-      const nameCell = event.target.closest('#leads-table-region tbody tr td:nth-child(3)');
-      if (!nameCell || event.target.closest('a, button, input, select, textarea, .action-more-menu')) return;
-      const row = nameCell.closest('tr[data-lead-id]');
-      const leadId = row?.dataset?.leadId;
-      if (!leadId) return;
-      const data = await ajaxAction('fetch_lead_form', { lead_id: leadId });
-      if (data.success) {
-        openDrawer('View / Edit Lead', data.html || '');
-        initLeadEditStatusField(document.getElementById('ux-drawer-body'));
-      }
-    });
-
-    window.addEventListener('popstate', async () => {
-      await replaceLeadsTableFromUrl(window.location.href, false);
     });
   </script>
 </body>
