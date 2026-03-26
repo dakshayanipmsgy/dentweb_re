@@ -15074,36 +15074,3 @@ body.smart-guide-open {
     grid-template-columns: repeat(2, 1fr);
   }
 }
-.floating-solar-link {
-  position: fixed;
-  left: 1rem;
-  bottom: 1.5rem;
-  z-index: 70;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border-radius: 999px;
-  background: #0f766e;
-  color: #fff;
-  text-decoration: none;
-  font-weight: 700;
-  box-shadow: 0 10px 22px rgba(15, 118, 110, 0.35);
-}
-.floating-solar-link:hover,
-.floating-solar-link:focus-visible { background: #115e59; }
-
-.home-solar-finance-highlight {
-  margin: 1rem auto 0;
-  width: min(1200px, calc(100% - 2rem));
-}
-.home-solar-finance-highlight .highlight-card {
-  display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;
-  background: linear-gradient(135deg,#ecfeff,#eff6ff);
-  border: 1px solid #bae6fd;
-  border-radius: 18px;
-  padding: 1.25rem;
-}
-@media (max-width: 768px) {
-  .floating-solar-link { left: 0.75rem; bottom: 0.8rem; font-size: 0.86rem; padding: 0.62rem 0.78rem; }
-}
