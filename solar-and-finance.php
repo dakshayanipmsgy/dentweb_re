@@ -263,10 +263,34 @@ $defaults = $settings['defaults'] ?? [];
       const kpi=[['Expected monthly generation',`${solarUnits.toFixed(0)} units`],['Expected annual generation',`${(solarUnits*12).toFixed(0)} units`],['Units in 25 years',`${(solarUnits*12*25).toFixed(0)} units`],['Annual saving',INR(Math.max(monthlyBill-residual,0)*12)],['Estimated payback (self funded)',`${((costSelf-subsidy)/Math.max((monthlyBill-residual)*12,1)).toFixed(1)} years`],['Roof area needed',`${(size*Number(d.roof_area_sqft_per_kw||100)).toFixed(0)} sq.ft`],['Bill offset',`${Math.min((solarValue/Math.max(monthlyBill,1))*100,100).toFixed(1)}%`],['Annual CO₂ reduction',`${((solarUnits*12)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['25-year CO₂ reduction',`${((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['Tree equivalent',`${(((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82))/Number(d.tree_factor_kg_per_tree||21)).toFixed(0)} trees`]];
       kpiPanel.innerHTML=kpi.map(([k,v])=>`<div class='sf-metric'><strong>${k}</strong><div>${v}</div></div>`).join('');
 
-      const payback=[['Loan up to 2 lacs', (effUp/Math.max((monthlyBill-(emiUp+residual))*12,1))]];
-      if(higherLoanApplicable){payback.push(['Loan above 2 lacs',(effHigh/Math.max((monthlyBill-(emiHigh+residual))*12,1))]);}
-      payback.push(['Self Funded',((costSelf-subsidy)/Math.max((monthlyBill-residual)*12,1))]);
-      paybackMeters.innerHTML=payback.map(([n,p])=>`<div class='sf-metric'><strong>${n}</strong><div>${isFinite(p)?p.toFixed(1):'N/A'} years</div></div>`).join('');
+      const PAYBACK_HORIZON_MONTHS=25*12;
+      const findLoanPaybackMonth=(marginMoney,monthlyOutflowLoan,monthlyBillWithoutSolar,horizonMonths=PAYBACK_HORIZON_MONTHS)=>{
+        let cumulativeLoanSide=Math.max(marginMoney,0);
+        let cumulativeNoSolar=0;
+        for(let month=1;month<=horizonMonths;month+=1){
+          cumulativeLoanSide+=monthlyOutflowLoan;
+          cumulativeNoSolar+=monthlyBillWithoutSolar;
+          if(cumulativeLoanSide<=cumulativeNoSolar){return month;}
+        }
+        return null;
+      };
+      const formatLoanPayback=(month)=>{
+        if(month===null){return 'Not within 25 years';}
+        const years=Math.floor(month/12);
+        const remMonths=month%12;
+        if(years===0){return `${remMonths} month${remMonths===1?'':'s'}`;}
+        if(remMonths===0){return `${years} year${years===1?'':'s'}`;}
+        return `${years} year${years===1?'':'s'} ${remMonths} month${remMonths===1?'':'s'}`;
+      };
+
+      const monthlyOutflowLoanUp2=emiUp+residual;
+      const payback=[['Loan up to 2 lacs',formatLoanPayback(findLoanPaybackMonth(marginUp,monthlyOutflowLoanUp2,monthlyBill))]];
+      if(higherLoanApplicable){
+        const monthlyOutflowLoanHigh=emiHigh+residual;
+        payback.push(['Loan above 2 lacs',formatLoanPayback(findLoanPaybackMonth(marginHigh,monthlyOutflowLoanHigh,monthlyBill))]);
+      }
+      payback.push(['Self Funded',`${((costSelf-subsidy)/Math.max((monthlyBill-residual)*12,1)).toFixed(1)} years`]);
+      paybackMeters.innerHTML=payback.map(([n,p])=>`<div class='sf-metric'><strong>${n}</strong><div>${p}</div></div>`).join('');
 
       const finData=[
         ['No Solar',[['Monthly bill',INR(monthlyBill)],['25 year expense',INR(monthlyBill*12*25)]]],
