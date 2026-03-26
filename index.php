@@ -350,18 +350,6 @@ $schemaContext = [
       <div data-home-sections-list></div>
     </div>
 
-
-    <section class="section" id="solar-finance-entry">
-      <div class="container">
-        <article class="card" style="padding:1.5rem;background:linear-gradient(135deg,#0f172a,#1e293b);color:#fff;">
-          <p class="text-sm" style="opacity:.85;margin-bottom:.5rem;">New public tool</p>
-          <h2 style="color:#fff;">Solar and Finance</h2>
-          <p style="color:rgba(255,255,255,.9);max-width:840px;">Understand your solar requirement, compare loan and self-funded options, and request quotation on WhatsApp in one flow.</p>
-          <a href="/solar-and-finance.php" class="btn btn-primary" style="margin-top:.5rem;">Open Solar and Finance</a>
-        </article>
-      </div>
-    </section>
-
     <section class="section offers-section" id="offers">
       <div class="container">
         <div class="head">
