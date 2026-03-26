@@ -66,6 +66,8 @@ $pathFor = static function (string $path) use ($prefix): string {
     return ($prefix === '' ? '' : $prefix) . '/' . $clean;
 };
 
+$solarFinanceSettingsUrl = $pathFor('admin-solar-finance-settings.php');
+
 $portalClock = portal_current_time();
 $portalTimeIso = (string) ($portalClock['iso'] ?? '');
 $portalTimeDisplay = (string) ($portalClock['display'] ?? '');
@@ -510,6 +512,10 @@ $cardConfigs[] = [
         <a href="<?= htmlspecialchars($pathFor('admin/website-settings/'), ENT_QUOTES) ?>" class="btn btn-ghost">
           <i class="fa-solid fa-palette" aria-hidden="true"></i>
           Website Content &amp; Theme
+        </a>
+        <a href="<?= htmlspecialchars($pathFor('admin-solar-finance-settings.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
+          <i class="fa-solid fa-chart-line" aria-hidden="true"></i>
+          Solar &amp; Finance Settings
         </a>
         <a href="<?= htmlspecialchars($pathFor('admin-blog-manager.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
           <i class="fa-solid fa-newspaper" aria-hidden="true"></i>
