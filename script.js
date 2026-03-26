@@ -46,6 +46,7 @@ const INLINE_PARTIALS = {
           <a href="/knowledge-hub.html" class="nav-link" role="menuitem">Knowledge Hub</a>
           <a href="/innovation-tech.html" class="nav-link" role="menuitem">Innovation &amp; Tech</a>
           <a href="/blog/index.php" class="nav-link" role="menuitem">Blog &amp; Insights</a>
+          <a href="/solar-and-finance.php" class="nav-link" role="menuitem">Solar &amp; Finance</a>
           <a href="/calculator.html" class="nav-link" role="menuitem">Solar Calculator</a>
           <a href="/policies.html" class="nav-link" role="menuitem">Policies &amp; Compliance</a>
             </div>
@@ -95,6 +96,7 @@ const INLINE_PARTIALS = {
       <a href="/knowledge-hub.html">Knowledge Hub</a>
       <a href="/innovation-tech.html">Innovation &amp; Tech</a>
       <a href="/blog/index.php">Blog &amp; Insights</a>
+      <a href="/solar-and-finance.php">Solar &amp; Finance</a>
       <a href="/calculator.html">Solar Calculator</a>
       <a href="/policies.html">Policies &amp; Compliance</a>
         </div>
@@ -162,6 +164,7 @@ const INLINE_PARTIALS = {
         <ul class="footer-links">
           <li><a href="/pm-surya-ghar.html">PM Surya Ghar Yojana</a></li>
           <li><a href="/financing.html">Financing &amp; Loans</a></li>
+          <li><a href="/solar-and-finance.php">Solar &amp; Finance</a></li>
           <li><a href="/solar-projects.html#residential">Residential Solutions</a></li>
           <li><a href="/solar-projects.html#commercial">Commercial / Industrial</a></li>
       <li><a href="/calculator.html">Solar Savings Calculator</a></li>
@@ -186,6 +189,11 @@ const INLINE_PARTIALS = {
     Office: Maa Tara, Kilburn Colony, Hinoo, Ranchi, Jharkhand-834002.
   </p>
 </div>
+
+<a class="floating-solar-link" href="/solar-and-finance.php" aria-label="Open Solar and Finance">
+  <i class="fa-solid fa-solar-panel"></i>
+  <span>Solar &amp; Finance</span>
+</a>
 
 <div class="floating-support" data-floating-actions>
   <button
