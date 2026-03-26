@@ -259,11 +259,8 @@ $defaults = $settings['defaults'] ?? [];
       if(higherLoanApplicable){cumulativeDatasets.push({label:'Loan >2L',data:cumul(marginHigh,emiHigh,residual),borderColor:'#1d4ed8'});}
       cumulativeDatasets.push({label:'Self Funded',data:years.map(y=>costSelf-subsidy+y*12*residual),borderColor:'#f59e0b'});
 
-      document.getElementById('results').hidden=false;
-      const kpi=[['Expected monthly generation',`${solarUnits.toFixed(0)} units`],['Expected annual generation',`${(solarUnits*12).toFixed(0)} units`],['Units in 25 years',`${(solarUnits*12*25).toFixed(0)} units`],['Annual saving',INR(Math.max(monthlyBill-residual,0)*12)],['Estimated payback (self funded)',`${((costSelf-subsidy)/Math.max((monthlyBill-residual)*12,1)).toFixed(1)} years`],['Roof area needed',`${(size*Number(d.roof_area_sqft_per_kw||100)).toFixed(0)} sq.ft`],['Bill offset',`${Math.min((solarValue/Math.max(monthlyBill,1))*100,100).toFixed(1)}%`],['Annual CO₂ reduction',`${((solarUnits*12)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['25-year CO₂ reduction',`${((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['Tree equivalent',`${(((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82))/Number(d.tree_factor_kg_per_tree||21)).toFixed(0)} trees`]];
-      kpiPanel.innerHTML=kpi.map(([k,v])=>`<div class='sf-metric'><strong>${k}</strong><div>${v}</div></div>`).join('');
-
       const PAYBACK_HORIZON_MONTHS=25*12;
+      const selfFundedPaybackYears=(costSelf-subsidy)/Math.max((monthlyBill-residual)*12,1);
       const findLoanPaybackMonth=(marginMoney,monthlyOutflowLoan,monthlyBillWithoutSolar,horizonMonths=PAYBACK_HORIZON_MONTHS)=>{
         let cumulativeLoanSide=Math.max(marginMoney,0);
         let cumulativeNoSolar=0;
@@ -282,6 +279,16 @@ $defaults = $settings['defaults'] ?? [];
         if(remMonths===0){return `${years} year${years===1?'':'s'}`;}
         return `${years} year${years===1?'':'s'} ${remMonths} month${remMonths===1?'':'s'}`;
       };
+      const formatSelfFundedPayback=(decimalYears)=>{
+        if(!Number.isFinite(decimalYears)||decimalYears<0){return '—';}
+        const totalMonths=Math.round(decimalYears*12);
+        if(totalMonths>PAYBACK_HORIZON_MONTHS){return 'Not within 25 years';}
+        return formatLoanPayback(totalMonths);
+      };
+
+      document.getElementById('results').hidden=false;
+      const kpi=[['Expected monthly generation',`${solarUnits.toFixed(0)} units`],['Expected annual generation',`${(solarUnits*12).toFixed(0)} units`],['Units in 25 years',`${(solarUnits*12*25).toFixed(0)} units`],['Annual saving',INR(Math.max(monthlyBill-residual,0)*12)],['Estimated payback (self funded)',formatSelfFundedPayback(selfFundedPaybackYears)],['Roof area needed',`${(size*Number(d.roof_area_sqft_per_kw||100)).toFixed(0)} sq.ft`],['Bill offset',`${Math.min((solarValue/Math.max(monthlyBill,1))*100,100).toFixed(1)}%`],['Annual CO₂ reduction',`${((solarUnits*12)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['25-year CO₂ reduction',`${((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82)).toFixed(0)} kg`],['Tree equivalent',`${(((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82))/Number(d.tree_factor_kg_per_tree||21)).toFixed(0)} trees`]];
+      kpiPanel.innerHTML=kpi.map(([k,v])=>`<div class='sf-metric'><strong>${k}</strong><div>${v}</div></div>`).join('');
 
       const monthlyOutflowLoanUp2=emiUp+residual;
       const payback=[['Loan up to 2 lacs',formatLoanPayback(findLoanPaybackMonth(marginUp,monthlyOutflowLoanUp2,monthlyBill))]];
@@ -289,7 +296,7 @@ $defaults = $settings['defaults'] ?? [];
         const monthlyOutflowLoanHigh=emiHigh+residual;
         payback.push(['Loan above 2 lacs',formatLoanPayback(findLoanPaybackMonth(marginHigh,monthlyOutflowLoanHigh,monthlyBill))]);
       }
-      payback.push(['Self Funded',`${((costSelf-subsidy)/Math.max((monthlyBill-residual)*12,1)).toFixed(1)} years`]);
+      payback.push(['Self Funded',formatSelfFundedPayback(selfFundedPaybackYears)]);
       paybackMeters.innerHTML=payback.map(([n,p])=>`<div class='sf-metric'><strong>${n}</strong><div>${p}</div></div>`).join('');
 
       const finData=[
