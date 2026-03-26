@@ -511,6 +511,10 @@ $cardConfigs[] = [
           <i class="fa-solid fa-palette" aria-hidden="true"></i>
           Website Content &amp; Theme
         </a>
+        <a href="<?= htmlspecialchars($pathFor('admin-solar-finance-settings.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
+          <i class="fa-solid fa-calculator" aria-hidden="true"></i>
+          Solar &amp; Finance Settings
+        </a>
         <a href="<?= htmlspecialchars($pathFor('admin-blog-manager.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
           <i class="fa-solid fa-newspaper" aria-hidden="true"></i>
           Blog Manager
