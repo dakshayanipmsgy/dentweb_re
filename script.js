@@ -187,6 +187,10 @@ const INLINE_PARTIALS = {
   </p>
 </div>
 
+<a href="/solar-and-finance.php" class="solar-finance-float-left" aria-label="Open Solar and Finance page">
+  <i class="fa-solid fa-solar-panel" aria-hidden="true"></i> Solar and Finance
+</a>
+
 <div class="floating-support" data-floating-actions>
   <button
     type="button"
