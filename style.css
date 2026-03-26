@@ -15074,3 +15074,71 @@ body.smart-guide-open {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+.home-solar-finance-cta {
+  padding: 1rem 0 0;
+}
+.home-solar-finance-cta__inner {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.25rem;
+  align-items: center;
+  background: linear-gradient(90deg, #0f766e 0%, #0891b2 100%);
+  color: #fff;
+  border-radius: 1rem;
+  padding: 1.25rem 1.5rem;
+}
+.home-solar-finance-cta__kicker { opacity: .9; font-weight: 600; margin-bottom: .3rem; }
+
+.floating-solar-finance {
+  position: fixed;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 998;
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  background: #0f766e;
+  color: #fff;
+  border-radius: 999px;
+  padding: .65rem .9rem;
+  box-shadow: 0 8px 24px rgba(15, 118, 110, .3);
+  text-decoration: none;
+  font-weight: 600;
+}
+.floating-solar-finance:hover { background: #0d9488; }
+
+.sf-page { background: #f8fafc; }
+.sf-wrap { width: min(1600px, 100% - 3rem); margin: 0 auto; }
+.sf-hero { padding: 2.5rem 0; background: linear-gradient(180deg, #ecfeff, #f8fafc); }
+.sf-kicker { color: #0f766e; font-weight: 700; }
+.sf-hero h1 { font-size: clamp(2rem, 4vw, 3.2rem); margin-bottom: .65rem; }
+.sf-hero-points { display: grid; gap: .35rem; margin: 1rem 0 1.25rem; }
+.sf-section { padding: 1.6rem 0 2rem; }
+.sf-sub { color: #475569; margin-bottom: .9rem; }
+.sf-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(210px,1fr)); gap: .95rem; }
+.sf-grid label { display: grid; gap: .4rem; font-weight: 600; }
+.sf-grid input, .sf-grid select, .sf-advanced textarea {
+  border: 1px solid #cbd5e1; border-radius: .75rem; padding: .65rem .7rem; background: #fff;
+}
+.sf-advanced { margin-top: 1rem; background: #fff; border-radius: 1rem; padding: .9rem; border: 1px solid #e2e8f0; }
+.sf-actions { display: flex; flex-direction: column; gap: .55rem; margin-top: 1rem; }
+.sf-note { color: #0369a1; font-weight: 500; }
+.sf-card, .sf-pill { background: #fff; border-radius: 1rem; padding: 1rem; border: 1px solid #e2e8f0; }
+.sf-cards { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: .8rem; margin-bottom: 1rem; }
+.sf-pill h4 { font-size: .86rem; color:#475569; margin-bottom:.4rem; }
+.sf-pill p { font-weight: 700; font-size: 1.05rem; }
+.sf-chart-grid, .sf-finance-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap: .9rem; margin-bottom: .9rem; }
+#sfOutflowChart, #sfCumulativeChart { min-height: 260px; }
+.sf-meter { height: .85rem; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-bottom: .55rem; }
+.sf-meter-fill { height: 100%; background: linear-gradient(90deg, #0ea5e9, #16a34a); }
+.sf-edu-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: .9rem; margin-top: .8rem; }
+.sf-faq { margin-top: .9rem; display: grid; gap: .7rem; }
+.sf-cta-inner { background: #0f172a; color: #fff; border-radius: 1rem; padding: 1.4rem; display:flex; justify-content: space-between; gap: 1rem; align-items: center; }
+
+@media (max-width: 900px) {
+  .home-solar-finance-cta__inner, .sf-cta-inner { flex-direction: column; align-items: flex-start; }
+  .sf-wrap { width: calc(100% - 1.2rem); }
+  .floating-solar-finance { left: .5rem; top: auto; bottom: 6.8rem; transform: none; padding: .55rem .7rem; }
+  .floating-solar-finance span { font-size: .82rem; }
+}
