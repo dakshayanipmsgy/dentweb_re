@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/leads.php';
+require_once __DIR__ . '/../admin/includes/documents_helpers.php';
 
 function solar_finance_reports_storage_path(): string
 {
@@ -191,4 +192,229 @@ function solar_finance_create_or_update_lead(array $report): array
     $created = add_lead($payload);
 
     return ['action' => 'created', 'lead_id' => (string) ($created['id'] ?? '')];
+}
+
+function solar_finance_find_matching_kit(string $systemType): ?array
+{
+    $targetName = strtolower(trim($systemType)) === 'hybrid'
+        ? 'hybrid solar power generation system'
+        : 'ongrid solar power generation system';
+
+    foreach (documents_inventory_kits(false) as $kit) {
+        $name = strtolower(trim((string) ($kit['name'] ?? '')));
+        if ($name === $targetName) {
+            return $kit;
+        }
+    }
+
+    return null;
+}
+
+function solar_finance_quote_mobile_key_from_quote(array $quote): string
+{
+    $candidates = [
+        (string) ($quote['customer_mobile'] ?? ''),
+        (string) ($quote['source_lead_mobile'] ?? ''),
+        (string) (($quote['source']['lead_mobile'] ?? '')),
+    ];
+    foreach ($candidates as $candidate) {
+        $key = solar_finance_mobile_key($candidate);
+        if ($key !== '') {
+            return $key;
+        }
+    }
+    return '';
+}
+
+function create_or_update_solar_finance_quote(array $payload): array
+{
+    $customer = is_array($payload['customer'] ?? null) ? $payload['customer'] : [];
+    $inputs = is_array($payload['inputs'] ?? null) ? $payload['inputs'] : [];
+
+    $customerName = trim((string) ($customer['name'] ?? ''));
+    $city = trim((string) ($customer['location'] ?? ''));
+    $mobile = solar_finance_normalize_mobile((string) ($customer['mobile_normalized'] ?? ($customer['mobile_raw'] ?? '')));
+    $mobileKey = solar_finance_mobile_key($mobile);
+    if ($customerName === '' || $city === '' || $mobileKey === '') {
+        return ['success' => false, 'action' => 'skipped', 'message' => 'Required customer details are missing.'];
+    }
+
+    $systemType = strtolower(trim((string) ($inputs['system_type'] ?? 'Ongrid'))) === 'hybrid' ? 'Hybrid' : 'Ongrid';
+    $kit = solar_finance_find_matching_kit($systemType);
+    if (!is_array($kit)) {
+        return ['success' => false, 'action' => 'skipped', 'message' => 'Required kit not found in Items Master.'];
+    }
+
+    $higherLoanApplicable = (bool) ($inputs['higher_loan_applicable'] ?? false);
+    $systemCostUp2 = max(0, (float) ($inputs['system_cost_up2'] ?? 0));
+    $systemCostAbove2 = max(0, (float) ($inputs['system_cost_above2'] ?? 0));
+    $useAbove2Scenario = $higherLoanApplicable && $systemCostAbove2 > 0;
+    $selectedSystemPrice = $useAbove2Scenario ? $systemCostAbove2 : $systemCostUp2;
+
+    $loanInterest = $useAbove2Scenario
+        ? (float) ($inputs['interest_rate_above2'] ?? 0)
+        : (float) ($inputs['interest_rate_up2'] ?? 0);
+    $loanAmount = $useAbove2Scenario
+        ? (float) ($inputs['loan_amount_above2'] ?? 0)
+        : (float) ($inputs['loan_amount_up2'] ?? 0);
+    $marginMoney = $useAbove2Scenario
+        ? (float) ($inputs['margin_money_above2'] ?? 0)
+        : (float) ($inputs['margin_money_up2'] ?? 0);
+
+    $subsidy = max(0, (float) ($inputs['subsidy'] ?? 0));
+    $monthlyBill = max(0, (float) ($inputs['monthly_bill'] ?? 0));
+    $solarSize = max(0, (float) ($inputs['solar_size_kw'] ?? 0));
+    $loanTenureYears = max(0, (float) ($inputs['loan_tenure_years'] ?? 0));
+
+    $linkedQuoteId = safe_text((string) ($payload['linked_quote_id'] ?? ''));
+    $existing = null;
+    if ($linkedQuoteId !== '') {
+        $linked = documents_get_quote($linkedQuoteId);
+        if (is_array($linked)) {
+            $linkedKey = solar_finance_quote_mobile_key_from_quote($linked);
+            $linkedSource = strtolower(trim((string) ($linked['source']['type'] ?? '')));
+            if ($linkedSource === 'solar_and_finance' && $linkedKey === $mobileKey) {
+                $existing = $linked;
+            }
+        }
+    }
+
+    if (!is_array($existing)) {
+        foreach (documents_list_quotes() as $quote) {
+            $sourceType = strtolower(trim((string) ($quote['source']['type'] ?? '')));
+            $status = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
+            if ($sourceType !== 'solar_and_finance' || $status !== 'draft') {
+                continue;
+            }
+            $quoteMobileKey = solar_finance_quote_mobile_key_from_quote($quote);
+            if ($quoteMobileKey === '' || $quoteMobileKey !== $mobileKey) {
+                continue;
+            }
+            $existing = $quote;
+            break;
+        }
+    }
+
+    if (is_array($existing) && !($existing['auto_sync_enabled'] ?? true)) {
+        return [
+            'success' => true,
+            'action' => 'skipped_manual_lock',
+            'quote_id' => (string) ($existing['id'] ?? ''),
+            'message' => 'Auto-sync is disabled for this quotation.',
+        ];
+    }
+
+    $isCreate = !is_array($existing);
+    $quote = $isCreate ? documents_quote_defaults() : $existing;
+
+    if ($isCreate) {
+        $number = documents_generate_quote_number('RES');
+        $quote['id'] = 'qtn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+        $quote['quote_no'] = ($number['ok'] ?? false) ? (string) ($number['quote_no'] ?? '') : '';
+        $quote['created_at'] = date('c');
+        $quote['created_by_type'] = 'system';
+        $quote['created_by_id'] = 'solar_finance';
+        $quote['created_by_name'] = 'Solar and Finance';
+        $quote['segment'] = 'RES';
+        $quote['template_set_id'] = safe_text((string) ($quote['template_set_id'] ?? ''));
+    }
+
+    $quote['updated_at'] = date('c');
+    $quote['status'] = 'draft';
+    $quote['party_type'] = 'lead';
+    $quote['customer_name'] = $customerName;
+    $quote['customer_mobile'] = $mobile;
+    $quote['city'] = $city;
+    $quote['district'] = $city;
+    $quote['state'] = safe_text((string) ($quote['state'] ?? 'Jharkhand')) ?: 'Jharkhand';
+    $quote['system_type'] = $systemType;
+    $quote['main_solar_kwp'] = $solarSize > 0 ? (string) $solarSize : '';
+    $quote['complimentary_non_dcr_kwp'] = '0';
+    $quote['capacity_kwp'] = $solarSize > 0 ? (string) $solarSize : '';
+    $quote['system_capacity_kwp'] = $solarSize;
+    $quote['input_total_gst_inclusive'] = $selectedSystemPrice;
+
+    $quote['source'] = [
+        'type' => 'solar_and_finance',
+        'lead_id' => '',
+        'lead_mobile' => $mobile,
+        'note' => 'Created from Solar and Finance',
+    ];
+    $quote['source_lead_mobile'] = $mobile;
+    $quote['auto_created'] = true;
+    $quote['auto_sync_enabled'] = true;
+    $quote['auto_source'] = 'solar_and_finance';
+    $quote['auto_sync_updated_at'] = date('c');
+    $quote['auto_sync_scenario'] = $useAbove2Scenario ? 'loan_above_2_lacs' : 'loan_upto_2_lacs';
+
+    $quote['customer_snapshot'] = array_merge(documents_customer_snapshot_defaults(), is_array($quote['customer_snapshot'] ?? null) ? $quote['customer_snapshot'] : [], [
+        'mobile' => $mobile,
+        'name' => $customerName,
+        'city' => $city,
+        'district' => $city,
+        'state' => (string) ($quote['state'] ?? 'Jharkhand'),
+    ]);
+
+    $kitId = safe_text((string) ($kit['id'] ?? ''));
+    $kitName = (string) ($kit['name'] ?? 'Kit');
+    $kitDescription = safe_text((string) ($kit['description'] ?? ''));
+    $kitHsn = safe_text((string) ($kit['hsn'] ?? '')) ?: '8541';
+    $quote['quote_items'] = documents_normalize_quote_structured_items([[
+        'type' => 'kit',
+        'kit_id' => $kitId,
+        'component_id' => '',
+        'qty' => 1,
+        'unit' => 'set',
+        'variant_id' => '',
+        'variant_snapshot' => [],
+        'name_snapshot' => $kitName,
+        'description_snapshot' => $kitDescription,
+        'master_description_snapshot' => $kitDescription,
+        'custom_description' => '',
+        'hsn_snapshot' => $kitHsn,
+        'meta' => [],
+    ]]);
+    $quote['items'] = documents_normalize_quote_items([[
+        'name' => $kitName,
+        'description' => $kitDescription,
+        'hsn' => $kitHsn,
+        'qty' => 1,
+        'unit' => 'set',
+        'gst_slab' => '5',
+        'basic_amount' => 0,
+    ]], $systemType, $solarSize, $kitHsn);
+
+    $quote['finance_inputs']['monthly_bill_rs'] = (string) $monthlyBill;
+    $quote['finance_inputs']['subsidy_expected_rs'] = (string) $subsidy;
+    $quote['finance_inputs']['loan']['enabled'] = true;
+    $quote['finance_inputs']['loan']['interest_pct'] = (string) $loanInterest;
+    $quote['finance_inputs']['loan']['tenure_years'] = (string) $loanTenureYears;
+    $quote['finance_inputs']['loan']['loan_amount'] = (string) $loanAmount;
+    $quote['finance_inputs']['loan']['margin_pct'] = '';
+
+    $quote['customer_savings_inputs']['bank_loan_enabled'] = true;
+    $quote['customer_savings_inputs']['loan_interest_rate_percent'] = $loanInterest;
+    $quote['customer_savings_inputs']['loan_tenure_months'] = $loanTenureYears > 0 ? (int) round($loanTenureYears * 12) : null;
+    $quote['customer_savings_inputs']['loan_cap_rs'] = $loanAmount;
+    $quote['customer_savings_inputs']['margin_amount_rs'] = $marginMoney;
+    $quote['customer_savings_inputs']['monthly_bill_before_rs'] = $monthlyBill;
+
+    $quoteDefaults = documents_get_quote_defaults_settings();
+    $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, 0.0, $subsidy, $selectedSystemPrice, $quoteDefaults);
+    $quote['tax_breakdown'] = is_array($quote['calc']['tax_breakdown'] ?? null)
+        ? (array) $quote['calc']['tax_breakdown']
+        : ['basic_total' => 0, 'gst_total' => 0, 'gross_incl_gst' => 0, 'slabs' => []];
+
+    $saved = documents_save_quote($quote);
+    if (!($saved['ok'] ?? false)) {
+        return ['success' => false, 'action' => 'failed', 'message' => (string) ($saved['error'] ?? 'Unable to save quotation.')];
+    }
+
+    return [
+        'success' => true,
+        'action' => $isCreate ? 'created' : 'updated',
+        'quote_id' => (string) ($quote['id'] ?? ''),
+        'quote_no' => (string) ($quote['quote_no'] ?? ''),
+        'scenario' => $quote['auto_sync_scenario'],
+    ];
 }

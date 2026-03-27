@@ -169,6 +169,7 @@ $defaults = $settings['defaults'] ?? [];
     const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
     const glancePanel=document.getElementById('glancePanel'),paybackMeters=document.getElementById('paybackMeters'),financeBoxes=document.getElementById('financeBoxes'),waQuote=document.getElementById('waQuote');
     let latestSnapshot=null, latestReportUrl='';
+    let autoQuoteState={quoteId:'',mobileKey:'',lastSyncHash:'',timer:null,inFlight:false};
 
     const num=(v,fallback=0)=>{const n=Number(v); return Number.isFinite(n)?n:fallback;};
     const floorRecommendedSize=v=>{
@@ -214,7 +215,63 @@ $defaults = $settings['defaults'] ?? [];
       const digits=String(normalized||'').replace(/\D+/g,'');
       return /^91\d{10}$/.test(digits)?`+${digits}`:'';
     };
+    const mobileKey=value=>{
+      const normalized=normalizeIndianMobile(value);
+      return normalized?normalized.slice(-10):'';
+    };
     const setCustomerError=(msg)=>{el.customerError.textContent=msg||'';};
+
+    async function syncAutoQuotation(reason=''){
+      if(autoQuoteState.inFlight) return;
+      if(!latestSnapshot || document.getElementById('results').hidden) return;
+      const name=(el.customerName.value||'').trim();
+      const location=(el.customerLocation.value||'').trim();
+      const normalizedMobile=normalizeIndianMobile(el.customerMobile.value||'');
+      if(!name||!location||!normalizedMobile) return;
+      const snapshot={...latestSnapshot,customer:{name,location,mobile_normalized:normalizedMobile,mobile_raw:(el.customerMobile.value||'').trim()}};
+      const payload={
+        ...snapshot,
+        linked_quote_id:autoQuoteState.quoteId||'',
+        sync_reason:reason||'input'
+      };
+      const nextMobileKey=mobileKey(normalizedMobile);
+      const syncHash=JSON.stringify([
+        nextMobileKey,
+        snapshot.customer.name,
+        snapshot.customer.location,
+        snapshot.inputs?.system_type,
+        snapshot.inputs?.solar_size_kw,
+        snapshot.inputs?.system_cost_up2,
+        snapshot.inputs?.system_cost_above2,
+        snapshot.inputs?.higher_loan_applicable,
+        snapshot.inputs?.monthly_bill,
+        snapshot.inputs?.subsidy,
+        snapshot.inputs?.interest_rate_up2,
+        snapshot.inputs?.interest_rate_above2,
+        snapshot.inputs?.loan_amount_up2,
+        snapshot.inputs?.loan_amount_above2,
+        snapshot.inputs?.margin_money_up2,
+        snapshot.inputs?.margin_money_above2
+      ]);
+      if(autoQuoteState.lastSyncHash===syncHash && autoQuoteState.mobileKey===nextMobileKey) return;
+      autoQuoteState.inFlight=true;
+      try{
+        const res=await fetch('/solar-and-finance-auto-quotation.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        const data=await res.json();
+        if(res.ok && data?.success){
+          autoQuoteState.quoteId=String(data.quote_id||autoQuoteState.quoteId||'');
+          autoQuoteState.mobileKey=nextMobileKey;
+          autoQuoteState.lastSyncHash=syncHash;
+        }
+      }catch(_err){
+      }finally{
+        autoQuoteState.inFlight=false;
+      }
+    }
+    function scheduleAutoQuotationSync(reason=''){
+      clearTimeout(autoQuoteState.timer);
+      autoQuoteState.timer=setTimeout(()=>{syncAutoQuotation(reason);},800);
+    }
 
     function clearResults(){
       document.getElementById('results').hidden=true;
@@ -442,7 +499,7 @@ $defaults = $settings['defaults'] ?? [];
         inputs:{
           monthly_bill:monthlyBill,monthly_units:units||Math.round(monthlyBill/rate),system_type:el.systemType.value,solar_size_kw:size,daily_generation_per_kw:gen,unit_rate:rate,
           subsidy,loan_tenure_years:tenure,system_cost_self:costSelf,system_cost_up2:costUp2,system_cost_above2:costAbove2,loan_amount_up2:loanUp,margin_money_up2:marginUp,interest_rate_up2:num(el.interestRateUp2.value,d.interest_upto_2_lacs||6),
-          loan_amount_above2:loanHigh,margin_money_above2:marginHigh,interest_rate_above2:num(el.interestRateAbove2.value,d.interest_above_2_lacs||8.15),hybrid_variation:hy
+          loan_amount_above2:loanHigh,margin_money_above2:marginHigh,interest_rate_above2:num(el.interestRateAbove2.value,d.interest_above_2_lacs||8.15),higher_loan_applicable:higherLoanApplicable,hybrid_variation:hy
         },
         results:{
           generation:{monthly_units:solarUnits,annual_units:solarUnits*12,units_25_year:solarUnits*12*25,roof_area_sqft:size*Number(d.roof_area_sqft_per_kw||100),bill_offset_percent:Math.min((solarValue/Math.max(monthlyBill,1))*100,100),daily_generation_assumption:gen},
@@ -474,6 +531,7 @@ $defaults = $settings['defaults'] ?? [];
       if(normalizedMobile) quoteLines.push(`- Mobile: ${displayIndianMobile(normalizedMobile)}`);
       if(latestReportUrl) quoteLines.push(`- Report link: ${latestReportUrl}`);
       waQuote.href=`https://wa.me/917070278178?text=${encodeURIComponent(quoteLines.join('\n'))}`;
+      scheduleAutoQuotationSync('render');
     }
 
 
@@ -517,6 +575,7 @@ $defaults = $settings['defaults'] ?? [];
       debouncedIds.forEach(clearUserEdited);
       [el.inverterKva,el.phase,el.batteryCount].forEach(node=>{node.innerHTML='';});
       setField('customerName',''); setField('customerLocation',''); setField('customerMobile','');
+      autoQuoteState={quoteId:'',mobileKey:'',lastSyncHash:'',timer:null,inFlight:false};
       latestSnapshot=null; latestReportUrl=''; setCustomerError('');
       clearResults();
       recalculateSolarFinance({changedField:'reset'});
@@ -533,6 +592,10 @@ $defaults = $settings['defaults'] ?? [];
 
     ['monthlyBill','monthlyUnits','solarSize','dailyGeneration','unitRate','subsidy','loanTenure','systemCostSelf','systemCostUp2','systemCostAbove2','loanAmountUp2','marginMoneyUp2','interestRateUp2','loanAmountAbove2','marginMoneyAbove2','interestRateAbove2'].forEach(id=>bindInput(id,'input'));
     ['systemType','inverterKva','phase','batteryCount'].forEach(id=>bindInput(id,'change'));
+    ['customerName','customerLocation','customerMobile'].forEach(id=>{
+      el[id].addEventListener('input',()=>{scheduleAutoQuotationSync(`customer_${id}_input`);});
+      el[id].addEventListener('blur',()=>{syncAutoQuotation(`customer_${id}_blur`);});
+    });
     document.getElementById('calcBtn').addEventListener('click',()=>recalculateSolarFinance({changedField:'manualTrigger'}));
     document.getElementById('resetBtn').addEventListener('click',resetAllFields);
     el.generateReportBtn.addEventListener('click',generateReport);
