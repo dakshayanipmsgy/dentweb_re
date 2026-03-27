@@ -104,19 +104,6 @@ $defaults = $settings['defaults'] ?? [];
       <div id="glancePanel" class="sf-glance-grid"></div>
     </section>
 
-
-
-    <section class="sf-card sf-customer">
-      <h2>Customer details (for report generation)</h2>
-      <p class="sf-note">You can explore the calculator without these details. They are required only when you click <strong>Generate Report</strong>.</p>
-      <div class="sf-inputs">
-        <label>Customer Name<input type="text" id="customerName" placeholder="Enter customer name"></label>
-        <label>Location<input type="text" id="customerLocation" placeholder="City / Area"></label>
-        <label>Mobile Number<input type="text" id="customerMobile" placeholder="e.g. 9999999999"></label>
-      </div>
-      <div id="customerError" class="sf-error" role="alert" aria-live="polite"></div>
-    </section>
-
     <section class="sf-results" id="results" hidden>
       <div class="sf-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));margin-bottom:1rem">
         <article class="sf-card"><h3>Monthly Outflow Comparison</h3><canvas id="monthlyChart" height="180"></canvas></article>
@@ -124,6 +111,16 @@ $defaults = $settings['defaults'] ?? [];
       </div>
       <article class="sf-card" style="margin-bottom:1rem"><h3>Payback meters</h3><div id="paybackMeters" class="sf-kpis"></div></article>
       <article class="sf-card"><h3>Financial Clarity</h3><div id="financeBoxes" class="sf-finance-grid"></div></article>
+      <section class="sf-card sf-customer">
+        <h2>Customer details (for report generation)</h2>
+        <p class="sf-note">You can explore the calculator without these details. They are required only when you click <strong>Generate Report</strong>.</p>
+        <div class="sf-inputs">
+          <label>Customer Name<input type="text" id="customerName" placeholder="Enter customer name"></label>
+          <label>Location<input type="text" id="customerLocation" placeholder="City / Area"></label>
+          <label>Mobile Number<input type="text" id="customerMobile" placeholder="e.g. 9999999999"></label>
+        </div>
+        <div id="customerError" class="sf-error" role="alert" aria-live="polite"></div>
+      </section>
       <div style="margin-top:1rem;display:flex;gap:.6rem;flex-wrap:wrap">
         <button class="sf-btn report" type="button" id="generateReportBtn">Generate Report</button>
         <a class="sf-btn alt" target="_blank" id="waQuote" href="#"><i class="fa-brands fa-whatsapp"></i> <?= htmlspecialchars((string) ($content['cta_text'] ?? 'Request a quotation')) ?></a>
