@@ -329,6 +329,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quote['status'] = 'Draft';
         } else {
             $quote = $existing;
+            if (($quote['auto_created'] ?? false) && ($quote['auto_sync_enabled'] ?? true)) {
+                $quote['auto_sync_enabled'] = false;
+                $quote['auto_sync_disabled_at'] = date('c');
+                $user = current_user();
+                $quote['auto_sync_disabled_by'] = [
+                    'type' => (string) ($user['role_name'] ?? 'admin'),
+                    'id' => (string) ($user['id'] ?? ''),
+                    'name' => (string) ($user['full_name'] ?? ''),
+                ];
+            }
         }
 
         $quote['template_set_id'] = $templateSetId;
