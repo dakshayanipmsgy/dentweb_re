@@ -57,7 +57,7 @@ $defaults = $settings['defaults'] ?? [];
           <label>Monthly Units (kWh)<input type="number" id="monthlyUnits" min="0"></label>
           <label>System Type<select id="systemType"><option>On-Grid</option><option>Hybrid</option></select></label>
         </div>
-        <details class="sf-pro" open>
+        <details class="sf-pro">
           <summary><strong>B2) Advanced / Pro Inputs</strong></summary>
           <div class="sf-inputs" style="margin-top:.7rem">
             <label>Solar Size (kW)<input type="number" step="0.1" id="solarSize"></label>
