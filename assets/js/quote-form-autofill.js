@@ -34,7 +34,6 @@
     const resetSubsidyBtn = config.resetSubsidyBtn || document.getElementById('resetSubsidyDefault');
 
     const monthlyBillTouchedFlag = field('monthly_bill_touched');
-    const isEditQuote = !!quoteIdInput && String(quoteIdInput.value || '').trim() !== '';
 
     const managedFields = [monthlyBillInput, subsidyInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput, unitRateInput, annualGenerationInput].filter(Boolean);
     managedFields.forEach((input) => {
@@ -51,15 +50,6 @@
         return Number.isFinite(n) ? n : 0;
     };
     const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
-
-    if (isEditQuote) {
-        [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].forEach((input) => {
-            if (!input || fieldEmpty(input)) return;
-            input.dataset.touched = '1';
-            input.dataset.hasSavedValue = '1';
-        });
-    }
-
     const setIfAllowed = (input, value, options) => {
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
