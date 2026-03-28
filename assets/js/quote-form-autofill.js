@@ -28,17 +28,22 @@
     const loanInterestInput = field('loan_interest_pct');
     const loanTenureInput = field('loan_tenure_years');
     const loanMarginInput = field('loan_margin_pct');
+    const loanFields = [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].filter(Boolean);
 
     const resetLoanBtn = config.resetLoanBtn || document.getElementById('resetLoanDefaults');
     const resetMonthlyBtn = config.resetMonthlyBtn || document.getElementById('resetMonthlySuggestion');
     const resetSubsidyBtn = config.resetSubsidyBtn || document.getElementById('resetSubsidyDefault');
 
     const monthlyBillTouchedFlag = field('monthly_bill_touched');
+    const isEditQuote = !!quoteIdInput && String(quoteIdInput.value || '').trim() !== '';
 
     const managedFields = [monthlyBillInput, subsidyInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput, unitRateInput, annualGenerationInput].filter(Boolean);
     managedFields.forEach((input) => {
         input.addEventListener('input', () => {
             input.dataset.touched = '1';
+            if (loanFields.includes(input)) {
+                input.dataset.hasSavedValue = '0';
+            }
             if (input === monthlyBillInput && monthlyBillTouchedFlag) {
                 monthlyBillTouchedFlag.value = '1';
             }
@@ -53,7 +58,9 @@
     const setIfAllowed = (input, value, options) => {
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
+        const respectSavedOnEdit = !!(options && options.respectSavedOnEdit);
         if (!input) return;
+        if (!force && respectSavedOnEdit && isEditQuote && input.dataset.hasSavedValue === '1' && !fieldEmpty(input)) return;
         if (!force && input === monthlyBillInput && monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1') return;
         if (!force && input.dataset.touched === '1' && !fieldEmpty(input)) return;
         const val = noDecimals ? Math.round(value) : Math.round(value * 100) / 100;
@@ -124,10 +131,10 @@
         const loanAmount = Math.max(0, Math.min(desiredLoan, maxLoan));
         const marginAmount = Math.max(0, grossPayable - loanAmount);
 
-        setIfAllowed(loanAmountInput, loanAmount, { force: shouldForce });
-        setIfAllowed(loanMarginInput, marginAmount, { force: shouldForce });
-        setIfAllowed(loanInterestInput, parseNum(loanCfg.interest_pct || 6), { force: shouldForce });
-        setIfAllowed(loanTenureInput, parseNum(loanCfg.tenure_years || 10), { force: shouldForce, noDecimals: true });
+        setIfAllowed(loanAmountInput, loanAmount, { force: shouldForce, respectSavedOnEdit: true });
+        setIfAllowed(loanMarginInput, marginAmount, { force: shouldForce, respectSavedOnEdit: true });
+        setIfAllowed(loanInterestInput, parseNum(loanCfg.interest_pct || 6), { force: shouldForce, respectSavedOnEdit: true });
+        setIfAllowed(loanTenureInput, parseNum(loanCfg.tenure_years || 10), { force: shouldForce, noDecimals: true, respectSavedOnEdit: true });
     };
 
     const applyMonthlySuggestion = (force) => {
@@ -177,7 +184,10 @@
 
     resetLoanBtn?.addEventListener('click', (e) => {
         e.preventDefault();
-        [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].forEach((input) => { if (input) input.dataset.touched = ''; });
+        loanFields.forEach((input) => {
+            input.dataset.touched = '';
+            input.dataset.hasSavedValue = '0';
+        });
         applyLoanDefaults(true);
     });
     resetMonthlyBtn?.addEventListener('click', (e) => {
