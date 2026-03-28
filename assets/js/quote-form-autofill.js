@@ -34,6 +34,7 @@
     const resetSubsidyBtn = config.resetSubsidyBtn || document.getElementById('resetSubsidyDefault');
 
     const monthlyBillTouchedFlag = field('monthly_bill_touched');
+    const isEditQuote = !!(quoteIdInput && String(quoteIdInput.value || '').trim() !== '');
 
     const managedFields = [monthlyBillInput, subsidyInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput, unitRateInput, annualGenerationInput].filter(Boolean);
     managedFields.forEach((input) => {
@@ -55,6 +56,7 @@
         const noDecimals = !!(options && options.noDecimals);
         if (!input) return;
         if (!force && input === monthlyBillInput && monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1') return;
+        if (!force && isEditQuote && !fieldEmpty(input)) return;
         if (!force && input.dataset.touched === '1' && !fieldEmpty(input)) return;
         const val = noDecimals ? Math.round(value) : Math.round(value * 100) / 100;
         input.value = String(val);
@@ -146,6 +148,7 @@
         const currentMonthlyBill = parseNum(monthlyBillInput?.value);
         const monthlyBillTouched = monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1';
         if (!shouldForce && monthlyBillTouched) return;
+        if (!shouldForce && isEditQuote && monthlyBillInput && !fieldEmpty(monthlyBillInput)) return;
         if (!shouldForce && monthlyBillInput && !fieldEmpty(monthlyBillInput) && currentMonthlyBill > 0 && monthlyBillInput.dataset.touched === '1') return;
         setIfAllowed(monthlyBillInput, (capacity * annualGeneration * unitRate) / 12, { force: shouldForce, noDecimals: true });
     };
@@ -190,7 +193,8 @@
     });
 
     if (monthlyBillTouchedFlag) {
-        monthlyBillTouchedFlag.value = '0';
+        const hasSavedMonthly = monthlyBillInput && !fieldEmpty(monthlyBillInput);
+        monthlyBillTouchedFlag.value = (isEditQuote && hasSavedMonthly) ? '1' : '0';
     }
     resetSubsidyBtn?.addEventListener('click', (e) => {
         e.preventDefault();
