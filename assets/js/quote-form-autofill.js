@@ -38,6 +38,8 @@
     const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
     const isExistingQuote = () => !!(quoteIdInput && String(quoteIdInput.value || '').trim() !== '');
     const hasSavedMonthlyBill = () => !!(monthlyBillInput && !fieldEmpty(monthlyBillInput));
+    const hasSavedUnitRate = () => !!(unitRateInput && !fieldEmpty(unitRateInput));
+    const hasSavedAnnualGeneration = () => !!(annualGenerationInput && !fieldEmpty(annualGenerationInput));
 
     const managedFields = [monthlyBillInput, subsidyInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput, unitRateInput, annualGenerationInput].filter(Boolean);
     managedFields.forEach((input) => {
@@ -57,6 +59,12 @@
     if (isExistingQuote() && hasSavedMonthlyBill()) {
         monthlyBillInput.dataset.touched = '1';
         if (monthlyBillTouchedFlag) monthlyBillTouchedFlag.value = '1';
+    }
+    if (isExistingQuote() && hasSavedUnitRate() && unitRateInput) {
+        unitRateInput.dataset.touched = '1';
+    }
+    if (isExistingQuote() && hasSavedAnnualGeneration() && annualGenerationInput) {
+        annualGenerationInput.dataset.touched = '1';
     }
 
     const markLoanFieldsTouchedForEdit = () => {
@@ -150,10 +158,12 @@
         if (!shouldForce && isExistingQuote() && hasSavedMonthlyBill()) return;
 
         const segSettings = currentSegmentSettings();
-        if (unitRateInput && fieldEmpty(unitRateInput) && (!unitRateInput.dataset.touched || shouldForce)) {
+        const shouldPreserveSavedUnitRate = !shouldForce && isExistingQuote() && hasSavedUnitRate();
+        const shouldPreserveSavedAnnualGeneration = !shouldForce && isExistingQuote() && hasSavedAnnualGeneration();
+        if (!shouldPreserveSavedUnitRate && unitRateInput && fieldEmpty(unitRateInput) && (!unitRateInput.dataset.touched || shouldForce)) {
             unitRateInput.value = String(parseNum(segSettings.unit_rate_rs_per_kwh || 0));
         }
-        if (annualGenerationInput && fieldEmpty(annualGenerationInput) && (!annualGenerationInput.dataset.touched || shouldForce)) {
+        if (!shouldPreserveSavedAnnualGeneration && annualGenerationInput && fieldEmpty(annualGenerationInput) && (!annualGenerationInput.dataset.touched || shouldForce)) {
             annualGenerationInput.value = String(parseNum(segSettings.annual_generation_per_kw || safeDefaultEnergy));
         }
 
