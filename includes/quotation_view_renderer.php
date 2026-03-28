@@ -105,10 +105,16 @@ function compute_financial_clarity(array $quote, array $calc, array $snapshot): 
         return (float) $value;
     };
 
+    $primaryScenario = (string) ($quote['primary_finance_scenario'] ?? 'loan_above_2_lacs');
+    $scenarioPrices = is_array($quote['scenario_prices'] ?? null) ? $quote['scenario_prices'] : [];
+    $primaryPrice = 0.0;
+    if (in_array($primaryScenario, ['self_funded', 'loan_upto_2_lacs', 'loan_above_2_lacs'], true)) {
+        $primaryPrice = $toFloat($scenarioPrices[$primaryScenario]['price'] ?? 0);
+    }
     $grossBeforeDiscount = $toFloat($calc['gross_payable_before_discount'] ?? 0);
     $discount = max(0, $toFloat($calc['discount_rs'] ?? 0));
     $grossFallback = max(0, $grossBeforeDiscount - $discount);
-    $gross = $toFloat($calc['gross_payable'] ?? $grossFallback);
+    $gross = $primaryPrice > 0 ? $primaryPrice : $toFloat($calc['gross_payable'] ?? $grossFallback);
     $subsidy = $toFloat($calc['subsidy_expected_rs'] ?? 0);
     $capacity = max(0, $toFloat($quote['capacity_kwp'] ?? $quote['system_capacity_kwp'] ?? 0));
     $tariff = max(0.1, $toFloat($snapshot['unit_rate_rs_per_kwh'] ?? null, 1));
@@ -156,6 +162,7 @@ function compute_financial_clarity(array $quote, array $calc, array $snapshot): 
     }
 
     return [
+        'primary_finance_scenario' => $primaryScenario,
         'gross' => $gross,
         'subsidy' => $subsidy,
         'monthly_bill_before_rs' => $toFloat($snapshot['monthly_bill_before_rs'] ?? 0),
@@ -176,6 +183,8 @@ function compute_financial_clarity(array $quote, array $calc, array $snapshot): 
         'self_upfront_rs' => $gross,
         'self_upfront_net_rs' => max(0, $gross - $subsidy),
         'self_residual_bill_rs' => $residualBill,
+        'scenario_prices' => $scenarioPrices,
+        'finance_scenarios' => is_array($quote['finance_scenarios'] ?? null) ? $quote['finance_scenarios'] : [],
     ];
 }
 
@@ -423,6 +432,12 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <section class="card"><div class="h sec">📦 Item summary</div><table><thead><tr><th>Sr No</th><th>Item and Description</th><th>HSN</th><th class="center">Quantity</th><th class="center">Unit</th></tr></thead><tbody><?php if ($itemRows === []): ?><tr><td colspan="5" class="center muted">No line items added.</td></tr><?php else: foreach ($itemRows as $idx => $item): ?><tr><td><?= (int)$idx + 1 ?></td><td><div><?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?></div><?php $itemDesc=(string)($item['description'] ?? ''); if (trim($itemDesc) !== ''): ?><div class="item-master-description"><?= nl2br(htmlspecialchars($itemDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?><?php $customDesc=(string)($item['custom_description'] ?? ''); if (trim($customDesc) !== ''): ?><div class="item-custom-description">📝 <?= nl2br(htmlspecialchars($customDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?></td><td><?= htmlspecialchars((string)($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['qty'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
 <?php if($specialReq!==''): ?><section class="card"><div class="h sec">✍️ Special Requests From Consumer (Inclusive in the rate)</div><div><?= quotation_sanitize_html($specialReq) ?></div><div><i>In case of conflict between annexures and special requests, special requests will be prioritized.</i></div></section><?php endif; ?>
 <section class="card"><div class="h sec">💰 Pricing summary</div><table><thead><tr><th>#</th><th>Particular</th><th class="right">Amount</th></tr></thead><tbody><tr><td>1</td><td>Total system price incl GST</td><td class="right"><?= quotation_format_inr_indian((float)($calc['system_total_incl_gst_rs'] ?? $quote['input_total_gst_inclusive'] ?? 0), $showDecimals) ?></td></tr><tr><td>2</td><td>Transportation</td><td class="right"><?= quotation_format_inr_indian((float)($calc['transportation_rs'] ?? 0), $showDecimals) ?></td></tr><?php if ($discountApplicable): ?><tr><td>3</td><td>Discount<?php $discountNote=(string)($calc['discount_note'] ?? ''); if(trim($discountNote)!==''): ?><div class="muted" style="font-size:.85em;margin-top:2px"><?= htmlspecialchars($discountNote, ENT_QUOTES) ?></div><?php endif; ?></td><td class="right">- <?= quotation_format_inr_indian($discountRsDisplay, $showDecimals) ?></td></tr><?php endif; ?><tr class="pricing-gross-row"><td><?= $discountApplicable ? '4' : '3' ?></td><td><?= htmlspecialchars($grossPayableLabel, ENT_QUOTES) ?></td><td class="right" id="upfront"></td></tr><tr><td><?= $discountApplicable ? '5' : '4' ?></td><td>Subsidy expected</td><td class="right"><?= quotation_format_inr_indian((float)($calc['subsidy_expected_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td><?= $discountApplicable ? '6' : '5' ?></td><td><b>Net Investment/Cost After Subsidy Credit</b></td><td class="right"><b id="upfrontNet"></b></td></tr></tbody></table></section>
+<?php
+$scenarioOrder = ['self_funded' => 'Self Funded', 'loan_upto_2_lacs' => 'Loan up to ₹2 lacs', 'loan_above_2_lacs' => 'Loan above ₹2 lacs'];
+$scenarioRows = is_array($financialClarity['finance_scenarios'] ?? null) ? $financialClarity['finance_scenarios'] : [];
+$primaryScenarioLabel = (string)($scenarioOrder[$financialClarity['primary_finance_scenario'] ?? ''] ?? 'Loan above ₹2 lacs');
+?>
+<section class="card"><div class="h sec">Funding Options at a Glance <span class="muted">(Primary: <?= htmlspecialchars($primaryScenarioLabel, ENT_QUOTES) ?>)</span></div><table><thead><tr><th>Scenario</th><th>Price</th><th>Margin</th><th>Loan</th><th>Interest</th><th>EMI</th><th>Monthly Outflow</th><th>Payback</th></tr></thead><tbody><?php foreach ($scenarioOrder as $key => $label): $row = is_array($scenarioRows[$key] ?? null) ? $scenarioRows[$key] : []; if ($key === 'loan_above_2_lacs' && empty($row['applicable']) && !empty($quote['scenario_prices']['loan_above_2_lacs'])) { continue; } ?><tr><td><?= htmlspecialchars($label, ENT_QUOTES) ?></td><td><?= quotation_format_inr_indian((float)($row['price'] ?? $quote['scenario_prices'][$key]['price'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['margin_money_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['loan_amount_rs'] ?? 0), $showDecimals) ?></td><td><?= number_format((float)($row['interest_pct'] ?? 0), 2) ?>%</td><td><?= quotation_format_inr_indian((float)($row['emi_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['monthly_outflow'] ?? 0), $showDecimals) ?></td><td><?= number_format((float)($row['payback'] ?? 0), 1) ?> yrs</td></tr><?php endforeach; ?></tbody></table></section>
 <section class="card sf-glance-wrap"><div class="h sec">☀️ Solar at a Glance</div><div class="sf-glance-grid" id="glancePanel"></div></section>
 <section class="card chart-responsive-card"><div class="h sec">📊 Monthly Outflow Comparison</div><canvas id="monthlyChart" height="130"></canvas><img id="monthlyChartPrint" class="chart-print-img" alt="Monthly outflow chart for print"></section>
 <section class="card chart-responsive-card"><div class="h sec">📈 Cumulative Expense Over 25 Years</div><canvas id="cumulativeChart" height="130"></canvas><img id="cumulativeChartPrint" class="chart-print-img" alt="Cumulative expense chart for print"></section>

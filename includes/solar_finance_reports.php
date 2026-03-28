@@ -349,6 +349,19 @@ function create_or_update_solar_finance_quote(array $payload): array
     $quote['auto_source'] = 'solar_and_finance';
     $quote['auto_sync_updated_at'] = date('c');
     $quote['auto_sync_scenario'] = $useAbove2Scenario ? 'loan_above_2_lacs' : 'loan_upto_2_lacs';
+    $quote['primary_finance_scenario'] = $quote['auto_sync_scenario'];
+    $quote['scenario_prices'] = [
+        'self_funded' => ['price' => max(0, (float) ($inputs['system_cost_self_funded'] ?? $systemCostUp2))],
+        'loan_upto_2_lacs' => ['price' => $systemCostUp2],
+        'loan_above_2_lacs' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000)],
+    ];
+    $quote['rate_chart_snapshot'] = [
+        'source' => 'solar_and_finance',
+        'captured_at' => date('c'),
+        'self_funded_price' => (float) ($quote['scenario_prices']['self_funded']['price'] ?? 0),
+        'loan_upto_2_lacs_price' => $systemCostUp2,
+        'loan_above_2_lacs_price' => $systemCostAbove2,
+    ];
 
     $quote['customer_snapshot'] = array_merge(documents_customer_snapshot_defaults(), is_array($quote['customer_snapshot'] ?? null) ? $quote['customer_snapshot'] : [], [
         'mobile' => $mobile,
@@ -405,6 +418,32 @@ function create_or_update_solar_finance_quote(array $payload): array
     $quote['customer_savings_inputs']['monthly_bill_before_rs'] = $monthlyBill;
     $quote['customer_savings_inputs']['unit_rate_rs_per_kwh'] = $unitRate > 0 ? $unitRate : null;
     $quote['customer_savings_inputs']['annual_generation_kwh_per_kw'] = $annualGenerationPerKw > 0 ? $annualGenerationPerKw : null;
+    $quote['finance_scenarios'] = [
+        'self_funded' => [
+            'price' => (float) ($quote['scenario_prices']['self_funded']['price'] ?? 0),
+            'subsidy' => $subsidy,
+            'gross_payable' => (float) ($quote['scenario_prices']['self_funded']['price'] ?? 0),
+            'net_investment_after_subsidy' => max(0, (float) ($quote['scenario_prices']['self_funded']['price'] ?? 0) - $subsidy),
+            'monthly_outflow' => 0,
+            'payback' => 0,
+            'applicable' => true,
+        ],
+        'loan_upto_2_lacs' => [
+            'price' => $systemCostUp2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostUp2,
+            'net_investment_after_subsidy' => max(0, $systemCostUp2 - $subsidy), 'monthly_outflow' => 0, 'payback' => 0, 'applicable' => true,
+            'margin_money_rs' => (float) ($inputs['margin_money_up2'] ?? 0), 'loan_amount_rs' => (float) ($inputs['loan_amount_up2'] ?? 0),
+            'effective_loan_principal_rs' => max(0, (float) ($inputs['loan_amount_up2'] ?? 0) - $subsidy), 'interest_pct' => (float) ($inputs['interest_rate_up2'] ?? 0),
+            'tenure_years' => $loanTenureYears, 'emi_rs' => (float) ($inputs['monthly_emi_up2'] ?? 0), 'residual_bill_rs' => 0,
+        ],
+        'loan_above_2_lacs' => [
+            'price' => $systemCostAbove2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostAbove2,
+            'net_investment_after_subsidy' => max(0, $systemCostAbove2 - $subsidy), 'monthly_outflow' => 0, 'payback' => 0,
+            'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000),
+            'margin_money_rs' => (float) ($inputs['margin_money_above2'] ?? 0), 'loan_amount_rs' => (float) ($inputs['loan_amount_above2'] ?? 0),
+            'effective_loan_principal_rs' => max(0, (float) ($inputs['loan_amount_above2'] ?? 0) - $subsidy), 'interest_pct' => (float) ($inputs['interest_rate_above2'] ?? 0),
+            'tenure_years' => $loanTenureYears, 'emi_rs' => (float) ($inputs['monthly_emi_above2'] ?? 0), 'residual_bill_rs' => 0,
+        ],
+    ];
 
     $quoteDefaults = documents_get_quote_defaults_settings();
     $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, 0.0, $subsidy, $selectedSystemPrice, $quoteDefaults);
