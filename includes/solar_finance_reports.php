@@ -263,8 +263,11 @@ function create_or_update_solar_finance_quote(array $payload): array
 
     $subsidy = max(0, (float) ($inputs['subsidy'] ?? 0));
     $monthlyBill = max(0, (float) ($inputs['monthly_bill'] ?? 0));
+    $unitRate = max(0, (float) ($inputs['unit_rate'] ?? 0));
     $solarSize = max(0, (float) ($inputs['solar_size_kw'] ?? 0));
     $loanTenureYears = max(0, (float) ($inputs['loan_tenure_years'] ?? 0));
+    $dailyGeneration = max(0, (float) ($inputs['daily_generation_per_kw'] ?? 0));
+    $annualGenerationPerKw = $dailyGeneration * 360;
 
     $linkedQuoteId = safe_text((string) ($payload['linked_quote_id'] ?? ''));
     $existing = null;
@@ -385,19 +388,24 @@ function create_or_update_solar_finance_quote(array $payload): array
     ]], $systemType, $solarSize, $kitHsn);
 
     $quote['finance_inputs']['monthly_bill_rs'] = (string) $monthlyBill;
+    $quote['finance_inputs']['unit_rate_rs_per_kwh'] = (string) $unitRate;
+    $quote['finance_inputs']['annual_generation_per_kw'] = (string) $annualGenerationPerKw;
     $quote['finance_inputs']['subsidy_expected_rs'] = (string) $subsidy;
     $quote['finance_inputs']['loan']['enabled'] = true;
     $quote['finance_inputs']['loan']['interest_pct'] = (string) $loanInterest;
     $quote['finance_inputs']['loan']['tenure_years'] = (string) $loanTenureYears;
     $quote['finance_inputs']['loan']['loan_amount'] = (string) $loanAmount;
-    $quote['finance_inputs']['loan']['margin_pct'] = '';
+    $quote['finance_inputs']['loan']['margin_pct'] = (string) $marginMoney;
 
     $quote['customer_savings_inputs']['bank_loan_enabled'] = true;
+    $quote['customer_savings_inputs']['unit_rate_rs_per_kwh'] = $unitRate;
+    $quote['customer_savings_inputs']['annual_generation_kwh_per_kw'] = $annualGenerationPerKw;
     $quote['customer_savings_inputs']['loan_interest_rate_percent'] = $loanInterest;
     $quote['customer_savings_inputs']['loan_tenure_months'] = $loanTenureYears > 0 ? (int) round($loanTenureYears * 12) : null;
     $quote['customer_savings_inputs']['loan_cap_rs'] = $loanAmount;
     $quote['customer_savings_inputs']['margin_amount_rs'] = $marginMoney;
     $quote['customer_savings_inputs']['monthly_bill_before_rs'] = $monthlyBill;
+    $quote['customer_savings_inputs']['subsidy_credit_rs'] = $subsidy;
 
     $quoteDefaults = documents_get_quote_defaults_settings();
     $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, 0.0, $subsidy, $selectedSystemPrice, $quoteDefaults);
