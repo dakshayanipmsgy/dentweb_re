@@ -16,7 +16,6 @@
     const transportInput = field('transportation_rs');
     const subsidyInput = field('subsidy_expected_rs');
     const discountInput = field('discount_rs');
-    const discountNoteInput = field('discount_note');
     const capacityInput = quoteForm.querySelector('#computedCapacityKwp') || field('capacity_kwp');
     const schemeTypeInput = field('scheme_type');
     const customerTypeInput = field('customer_type');
@@ -34,54 +33,17 @@
     const resetMonthlyBtn = config.resetMonthlyBtn || document.getElementById('resetMonthlySuggestion');
     const resetSubsidyBtn = config.resetSubsidyBtn || document.getElementById('resetSubsidyDefault');
 
-    const overrideField = (key) => field('customer_savings_override_' + key);
-    const overrideInputs = {
-        monthly_bill_rs: overrideField('monthly_bill_rs'),
-        unit_rate_rs_per_kwh: overrideField('unit_rate_rs_per_kwh'),
-        annual_generation_per_kw: overrideField('annual_generation_per_kw'),
-        transportation_rs: overrideField('transportation_rs'),
-        discount_rs: overrideField('discount_rs'),
-        discount_note: overrideField('discount_note'),
-        subsidy_expected_rs: overrideField('subsidy_expected_rs'),
-        loan_enabled: overrideField('loan_enabled'),
-        loan_interest_pct: overrideField('loan_interest_pct'),
-        loan_tenure_years: overrideField('loan_tenure_years'),
-        loan_margin_pct: overrideField('loan_margin_pct'),
-        loan_amount: overrideField('loan_amount')
-    };
-
-    const fieldOverrideKey = new Map([
-        [monthlyBillInput, 'monthly_bill_rs'],
-        [unitRateInput, 'unit_rate_rs_per_kwh'],
-        [annualGenerationInput, 'annual_generation_per_kw'],
-        [transportInput, 'transportation_rs'],
-        [discountInput, 'discount_rs'],
-        [subsidyInput, 'subsidy_expected_rs'],
-        [loanAmountInput, 'loan_amount'],
-        [loanInterestInput, 'loan_interest_pct'],
-        [loanTenureInput, 'loan_tenure_years'],
-        [loanMarginInput, 'loan_margin_pct']
-    ]);
-    const isOverridden = (key) => !!(overrideInputs[key] && overrideInputs[key].value === '1');
-    const setOverridden = (key, value) => {
-        if (!overrideInputs[key]) return;
-        overrideInputs[key].value = value ? '1' : '0';
-    };
+    const monthlyBillTouchedFlag = field('monthly_bill_touched');
 
     const managedFields = [monthlyBillInput, subsidyInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput, unitRateInput, annualGenerationInput].filter(Boolean);
     managedFields.forEach((input) => {
         input.addEventListener('input', () => {
             input.dataset.touched = '1';
-            const key = fieldOverrideKey.get(input);
-            if (key) {
-                setOverridden(key, true);
+            if (input === monthlyBillInput && monthlyBillTouchedFlag) {
+                monthlyBillTouchedFlag.value = '1';
             }
         });
     });
-    loanEnabled?.addEventListener('change', () => setOverridden('loan_enabled', true));
-    transportInput?.addEventListener('input', () => setOverridden('transportation_rs', true));
-    discountInput?.addEventListener('input', () => setOverridden('discount_rs', true));
-    discountNoteInput?.addEventListener('input', () => setOverridden('discount_note', true));
 
     const parseNum = (value) => {
         const n = Number(value);
@@ -92,13 +54,12 @@
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
         if (!input) return;
-        const overrideKey = fieldOverrideKey.get(input);
-        if (!force && overrideKey && isOverridden(overrideKey)) return;
+        if (!force && input === monthlyBillInput && monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1') return;
         if (!force && input.dataset.touched === '1' && !fieldEmpty(input)) return;
         const val = noDecimals ? Math.round(value) : Math.round(value * 100) / 100;
         input.value = String(val);
-        if (force && overrideKey) {
-            setOverridden(overrideKey, false);
+        if (input === monthlyBillInput && monthlyBillTouchedFlag && force) {
+            monthlyBillTouchedFlag.value = '0';
         }
     };
 
@@ -183,7 +144,8 @@
         const annualGeneration = parseNum(annualGenerationInput?.value || segSettings.annual_generation_per_kw || safeDefaultEnergy);
         const unitRate = parseNum(unitRateInput?.value || segSettings.unit_rate_rs_per_kwh || 0);
         const currentMonthlyBill = parseNum(monthlyBillInput?.value);
-        if (!shouldForce && isOverridden('monthly_bill_rs')) return;
+        const monthlyBillTouched = monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1';
+        if (!shouldForce && monthlyBillTouched) return;
         if (!shouldForce && monthlyBillInput && !fieldEmpty(monthlyBillInput) && currentMonthlyBill > 0 && monthlyBillInput.dataset.touched === '1') return;
         setIfAllowed(monthlyBillInput, (capacity * annualGeneration * unitRate) / 12, { force: shouldForce, noDecimals: true });
     };
@@ -216,26 +178,23 @@
     resetLoanBtn?.addEventListener('click', (e) => {
         e.preventDefault();
         [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].forEach((input) => { if (input) input.dataset.touched = ''; });
-        setOverridden('loan_amount', false);
-        setOverridden('loan_interest_pct', false);
-        setOverridden('loan_tenure_years', false);
-        setOverridden('loan_margin_pct', false);
         applyLoanDefaults(true);
     });
     resetMonthlyBtn?.addEventListener('click', (e) => {
         e.preventDefault();
         if (monthlyBillInput) monthlyBillInput.dataset.touched = '';
-        setOverridden('monthly_bill_rs', false);
+        if (monthlyBillTouchedFlag) monthlyBillTouchedFlag.value = '0';
         if (unitRateInput) unitRateInput.dataset.touched = '';
-        setOverridden('unit_rate_rs_per_kwh', false);
         if (annualGenerationInput) annualGenerationInput.dataset.touched = '';
-        setOverridden('annual_generation_per_kw', false);
         applyMonthlySuggestion(true);
     });
+
+    if (monthlyBillTouchedFlag) {
+        monthlyBillTouchedFlag.value = '0';
+    }
     resetSubsidyBtn?.addEventListener('click', (e) => {
         e.preventDefault();
         if (subsidyInput) subsidyInput.dataset.touched = '';
-        setOverridden('subsidy_expected_rs', false);
         applySubsidyDefault(true);
         applyLoanDefaults(false);
     });
