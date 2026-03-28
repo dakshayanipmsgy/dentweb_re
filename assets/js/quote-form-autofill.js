@@ -34,6 +34,7 @@
     const resetSubsidyBtn = config.resetSubsidyBtn || document.getElementById('resetSubsidyDefault');
 
     const monthlyBillTouchedFlag = field('monthly_bill_touched');
+    const isEditMode = !!(quoteIdInput && String(quoteIdInput.value || '').trim() !== '');
 
     const managedFields = [monthlyBillInput, subsidyInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput, unitRateInput, annualGenerationInput].filter(Boolean);
     managedFields.forEach((input) => {
@@ -50,11 +51,17 @@
         return Number.isFinite(n) ? n : 0;
     };
     const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
+    const isSavedFinanceValueLocked = (input) => {
+        if (!input || !isEditMode) return false;
+        const hasSavedFlag = String(input.dataset.hasSavedValue || '') === '1';
+        return hasSavedFlag && input.dataset.touched !== '1';
+    };
     const setIfAllowed = (input, value, options) => {
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
         if (!input) return;
         if (!force && input === monthlyBillInput && monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1') return;
+        if (!force && isSavedFinanceValueLocked(input)) return;
         if (!force && input.dataset.touched === '1' && !fieldEmpty(input)) return;
         const val = noDecimals ? Math.round(value) : Math.round(value * 100) / 100;
         input.value = String(val);
@@ -177,7 +184,11 @@
 
     resetLoanBtn?.addEventListener('click', (e) => {
         e.preventDefault();
-        [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].forEach((input) => { if (input) input.dataset.touched = ''; });
+        [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].forEach((input) => {
+            if (!input) return;
+            input.dataset.touched = '';
+            input.dataset.hasSavedValue = '0';
+        });
         applyLoanDefaults(true);
     });
     resetMonthlyBtn?.addEventListener('click', (e) => {
