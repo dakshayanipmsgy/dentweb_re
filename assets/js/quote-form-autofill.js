@@ -28,6 +28,7 @@
     const loanInterestInput = field('loan_interest_pct');
     const loanTenureInput = field('loan_tenure_years');
     const loanMarginInput = field('loan_margin_pct');
+    const loanManagedInputs = [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].filter(Boolean);
 
     const resetLoanBtn = config.resetLoanBtn || document.getElementById('resetLoanDefaults');
     const resetMonthlyBtn = config.resetMonthlyBtn || document.getElementById('resetMonthlySuggestion');
@@ -44,12 +45,16 @@
             }
         });
     });
-
     const parseNum = (value) => {
         const n = Number(value);
         return Number.isFinite(n) ? n : 0;
     };
     const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
+    loanManagedInputs.forEach((input) => {
+        if (String(input.dataset.hasSavedValue || '') === '1' && !fieldEmpty(input)) {
+            input.dataset.touched = '1';
+        }
+    });
     const setIfAllowed = (input, value, options) => {
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
@@ -116,6 +121,8 @@
     const applyLoanDefaults = (force) => {
         const shouldForce = !!force;
         if (!loanEnabled || !loanEnabled.checked) return;
+        const hasSavedLoanValues = loanManagedInputs.some((input) => String(input.dataset.hasSavedValue || '') === '1' && !fieldEmpty(input));
+        if (!shouldForce && hasSavedLoanValues) return;
         const loanCfg = currentSegmentSettings().loan_bestcase || {};
         const grossPayable = computeGrossPayable();
         const maxLoan = parseNum(loanCfg.max_loan_rs || 200000);
