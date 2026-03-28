@@ -28,6 +28,7 @@
     const loanInterestInput = field('loan_interest_pct');
     const loanTenureInput = field('loan_tenure_years');
     const loanMarginInput = field('loan_margin_pct');
+    const isEditQuote = !!(quoteIdInput && String(quoteIdInput.value || '').trim() !== '');
 
     const resetLoanBtn = config.resetLoanBtn || document.getElementById('resetLoanDefaults');
     const resetMonthlyBtn = config.resetMonthlyBtn || document.getElementById('resetMonthlySuggestion');
@@ -54,6 +55,7 @@
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
         if (!input) return;
+        if (!force && isEditQuote && !fieldEmpty(input)) return;
         if (!force && input === monthlyBillInput && monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1') return;
         if (!force && input.dataset.touched === '1' && !fieldEmpty(input)) return;
         const val = noDecimals ? Math.round(value) : Math.round(value * 100) / 100;
