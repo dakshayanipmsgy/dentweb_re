@@ -170,9 +170,15 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
         $fallbackBill = $toFloat($quote['finance_inputs']['monthly_bill_rs'] ?? 0);
         $monthlyUnitsBefore = $fallbackBill > 0 ? ($fallbackBill / $tariff) : 0.0;
     }
-    $residualUnits = max(0, $monthlyUnitsBefore - $monthlyUnitsSolar);
-    $residualBill = $residualUnits * $tariff;
     $noSolarMonthlyBill = max(0, $toFloat($snapshot['monthly_bill_before_rs'] ?? null, $toFloat($quote['finance_inputs']['monthly_bill_rs'] ?? 0)));
+    $solarValueMonthlyRs = max(0, $monthlyUnitsSolar * $tariff);
+    $minimumResidualBillFloor = max(
+        0,
+        $toFloat($snapshot['minimum_bill_rs'] ?? null, 0),
+        $toFloat($snapshot['residual_bill_floor_rs'] ?? null, 0),
+        $toFloat($snapshot['fixed_monthly_charge_rs'] ?? null, 0)
+    );
+    $residualBill = max($minimumResidualBillFloor, $noSolarMonthlyBill - $solarValueMonthlyRs);
 
     $order = [
         'self_funded' => 'Self Funded',
@@ -196,7 +202,7 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
         $loanAmount = max(0, $toFloat($row['loan_amount_rs'] ?? 0));
         $effectivePrincipal = max(0, $toFloat($row['effective_loan_principal_rs'] ?? ($loanAmount - $scenarioSubsidy)));
         $emi = max(0, $toFloat($row['emi_rs'] ?? 0));
-        $residualBillScenario = max(0, $toFloat($row['residual_bill_rs'] ?? $residualBill));
+        $residualBillScenario = $residualBill;
         $monthlyOutflow = max(0, $toFloat($row['monthly_outflow_rs'] ?? $row['monthly_outflow'] ?? 0));
         $applicable = $scenarioKey !== 'loan_above_2_lacs'
             ? (bool) ($row['applicable'] ?? true)
