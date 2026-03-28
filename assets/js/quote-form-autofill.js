@@ -35,7 +35,17 @@
 
     const monthlyBillTouchedFlag = field('monthly_bill_touched');
 
+    const parseNum = (value) => {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : 0;
+    };
+    const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
     const managedFields = [monthlyBillInput, subsidyInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput, unitRateInput, annualGenerationInput].filter(Boolean);
+    [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].filter(Boolean).forEach((input) => {
+        if (String(input.dataset.hasSavedValue || '') === '1' && !fieldEmpty(input)) {
+            input.dataset.touched = '1';
+        }
+    });
     managedFields.forEach((input) => {
         input.addEventListener('input', () => {
             input.dataset.touched = '1';
@@ -44,16 +54,11 @@
             }
         });
     });
-
-    const parseNum = (value) => {
-        const n = Number(value);
-        return Number.isFinite(n) ? n : 0;
-    };
-    const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
     const setIfAllowed = (input, value, options) => {
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
         if (!input) return;
+        if (!force && String(input.dataset.hasSavedValue || '') === '1' && !fieldEmpty(input)) return;
         if (!force && input === monthlyBillInput && monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1') return;
         if (!force && input.dataset.touched === '1' && !fieldEmpty(input)) return;
         const val = noDecimals ? Math.round(value) : Math.round(value * 100) / 100;
