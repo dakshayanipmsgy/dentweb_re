@@ -36,12 +36,31 @@
     const monthlyBillTouchedFlag = field('monthly_bill_touched');
 
     const managedFields = [monthlyBillInput, subsidyInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput, unitRateInput, annualGenerationInput].filter(Boolean);
+    const hasQuoteId = !!quoteIdInput && String(quoteIdInput.value || '').trim() !== '';
+    const hasValue = (input) => {
+        if (!input) return false;
+        if (input.type === 'checkbox' || input.type === 'radio') return !!input.checked;
+        return String(input.value || '').trim() !== '';
+    };
+    const markAsUserEdited = (input) => {
+        if (!input) return;
+        input.dataset.touched = '1';
+        if (input === monthlyBillInput && monthlyBillTouchedFlag) {
+            monthlyBillTouchedFlag.value = '1';
+        }
+    };
+
+    if (hasQuoteId) {
+        managedFields.forEach((input) => {
+            if (hasValue(input)) {
+                markAsUserEdited(input);
+            }
+        });
+    }
+
     managedFields.forEach((input) => {
         input.addEventListener('input', () => {
-            input.dataset.touched = '1';
-            if (input === monthlyBillInput && monthlyBillTouchedFlag) {
-                monthlyBillTouchedFlag.value = '1';
-            }
+            markAsUserEdited(input);
         });
     });
 
@@ -189,7 +208,7 @@
         applyMonthlySuggestion(true);
     });
 
-    if (monthlyBillTouchedFlag) {
+    if (monthlyBillTouchedFlag && !hasQuoteId) {
         monthlyBillTouchedFlag.value = '0';
     }
     resetSubsidyBtn?.addEventListener('click', (e) => {
