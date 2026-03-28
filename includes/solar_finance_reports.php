@@ -264,6 +264,9 @@ function create_or_update_solar_finance_quote(array $payload): array
     $subsidy = max(0, (float) ($inputs['subsidy'] ?? 0));
     $monthlyBill = max(0, (float) ($inputs['monthly_bill'] ?? 0));
     $solarSize = max(0, (float) ($inputs['solar_size_kw'] ?? 0));
+    $unitRate = max(0, (float) ($inputs['unit_rate'] ?? 0));
+    $dailyGenerationPerKw = max(0, (float) ($inputs['daily_generation_per_kw'] ?? 0));
+    $annualGenerationPerKw = $dailyGenerationPerKw > 0 ? $dailyGenerationPerKw * 360 : 0.0;
     $loanTenureYears = max(0, (float) ($inputs['loan_tenure_years'] ?? 0));
 
     $linkedQuoteId = safe_text((string) ($payload['linked_quote_id'] ?? ''));
@@ -385,6 +388,8 @@ function create_or_update_solar_finance_quote(array $payload): array
     ]], $systemType, $solarSize, $kitHsn);
 
     $quote['finance_inputs']['monthly_bill_rs'] = (string) $monthlyBill;
+    $quote['finance_inputs']['unit_rate_rs_per_kwh'] = $unitRate > 0 ? (string) $unitRate : '';
+    $quote['finance_inputs']['annual_generation_per_kw'] = $annualGenerationPerKw > 0 ? (string) $annualGenerationPerKw : '';
     $quote['finance_inputs']['subsidy_expected_rs'] = (string) $subsidy;
     $quote['finance_inputs']['loan']['enabled'] = true;
     $quote['finance_inputs']['loan']['interest_pct'] = (string) $loanInterest;
@@ -398,6 +403,8 @@ function create_or_update_solar_finance_quote(array $payload): array
     $quote['customer_savings_inputs']['loan_cap_rs'] = $loanAmount;
     $quote['customer_savings_inputs']['margin_amount_rs'] = $marginMoney;
     $quote['customer_savings_inputs']['monthly_bill_before_rs'] = $monthlyBill;
+    $quote['customer_savings_inputs']['unit_rate_rs_per_kwh'] = $unitRate > 0 ? $unitRate : null;
+    $quote['customer_savings_inputs']['annual_generation_kwh_per_kw'] = $annualGenerationPerKw > 0 ? $annualGenerationPerKw : null;
 
     $quoteDefaults = documents_get_quote_defaults_settings();
     $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, 0.0, $subsidy, $selectedSystemPrice, $quoteDefaults);
