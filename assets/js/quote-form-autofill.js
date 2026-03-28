@@ -50,6 +50,13 @@
         return Number.isFinite(n) ? n : 0;
     };
     const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
+    const isExistingQuote = () => !!(quoteIdInput && String(quoteIdInput.value || '').trim() !== '');
+    const markLoanFieldsTouchedForEdit = () => {
+        if (!isExistingQuote()) return;
+        [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].forEach((input) => {
+            if (input && !fieldEmpty(input)) input.dataset.touched = '1';
+        });
+    };
     const setIfAllowed = (input, value, options) => {
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
@@ -199,6 +206,7 @@
         applyLoanDefaults(false);
     });
 
+    markLoanFieldsTouchedForEdit();
     applyLoanDefaults(false);
     applyMonthlySuggestion(false);
     applySubsidyDefault(false);
