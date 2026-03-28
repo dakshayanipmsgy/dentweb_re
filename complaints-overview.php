@@ -576,7 +576,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
 
     <section class="complaints-export">
       <h2>Export Excel</h2>
-      <form method="post">
+      <form method="post" target="_blank" rel="noopener">
         <input type="hidden" name="action" value="export_excel" />
         <div class="complaints-export-grid">
           <div>
