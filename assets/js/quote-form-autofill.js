@@ -21,7 +21,6 @@
     const customerTypeInput = field('customer_type');
     const pmSuryagharInput = field('is_pm_suryaghar');
     const quoteIdInput = field('quote_id');
-    const isEditMode = !!quoteIdInput && String(quoteIdInput.value || '').trim() !== '';
     const unitRateInput = field('unit_rate_rs_per_kwh');
     const annualGenerationInput = field('annual_generation_per_kw');
     const monthlyBillInput = field('monthly_bill_rs');
@@ -36,42 +35,29 @@
 
     const monthlyBillTouchedFlag = field('monthly_bill_touched');
 
-    const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
     const managedFields = [monthlyBillInput, subsidyInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput, unitRateInput, annualGenerationInput].filter(Boolean);
-    const loanManagedFields = [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].filter(Boolean);
     managedFields.forEach((input) => {
         input.addEventListener('input', () => {
             input.dataset.touched = '1';
-            input.dataset.hasSavedValue = '';
             if (input === monthlyBillInput && monthlyBillTouchedFlag) {
                 monthlyBillTouchedFlag.value = '1';
             }
         });
     });
-    if (isEditMode) {
-        managedFields.forEach((input) => {
-            if (!fieldEmpty(input)) {
-                input.dataset.hasSavedValue = '1';
-            }
-        });
-    }
 
     const parseNum = (value) => {
         const n = Number(value);
         return Number.isFinite(n) ? n : 0;
     };
+    const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
     const setIfAllowed = (input, value, options) => {
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
         if (!input) return;
         if (!force && input === monthlyBillInput && monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1') return;
-        if (!force && isEditMode && input.dataset.hasSavedValue === '1') return;
         if (!force && input.dataset.touched === '1' && !fieldEmpty(input)) return;
         const val = noDecimals ? Math.round(value) : Math.round(value * 100) / 100;
         input.value = String(val);
-        if (isEditMode) {
-            input.dataset.hasSavedValue = '';
-        }
         if (input === monthlyBillInput && monthlyBillTouchedFlag && force) {
             monthlyBillTouchedFlag.value = '0';
         }
@@ -191,11 +177,7 @@
 
     resetLoanBtn?.addEventListener('click', (e) => {
         e.preventDefault();
-        loanManagedFields.forEach((input) => {
-            if (!input) return;
-            input.dataset.touched = '';
-            input.dataset.hasSavedValue = '';
-        });
+        [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].forEach((input) => { if (input) input.dataset.touched = ''; });
         applyLoanDefaults(true);
     });
     resetMonthlyBtn?.addEventListener('click', (e) => {
