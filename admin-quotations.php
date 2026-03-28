@@ -80,6 +80,18 @@ $templates = array_values(array_filter($templatesRaw, static function ($row): bo
 }));
 $templateBlocks = documents_sync_template_block_entries($templates);
 $templateBlocks = is_array($templateBlocks) ? $templateBlocks : [];
+$defaultTemplateNameForNewQuote = 'pm surya ghar - residential (subsidy) (res)';
+$resolveDefaultTemplateIdForNewQuote = static function (array $templateRows) use ($defaultTemplateNameForNewQuote): string {
+    foreach ($templateRows as $tplRow) {
+        $templateName = trim((string) ($tplRow['name'] ?? ''));
+        $segmentName = trim((string) ($tplRow['segment'] ?? ''));
+        $displayName = trim($templateName . ($segmentName !== '' ? (' (' . $segmentName . ')') : ''));
+        if (strcasecmp($displayName, $defaultTemplateNameForNewQuote) === 0) {
+            return safe_text((string) ($tplRow['id'] ?? ''));
+        }
+    }
+    return '';
+};
 $company = load_company_profile();
 $quoteDefaults = load_quote_defaults();
 $quoteDefaults = is_array($quoteDefaults) ? $quoteDefaults : documents_quote_defaults_settings();
@@ -1032,6 +1044,18 @@ if ($editing === null) {
     $editing = documents_quote_defaults();
     $editing['quotation_date'] = date('Y-m-d');
     $editing['valid_until'] = date('Y-m-d', strtotime('+7 days'));
+    if (trim((string) ($editing['template_set_id'] ?? '')) === '') {
+        $defaultTemplateId = $resolveDefaultTemplateIdForNewQuote($templates);
+        if ($defaultTemplateId !== '') {
+            $editing['template_set_id'] = $defaultTemplateId;
+            foreach ($templates as $tpl) {
+                if ((string) ($tpl['id'] ?? '') === $defaultTemplateId) {
+                    $editing['segment'] = safe_text((string) ($tpl['segment'] ?? $editing['segment']));
+                    break;
+                }
+            }
+        }
+    }
 }
 
 $prefillMessage = '';
