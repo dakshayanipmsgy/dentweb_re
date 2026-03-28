@@ -240,27 +240,29 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
                     $emi = ($effectivePrincipal * $monthlyRate * $pow) / max(0.000001, $pow - 1);
                 }
             }
-            if ($monthlyOutflow <= 0) {
-                $monthlyOutflow = $emi + $residualBillScenario;
-            }
+            $monthlyOutflow = max(0, $emi + $residualBillScenario);
             if ($scenarioKey === 'loan_above_2_lacs' && !$applicable) {
                 $applicable = ($loanAmount > 200000) || ($price > 200000 && !empty($scenarioPrices['loan_above_2_lacs']));
             }
         }
 
-        $paybackMonths = $toInt($row['payback_months'] ?? null, 0);
-        if ($paybackMonths <= 0) {
-            $legacyYears = $toFloat($row['payback'] ?? 0);
-            if ($legacyYears > 0) {
-                $paybackMonths = max(1, (int) round($legacyYears * 12));
+        if ($scenarioKey === 'self_funded') {
+            $paybackMonths = $toInt($row['payback_months'] ?? null, 0);
+            if ($paybackMonths <= 0) {
+                $legacyYears = $toFloat($row['payback'] ?? 0);
+                if ($legacyYears > 0) {
+                    $paybackMonths = max(1, (int) round($legacyYears * 12));
+                }
             }
-        }
-        if ($paybackMonths <= 0) {
-            $initialCost = $scenarioKey === 'self_funded' ? $netInvestment : $marginMoney;
-            $paybackMonths = $calculatePaybackMonths($initialCost, $monthlyOutflow, $noSolarMonthlyBill);
-        }
-        $paybackDisplay = trim((string) ($row['payback_display'] ?? ''));
-        if ($paybackDisplay === '') {
+            if ($paybackMonths <= 0) {
+                $paybackMonths = $calculatePaybackMonths($netInvestment, $monthlyOutflow, $noSolarMonthlyBill);
+            }
+            $paybackDisplay = trim((string) ($row['payback_display'] ?? ''));
+            if ($paybackDisplay === '') {
+                $paybackDisplay = $formatPaybackMonths($paybackMonths);
+            }
+        } else {
+            $paybackMonths = $calculatePaybackMonths($marginMoney, $monthlyOutflow, $noSolarMonthlyBill);
             $paybackDisplay = $formatPaybackMonths($paybackMonths);
         }
 
@@ -581,7 +583,7 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <section class="card"><span class="chip">✅ MNRE compliant</span><span class="chip"><?= $segment === 'RES' ? '✅ PM Surya Ghar eligible' : 'ℹ️ Segment specific policy' ?></span><span class="chip">🔌 Net metering supported</span><span class="chip">🛡️ 25+ year life / warranty</span></section>
 <?php if ($customerSiteFields !== []): ?><section class="card"><div class="h sec">🏠 Customer &amp; Site 📍</div><div class="grid2"><?php foreach ($customerSiteFields as $field): ?><div class="metric"><b><?= htmlspecialchars((string) ($field['label'] ?? ''), ENT_QUOTES) ?></b><div><?= nl2br(htmlspecialchars((string) ($field['value'] ?? ''), ENT_QUOTES)) ?></div></div><?php endforeach; ?></div></section><?php endif; ?>
 <?php if ($coverNote !== ''): ?><section class="card"><div><?= quotation_sanitize_html($coverNote) ?></div></section><?php endif; ?>
-<section class="card"><div class="h sec">⚡ At a glance</div><div class="hero"><div class="metric">System Size<?php if ($hasMainSolarSplit): ?><b class="system-size-main"><?= htmlspecialchars(number_format($mainSolarKwp, 2, '.', ''), ENT_QUOTES) ?> kWp</b><?php if ($complimentarySolarKwp > 0): ?><small class="system-size-sub">Complimentary Non-DCR Solar Size: <?= htmlspecialchars(number_format($complimentarySolarKwp, 2, '.', ''), ENT_QUOTES) ?> kWp</small><?php endif; ?><?php else: ?><b><?= htmlspecialchars((string)($quote['capacity_kwp'] ?? '0'), ENT_QUOTES) ?> kWp</b><?php endif; ?></div><div class="metric">Monthly Bill (Without Solar)<b><?= htmlspecialchars($monthlyBillBeforeDisplay, ENT_QUOTES) ?></b></div><div class="metric">Monthly Outflow (With Solar – Bank Finance)<b id="heroOutflowBank">-</b></div><div class="metric">Monthly Outflow (With Solar – Self Funded)<b id="heroOutflowSelf">-</b></div></div><div class="save-line">🟢 You save approx <span id="heroSaving">-</span> every month</div></section>
+<section class="card"><div class="h sec">⚡ At a glance</div><div class="hero"><div class="metric">System Size<?php if ($hasMainSolarSplit): ?><b class="system-size-main"><?= htmlspecialchars(number_format($mainSolarKwp, 2, '.', ''), ENT_QUOTES) ?> kWp</b><?php if ($complimentarySolarKwp > 0): ?><small class="system-size-sub">Complimentary Non-DCR Solar Size: <?= htmlspecialchars(number_format($complimentarySolarKwp, 2, '.', ''), ENT_QUOTES) ?> kWp</small><?php endif; ?><?php else: ?><b><?= htmlspecialchars((string)($quote['capacity_kwp'] ?? '0'), ENT_QUOTES) ?> kWp</b><?php endif; ?></div><div class="metric">Monthly Bill (Without Solar)<b><?= htmlspecialchars($monthlyBillBeforeDisplay, ENT_QUOTES) ?></b></div><div class="metric">Monthly Outflow (With Solar – Loan up to ₹2 lacs)<b id="heroOutflowLoanUp2">-</b></div><div class="metric" id="heroCardLoanAbove2">Monthly Outflow (With Solar – Loan above ₹2 lacs)<b id="heroOutflowLoanAbove2">-</b></div><div class="metric">Monthly Outflow (With Solar – Self Funded)<b id="heroOutflowSelf">-</b></div></div><div class="save-line">🟢 You save approx <span id="heroSaving">-</span> every month</div></section>
 <section class="card"><div class="h sec">📦 Item summary</div><table><thead><tr><th>Sr No</th><th>Item and Description</th><th>HSN</th><th class="center">Quantity</th><th class="center">Unit</th></tr></thead><tbody><?php if ($itemRows === []): ?><tr><td colspan="5" class="center muted">No line items added.</td></tr><?php else: foreach ($itemRows as $idx => $item): ?><tr><td><?= (int)$idx + 1 ?></td><td><div><?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?></div><?php $itemDesc=(string)($item['description'] ?? ''); if (trim($itemDesc) !== ''): ?><div class="item-master-description"><?= nl2br(htmlspecialchars($itemDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?><?php $customDesc=(string)($item['custom_description'] ?? ''); if (trim($customDesc) !== ''): ?><div class="item-custom-description">📝 <?= nl2br(htmlspecialchars($customDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?></td><td><?= htmlspecialchars((string)($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['qty'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
 <?php if($specialReq!==''): ?><section class="card"><div class="h sec">✍️ Special Requests From Consumer (Inclusive in the rate)</div><div><?= quotation_sanitize_html($specialReq) ?></div><div><i>In case of conflict between annexures and special requests, special requests will be prioritized.</i></div></section><?php endif; ?>
 <section class="card"><div class="h sec">💰 Pricing summary</div><table><thead><tr><th>#</th><th>Particular</th><th class="right">Amount</th></tr></thead><tbody><tr><td>1</td><td>Total system price incl GST</td><td class="right"><?= quotation_format_inr_indian((float)($calc['system_total_incl_gst_rs'] ?? $quote['input_total_gst_inclusive'] ?? 0), $showDecimals) ?></td></tr><tr><td>2</td><td>Transportation</td><td class="right"><?= quotation_format_inr_indian((float)($calc['transportation_rs'] ?? 0), $showDecimals) ?></td></tr><?php if ($discountApplicable): ?><tr><td>3</td><td>Discount<?php $discountNote=(string)($calc['discount_note'] ?? ''); if(trim($discountNote)!==''): ?><div class="muted" style="font-size:.85em;margin-top:2px"><?= htmlspecialchars($discountNote, ENT_QUOTES) ?></div><?php endif; ?></td><td class="right">- <?= quotation_format_inr_indian($discountRsDisplay, $showDecimals) ?></td></tr><?php endif; ?><tr class="pricing-gross-row"><td><?= $discountApplicable ? '4' : '3' ?></td><td><?= htmlspecialchars($grossPayableLabel, ENT_QUOTES) ?></td><td class="right" id="upfront"></td></tr><tr><td><?= $discountApplicable ? '5' : '4' ?></td><td>Subsidy expected</td><td class="right"><?= quotation_format_inr_indian((float)($calc['subsidy_expected_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td><?= $discountApplicable ? '6' : '5' ?></td><td><b>Net Investment/Cost After Subsidy Credit</b></td><td class="right"><b id="upfrontNet"></b></td></tr></tbody></table></section>
@@ -623,7 +625,6 @@ const scenarioColors={
 };
 const scenarios=(finance&&typeof finance==='object'&&finance.finance_scenarios&&typeof finance.finance_scenarios==='object')?finance.finance_scenarios:{};
 const monthlyBill=Math.max(0,num(finance.no_solar_monthly_bill_rs));
-const primaryScenario=String(finance.primary_finance_scenario||'loan_upto_2_lacs');
 const getScenario=(key)=>{const row=scenarios[key];return row&&typeof row==='object'?row:{};};
 const isScenarioApplicable=(key)=>{
   const row=getScenario(key);
@@ -632,9 +633,11 @@ const isScenarioApplicable=(key)=>{
 };
 const orderedApplicableScenarios=scenarioOrder.filter((key)=>isScenarioApplicable(key));
 const selfScenario=getScenario('self_funded');
-const primaryLoanKey=(primaryScenario!=='self_funded' && isScenarioApplicable(primaryScenario))?primaryScenario:(isScenarioApplicable('loan_upto_2_lacs')?'loan_upto_2_lacs':(isScenarioApplicable('loan_above_2_lacs')?'loan_above_2_lacs':''));
-const loanScenario=primaryLoanKey!==''?getScenario(primaryLoanKey):{};
+const loanUp2Scenario=getScenario('loan_upto_2_lacs');
+const loanAbove2Scenario=getScenario('loan_above_2_lacs');
 const selfOutflow=Math.max(0,num(selfScenario.monthly_outflow_rs));
+const loanUp2Outflow=Math.max(0,num(loanUp2Scenario.monthly_outflow_rs));
+const loanAbove2Outflow=Math.max(0,num(loanAbove2Scenario.monthly_outflow_rs));
 const selfResidual=Math.max(0,num(selfScenario.residual_bill_rs));
 const selfNetInvestment=Math.max(0,num(selfScenario.net_investment_after_subsidy));
 const monthlySaving=Math.max(0,monthlyBill-selfOutflow);
@@ -650,15 +653,17 @@ const co225=annualCo2*25;
 const treeFactor=Math.max(0.1,<?= json_encode($treeAbsorption) ?>);
 const annualTrees=annualCo2/treeFactor;
 const trees25=co225/treeFactor;
-const hasLoanScenario=primaryLoanKey!=='';
-const loanOutflow=Math.max(0,num(loanScenario.monthly_outflow_rs));
-
 const setText=(id,val)=>{const node=document.getElementById(id);if(node){node.textContent=val;}};
 setText('upfront',r(num(finance.gross)));
 setText('upfrontNet',r(selfNetInvestment));
-setText('heroOutflowBank',hasLoanScenario?r(loanOutflow):'—');
+setText('heroOutflowLoanUp2',isScenarioApplicable('loan_upto_2_lacs')?r(loanUp2Outflow):'—');
+setText('heroOutflowLoanAbove2',isScenarioApplicable('loan_above_2_lacs')?r(loanAbove2Outflow):'—');
 setText('heroOutflowSelf',r(selfOutflow));
 setText('heroSaving',r(monthlySaving));
+const heroCardLoanAbove2=document.getElementById('heroCardLoanAbove2');
+if(heroCardLoanAbove2 && !isScenarioApplicable('loan_above_2_lacs')){
+  heroCardLoanAbove2.style.display='none';
+}
 
 const fmtMonths=(months)=>{
   if(!Number.isFinite(months)||months<0) return '—';
