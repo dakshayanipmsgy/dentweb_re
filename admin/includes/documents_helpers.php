@@ -458,6 +458,31 @@ function documents_quote_defaults_settings(): array
             'IND' => ['unit_rate_rs_per_kwh' => 11, 'subsidy' => ['enabled' => false], 'loan_defaults' => ['enabled' => true, 'tenure_years' => 7]],
             'INST' => ['unit_rate_rs_per_kwh' => 9, 'subsidy' => ['enabled' => false,], 'loan_defaults' => ['enabled' => true, 'tenure_years' => 7]],
         ],
+        'rate_chart' => [
+            'on_grid' => [
+                ['solar_size_kwp' => 2, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 3, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 4, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 5, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 6, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 7, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 8, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 9, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 10, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+            ],
+            'hybrid' => [
+                ['solar_size_kwp' => 0, 'inverter_kva' => 3.0, 'phase' => '1', 'battery_count' => 2, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 0, 'inverter_kva' => 3.0, 'phase' => '1', 'battery_count' => 4, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 0, 'inverter_kva' => 5.0, 'phase' => '1', 'battery_count' => 4, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 0, 'inverter_kva' => 7.5, 'phase' => '1', 'battery_count' => 8, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 0, 'inverter_kva' => 10.0, 'phase' => '1', 'battery_count' => 10, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 0, 'inverter_kva' => 10.0, 'phase' => '1', 'battery_count' => 15, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 0, 'inverter_kva' => 15.0, 'phase' => '1', 'battery_count' => 20, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 0, 'inverter_kva' => 7.5, 'phase' => '3', 'battery_count' => 8, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 0, 'inverter_kva' => 10.0, 'phase' => '3', 'battery_count' => 10, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+                ['solar_size_kwp' => 0, 'inverter_kva' => 15.0, 'phase' => '3', 'battery_count' => 15, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
+            ],
+        ],
     ];
 }
 
@@ -1079,6 +1104,18 @@ function documents_quote_defaults(): array
             'discount_rs' => '0',
             'discount_note' => '',
         ],
+        'primary_finance_scenario' => 'loan_above_2_lacs',
+        'scenario_prices' => [
+            'self_funded' => ['price' => 0],
+            'loan_upto_2_lacs' => ['price' => 0],
+            'loan_above_2_lacs' => ['price' => 0, 'applicable' => true],
+        ],
+        'finance_scenarios' => [
+            'self_funded' => [],
+            'loan_upto_2_lacs' => [],
+            'loan_above_2_lacs' => [],
+        ],
+        'rate_chart_snapshot' => [],
         'customer_savings_inputs' => [
             'unit_rate_rs_per_kwh' => null,
             'annual_generation_kwh_per_kw' => null,
@@ -1115,6 +1152,56 @@ function documents_quote_defaults(): array
         'locked_flag' => false,
         'locked_at' => null,
     ];
+}
+
+function documents_quote_default_finance_scenario_shape(): array
+{
+    return [
+        'price' => 0.0,
+        'subsidy' => 0.0,
+        'gross_payable' => 0.0,
+        'net_investment_after_subsidy' => 0.0,
+        'monthly_outflow' => 0.0,
+        'payback' => 0.0,
+        'applicable' => true,
+        'margin_money_rs' => 0.0,
+        'loan_amount_rs' => 0.0,
+        'effective_loan_principal_rs' => 0.0,
+        'interest_pct' => 0.0,
+        'tenure_years' => 0.0,
+        'emi_rs' => 0.0,
+        'residual_bill_rs' => 0.0,
+        'finance_mode' => 'ratio',
+        'margin_ratio_pct' => 20.0,
+        'loan_ratio_pct' => 80.0,
+    ];
+}
+
+function documents_quote_find_rate_chart_row(array $rateChart, string $systemType, float $solarSizeKwp, float $inverterKva = 0.0, string $phase = '', int $batteryCount = 0): array
+{
+    $type = strtolower(trim($systemType)) === 'hybrid' ? 'hybrid' : 'on_grid';
+    $rows = is_array($rateChart[$type] ?? null) ? $rateChart[$type] : [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if (abs(((float) ($row['solar_size_kwp'] ?? 0)) - $solarSizeKwp) > 0.01) {
+            continue;
+        }
+        if ($type === 'hybrid') {
+            if (abs(((float) ($row['inverter_kva'] ?? 0)) - $inverterKva) > 0.01) {
+                continue;
+            }
+            if ((string) ($row['phase'] ?? '') !== $phase) {
+                continue;
+            }
+            if ((int) ($row['battery_count'] ?? 0) !== $batteryCount) {
+                continue;
+            }
+        }
+        return $row;
+    }
+    return [];
 }
 
 function documents_quote_resolve_customer_savings_inputs(array $quote, ?array $quoteDefaults = null): array

@@ -214,6 +214,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($whyPoints !== []) {
             $d['global']['quotation_ui']['why_dakshayani_points'] = $whyPoints;
         }
+        $rateChartOnGridRaw = trim((string) ($_POST['rate_chart_on_grid_json'] ?? ''));
+        if ($rateChartOnGridRaw !== '') {
+            $decoded = json_decode($rateChartOnGridRaw, true);
+            if (is_array($decoded)) {
+                $d['rate_chart']['on_grid'] = array_values(array_filter(array_map(static function ($row): array {
+                    return [
+                        'solar_size_kwp' => (float) ($row['solar_size_kwp'] ?? 0),
+                        'self_funded_price' => (float) ($row['self_funded_price'] ?? 0),
+                        'loan_upto_2_lacs_price' => (float) ($row['loan_upto_2_lacs_price'] ?? 0),
+                        'loan_above_2_lacs_price' => (float) ($row['loan_above_2_lacs_price'] ?? 0),
+                    ];
+                }, $decoded), static fn(array $row): bool => $row['solar_size_kwp'] > 0));
+            }
+        }
+        $rateChartHybridRaw = trim((string) ($_POST['rate_chart_hybrid_json'] ?? ''));
+        if ($rateChartHybridRaw !== '') {
+            $decoded = json_decode($rateChartHybridRaw, true);
+            if (is_array($decoded)) {
+                $d['rate_chart']['hybrid'] = array_values(array_filter(array_map(static function ($row): array {
+                    return [
+                        'solar_size_kwp' => (float) ($row['solar_size_kwp'] ?? 0),
+                        'inverter_kva' => (float) ($row['inverter_kva'] ?? 0),
+                        'phase' => safe_text((string) ($row['phase'] ?? '')),
+                        'battery_count' => (int) ($row['battery_count'] ?? 0),
+                        'self_funded_price' => (float) ($row['self_funded_price'] ?? 0),
+                        'loan_upto_2_lacs_price' => (float) ($row['loan_upto_2_lacs_price'] ?? 0),
+                        'loan_above_2_lacs_price' => (float) ($row['loan_above_2_lacs_price'] ?? 0),
+                    ];
+                }, $decoded), static fn(array $row): bool => $row['inverter_kva'] > 0 && $row['phase'] !== ''));
+            }
+        }
         $saved = save_quote_defaults($d);
         if (!($saved['ok'] ?? false)) { $redirectWith('error', 'Unable to save quotation settings.'); }
         header('Location: admin-quotations.php?' . http_build_query(['tab' => 'settings', 'status' => 'success', 'message' => 'Quotation settings saved.']));
@@ -590,11 +621,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $quote['discount_rs'] = $discountRs;
         $quote['discount_note'] = $discountNote;
-        $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, $transportationRs, $subsidyExpectedRs, $systemTotalInclGstRs, $quoteDefaults);
+
+        $primaryScenario = safe_text((string) ($_POST['primary_finance_scenario'] ?? 'loan_above_2_lacs'));
+        if (!in_array($primaryScenario, ['self_funded', 'loan_upto_2_lacs', 'loan_above_2_lacs'], true)) {
+            $primaryScenario = 'loan_above_2_lacs';
+        }
+        $quote['primary_finance_scenario'] = $primaryScenario;
+        $priceSelfFunded = max(0, (float) ($_POST['scenario_price_self_funded'] ?? 0));
+        $priceLoanUp2 = max(0, (float) ($_POST['scenario_price_loan_upto_2_lacs'] ?? 0));
+        $priceLoanAbove2 = max(0, (float) ($_POST['scenario_price_loan_above_2_lacs'] ?? 0));
+        $loanAboveApplicable = ($priceLoanAbove2 * 0.8) >= 200000;
+        $quote['scenario_prices'] = [
+            'self_funded' => ['price' => $priceSelfFunded],
+            'loan_upto_2_lacs' => ['price' => $priceLoanUp2],
+            'loan_above_2_lacs' => ['price' => $priceLoanAbove2, 'applicable' => $loanAboveApplicable],
+        ];
+        $quote['rate_chart_snapshot'] = [
+            'system_type' => safe_text((string) ($_POST['system_type'] ?? '')),
+            'solar_size_kwp' => (float) ($_POST['main_solar_kwp'] ?? $_POST['capacity_kwp'] ?? 0),
+            'hybrid_inverter_kva' => (float) ($_POST['hybrid_inverter_kva'] ?? 0),
+            'hybrid_phase' => safe_text((string) ($_POST['hybrid_phase'] ?? '')),
+            'hybrid_battery_count' => (int) ($_POST['hybrid_battery_count'] ?? 0),
+            'self_funded_price' => $priceSelfFunded,
+            'loan_upto_2_lacs_price' => $priceLoanUp2,
+            'loan_above_2_lacs_price' => $priceLoanAbove2,
+            'captured_at' => date('c'),
+        ];
+        $priceForPrimary = $systemTotalInclGstRs;
+        if ($primaryScenario === 'self_funded' && $priceSelfFunded > 0) {
+            $priceForPrimary = $priceSelfFunded;
+        } elseif ($primaryScenario === 'loan_upto_2_lacs' && $priceLoanUp2 > 0) {
+            $priceForPrimary = $priceLoanUp2;
+        } elseif ($primaryScenario === 'loan_above_2_lacs' && $priceLoanAbove2 > 0) {
+            $priceForPrimary = $priceLoanAbove2;
+        }
+        $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, $transportationRs, $subsidyExpectedRs, $priceForPrimary, $quoteDefaults);
         $quote['tax_breakdown'] = is_array($quote['calc']['tax_breakdown'] ?? null) ? (array) $quote['calc']['tax_breakdown'] : ['basic_total' => 0, 'gst_total' => 0, 'gross_incl_gst' => 0, 'slabs' => []];
         $quote['gst_mode_snapshot'] = (string) ($quote['tax_breakdown']['mode'] ?? 'single');
         $quote['gst_slabs_snapshot'] = is_array($quote['tax_breakdown']['slabs'] ?? null) ? $quote['tax_breakdown']['slabs'] : [];
-        $quote['input_total_gst_inclusive'] = $systemTotalInclGstRs;
+        $quote['input_total_gst_inclusive'] = $priceForPrimary;
         $quote['special_requests_text'] = trim((string) ($_POST['special_requests_text'] ?? ''));
         $quote['special_requests_inclusive'] = $quote['special_requests_text'];
         $quote['special_requests_override_note'] = true;
@@ -609,6 +674,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['finance_inputs']['loan']['tenure_years'] = safe_text($_POST['loan_tenure_years'] ?? '');
         $quote['finance_inputs']['loan']['margin_pct'] = safe_text($_POST['loan_margin_pct'] ?? '');
         $quote['finance_inputs']['loan']['loan_amount'] = safe_text($_POST['loan_amount'] ?? '');
+        $postData = $_POST;
+        $buildLoanScenario = static function (string $name, float $price, bool $applicable) use ($postData, $subsidyExpectedRs): array {
+            $mode = safe_text((string) ($postData[$name . '_finance_mode'] ?? 'ratio')) === 'manual' ? 'manual' : 'ratio';
+            $marginRatio = max(0, min(100, (float) ($postData[$name . '_margin_ratio_pct'] ?? 20)));
+            $loanRatio = max(0, min(100, (float) ($postData[$name . '_loan_ratio_pct'] ?? (100 - $marginRatio))));
+            if (abs(($marginRatio + $loanRatio) - 100.0) > 0.001) {
+                $loanRatio = max(0, 100 - $marginRatio);
+            }
+            $marginMoney = $mode === 'manual' ? max(0, (float) ($postData[$name . '_margin_money_rs'] ?? 0)) : ($price * $marginRatio / 100);
+            $loanAmount = $mode === 'manual' ? max(0, (float) ($postData[$name . '_loan_amount_rs'] ?? 0)) : ($price * $loanRatio / 100);
+            return [
+                'price' => $price,
+                'subsidy' => $subsidyExpectedRs,
+                'gross_payable' => $price,
+                'net_investment_after_subsidy' => max(0, $price - $subsidyExpectedRs),
+                'monthly_outflow' => 0,
+                'payback' => 0,
+                'applicable' => $applicable,
+                'margin_money_rs' => $marginMoney,
+                'loan_amount_rs' => $loanAmount,
+                'effective_loan_principal_rs' => max(0, $loanAmount - $subsidyExpectedRs),
+                'interest_pct' => max(0, (float) ($postData[$name . '_interest_pct'] ?? 0)),
+                'tenure_years' => max(0, (float) ($postData[$name . '_tenure_years'] ?? 0)),
+                'emi_rs' => 0,
+                'residual_bill_rs' => 0,
+                'finance_mode' => $mode,
+                'margin_ratio_pct' => $marginRatio,
+                'loan_ratio_pct' => $loanRatio,
+            ];
+        };
+        $quote['finance_scenarios'] = [
+            'self_funded' => [
+                'price' => $priceSelfFunded,
+                'subsidy' => $subsidyExpectedRs,
+                'gross_payable' => $priceSelfFunded,
+                'net_investment_after_subsidy' => max(0, $priceSelfFunded - $subsidyExpectedRs),
+                'monthly_outflow' => 0,
+                'payback' => 0,
+                'applicable' => true,
+                'margin_money_rs' => 0,
+                'loan_amount_rs' => 0,
+                'effective_loan_principal_rs' => 0,
+                'interest_pct' => 0,
+                'tenure_years' => 0,
+                'emi_rs' => 0,
+                'residual_bill_rs' => 0,
+            ],
+            'loan_upto_2_lacs' => $buildLoanScenario('loan_upto_2_lacs', $priceLoanUp2, isset($_POST['loan_upto_2_lacs_applicable'])),
+            'loan_above_2_lacs' => $buildLoanScenario('loan_above_2_lacs', $priceLoanAbove2, $loanAboveApplicable && isset($_POST['loan_above_2_lacs_applicable'])),
+        ];
         $quote = documents_quote_apply_customer_savings_inputs($quote, $_POST, $quoteDefaults);
         $monthlyBillTouched = safe_text((string) ($_POST['monthly_bill_touched'] ?? '0')) === '1';
         $savedMonthlyBill = (float) ($quote['customer_savings_inputs']['monthly_bill_before_rs'] ?? 0);
@@ -1047,6 +1162,16 @@ if ($savedAnnualGenerationForEdit === '') {
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
 <div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Add kits/components from Items Master. Name/description snapshots are captured automatically.</div><table id="structuredItemsTable"><thead><tr><th>Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Quotation-specific description / note</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?></div><?php $masterPreview = (string)($sItem['master_description_snapshot'] ?? ($sItem['description_snapshot'] ?? '')); if (trim($masterPreview) !== ''): ?><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars($masterPreview, ENT_QUOTES) ?></div><?php endif; ?><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"><?= htmlspecialchars((string)($sItem['custom_description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
+<div style="grid-column:1/-1"><h3>Section 5 — Funding Scenarios</h3></div>
+<div><label>Primary Finance Scenario</label><select name="primary_finance_scenario"><option value="self_funded" <?= (($editing['primary_finance_scenario'] ?? '')==='self_funded')?'selected':'' ?>>Self Funded</option><option value="loan_upto_2_lacs" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_upto_2_lacs')?'selected':'' ?>>Loan up to ₹2 lacs</option><option value="loan_above_2_lacs" <?= (($editing['primary_finance_scenario'] ?? 'loan_above_2_lacs')==='loan_above_2_lacs')?'selected':'' ?>>Loan above ₹2 lacs</option></select></div>
+<div><label>Self Funded Price ₹</label><input type="number" step="0.01" name="scenario_price_self_funded" value="<?= htmlspecialchars((string)($editing['scenario_prices']['self_funded']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
+<div><label>Loan up to ₹2 lacs Price ₹</label><input type="number" step="0.01" name="scenario_price_loan_upto_2_lacs" value="<?= htmlspecialchars((string)($editing['scenario_prices']['loan_upto_2_lacs']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
+<div><label>Loan above ₹2 lacs Price ₹</label><input type="number" step="0.01" name="scenario_price_loan_above_2_lacs" value="<?= htmlspecialchars((string)($editing['scenario_prices']['loan_above_2_lacs']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
+<div><label><input type="checkbox" name="loan_upto_2_lacs_applicable" <?= !empty($editing['finance_scenarios']['loan_upto_2_lacs']['applicable']) ? 'checked' : 'checked' ?>> Loan up to ₹2 lacs applicable</label></div>
+<div><label><input type="checkbox" name="loan_above_2_lacs_applicable" <?= !empty($editing['finance_scenarios']['loan_above_2_lacs']['applicable']) ? 'checked' : '' ?>> Loan above ₹2 lacs applicable</label></div>
+<div><label>Hybrid Inverter (kVA)</label><input type="number" step="0.1" name="hybrid_inverter_kva" value="<?= htmlspecialchars((string)($editing['rate_chart_snapshot']['hybrid_inverter_kva'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Hybrid Phase</label><select name="hybrid_phase"><option value="">--</option><option value="1" <?= (($editing['rate_chart_snapshot']['hybrid_phase'] ?? '')==='1')?'selected':'' ?>>1 Phase</option><option value="3" <?= (($editing['rate_chart_snapshot']['hybrid_phase'] ?? '')==='3')?'selected':'' ?>>3 Phase</option></select></div>
+<div><label>Hybrid Battery Count</label><input type="number" step="1" min="0" name="hybrid_battery_count" value="<?= htmlspecialchars((string)($editing['rate_chart_snapshot']['hybrid_battery_count'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Monthly electricity bill (₹)</label><input type="number" step="0.01" name="monthly_bill_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['monthly_bill_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted">Suggested bill based on generation & tariff. You can change it. <a href="#" id="resetMonthlySuggestion">Reset suggestion</a></div></div>
 <input type="hidden" name="monthly_bill_touched" id="monthlyBillTouched" value="0">
 <div><label>Unit rate (₹/kWh)</label><input type="number" step="0.01" name="unit_rate_rs_per_kwh" value="<?= htmlspecialchars((string)($savedUnitRateForEdit !== '' ? $savedUnitRateForEdit : ($segmentDefaults['unit_rate_rs_per_kwh'] ?? '')), ENT_QUOTES) ?>"></div>
@@ -1055,6 +1180,22 @@ if ($savedAnnualGenerationForEdit === '') {
 <div><label>Discount (₹)</label><input type="number" step="0.01" min="0" name="discount_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['discount_rs'] ?? ($editing['discount_rs'] ?? '0')), ENT_QUOTES) ?>"></div>
 <div><label>Discount note</label><input name="discount_note" value="<?= htmlspecialchars((string)($editing['finance_inputs']['discount_note'] ?? ($editing['discount_note'] ?? '')), ENT_QUOTES) ?>" placeholder="Optional (e.g. Festival Offer)"></div>
 <div><label>Subsidy ₹</label><input type="number" step="0.01" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['subsidy_expected_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted"><a href="#" id="resetSubsidyDefault">Reset to scheme default</a></div></div>
+<div style="grid-column:1/-1"><h3>Loan up to ₹2 lacs</h3></div>
+<div><label>Finance mode</label><select name="loan_upto_2_lacs_finance_mode"><option value="ratio" <?= (($editing['finance_scenarios']['loan_upto_2_lacs']['finance_mode'] ?? 'ratio')==='ratio')?'selected':'' ?>>Ratio</option><option value="manual" <?= (($editing['finance_scenarios']['loan_upto_2_lacs']['finance_mode'] ?? '')==='manual')?'selected':'' ?>>Manual</option></select></div>
+<div><label>Margin %</label><input type="number" step="0.01" name="loan_upto_2_lacs_margin_ratio_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['margin_ratio_pct'] ?? 20), ENT_QUOTES) ?>"></div>
+<div><label>Loan %</label><input type="number" step="0.01" name="loan_upto_2_lacs_loan_ratio_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['loan_ratio_pct'] ?? 80), ENT_QUOTES) ?>"></div>
+<div><label>Margin ₹</label><input type="number" step="0.01" name="loan_upto_2_lacs_margin_money_rs" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['margin_money_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Loan ₹</label><input type="number" step="0.01" name="loan_upto_2_lacs_loan_amount_rs" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['loan_amount_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Interest %</label><input type="number" step="0.01" name="loan_upto_2_lacs_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['interest_pct'] ?? ($editing['finance_inputs']['loan']['interest_pct'] ?? '')), ENT_QUOTES) ?>"></div>
+<div><label>Tenure years</label><input type="number" step="0.01" name="loan_upto_2_lacs_tenure_years" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['tenure_years'] ?? ($editing['finance_inputs']['loan']['tenure_years'] ?? '')), ENT_QUOTES) ?>"></div>
+<div style="grid-column:1/-1"><h3>Loan above ₹2 lacs</h3></div>
+<div><label>Finance mode</label><select name="loan_above_2_lacs_finance_mode"><option value="ratio" <?= (($editing['finance_scenarios']['loan_above_2_lacs']['finance_mode'] ?? 'ratio')==='ratio')?'selected':'' ?>>Ratio</option><option value="manual" <?= (($editing['finance_scenarios']['loan_above_2_lacs']['finance_mode'] ?? '')==='manual')?'selected':'' ?>>Manual</option></select></div>
+<div><label>Margin %</label><input type="number" step="0.01" name="loan_above_2_lacs_margin_ratio_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['margin_ratio_pct'] ?? 20), ENT_QUOTES) ?>"></div>
+<div><label>Loan %</label><input type="number" step="0.01" name="loan_above_2_lacs_loan_ratio_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['loan_ratio_pct'] ?? 80), ENT_QUOTES) ?>"></div>
+<div><label>Margin ₹</label><input type="number" step="0.01" name="loan_above_2_lacs_margin_money_rs" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['margin_money_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Loan ₹</label><input type="number" step="0.01" name="loan_above_2_lacs_loan_amount_rs" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['loan_amount_rs'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Interest %</label><input type="number" step="0.01" name="loan_above_2_lacs_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['interest_pct'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Tenure years</label><input type="number" step="0.01" name="loan_above_2_lacs_tenure_years" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Loan amount ₹</label><input type="number" step="0.01" name="loan_amount" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['loan_amount'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label><input type="checkbox" name="loan_enabled" <?= !empty($editing['finance_inputs']['loan']['enabled']) ? 'checked' : '' ?>> Loan enabled</label></div>
 <div><label>Loan interest %</label><input type="number" step="0.01" name="loan_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['interest_pct'] ?? ''), ENT_QUOTES) ?>"></div>
@@ -1109,7 +1250,7 @@ $quoteShareMobile = $quotationExtractMobile($q);
 </td>
 </tr><?php endforeach; if ($allQuotes===[]): ?><tr><td colspan="7">No quotations yet.</td></tr><?php endif; ?></tbody></table>
 </div>
-<?php if ($tab === "settings"): $d = $quoteDefaults; ?><div class="card"><h2>Quotation Settings</h2><form method="post" class="grid"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ""), ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_settings"><div><label>Primary color</label><div style="display:flex;gap:6px"><input type="color" name="ui_primary" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="ui_primary_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Accent color</label><div style="display:flex;gap:6px"><input type="color" name="ui_accent" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="ui_accent_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"><input name="ui_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"></div></div><div><label>Muted text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_muted_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"><input name="ui_muted_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"></div></div><div><label>Page background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_page_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"><input name="ui_page_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"></div></div><div><label>Card background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_card_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="ui_card_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Border color</label><div style="display:flex;gap:6px"><input type="color" name="ui_border" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"><input name="ui_border_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient A</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="header_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient B</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="header_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient A</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="footer_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient B</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="footer_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Header font color</label><div style="display:flex;gap:6px"><input type="color" name="header_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="header_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Footer font color</label><div style="display:flex;gap:6px"><input type="color" name="footer_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="footer_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient direction</label><select name="header_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="header_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['header']['enabled'])?'checked':'' ?>> Enable header gradient</label></div><div><label>Footer gradient direction</label><select name="footer_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="footer_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['footer']['enabled'])?'checked':'' ?>> Enable footer gradient</label></div><div><label>Default interest rate (%)</label><input type="number" step="0.01" name="res_interest_pct" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['interest_pct'] ?? 6), ENT_QUOTES) ?>"></div><div><label>Default loan tenure (years)</label><input type="number" name="res_tenure_years" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['tenure_years'] ?? 10), ENT_QUOTES) ?>"></div><div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450), ENT_QUOTES) ?>"></div><div><label>Emission factor (kg CO2/kWh)</label><input type="number" step="0.01" name="emission_factor_kg_per_kwh" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['emission_factor_kg_per_kwh'] ?? 0.82), ENT_QUOTES) ?>"></div><div><label>CO2 absorbed per tree per year (kg)</label><input type="number" step="0.01" name="tree_absorption_kg_per_tree_per_year" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'] ?? 20), ENT_QUOTES) ?>"></div><div><label><input type="checkbox" name="show_decimals" <?= !empty($d['global']['quotation_ui']['show_decimals'])?'checked':'' ?>> Show INR decimals in quotation</label></div><div><label>QR target</label><select name="qr_target"><option value="quotation" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="quotation")?'selected':'' ?>>This quotation link</option><option value="website" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="website")?'selected':'' ?>>Company website</option></select></div><div style="grid-column:1/-1"><label>Why Dakshayani points (one per line)</label><textarea name="why_dakshayani_points"><?= htmlspecialchars(implode("\n", (array)($d['global']['quotation_ui']['why_dakshayani_points'] ?? [])), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Footer disclaimer</label><textarea name="footer_disclaimer"><?= htmlspecialchars((string)($d['global']['quotation_ui']['footer_disclaimer'] ?? ''), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><button class="btn" type="submit">Save Settings</button></div></form></div><?php endif; ?>
+<?php if ($tab === "settings"): $d = $quoteDefaults; ?><div class="card"><h2>Quotation Settings</h2><form method="post" class="grid"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ""), ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_settings"><div><label>Primary color</label><div style="display:flex;gap:6px"><input type="color" name="ui_primary" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="ui_primary_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Accent color</label><div style="display:flex;gap:6px"><input type="color" name="ui_accent" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="ui_accent_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"><input name="ui_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"></div></div><div><label>Muted text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_muted_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"><input name="ui_muted_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"></div></div><div><label>Page background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_page_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"><input name="ui_page_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"></div></div><div><label>Card background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_card_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="ui_card_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Border color</label><div style="display:flex;gap:6px"><input type="color" name="ui_border" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"><input name="ui_border_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient A</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="header_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient B</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="header_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient A</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="footer_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient B</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="footer_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Header font color</label><div style="display:flex;gap:6px"><input type="color" name="header_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="header_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Footer font color</label><div style="display:flex;gap:6px"><input type="color" name="footer_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="footer_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient direction</label><select name="header_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="header_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['header']['enabled'])?'checked':'' ?>> Enable header gradient</label></div><div><label>Footer gradient direction</label><select name="footer_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="footer_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['footer']['enabled'])?'checked':'' ?>> Enable footer gradient</label></div><div><label>Default interest rate (%)</label><input type="number" step="0.01" name="res_interest_pct" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['interest_pct'] ?? 6), ENT_QUOTES) ?>"></div><div><label>Default loan tenure (years)</label><input type="number" name="res_tenure_years" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['tenure_years'] ?? 10), ENT_QUOTES) ?>"></div><div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450), ENT_QUOTES) ?>"></div><div><label>Emission factor (kg CO2/kWh)</label><input type="number" step="0.01" name="emission_factor_kg_per_kwh" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['emission_factor_kg_per_kwh'] ?? 0.82), ENT_QUOTES) ?>"></div><div><label>CO2 absorbed per tree per year (kg)</label><input type="number" step="0.01" name="tree_absorption_kg_per_tree_per_year" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'] ?? 20), ENT_QUOTES) ?>"></div><div><label><input type="checkbox" name="show_decimals" <?= !empty($d['global']['quotation_ui']['show_decimals'])?'checked':'' ?>> Show INR decimals in quotation</label></div><div><label>QR target</label><select name="qr_target"><option value="quotation" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="quotation")?'selected':'' ?>>This quotation link</option><option value="website" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="website")?'selected':'' ?>>Company website</option></select></div><div style="grid-column:1/-1"><label>Why Dakshayani points (one per line)</label><textarea name="why_dakshayani_points"><?= htmlspecialchars(implode("\n", (array)($d['global']['quotation_ui']['why_dakshayani_points'] ?? [])), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Footer disclaimer</label><textarea name="footer_disclaimer"><?= htmlspecialchars((string)($d['global']['quotation_ui']['footer_disclaimer'] ?? ''), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Rate chart — On-Grid (JSON)</label><textarea name="rate_chart_on_grid_json"><?= htmlspecialchars(json_encode((array)($d['rate_chart']['on_grid'] ?? []), JSON_PRETTY_PRINT), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Rate chart — Hybrid (JSON)</label><textarea name="rate_chart_hybrid_json"><?= htmlspecialchars(json_encode((array)($d['rate_chart']['hybrid'] ?? []), JSON_PRETTY_PRINT), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><button class="btn" type="submit">Save Settings</button></div></form></div><?php endif; ?>
 <div class="card"><h2>Bulk Modify Quotations</h2>
 <form method="post">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
@@ -1502,5 +1643,51 @@ window.quoteFormAutofillConfig = {
     settingsBySegment: <?= json_encode($autofillSegments, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
     defaultEnergy: <?= json_encode((float)($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450)) ?>
 };
+
+(() => {
+    const rateChart = <?= json_encode((array)($quoteDefaults['rate_chart'] ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const systemType = document.querySelector('select[name="system_type"]');
+    const solarSize = document.querySelector('input[name="main_solar_kwp"]') || document.querySelector('input[name="capacity_kwp"]');
+    const inverter = document.querySelector('input[name="hybrid_inverter_kva"]');
+    const phase = document.querySelector('select[name="hybrid_phase"]');
+    const battery = document.querySelector('input[name="hybrid_battery_count"]');
+    const selfPrice = document.querySelector('input[name="scenario_price_self_funded"]');
+    const up2Price = document.querySelector('input[name="scenario_price_loan_upto_2_lacs"]');
+    const above2Price = document.querySelector('input[name="scenario_price_loan_above_2_lacs"]');
+
+    const parseNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+    const pickRow = () => {
+        const type = String(systemType?.value || '').toLowerCase() === 'hybrid' ? 'hybrid' : 'on_grid';
+        const rows = Array.isArray(rateChart[type]) ? rateChart[type] : [];
+        return rows.find((row) => {
+            if (Math.abs(parseNum(row.solar_size_kwp) - parseNum(solarSize?.value || 0)) > 0.01) return false;
+            if (type === 'hybrid') {
+                if (Math.abs(parseNum(row.inverter_kva) - parseNum(inverter?.value || 0)) > 0.01) return false;
+                if (String(row.phase || '') !== String(phase?.value || '')) return false;
+                if (parseNum(row.battery_count) !== parseNum(battery?.value || 0)) return false;
+            }
+            return true;
+        });
+    };
+    const fillScenarioPrices = () => {
+        const row = pickRow();
+        if (!row) return;
+        if (selfPrice && parseNum(selfPrice.value) <= 0) selfPrice.value = String(parseNum(row.self_funded_price));
+        if (up2Price && parseNum(up2Price.value) <= 0) up2Price.value = String(parseNum(row.loan_upto_2_lacs_price));
+        if (above2Price && parseNum(above2Price.value) <= 0) above2Price.value = String(parseNum(row.loan_above_2_lacs_price));
+    };
+    [systemType, solarSize, inverter, phase, battery].forEach((el) => el?.addEventListener('change', fillScenarioPrices));
+    fillScenarioPrices();
+
+    const bindRatioSync = (prefix) => {
+        const marginPct = document.querySelector(`[name="${prefix}_margin_ratio_pct"]`);
+        const loanPct = document.querySelector(`[name="${prefix}_loan_ratio_pct"]`);
+        if (!marginPct || !loanPct) return;
+        marginPct.addEventListener('input', () => { loanPct.value = String(Math.max(0, 100 - parseNum(marginPct.value))); });
+        loanPct.addEventListener('input', () => { marginPct.value = String(Math.max(0, 100 - parseNum(loanPct.value))); });
+    };
+    bindRatioSync('loan_upto_2_lacs');
+    bindRatioSync('loan_above_2_lacs');
+})();
 
 </script><script src="assets/js/quote-form-autofill.js"></script></main></body></html>
