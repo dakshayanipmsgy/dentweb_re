@@ -945,22 +945,6 @@ if ($editing['id'] === '' && $fromLeadId !== '') {
     }
 }
 
-$hasSavedFinanceValue = static function (array $quote, array $path): bool {
-    $cursor = $quote;
-    foreach ($path as $segment) {
-        if (!is_array($cursor) || !array_key_exists($segment, $cursor)) {
-            return false;
-        }
-        $cursor = $cursor[$segment];
-    }
-
-    return trim((string) $cursor) !== '';
-};
-$loanAmountHasSavedValue = $hasSavedFinanceValue($editing, ['finance_inputs', 'loan', 'loan_amount']);
-$loanInterestHasSavedValue = $hasSavedFinanceValue($editing, ['finance_inputs', 'loan', 'interest_pct']);
-$loanTenureHasSavedValue = $hasSavedFinanceValue($editing, ['finance_inputs', 'loan', 'tenure_years']);
-$loanMarginHasSavedValue = $hasSavedFinanceValue($editing, ['finance_inputs', 'loan', 'margin_pct']);
-
 $status = safe_text($_GET['status'] ?? '');
 $editingQuoteItems = documents_normalize_quote_structured_items(is_array($editing['quote_items'] ?? null) ? $editing['quote_items'] : []);
 $message = safe_text($_GET['message'] ?? '');
@@ -1059,11 +1043,11 @@ if ($lookup !== null) {
 <div><label>Discount (₹)</label><input type="number" step="0.01" min="0" name="discount_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['discount_rs'] ?? ($editing['discount_rs'] ?? '0')), ENT_QUOTES) ?>"></div>
 <div><label>Discount note</label><input name="discount_note" value="<?= htmlspecialchars((string)($editing['finance_inputs']['discount_note'] ?? ($editing['discount_note'] ?? '')), ENT_QUOTES) ?>" placeholder="Optional (e.g. Festival Offer)"></div>
 <div><label>Subsidy ₹</label><input type="number" step="0.01" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['subsidy_expected_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted"><a href="#" id="resetSubsidyDefault">Reset to scheme default</a></div></div>
-<div><label>Loan amount ₹</label><input type="number" step="0.01" name="loan_amount" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['loan_amount'] ?? ''), ENT_QUOTES) ?>" data-has-saved-value="<?= $loanAmountHasSavedValue ? '1' : '0' ?>"></div>
+<div><label>Loan amount ₹</label><input type="number" step="0.01" name="loan_amount" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['loan_amount'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label><input type="checkbox" name="loan_enabled" <?= !empty($editing['finance_inputs']['loan']['enabled']) ? 'checked' : '' ?>> Loan enabled</label></div>
-<div><label>Loan interest %</label><input type="number" step="0.01" name="loan_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['interest_pct'] ?? ''), ENT_QUOTES) ?>" data-has-saved-value="<?= $loanInterestHasSavedValue ? '1' : '0' ?>"></div>
-<div><label>Loan tenure years</label><input type="number" step="1" name="loan_tenure_years" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['tenure_years'] ?? ''), ENT_QUOTES) ?>" data-has-saved-value="<?= $loanTenureHasSavedValue ? '1' : '0' ?>"></div>
-<div><label>Margin money ₹</label><input type="number" step="0.01" name="loan_margin_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['margin_pct'] ?? ''), ENT_QUOTES) ?>" data-has-saved-value="<?= $loanMarginHasSavedValue ? '1' : '0' ?>"><div class="muted"><a href="#" id="resetLoanDefaults">Reset to defaults</a></div></div>
+<div><label>Loan interest %</label><input type="number" step="0.01" name="loan_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['interest_pct'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Loan tenure years</label><input type="number" step="1" name="loan_tenure_years" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Margin money ₹</label><input type="number" step="0.01" name="loan_margin_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['margin_pct'] ?? ''), ENT_QUOTES) ?>"><div class="muted"><a href="#" id="resetLoanDefaults">Reset to defaults</a></div></div>
 <div style="grid-column:1/-1"><h3>Typography & Watermark Overrides</h3></div>
 <div><label>Base font px</label><input type="number" step="1" name="style_base_font_px" value="<?= htmlspecialchars((string)($editing['style_overrides']['typography']['base_font_px'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Heading scale</label><input type="number" step="0.1" name="style_heading_scale" value="<?= htmlspecialchars((string)($editing['style_overrides']['typography']['heading_scale'] ?? ''), ENT_QUOTES) ?>"></div>
