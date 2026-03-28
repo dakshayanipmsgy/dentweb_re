@@ -95,6 +95,18 @@ function solar_finance_generate_report_token(): string
     return bin2hex(random_bytes(24));
 }
 
+function solar_finance_find_default_tax_profile_id(): string
+{
+    $targetName = 'solar power generation system tax profile';
+    foreach (documents_inventory_tax_profiles(false) as $profile) {
+        $name = trim((string) ($profile['name'] ?? ''));
+        if ($name !== '' && strcasecmp($name, $targetName) === 0) {
+            return safe_text((string) ($profile['id'] ?? ''));
+        }
+    }
+    return '';
+}
+
 function solar_finance_create_report(array $payload): array
 {
     $reports = solar_finance_load_reports();
@@ -306,6 +318,13 @@ function create_or_update_solar_finance_quote(array $payload): array
 
     $isCreate = !is_array($existing);
     $quote = $isCreate ? documents_quote_defaults() : $existing;
+    $savingsOverrides = documents_quote_get_customer_savings_overrides($quote);
+    $setIfNotOverridden = static function (string $key, callable $setter) use ($savingsOverrides): void {
+        if (!empty($savingsOverrides[$key])) {
+            return;
+        }
+        $setter();
+    };
 
     if ($isCreate) {
         $number = documents_generate_quote_number('RES');
@@ -333,6 +352,14 @@ function create_or_update_solar_finance_quote(array $payload): array
     $quote['capacity_kwp'] = $solarSize > 0 ? (string) $solarSize : '';
     $quote['system_capacity_kwp'] = $solarSize;
     $quote['input_total_gst_inclusive'] = $selectedSystemPrice;
+    if ((string) ($quote['tax_profile_id'] ?? '') === '') {
+        $defaultTaxProfileId = solar_finance_find_default_tax_profile_id();
+        if ($defaultTaxProfileId !== '') {
+            $quote['tax_profile_id'] = $defaultTaxProfileId;
+        } else {
+            error_log('[solar-finance] tax profile not found: solar power generation system tax profile');
+        }
+    }
 
     $quote['source'] = [
         'type' => 'solar_and_finance',
@@ -384,20 +411,35 @@ function create_or_update_solar_finance_quote(array $payload): array
         'basic_amount' => 0,
     ]], $systemType, $solarSize, $kitHsn);
 
-    $quote['finance_inputs']['monthly_bill_rs'] = (string) $monthlyBill;
-    $quote['finance_inputs']['subsidy_expected_rs'] = (string) $subsidy;
-    $quote['finance_inputs']['loan']['enabled'] = true;
-    $quote['finance_inputs']['loan']['interest_pct'] = (string) $loanInterest;
-    $quote['finance_inputs']['loan']['tenure_years'] = (string) $loanTenureYears;
-    $quote['finance_inputs']['loan']['loan_amount'] = (string) $loanAmount;
-    $quote['finance_inputs']['loan']['margin_pct'] = '';
+    $setIfNotOverridden('monthly_bill_rs', static function () use (&$quote, $monthlyBill): void {
+        $quote['finance_inputs']['monthly_bill_rs'] = (string) $monthlyBill;
+        $quote['customer_savings_inputs']['monthly_bill_before_rs'] = $monthlyBill;
+    });
+    $setIfNotOverridden('subsidy_expected_rs', static function () use (&$quote, $subsidy): void {
+        $quote['finance_inputs']['subsidy_expected_rs'] = (string) $subsidy;
+    });
+    $setIfNotOverridden('loan_enabled', static function () use (&$quote): void {
+        $quote['finance_inputs']['loan']['enabled'] = true;
+        $quote['customer_savings_inputs']['bank_loan_enabled'] = true;
+    });
+    $setIfNotOverridden('loan_interest_pct', static function () use (&$quote, $loanInterest): void {
+        $quote['finance_inputs']['loan']['interest_pct'] = (string) $loanInterest;
+        $quote['customer_savings_inputs']['loan_interest_rate_percent'] = $loanInterest;
+    });
+    $setIfNotOverridden('loan_tenure_years', static function () use (&$quote, $loanTenureYears): void {
+        $quote['finance_inputs']['loan']['tenure_years'] = (string) $loanTenureYears;
+        $quote['customer_savings_inputs']['loan_tenure_months'] = $loanTenureYears > 0 ? (int) round($loanTenureYears * 12) : null;
+    });
+    $setIfNotOverridden('loan_amount', static function () use (&$quote, $loanAmount): void {
+        $quote['finance_inputs']['loan']['loan_amount'] = (string) $loanAmount;
+        $quote['customer_savings_inputs']['loan_cap_rs'] = $loanAmount;
+    });
+    $setIfNotOverridden('loan_margin_pct', static function () use (&$quote, $marginMoney): void {
+        $quote['finance_inputs']['loan']['margin_pct'] = (string) $marginMoney;
+        $quote['customer_savings_inputs']['margin_amount_rs'] = $marginMoney;
+    });
 
-    $quote['customer_savings_inputs']['bank_loan_enabled'] = true;
-    $quote['customer_savings_inputs']['loan_interest_rate_percent'] = $loanInterest;
-    $quote['customer_savings_inputs']['loan_tenure_months'] = $loanTenureYears > 0 ? (int) round($loanTenureYears * 12) : null;
-    $quote['customer_savings_inputs']['loan_cap_rs'] = $loanAmount;
-    $quote['customer_savings_inputs']['margin_amount_rs'] = $marginMoney;
-    $quote['customer_savings_inputs']['monthly_bill_before_rs'] = $monthlyBill;
+    $quote['customer_savings_overrides'] = $savingsOverrides;
 
     $quoteDefaults = documents_get_quote_defaults_settings();
     $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, 0.0, $subsidy, $selectedSystemPrice, $quoteDefaults);

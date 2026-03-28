@@ -1091,6 +1091,20 @@ function documents_quote_defaults(): array
             'monthly_bill_before_rs' => null,
             'monthly_units_before' => null,
         ],
+        'customer_savings_overrides' => [
+            'monthly_bill_rs' => false,
+            'unit_rate_rs_per_kwh' => false,
+            'annual_generation_per_kw' => false,
+            'transportation_rs' => false,
+            'discount_rs' => false,
+            'discount_note' => false,
+            'subsidy_expected_rs' => false,
+            'loan_enabled' => false,
+            'loan_interest_pct' => false,
+            'loan_tenure_years' => false,
+            'loan_margin_pct' => false,
+            'loan_amount' => false,
+        ],
         'style_overrides' => [
             'typography' => ['base_font_px' => '', 'heading_scale' => '', 'density' => ''],
             'watermark' => ['enabled' => '', 'image_path' => '', 'opacity' => ''],
@@ -1115,6 +1129,37 @@ function documents_quote_defaults(): array
         'locked_flag' => false,
         'locked_at' => null,
     ];
+}
+
+function documents_quote_customer_savings_override_defaults(): array
+{
+    return [
+        'monthly_bill_rs' => false,
+        'unit_rate_rs_per_kwh' => false,
+        'annual_generation_per_kw' => false,
+        'transportation_rs' => false,
+        'discount_rs' => false,
+        'discount_note' => false,
+        'subsidy_expected_rs' => false,
+        'loan_enabled' => false,
+        'loan_interest_pct' => false,
+        'loan_tenure_years' => false,
+        'loan_margin_pct' => false,
+        'loan_amount' => false,
+    ];
+}
+
+function documents_quote_get_customer_savings_overrides(array $quote): array
+{
+    $defaults = documents_quote_customer_savings_override_defaults();
+    $saved = is_array($quote['customer_savings_overrides'] ?? null) ? $quote['customer_savings_overrides'] : [];
+    $resolved = $defaults;
+    foreach ($defaults as $key => $defaultValue) {
+        if (array_key_exists($key, $saved)) {
+            $resolved[$key] = !empty($saved[$key]);
+        }
+    }
+    return $resolved;
 }
 
 function documents_quote_resolve_customer_savings_inputs(array $quote, ?array $quoteDefaults = null): array
@@ -1200,6 +1245,20 @@ function documents_quote_apply_customer_savings_inputs(array $quote, array $requ
     }
 
     $quote['customer_savings_inputs'] = $resolved;
+    return $quote;
+}
+
+function documents_quote_apply_customer_savings_overrides(array $quote, array $request): array
+{
+    $resolved = documents_quote_get_customer_savings_overrides($quote);
+    foreach ($resolved as $key => $current) {
+        $postKey = 'customer_savings_override_' . $key;
+        if (!array_key_exists($postKey, $request)) {
+            continue;
+        }
+        $resolved[$key] = safe_text((string) $request[$postKey]) === '1';
+    }
+    $quote['customer_savings_overrides'] = $resolved;
     return $quote;
 }
 
