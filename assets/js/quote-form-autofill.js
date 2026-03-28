@@ -50,13 +50,11 @@
         return Number.isFinite(n) ? n : 0;
     };
     const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
-    const hasSavedValue = (input) => !!input && input.dataset.hasSavedValue === '1';
     const setIfAllowed = (input, value, options) => {
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
         if (!input) return;
         if (!force && input === monthlyBillInput && monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1') return;
-        if (!force && hasSavedValue(input) && !fieldEmpty(input)) return;
         if (!force && input.dataset.touched === '1' && !fieldEmpty(input)) return;
         const val = noDecimals ? Math.round(value) : Math.round(value * 100) / 100;
         input.value = String(val);
