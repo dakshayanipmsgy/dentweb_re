@@ -35,6 +35,10 @@
 
     const monthlyBillTouchedFlag = field('monthly_bill_touched');
 
+    const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
+    const isExistingQuote = () => !!(quoteIdInput && String(quoteIdInput.value || '').trim() !== '');
+    const hasSavedMonthlyBill = () => !!(monthlyBillInput && !fieldEmpty(monthlyBillInput));
+
     const managedFields = [monthlyBillInput, subsidyInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput, unitRateInput, annualGenerationInput].filter(Boolean);
     managedFields.forEach((input) => {
         input.addEventListener('input', () => {
@@ -49,8 +53,12 @@
         const n = Number(value);
         return Number.isFinite(n) ? n : 0;
     };
-    const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
-    const isExistingQuote = () => !!(quoteIdInput && String(quoteIdInput.value || '').trim() !== '');
+
+    if (isExistingQuote() && hasSavedMonthlyBill()) {
+        monthlyBillInput.dataset.touched = '1';
+        if (monthlyBillTouchedFlag) monthlyBillTouchedFlag.value = '1';
+    }
+
     const markLoanFieldsTouchedForEdit = () => {
         if (!isExistingQuote()) return;
         [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].forEach((input) => {
@@ -139,6 +147,8 @@
 
     const applyMonthlySuggestion = (force) => {
         const shouldForce = !!force;
+        if (!shouldForce && isExistingQuote() && hasSavedMonthlyBill()) return;
+
         const segSettings = currentSegmentSettings();
         if (unitRateInput && fieldEmpty(unitRateInput) && (!unitRateInput.dataset.touched || shouldForce)) {
             unitRateInput.value = String(parseNum(segSettings.unit_rate_rs_per_kwh || 0));
@@ -195,10 +205,6 @@
         if (annualGenerationInput) annualGenerationInput.dataset.touched = '';
         applyMonthlySuggestion(true);
     });
-
-    if (monthlyBillTouchedFlag) {
-        monthlyBillTouchedFlag.value = '0';
-    }
     resetSubsidyBtn?.addEventListener('click', (e) => {
         e.preventDefault();
         if (subsidyInput) subsidyInput.dataset.touched = '';
