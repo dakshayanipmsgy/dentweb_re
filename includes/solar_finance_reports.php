@@ -226,6 +226,123 @@ function solar_finance_quote_mobile_key_from_quote(array $quote): string
     return '';
 }
 
+function solar_finance_default_residential_template_name(): string
+{
+    return 'pm surya ghar - residential (subsidy) (res)';
+}
+
+function solar_finance_resolve_template_context(string $currentTemplateSetId): array
+{
+    $templatesRaw = json_load(documents_templates_dir() . '/template_sets.json', []);
+    $templates = [];
+    foreach ($templatesRaw as $row) {
+        if (!is_array($row) || !empty($row['archived_flag'])) {
+            continue;
+        }
+        $templates[] = $row;
+    }
+
+    $templateBlocks = documents_sync_template_block_entries($templates);
+    $templateBlocks = is_array($templateBlocks) ? $templateBlocks : [];
+
+    $templateById = [];
+    foreach ($templates as $tplRow) {
+        $templateId = safe_text((string) ($tplRow['id'] ?? ''));
+        if ($templateId === '') {
+            continue;
+        }
+        $templateById[$templateId] = $tplRow;
+    }
+
+    $resolvedTemplateSetId = safe_text($currentTemplateSetId);
+    if ($resolvedTemplateSetId === '' || !isset($templateById[$resolvedTemplateSetId])) {
+        $defaultTemplateName = solar_finance_default_residential_template_name();
+        foreach ($templates as $tplRow) {
+            $templateName = trim((string) ($tplRow['name'] ?? ''));
+            $segmentName = trim((string) ($tplRow['segment'] ?? ''));
+            $displayName = trim($templateName . ($segmentName !== '' ? (' (' . $segmentName . ')') : ''));
+            if (strcasecmp($displayName, $defaultTemplateName) === 0) {
+                $resolvedTemplateSetId = safe_text((string) ($tplRow['id'] ?? ''));
+                break;
+            }
+        }
+    }
+
+    if ($resolvedTemplateSetId === '' || !isset($templateById[$resolvedTemplateSetId])) {
+        foreach ($templates as $tplRow) {
+            $candidateId = safe_text((string) ($tplRow['id'] ?? ''));
+            if ($candidateId !== '') {
+                $resolvedTemplateSetId = $candidateId;
+                break;
+            }
+        }
+    }
+
+    return [
+        'template_set_id' => $resolvedTemplateSetId,
+        'template' => is_array($templateById[$resolvedTemplateSetId] ?? null) ? $templateById[$resolvedTemplateSetId] : null,
+        'template_blocks' => $templateBlocks,
+    ];
+}
+
+function solar_finance_quote_has_attachment_snapshot(array $attachments): bool
+{
+    if (!empty($attachments['include_ongrid_diagram']) || !empty($attachments['include_hybrid_diagram']) || !empty($attachments['include_offgrid_diagram'])) {
+        return true;
+    }
+    if (trim((string) ($attachments['ongrid_diagram_media_id'] ?? '')) !== '') {
+        return true;
+    }
+    if (trim((string) ($attachments['hybrid_diagram_media_id'] ?? '')) !== '') {
+        return true;
+    }
+    if (trim((string) ($attachments['offgrid_diagram_media_id'] ?? '')) !== '') {
+        return true;
+    }
+    return !empty($attachments['additional_media_ids']) && is_array($attachments['additional_media_ids']);
+}
+
+function solar_finance_apply_template_snapshot_to_quote(array $quote, bool $isCreate): array
+{
+    $templateContext = solar_finance_resolve_template_context((string) ($quote['template_set_id'] ?? ''));
+    $templateSetId = safe_text((string) ($templateContext['template_set_id'] ?? ''));
+    $templateBlocks = is_array($templateContext['template_blocks'] ?? null) ? $templateContext['template_blocks'] : [];
+    $templateEntry = is_array($templateBlocks[$templateSetId] ?? null) ? $templateBlocks[$templateSetId] : [];
+
+    if ($templateSetId !== '') {
+        $quote['template_set_id'] = $templateSetId;
+        if ($isCreate) {
+            $templateSegment = safe_text((string) (($templateContext['template']['segment'] ?? '') ?: ''));
+            if ($templateSegment !== '') {
+                $quote['segment'] = $templateSegment;
+            }
+        }
+    }
+
+    $blockDefaults = documents_quote_annexure_from_template($templateBlocks, $templateSetId);
+    $annexure = documents_template_block_defaults();
+    $existingAnnexure = is_array($quote['annexures_overrides'] ?? null) ? $quote['annexures_overrides'] : [];
+    foreach ($annexure as $key => $defaultValue) {
+        $value = safe_text((string) ($existingAnnexure[$key] ?? $defaultValue));
+        if ($value === '' && ($blockDefaults[$key] ?? '') !== '') {
+            $value = safe_text((string) $blockDefaults[$key]);
+        }
+        $annexure[$key] = $value;
+    }
+    $quote['annexures_overrides'] = $annexure;
+    $quote['cover_notes_html_snapshot'] = trim((string) ($annexure['cover_notes'] ?? ''));
+
+    $templateAttachments = (($templateEntry['attachments'] ?? null) && is_array($templateEntry['attachments']))
+        ? $templateEntry['attachments']
+        : documents_template_attachment_defaults();
+    $existingAttachments = is_array($quote['template_attachments'] ?? null) ? $quote['template_attachments'] : [];
+    if ($isCreate || !solar_finance_quote_has_attachment_snapshot($existingAttachments)) {
+        $quote['template_attachments'] = $templateAttachments;
+    }
+
+    return $quote;
+}
+
 function create_or_update_solar_finance_quote(array $payload): array
 {
     $customer = is_array($payload['customer'] ?? null) ? $payload['customer'] : [];
@@ -319,7 +436,6 @@ function create_or_update_solar_finance_quote(array $payload): array
         $quote['created_by_id'] = 'solar_finance';
         $quote['created_by_name'] = 'Solar and Finance';
         $quote['segment'] = 'RES';
-        $quote['template_set_id'] = safe_text((string) ($quote['template_set_id'] ?? ''));
     }
 
     $quote['updated_at'] = date('c');
@@ -450,6 +566,7 @@ function create_or_update_solar_finance_quote(array $payload): array
     $quote['tax_breakdown'] = is_array($quote['calc']['tax_breakdown'] ?? null)
         ? (array) $quote['calc']['tax_breakdown']
         : ['basic_total' => 0, 'gst_total' => 0, 'gross_incl_gst' => 0, 'slabs' => []];
+    $quote = solar_finance_apply_template_snapshot_to_quote($quote, $isCreate);
 
     $saved = documents_save_quote($quote);
     if (!($saved['ok'] ?? false)) {
