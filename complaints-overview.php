@@ -31,6 +31,7 @@ $statusFilterRaw = $_GET['status'] ?? null;
 $statusFilter = strtolower(trim((string) ($statusFilterRaw ?? 'all')));
 $assigneeFilter = trim((string) ($_GET['assignee'] ?? 'all'));
 $categoryFilter = trim((string) ($_GET['category'] ?? 'all'));
+$statusOptions = ['all' => 'All statuses', 'open' => 'Open', 'intake' => 'Intake', 'triage' => 'Admin triage', 'work' => 'In progress', 'resolved' => 'Resolved', 'closed' => 'Closed'];
 
 $complaints = load_all_complaints();
 $customers = $customerStore->listCustomers();
@@ -73,6 +74,187 @@ $filtered = array_filter($complaints, static function (array $complaint) use ($s
 });
 
 $counts = complaint_summary_counts($complaints);
+
+function complaints_overview_value_or_dash(?string $value): string
+{
+    $trimmed = trim((string) $value);
+    return $trimmed === '' ? '—' : $trimmed;
+}
+
+function complaints_overview_normalize_selection(mixed $raw): array
+{
+    if (!is_array($raw)) {
+        return [];
+    }
+
+    $selected = [];
+    foreach ($raw as $item) {
+        $value = trim((string) $item);
+        if ($value === '') {
+            continue;
+        }
+        $selected[$value] = true;
+    }
+
+    return array_keys($selected);
+}
+
+function complaints_overview_excel_col_name(int $index): string
+{
+    $name = '';
+    while ($index > 0) {
+        $index--;
+        $name = chr(65 + ($index % 26)) . $name;
+        $index = intdiv($index, 26);
+    }
+
+    return $name;
+}
+
+function complaints_overview_build_xlsx(array $rows, int $freezeHeaderRow, string $sheetName = 'Complaints'): string
+{
+    if (!class_exists('ZipArchive')) {
+        throw new RuntimeException('ZipArchive extension is required to create Excel files.');
+    }
+
+    $maxColumns = 0;
+    foreach ($rows as $row) {
+        $maxColumns = max($maxColumns, count($row));
+    }
+    $maxColumns = max(1, $maxColumns);
+
+    $columnWidths = array_fill(0, $maxColumns, 12);
+    foreach ($rows as $row) {
+        foreach ($row as $columnIndex => $cell) {
+            $length = function_exists('mb_strlen') ? mb_strlen((string) $cell, 'UTF-8') : strlen((string) $cell);
+            $columnWidths[$columnIndex] = min(60, max($columnWidths[$columnIndex], $length + 2));
+        }
+    }
+
+    $xmlRows = [];
+    foreach ($rows as $rowIndex => $row) {
+        $sheetRowNumber = $rowIndex + 1;
+        $cells = '';
+        foreach ($row as $columnIndex => $cellValue) {
+            $columnName = complaints_overview_excel_col_name($columnIndex + 1);
+            $styleId = 0;
+            if ($sheetRowNumber === 1) {
+                $styleId = 1;
+            } elseif ($sheetRowNumber === 2) {
+                $styleId = 2;
+            } elseif ($sheetRowNumber === $freezeHeaderRow) {
+                $styleId = 3;
+            } elseif ($columnIndex === ($maxColumns - 1) && $sheetRowNumber > $freezeHeaderRow) {
+                $styleId = 4;
+            }
+
+            $escapedValue = htmlspecialchars((string) $cellValue, ENT_QUOTES | ENT_XML1 | ENT_SUBSTITUTE, 'UTF-8');
+            $cells .= '<c r="' . $columnName . $sheetRowNumber . '" t="inlineStr" s="' . $styleId . '"><is><t>' . $escapedValue . '</t></is></c>';
+        }
+        $xmlRows[] = '<row r="' . $sheetRowNumber . '">' . $cells . '</row>';
+    }
+
+    $colsXml = '';
+    foreach ($columnWidths as $index => $width) {
+        $colId = $index + 1;
+        $colsXml .= '<col min="' . $colId . '" max="' . $colId . '" width="' . number_format((float) $width, 2, '.', '') . '" customWidth="1"/>';
+    }
+
+    $sheetNameEscaped = htmlspecialchars($sheetName, ENT_QUOTES | ENT_XML1 | ENT_SUBSTITUTE, 'UTF-8');
+    $freezeXml = '';
+    if ($freezeHeaderRow >= 2) {
+        $freezeXml = '<sheetViews><sheetView workbookViewId="0"><pane ySplit="' . ($freezeHeaderRow - 1) . '" topLeftCell="A' . $freezeHeaderRow . '" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>';
+    }
+
+    $worksheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        . $freezeXml
+        . '<cols>' . $colsXml . '</cols>'
+        . '<sheetData>' . implode('', $xmlRows) . '</sheetData>'
+        . '</worksheet>';
+
+    $workbookXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        . '<sheets><sheet name="' . $sheetNameEscaped . '" sheetId="1" r:id="rId1"/></sheets>'
+        . '</workbook>';
+
+    $stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        . '<fonts count="4"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="16"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><sz val="11"/><name val="Calibri"/></font></fonts>'
+        . '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF1FF"/><bgColor indexed="64"/></patternFill></fill></fills>'
+        . '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders>'
+        . '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        . '<cellXfs count="5">'
+        . '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0"/>'
+        . '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+        . '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+        . '<xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>'
+        . '<xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>'
+        . '</cellXfs>'
+        . '</styleSheet>';
+
+    $contentTypesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        . '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        . '<Default Extension="xml" ContentType="application/xml"/>'
+        . '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        . '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        . '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+        . '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
+        . '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'
+        . '</Types>';
+
+    $relsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+        . '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>'
+        . '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>'
+        . '</Relationships>';
+
+    $workbookRelsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+        . '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        . '</Relationships>';
+
+    $timestampIso = gmdate('Y-m-d\TH:i:s\Z');
+    $coreXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+        . '<dc:creator>Dakshayani Enterprises</dc:creator><cp:lastModifiedBy>Dakshayani Enterprises</cp:lastModifiedBy>'
+        . '<dcterms:created xsi:type="dcterms:W3CDTF">' . $timestampIso . '</dcterms:created>'
+        . '<dcterms:modified xsi:type="dcterms:W3CDTF">' . $timestampIso . '</dcterms:modified>'
+        . '</cp:coreProperties>';
+
+    $appXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
+        . '<Application>PHP</Application>'
+        . '</Properties>';
+
+    $tmpPath = tempnam(sys_get_temp_dir(), 'cmp_xlsx_');
+    if ($tmpPath === false) {
+        throw new RuntimeException('Unable to create temporary file for Excel export.');
+    }
+    $xlsxPath = $tmpPath . '.xlsx';
+    @unlink($xlsxPath);
+    rename($tmpPath, $xlsxPath);
+
+    $zip = new ZipArchive();
+    if ($zip->open($xlsxPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+        throw new RuntimeException('Unable to initialize Excel archive.');
+    }
+
+    $zip->addFromString('[Content_Types].xml', $contentTypesXml);
+    $zip->addFromString('_rels/.rels', $relsXml);
+    $zip->addFromString('xl/workbook.xml', $workbookXml);
+    $zip->addFromString('xl/_rels/workbook.xml.rels', $workbookRelsXml);
+    $zip->addFromString('xl/worksheets/sheet1.xml', $worksheetXml);
+    $zip->addFromString('xl/styles.xml', $stylesXml);
+    $zip->addFromString('docProps/core.xml', $coreXml);
+    $zip->addFromString('docProps/app.xml', $appXml);
+    $zip->close();
+
+    return $xlsxPath;
+}
 
 function complaints_overview_safe(string $value): string
 {
@@ -157,6 +339,100 @@ if (($_GET['ajax'] ?? '') === '1') {
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
+
+$exportError = '';
+$exportAssignees = complaints_overview_normalize_selection($_POST['export_assignees'] ?? []);
+$exportCategories = complaints_overview_normalize_selection($_POST['export_categories'] ?? []);
+$exportStatuses = complaints_overview_normalize_selection($_POST['export_statuses'] ?? []);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'export_excel') {
+    $validAssigneeMap = array_fill_keys($assigneeOptions, true);
+    $validCategoryMap = array_fill_keys(complaint_problem_categories(), true);
+    $validStatusMap = array_fill_keys(array_keys(array_diff_key($statusOptions, ['all' => 'All statuses'])), true);
+
+    $exportAssignees = array_values(array_filter($exportAssignees, static fn (string $item): bool => isset($validAssigneeMap[$item])));
+    $exportCategories = array_values(array_filter($exportCategories, static fn (string $item): bool => isset($validCategoryMap[$item])));
+    $exportStatuses = array_values(array_filter($exportStatuses, static fn (string $item): bool => isset($validStatusMap[$item])));
+
+    if ($exportAssignees === [] && $exportCategories === [] && $exportStatuses === []) {
+        $exportError = 'Please select at least one filter to create the sheet.';
+    } else {
+        $matchingComplaints = array_values(array_filter($complaints, static function (array $complaint) use ($exportAssignees, $exportCategories, $exportStatuses): bool {
+            $assignee = complaint_display_assignee($complaint['assignee'] ?? '');
+            $category = (string) ($complaint['problem_category'] ?? '');
+            $status = strtolower(trim((string) ($complaint['status'] ?? 'open')));
+
+            $assigneeMatches = $exportAssignees === [] || in_array($assignee, $exportAssignees, true);
+            $categoryMatches = $exportCategories === [] || in_array($category, $exportCategories, true);
+            $statusMatches = $exportStatuses === [] || in_array($status, $exportStatuses, true);
+
+            return $assigneeMatches && $categoryMatches && $statusMatches;
+        }));
+
+        if ($matchingComplaints === []) {
+            $exportError = 'No matching complaints found for selected filters.';
+        } else {
+            $rows = [];
+            $rows[] = ['Dakshayani Enterprises'];
+            $rows[] = ['Filters Used'];
+            $rows[] = ['Assignees', $exportAssignees === [] ? 'Not filtered' : implode(', ', $exportAssignees)];
+            $rows[] = ['Categories', $exportCategories === [] ? 'Not filtered' : implode(', ', $exportCategories)];
+            $rows[] = ['Status', $exportStatuses === [] ? 'Not filtered' : implode(', ', array_map(static fn (string $status): string => $statusOptions[$status] ?? ucfirst($status), $exportStatuses))];
+            $rows[] = [];
+            $tableHeaderRow = count($rows) + 1;
+            $rows[] = [
+                'Name',
+                'Mobile Number',
+                'Application ID',
+                'Division Name',
+                'Sub Division Name',
+                'JBVNL Account Number',
+                'City',
+                'Complaint ID',
+                'Category',
+                'Status',
+                'Assignee',
+                'Complaint Date / Created At',
+                'Remarks / Description',
+            ];
+
+            foreach ($matchingComplaints as $complaint) {
+                $mobile = (string) ($complaint['customer_mobile'] ?? '');
+                $customer = $customerByMobile[$mobile] ?? [];
+                $rows[] = [
+                    complaints_overview_value_or_dash((string) ($customer['name'] ?? '')),
+                    complaints_overview_value_or_dash($mobile),
+                    complaints_overview_value_or_dash((string) ($customer['application_id'] ?? '')),
+                    complaints_overview_value_or_dash((string) ($customer['division_name'] ?? '')),
+                    complaints_overview_value_or_dash((string) ($customer['sub_division_name'] ?? '')),
+                    complaints_overview_value_or_dash((string) ($customer['jbvnl_account_number'] ?? '')),
+                    complaints_overview_value_or_dash((string) ($customer['city'] ?? '')),
+                    complaints_overview_value_or_dash((string) ($complaint['id'] ?? '')),
+                    complaints_overview_value_or_dash((string) ($complaint['problem_category'] ?? '')),
+                    complaints_overview_value_or_dash(ucfirst((string) ($complaint['status'] ?? 'open'))),
+                    complaints_overview_value_or_dash(complaint_display_assignee($complaint['assignee'] ?? '')),
+                    complaints_overview_value_or_dash((string) ($complaint['created_at'] ?? '')),
+                    complaints_overview_value_or_dash((string) ($complaint['description'] ?? '')),
+                ];
+            }
+
+            try {
+                $xlsxPath = complaints_overview_build_xlsx($rows, $tableHeaderRow);
+                $filename = 'complaints_export_' . gmdate('Ymd_His') . '.xlsx';
+
+                header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+                header('Content-Disposition: attachment; filename="' . $filename . '"');
+                header('Content-Length: ' . (string) filesize($xlsxPath));
+                header('Cache-Control: max-age=0');
+                readfile($xlsxPath);
+                @unlink($xlsxPath);
+                exit;
+            } catch (Throwable $exception) {
+                $exportError = 'Unable to create Excel sheet right now. Please try again.';
+            }
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -192,6 +468,14 @@ if (($_GET['ajax'] ?? '') === '1') {
     .ux-drawer-head { display:flex; justify-content:space-between; align-items:center; padding:.9rem 1rem; border-bottom:1px solid #e5e7eb; }
     .ux-drawer iframe { width:100%; height:100%; border:none; }
     .loading { opacity:.6; pointer-events:none; }
+    .complaints-export { margin:1rem 0; border:1px solid #dbe7ff; border-radius:12px; padding:1rem; background:#f8fbff; }
+    .complaints-export h2 { margin:0 0 .65rem; font-size:1.1rem; color:#1f4b99; }
+    .complaints-export-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.75rem; }
+    .complaints-export select,.complaints-export button { width:100%; padding:.6rem .7rem; border:1px solid #d1d5db; border-radius:10px; font:inherit; }
+    .complaints-export select { min-height:120px; background:#fff; }
+    .complaints-export button { max-width:220px; background:#1f4b99; color:#fff; border-color:#1f4b99; font-weight:700; cursor:pointer; margin-top:.75rem; }
+    .complaints-export-note { margin:.35rem 0 0; font-size:.88rem; color:#475569; }
+    .complaints-export-error { margin:.65rem 0 0; color:#991b1b; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:.6rem .8rem; }
   </style>
 </head>
 <body>
@@ -210,7 +494,6 @@ if (($_GET['ajax'] ?? '') === '1') {
       <div>
         <label class="sr-only" for="status">Status</label>
         <select id="status" name="status">
-          <?php $statusOptions = ['all' => 'All statuses', 'open' => 'Open', 'intake' => 'Intake', 'triage' => 'Admin triage', 'work' => 'In progress', 'resolved' => 'Resolved', 'closed' => 'Closed']; ?>
           <?php foreach ($statusOptions as $value => $label): ?><option value="<?= complaints_overview_safe($value) ?>" <?= $statusFilter === $value ? 'selected' : '' ?>><?= complaints_overview_safe($label) ?></option><?php endforeach; ?>
         </select>
       </div>
@@ -224,6 +507,44 @@ if (($_GET['ajax'] ?? '') === '1') {
       </div>
       <div><button type="submit">Apply filters</button></div>
     </form>
+
+    <section class="complaints-export">
+      <h2>Export Excel</h2>
+      <form method="post">
+        <input type="hidden" name="action" value="export_excel" />
+        <div class="complaints-export-grid">
+          <div>
+            <label for="export_assignees">Assignees</label>
+            <select id="export_assignees" name="export_assignees[]" multiple>
+              <?php foreach ($assigneeOptions as $assignee): ?>
+                <option value="<?= complaints_overview_safe($assignee) ?>" <?= in_array($assignee, $exportAssignees, true) ? 'selected' : '' ?>><?= complaints_overview_safe($assignee) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div>
+            <label for="export_categories">Categories</label>
+            <select id="export_categories" name="export_categories[]" multiple>
+              <?php foreach (complaint_problem_categories() as $category): ?>
+                <option value="<?= complaints_overview_safe($category) ?>" <?= in_array($category, $exportCategories, true) ? 'selected' : '' ?>><?= complaints_overview_safe($category) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div>
+            <label for="export_statuses">Status</label>
+            <select id="export_statuses" name="export_statuses[]" multiple>
+              <?php foreach ($statusOptions as $value => $label): if ($value === 'all') { continue; } ?>
+                <option value="<?= complaints_overview_safe($value) ?>" <?= in_array($value, $exportStatuses, true) ? 'selected' : '' ?>><?= complaints_overview_safe($label) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+        </div>
+        <p class="complaints-export-note">Select at least one Assignee, Category, or Status to create the sheet.</p>
+        <button type="submit">Create Excel Sheet</button>
+        <?php if ($exportError !== ''): ?>
+          <div class="complaints-export-error"><?= complaints_overview_safe($exportError) ?></div>
+        <?php endif; ?>
+      </form>
+    </section>
 
     <div id="complaintsTableRoot"><?= complaints_overview_render_table($filtered, $customerByMobile) ?></div>
   </div>
