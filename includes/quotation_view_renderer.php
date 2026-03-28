@@ -93,7 +93,7 @@ function quotation_shadow_css(string $preset): string
 }
 
 
-function compute_financial_clarity(array $quote, array $calc, array $snapshot): array
+function documents_quote_resolve_finance_scenarios_for_render(array $quote, array $calc, array $snapshot): array
 {
     $toFloat = static function ($value, float $fallback = 0.0): float {
         if ($value === null) {
@@ -104,18 +104,56 @@ function compute_financial_clarity(array $quote, array $calc, array $snapshot): 
         }
         return (float) $value;
     };
+    $toInt = static function ($value, int $fallback = 0): int {
+        if ($value === null) {
+            return $fallback;
+        }
+        if (is_string($value) && trim($value) === '') {
+            return $fallback;
+        }
+        return (int) round((float) $value);
+    };
+    $formatPaybackMonths = static function (int $months): string {
+        if ($months <= 0) {
+            return '—';
+        }
+        if ($months > 25 * 12) {
+            return 'Not within 25 years';
+        }
+        $years = intdiv($months, 12);
+        $remainingMonths = $months % 12;
+        if ($years <= 0) {
+            return $remainingMonths . ' month' . ($remainingMonths === 1 ? '' : 's');
+        }
+        if ($remainingMonths <= 0) {
+            return $years . ' year' . ($years === 1 ? '' : 's');
+        }
+        return $years . ' year' . ($years === 1 ? '' : 's') . ' ' . $remainingMonths . ' month' . ($remainingMonths === 1 ? '' : 's');
+    };
+    $calculatePaybackMonths = static function (float $initialSolarCost, float $solarMonthlyOutflow, float $noSolarMonthlyBill): int {
+        if ($noSolarMonthlyBill <= 0) {
+            return 0;
+        }
+        $cumSolar = max(0, $initialSolarCost);
+        $cumNoSolar = 0.0;
+        $horizon = 25 * 12;
+        for ($month = 1; $month <= $horizon; $month++) {
+            $cumSolar += max(0, $solarMonthlyOutflow);
+            $cumNoSolar += max(0, $noSolarMonthlyBill);
+            if ($cumSolar <= $cumNoSolar) {
+                return $month;
+            }
+        }
+        return $horizon + 1;
+    };
 
     $primaryScenario = (string) ($quote['primary_finance_scenario'] ?? 'loan_above_2_lacs');
     $scenarioPrices = is_array($quote['scenario_prices'] ?? null) ? $quote['scenario_prices'] : [];
-    $primaryPrice = 0.0;
-    if (in_array($primaryScenario, ['self_funded', 'loan_upto_2_lacs', 'loan_above_2_lacs'], true)) {
-        $primaryPrice = $toFloat($scenarioPrices[$primaryScenario]['price'] ?? 0);
-    }
-    $grossBeforeDiscount = $toFloat($calc['gross_payable_before_discount'] ?? 0);
+    $financeScenariosRaw = is_array($quote['finance_scenarios'] ?? null) ? $quote['finance_scenarios'] : [];
+    $grossBeforeDiscount = max(0, $toFloat($calc['gross_payable_before_discount'] ?? 0));
     $discount = max(0, $toFloat($calc['discount_rs'] ?? 0));
-    $grossFallback = max(0, $grossBeforeDiscount - $discount);
-    $gross = $primaryPrice > 0 ? $primaryPrice : $toFloat($calc['gross_payable'] ?? $grossFallback);
-    $subsidy = $toFloat($calc['subsidy_expected_rs'] ?? 0);
+    $grossFallback = max(0, $toFloat($calc['gross_payable'] ?? ($grossBeforeDiscount - $discount)));
+    $subsidy = max(0, $toFloat($calc['subsidy_expected_rs'] ?? 0));
     $capacity = max(0, $toFloat($quote['capacity_kwp'] ?? $quote['system_capacity_kwp'] ?? 0));
     $tariff = max(0.1, $toFloat($snapshot['unit_rate_rs_per_kwh'] ?? null, 1));
     $annualGeneration = max(0, $toFloat($snapshot['annual_generation_kwh_per_kw'] ?? null, 0));
@@ -134,58 +172,173 @@ function compute_financial_clarity(array $quote, array $calc, array $snapshot): 
     }
     $residualUnits = max(0, $monthlyUnitsBefore - $monthlyUnitsSolar);
     $residualBill = $residualUnits * $tariff;
+    $noSolarMonthlyBill = max(0, $toFloat($snapshot['monthly_bill_before_rs'] ?? null, $toFloat($quote['finance_inputs']['monthly_bill_rs'] ?? 0)));
 
-    $marginAmount = ($snapshot['margin_amount_rs'] ?? null) !== null ? max(0, (float) $snapshot['margin_amount_rs']) : null;
-    if ($marginAmount === null) {
-        $marginPct = max(0, $toFloat($snapshot['margin_rule_percent'] ?? null, 10));
-        $marginAmount = ($marginPct / 100) * $gross;
+    $order = [
+        'self_funded' => 'Self Funded',
+        'loan_upto_2_lacs' => 'Loan up to ₹2 lacs',
+        'loan_above_2_lacs' => 'Loan above ₹2 lacs',
+    ];
+    $resolvedScenarios = [];
+    foreach ($order as $scenarioKey => $scenarioLabel) {
+        $row = is_array($financeScenariosRaw[$scenarioKey] ?? null) ? $financeScenariosRaw[$scenarioKey] : [];
+        $price = max(0, $toFloat($row['price'] ?? $scenarioPrices[$scenarioKey]['price'] ?? $grossFallback));
+        if ($price <= 0) {
+            $price = $grossFallback;
+        }
+        $grossPayable = max(0, $toFloat($row['gross_payable'] ?? $price));
+        $scenarioSubsidy = max(0, $toFloat($row['subsidy'] ?? $subsidy));
+        $netInvestment = max(0, $toFloat($row['net_investment_after_subsidy'] ?? ($grossPayable - $scenarioSubsidy)));
+        $interestPct = max(0, $toFloat($row['interest_pct'] ?? $snapshot['loan_interest_rate_percent'] ?? 0));
+        $tenureYears = max(0, $toFloat($row['tenure_years'] ?? null, max(0.01, $toFloat($snapshot['loan_tenure_months'] ?? null, 120) / 12)));
+        $tenureMonths = max(1, $toInt($row['tenure_months'] ?? null, (int) round($tenureYears * 12)));
+        $marginMoney = max(0, $toFloat($row['margin_money_rs'] ?? 0));
+        $loanAmount = max(0, $toFloat($row['loan_amount_rs'] ?? 0));
+        $effectivePrincipal = max(0, $toFloat($row['effective_loan_principal_rs'] ?? ($loanAmount - $scenarioSubsidy)));
+        $emi = max(0, $toFloat($row['emi_rs'] ?? 0));
+        $residualBillScenario = max(0, $toFloat($row['residual_bill_rs'] ?? $residualBill));
+        $monthlyOutflow = max(0, $toFloat($row['monthly_outflow_rs'] ?? $row['monthly_outflow'] ?? 0));
+        $applicable = $scenarioKey !== 'loan_above_2_lacs'
+            ? (bool) ($row['applicable'] ?? true)
+            : (bool) ($row['applicable'] ?? false);
+
+        if ($scenarioKey === 'self_funded') {
+            $applicable = (bool) ($row['applicable'] ?? true);
+            $marginMoney = 0.0;
+            $loanAmount = 0.0;
+            $effectivePrincipal = 0.0;
+            $emi = 0.0;
+            if ($monthlyOutflow <= 0) {
+                $monthlyOutflow = $residualBillScenario;
+            }
+        } else {
+            if ($marginMoney <= 0 && $loanAmount <= 0) {
+                $marginPct = max(0, min(100, $toFloat($row['margin_ratio_pct'] ?? 20)));
+                $loanPct = max(0, min(100, $toFloat($row['loan_ratio_pct'] ?? max(0, 100 - $marginPct))));
+                $marginMoney = ($marginPct / 100) * $grossPayable;
+                $loanAmount = ($loanPct / 100) * $grossPayable;
+                if (($marginMoney + $loanAmount) <= 0) {
+                    $marginMoney = max(0, $grossPayable - $loanAmount);
+                }
+            }
+            if ($scenarioKey === 'loan_upto_2_lacs' && $loanAmount <= 0) {
+                $loanAmount = min(max(0, $grossPayable - $marginMoney), 200000);
+                $marginMoney = max(0, $grossPayable - $loanAmount);
+            }
+            if ($scenarioKey === 'loan_above_2_lacs' && $loanAmount > 200000) {
+                $applicable = (bool) ($row['applicable'] ?? true);
+            }
+            if ($effectivePrincipal <= 0) {
+                $effectivePrincipal = max(0, $loanAmount - $scenarioSubsidy);
+            }
+            if ($emi <= 0 && $effectivePrincipal > 0) {
+                $monthlyRate = ($interestPct / 100) / 12;
+                if ($monthlyRate <= 0) {
+                    $emi = $effectivePrincipal / max(1, $tenureMonths);
+                } else {
+                    $pow = pow(1 + $monthlyRate, $tenureMonths);
+                    $emi = ($effectivePrincipal * $monthlyRate * $pow) / max(0.000001, $pow - 1);
+                }
+            }
+            if ($monthlyOutflow <= 0) {
+                $monthlyOutflow = $emi + $residualBillScenario;
+            }
+            if ($scenarioKey === 'loan_above_2_lacs' && !$applicable) {
+                $applicable = ($loanAmount > 200000) || ($price > 200000 && !empty($scenarioPrices['loan_above_2_lacs']));
+            }
+        }
+
+        $paybackMonths = $toInt($row['payback_months'] ?? null, 0);
+        if ($paybackMonths <= 0) {
+            $legacyYears = $toFloat($row['payback'] ?? 0);
+            if ($legacyYears > 0) {
+                $paybackMonths = max(1, (int) round($legacyYears * 12));
+            }
+        }
+        if ($paybackMonths <= 0) {
+            $initialCost = $scenarioKey === 'self_funded' ? $netInvestment : $marginMoney;
+            $paybackMonths = $calculatePaybackMonths($initialCost, $monthlyOutflow, $noSolarMonthlyBill);
+        }
+        $paybackDisplay = trim((string) ($row['payback_display'] ?? ''));
+        if ($paybackDisplay === '') {
+            $paybackDisplay = $formatPaybackMonths($paybackMonths);
+        }
+
+        $cumulativeSeries = [];
+        if (is_array($row['cumulative_series'] ?? null) && $row['cumulative_series'] !== []) {
+            foreach ($row['cumulative_series'] as $point) {
+                $cumulativeSeries[] = $toFloat($point);
+            }
+        } else {
+            for ($year = 0; $year <= 25; $year++) {
+                $months = $year * 12;
+                if ($scenarioKey === 'self_funded') {
+                    $cumulativeSeries[] = $netInvestment + ($months * $residualBillScenario);
+                    continue;
+                }
+                $emiMonths = min($months, $tenureMonths);
+                $cumulativeSeries[] = $marginMoney + ($emiMonths * $emi) + ($months * $residualBillScenario);
+            }
+        }
+
+        $resolvedScenarios[$scenarioKey] = [
+            'applicable' => $applicable,
+            'label' => $scenarioLabel,
+            'price' => $price,
+            'subsidy' => $scenarioSubsidy,
+            'gross_payable' => $grossPayable,
+            'net_investment_after_subsidy' => $netInvestment,
+            'margin_money_rs' => $marginMoney,
+            'loan_amount_rs' => $loanAmount,
+            'effective_loan_principal_rs' => $effectivePrincipal,
+            'interest_pct' => $interestPct,
+            'tenure_years' => $tenureYears,
+            'tenure_months' => $tenureMonths,
+            'emi_rs' => $emi,
+            'residual_bill_rs' => $residualBillScenario,
+            'monthly_outflow_rs' => $monthlyOutflow,
+            'payback_months' => $paybackMonths,
+            'payback_display' => $paybackDisplay,
+            'cumulative_series' => $cumulativeSeries,
+            'is_primary' => $scenarioKey === $primaryScenario,
+        ];
     }
 
-    $loanEligible = max(0, $gross - $marginAmount);
-    $loanCap = max(0, $toFloat($snapshot['loan_cap_rs'] ?? null, $loanEligible));
-    if ($loanCap > 0 && $loanEligible > $loanCap) {
-        $loanEligible = $loanCap;
-        $marginAmount = max(0, $gross - $loanEligible);
-    }
-
-    $effectivePrincipal = max(0, $loanEligible - $subsidy);
-    $interestPct = max(0, $toFloat($snapshot['loan_interest_rate_percent'] ?? null, 0));
-    $tenureMonths = max(1, (int) round($toFloat($snapshot['loan_tenure_months'] ?? null, 120)));
-    $monthlyRate = ($interestPct / 100) / 12;
-    if ($effectivePrincipal <= 0) {
-        $emi = 0.0;
-    } elseif ($monthlyRate <= 0) {
-        $emi = $effectivePrincipal / $tenureMonths;
-    } else {
-        $pow = pow(1 + $monthlyRate, $tenureMonths);
-        $emi = ($effectivePrincipal * $monthlyRate * $pow) / max(0.000001, $pow - 1);
+    if (!isset($resolvedScenarios[$primaryScenario])) {
+        $primaryScenario = 'loan_upto_2_lacs';
     }
 
     return [
         'primary_finance_scenario' => $primaryScenario,
-        'gross' => $gross,
+        'gross' => (float) ($resolvedScenarios[$primaryScenario]['price'] ?? $grossFallback),
         'subsidy' => $subsidy,
-        'monthly_bill_before_rs' => $toFloat($snapshot['monthly_bill_before_rs'] ?? 0),
+        'monthly_bill_before_rs' => $noSolarMonthlyBill,
+        'no_solar_monthly_bill_rs' => $noSolarMonthlyBill,
         'monthly_units_before' => $monthlyUnitsBefore,
         'unit_rate_rs_per_kwh' => $tariff,
         'annual_generation_kwh_per_kw' => $annualGeneration,
         'capacity_kwp' => $capacity,
         'monthly_units_solar' => $monthlyUnitsSolar,
-        'residual_bill' => $residualBill,
-        'margin_amount_rs' => $marginAmount,
-        'loan_eligible_rs' => $loanEligible,
-        'loan_cap_rs' => $loanCap,
-        'loan_interest_rate_percent' => $interestPct,
-        'loan_tenure_months' => $tenureMonths,
-        'effective_principal_rs' => $effectivePrincipal,
-        'emi_rs' => $emi,
-        'loan_total_outflow_rs' => $emi + $residualBill,
-        'self_upfront_rs' => $gross,
-        'self_upfront_net_rs' => max(0, $gross - $subsidy),
-        'self_residual_bill_rs' => $residualBill,
+        'residual_bill' => (float) ($resolvedScenarios['self_funded']['residual_bill_rs'] ?? $residualBill),
+        'margin_amount_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs']['margin_money_rs'] ?? 0),
+        'loan_eligible_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs']['loan_amount_rs'] ?? 0),
+        'loan_cap_rs' => max(0, $toFloat($snapshot['loan_cap_rs'] ?? null, 0)),
+        'loan_interest_rate_percent' => (float) ($resolvedScenarios['loan_upto_2_lacs']['interest_pct'] ?? 0),
+        'loan_tenure_months' => (int) ($resolvedScenarios['loan_upto_2_lacs']['tenure_months'] ?? 120),
+        'effective_principal_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs']['effective_loan_principal_rs'] ?? 0),
+        'emi_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs']['emi_rs'] ?? 0),
+        'loan_total_outflow_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs']['monthly_outflow_rs'] ?? 0),
+        'self_upfront_rs' => (float) ($resolvedScenarios['self_funded']['price'] ?? $grossFallback),
+        'self_upfront_net_rs' => (float) ($resolvedScenarios['self_funded']['net_investment_after_subsidy'] ?? 0),
+        'self_residual_bill_rs' => (float) ($resolvedScenarios['self_funded']['residual_bill_rs'] ?? 0),
         'scenario_prices' => $scenarioPrices,
-        'finance_scenarios' => is_array($quote['finance_scenarios'] ?? null) ? $quote['finance_scenarios'] : [],
+        'finance_scenarios' => $resolvedScenarios,
     ];
+}
+
+function compute_financial_clarity(array $quote, array $calc, array $snapshot): array
+{
+    return documents_quote_resolve_finance_scenarios_for_render($quote, $calc, $snapshot);
 }
 
 function quotation_render(array $quote, array $quoteDefaults, array $company, bool $showAdmin = false, string $shareUrl = '', string $viewerType = 'admin', string $viewerId = ''): void
@@ -421,7 +574,7 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
 <style>
 :root{--color-primary:<?= htmlspecialchars((string)($colors['primary'] ?? '#0ea5e9'), ENT_QUOTES) ?>;--color-accent:<?= htmlspecialchars((string)($colors['accent'] ?? '#22c55e'), ENT_QUOTES) ?>;--color-text:<?= htmlspecialchars((string)($colors['text'] ?? '#0f172a'), ENT_QUOTES) ?>;--color-muted:<?= htmlspecialchars((string)($colors['muted_text'] ?? '#475569'), ENT_QUOTES) ?>;--page-bg:<?= htmlspecialchars((string)($colors['page_bg'] ?? '#f8fafc'), ENT_QUOTES) ?>;--card-bg:<?= htmlspecialchars((string)($colors['card_bg'] ?? '#ffffff'), ENT_QUOTES) ?>;--border-color:<?= htmlspecialchars((string)($colors['border'] ?? '#e2e8f0'), ENT_QUOTES) ?>;--base-font-size:<?= (int)($typo['base_px'] ?? 14) ?>px;--h1-size:<?= (int)($typo['h1_px'] ?? 24) ?>px;--h2-size:<?= (int)($typo['h2_px'] ?? 18) ?>px;--h3-size:<?= (int)($typo['h3_px'] ?? 16) ?>px;--line-height:<?= (float)($typo['line_height'] ?? 1.6) ?>;--shadow-preset:<?= quotation_shadow_css((string)($tokens['shadow'] ?? 'soft')) ?>;--header-bg:<?= htmlspecialchars($headerBg, ENT_QUOTES) ?>;--footer-bg:<?= htmlspecialchars($footerBg, ENT_QUOTES) ?>;--header-text-color:<?= htmlspecialchars($headerText, ENT_QUOTES) ?>;--footer-text-color:<?= htmlspecialchars($footerText, ENT_QUOTES) ?>}
 body{font-family:Inter,Arial,sans-serif;background:var(--page-bg);margin:0;color:var(--color-text);font-size:var(--base-font-size);line-height:var(--line-height)}
-h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-size)}.wrap{max-width:1100px;margin:0 auto;padding:12px}.card{background:var(--card-bg);border:1px solid var(--border-color);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow-preset)}.h{font-weight:700}.sec{border-bottom:2px solid var(--color-primary);padding-bottom:5px;margin-bottom:8px}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bank-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.metric{background:var(--page-bg);border:1px solid var(--border-color);border-radius:10px;padding:8px}.annexure-stack{display:grid;gap:16px}.hero{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.hero .metric b{display:block;font-size:1.2rem;margin-top:4px}.save-line{margin-top:10px;padding:10px 12px;border:1px solid #86efac;background:#f0fdf4;color:#166534;border-radius:10px;font-weight:700}.chip{background:#ccfbf1;color:#134e4a;border-radius:99px;padding:5px 10px;display:inline-block;margin:3px 6px 0 0}.quote-status-row{display:flex;justify-content:flex-end;align-items:center;padding-top:10px;padding-bottom:10px}.quote-status-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 11px;font-size:.86em;font-weight:700;letter-spacing:.01em;border:1px solid transparent}.quote-status-badge.draft{background:#fff7ed;color:#9a3412;border-color:#fed7aa}.quote-status-badge.accepted{background:#ecfdf3;color:#166534;border-color:#bbf7d0}.quote-meta-dates{margin-top:4px;font-size:.85em;line-height:1.5;text-align:right}.quote-meta-dates div{margin-top:2px}.muted{color:var(--color-muted)}.item-master-description{color:var(--color-muted);font-size:.88em;line-height:1.45;margin-top:2px;white-space:normal;word-break:break-word}.item-custom-description{color:#1e293b;font-size:.9em;line-height:1.5;margin-top:4px;font-weight:600;white-space:normal;word-break:break-word}table{width:100%;border-collapse:collapse}th,td{border:1px solid var(--border-color);padding:8px;text-align:left}th{background:#f8fafc}.right{text-align:right}.center{text-align:center}.pricing-gross-row td{font-weight:700;font-size:1.1em}.footer{background:var(--footer-bg);color:var(--footer-text-color)}.footer a,.footer a:visited{color:var(--footer-text-color)}.footer-brand-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}.footer-logo{display:inline-flex;align-items:center;justify-content:center}.footer-logo img{max-height:38px;width:auto;display:block}.footer-brand-name{color:var(--footer-text-color);font-size:1.1em;font-weight:700;line-height:1.3}.header{background:var(--header-bg);color:var(--header-text-color)}.header a,.header a:visited{color:var(--header-text-color)}.header-top{display:flex;align-items:center;gap:12px}.header-logo{background:rgba(255,255,255,.18);padding:4px 8px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center}.header-logo img{max-height:50px;width:auto;display:block}.header-main{min-width:0}.screen-only{display:block}.hide-print{display:block}.chart-block{margin-bottom:12px;break-inside:avoid;page-break-inside:avoid}.chart-title{font-weight:700;margin:2px 0 8px}.chart-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}.legend-item{display:flex;align-items:center;gap:6px;font-size:.92rem}.legend-swatch{width:12px;height:12px;border-radius:3px;display:inline-block}.bar-chart,.bar-chart *{box-sizing:border-box}.bar-chart{position:relative;overflow:hidden;display:flex;align-items:flex-end;justify-content:space-around;gap:10px;min-height:220px;padding:10px 12px 14px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.bar-wrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;min-width:0}.bar-area{height:160px;width:100%;padding:8px 8px 0;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}.bar{width:min(52px,100%);max-height:100%;border-radius:8px 8px 4px 4px;min-height:2px}.bar-label{font-size:.82rem;text-align:center;line-height:1.35;width:100%;overflow-wrap:anywhere}.axis-label{font-size:.82rem;color:var(--color-muted);text-align:center;margin-top:6px}.line-chart svg{width:100%;height:220px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.chart-print-img{display:none;width:100%;height:auto;max-width:100%;border:1px solid var(--border-color);border-radius:10px;background:#fff}.sf-glance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}.sf-glance-group{background:#f8faff;border:1px solid #dbe6f7;border-radius:12px;padding:10px}.sf-glance-group h3{margin:0 0 8px;font-size:1rem}.sf-glance-list{display:grid;gap:4px}.sf-glance-item{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px dashed #d8e1ef}.sf-glance-item:last-child{border-bottom:none}.sf-glance-label{font-weight:600;color:#23324d;font-size:.88rem}.sf-glance-value{font-weight:700;text-align:right}.sf-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}.sf-finance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px}.sf-finance-grid ul{margin:.4rem 0 0;padding-left:1rem}.payback-meter{width:100%;height:16px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px}.payback-meter-fill{height:100%;background:linear-gradient(to right,var(--color-primary),var(--color-accent));width:0}.scenario-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.chart-responsive-card canvas{display:block;width:100%!important;height:260px!important;max-height:260px}@media (max-width:700px){.header-top{flex-direction:column;align-items:flex-start}.footer-brand-row{align-items:flex-start}.scenario-grid{grid-template-columns:1fr}.bank-grid{grid-template-columns:1fr}.quote-status-row{justify-content:flex-start}.chart-responsive-card{padding:10px 10px 8px}.chart-responsive-card .sec{font-size:.95rem;padding-bottom:4px;margin-bottom:6px}.chart-responsive-card canvas{height:200px!important;max-height:200px}}@media print{.hide-print,.screen-only{display:none!important}.card{break-inside:avoid;box-shadow:none}.chart-block,.bar-chart,.line-chart{overflow:visible!important;height:auto!important}canvas{display:none!important}.chart-print-img{display:block!important}.item-master-description,.item-custom-description{white-space:normal;word-break:break-word;line-height:1.45}}</style>
+h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-size)}.wrap{max-width:1100px;margin:0 auto;padding:12px}.card{background:var(--card-bg);border:1px solid var(--border-color);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow-preset)}.h{font-weight:700}.sec{border-bottom:2px solid var(--color-primary);padding-bottom:5px;margin-bottom:8px}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.bank-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.metric{background:var(--page-bg);border:1px solid var(--border-color);border-radius:10px;padding:8px}.annexure-stack{display:grid;gap:16px}.hero{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.hero .metric b{display:block;font-size:1.2rem;margin-top:4px}.save-line{margin-top:10px;padding:10px 12px;border:1px solid #86efac;background:#f0fdf4;color:#166534;border-radius:10px;font-weight:700}.chip{background:#ccfbf1;color:#134e4a;border-radius:99px;padding:5px 10px;display:inline-block;margin:3px 6px 0 0}.quote-status-row{display:flex;justify-content:flex-end;align-items:center;padding-top:10px;padding-bottom:10px}.quote-status-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 11px;font-size:.86em;font-weight:700;letter-spacing:.01em;border:1px solid transparent}.quote-status-badge.draft{background:#fff7ed;color:#9a3412;border-color:#fed7aa}.quote-status-badge.accepted{background:#ecfdf3;color:#166534;border-color:#bbf7d0}.quote-meta-dates{margin-top:4px;font-size:.85em;line-height:1.5;text-align:right}.quote-meta-dates div{margin-top:2px}.muted{color:var(--color-muted)}.item-master-description{color:var(--color-muted);font-size:.88em;line-height:1.45;margin-top:2px;white-space:normal;word-break:break-word}.item-custom-description{color:#1e293b;font-size:.9em;line-height:1.5;margin-top:4px;font-weight:600;white-space:normal;word-break:break-word}table{width:100%;border-collapse:collapse}th,td{border:1px solid var(--border-color);padding:8px;text-align:left}th{background:#f8fafc}.right{text-align:right}.center{text-align:center}.pricing-gross-row td{font-weight:700;font-size:1.1em}.footer{background:var(--footer-bg);color:var(--footer-text-color)}.footer a,.footer a:visited{color:var(--footer-text-color)}.footer-brand-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}.footer-logo{display:inline-flex;align-items:center;justify-content:center}.footer-logo img{max-height:38px;width:auto;display:block}.footer-brand-name{color:var(--footer-text-color);font-size:1.1em;font-weight:700;line-height:1.3}.header{background:var(--header-bg);color:var(--header-text-color)}.header a,.header a:visited{color:var(--header-text-color)}.header-top{display:flex;align-items:center;gap:12px}.header-logo{background:rgba(255,255,255,.18);padding:4px 8px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center}.header-logo img{max-height:50px;width:auto;display:block}.header-main{min-width:0}.screen-only{display:block}.hide-print{display:block}.chart-block{margin-bottom:12px;break-inside:avoid;page-break-inside:avoid}.chart-title{font-weight:700;margin:2px 0 8px}.chart-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}.legend-item{display:flex;align-items:center;gap:6px;font-size:.92rem}.legend-swatch{width:12px;height:12px;border-radius:3px;display:inline-block}.bar-chart,.bar-chart *{box-sizing:border-box}.bar-chart{position:relative;overflow:hidden;display:flex;align-items:flex-end;justify-content:space-around;gap:10px;min-height:220px;padding:10px 12px 14px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.bar-wrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;min-width:0}.bar-area{height:160px;width:100%;padding:8px 8px 0;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}.bar{width:min(52px,100%);max-height:100%;border-radius:8px 8px 4px 4px;min-height:2px}.bar-label{font-size:.82rem;text-align:center;line-height:1.35;width:100%;overflow-wrap:anywhere}.axis-label{font-size:.82rem;color:var(--color-muted);text-align:center;margin-top:6px}.line-chart svg{width:100%;height:220px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)}.chart-print-img{display:none;width:100%;height:auto;max-width:100%;border:1px solid var(--border-color);border-radius:10px;background:#fff}.sf-glance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}.sf-glance-group{background:#f8faff;border:1px solid #dbe6f7;border-radius:12px;padding:10px}.sf-glance-group h3{margin:0 0 8px;font-size:1rem}.sf-glance-list{display:grid;gap:4px}.sf-glance-item{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px dashed #d8e1ef}.sf-glance-item:last-child{border-bottom:none}.sf-glance-label{font-weight:600;color:#23324d;font-size:.88rem}.sf-glance-value{font-weight:700;text-align:right}.sf-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}.sf-finance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px}.sf-finance-grid ul{margin:.4rem 0 0;padding-left:1rem}.payback-meter{width:100%;height:16px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px}.payback-meter-fill{height:100%;background:linear-gradient(to right,var(--color-primary),var(--color-accent));width:0}.scenario-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.chart-responsive-card canvas{display:block;width:100%!important;height:260px!important;max-height:260px}.primary-badge{display:inline-block;font-size:.75rem;background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc;border-radius:999px;padding:2px 8px;font-weight:700;margin-left:6px}@media (max-width:700px){.header-top{flex-direction:column;align-items:flex-start}.footer-brand-row{align-items:flex-start}.scenario-grid{grid-template-columns:1fr}.bank-grid{grid-template-columns:1fr}.quote-status-row{justify-content:flex-start}.chart-responsive-card{padding:10px 10px 8px}.chart-responsive-card .sec{font-size:.95rem;padding-bottom:4px;margin-bottom:6px}.chart-responsive-card canvas{height:200px!important;max-height:200px}}@media print{.hide-print,.screen-only{display:none!important}.card{break-inside:avoid;box-shadow:none}.chart-block,.bar-chart,.line-chart{overflow:visible!important;height:auto!important}canvas{display:none!important}.chart-print-img{display:block!important}.item-master-description,.item-custom-description{white-space:normal;word-break:break-word;line-height:1.45}}</style>
 </head><body><div id="quotation-root" class="wrap">
 <section class="card header"><div class="header-top"><?php if ($hasLogo): ?><div class="header-logo"><img src="<?= htmlspecialchars($logoSrc, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($companyName, ENT_QUOTES) ?> logo" /></div><?php endif; ?><div class="header-main"><div class="h"><?= htmlspecialchars($companyName, ENT_QUOTES) ?></div><div><?= htmlspecialchars((string)($company['address_line'] ?? ''), ENT_QUOTES) ?>, <?= htmlspecialchars((string)($company['city'] ?? ''), ENT_QUOTES) ?></div><div><?= implode(' | ', $phoneBits) ?><?= $phoneBits !== [] ? ' | ' : '' ?>✉️ <?= htmlspecialchars((string)($company['email_primary'] ?? ''), ENT_QUOTES) ?> · 🌐 <?= htmlspecialchars($website, ENT_QUOTES) ?><?= $waLink !== '' ? ' · <a href="' . htmlspecialchars($waLink, ENT_QUOTES) . '">Chat</a>' : '' ?></div><div>GSTIN <?= htmlspecialchars((string)($company['gstin'] ?? ''), ENT_QUOTES) ?> · UDYAM <?= htmlspecialchars((string)($company['udyam'] ?? ''), ENT_QUOTES) ?> · PAN <?= htmlspecialchars((string)($company['pan'] ?? ''), ENT_QUOTES) ?></div><div>Quote No <b><?= htmlspecialchars((string)($quote['quote_no'] ?? ''), ENT_QUOTES) ?></b></div></div></div></section>
 <section class="card quote-status-row"><div><span class="quote-status-badge <?= htmlspecialchars($statusBadgeClass, ENT_QUOTES) ?>">Status: <?= htmlspecialchars($statusBadgeLabel, ENT_QUOTES) ?></span><div class="quote-meta-dates muted"><div>Quotation Date: <?= htmlspecialchars($quotationDateDisplay, ENT_QUOTES) ?></div><div>Valid Until: <?= htmlspecialchars($validUntilDisplay, ENT_QUOTES) ?></div></div></div></section>
@@ -437,7 +590,7 @@ $scenarioOrder = ['self_funded' => 'Self Funded', 'loan_upto_2_lacs' => 'Loan up
 $scenarioRows = is_array($financialClarity['finance_scenarios'] ?? null) ? $financialClarity['finance_scenarios'] : [];
 $primaryScenarioLabel = (string)($scenarioOrder[$financialClarity['primary_finance_scenario'] ?? ''] ?? 'Loan above ₹2 lacs');
 ?>
-<section class="card"><div class="h sec">Funding Options at a Glance <span class="muted">(Primary: <?= htmlspecialchars($primaryScenarioLabel, ENT_QUOTES) ?>)</span></div><table><thead><tr><th>Scenario</th><th>Price</th><th>Margin</th><th>Loan</th><th>Interest</th><th>EMI</th><th>Monthly Outflow</th><th>Payback</th></tr></thead><tbody><?php foreach ($scenarioOrder as $key => $label): $row = is_array($scenarioRows[$key] ?? null) ? $scenarioRows[$key] : []; if ($key === 'loan_above_2_lacs' && empty($row['applicable']) && !empty($quote['scenario_prices']['loan_above_2_lacs'])) { continue; } ?><tr><td><?= htmlspecialchars($label, ENT_QUOTES) ?></td><td><?= quotation_format_inr_indian((float)($row['price'] ?? $quote['scenario_prices'][$key]['price'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['margin_money_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['loan_amount_rs'] ?? 0), $showDecimals) ?></td><td><?= number_format((float)($row['interest_pct'] ?? 0), 2) ?>%</td><td><?= quotation_format_inr_indian((float)($row['emi_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['monthly_outflow'] ?? 0), $showDecimals) ?></td><td><?= number_format((float)($row['payback'] ?? 0), 1) ?> yrs</td></tr><?php endforeach; ?></tbody></table></section>
+<section class="card"><div class="h sec">Funding Options at a Glance <span class="muted">(Primary: <?= htmlspecialchars($primaryScenarioLabel, ENT_QUOTES) ?>)</span></div><table><thead><tr><th>Scenario</th><th>Price</th><th>Subsidy</th><th>Margin Money</th><th>Loan Amount</th><th>Interest</th><th>Tenure</th><th>EMI</th><th>Monthly Outflow</th><th>Payback</th></tr></thead><tbody><?php foreach ($scenarioOrder as $key => $label): $row = is_array($scenarioRows[$key] ?? null) ? $scenarioRows[$key] : []; if ($key === 'loan_above_2_lacs' && empty($row['applicable'])) { continue; } ?><tr><td><?= htmlspecialchars($label, ENT_QUOTES) ?><?php if (!empty($row['is_primary'])): ?><span class="primary-badge">Primary</span><?php endif; ?></td><td><?= quotation_format_inr_indian((float)($row['price'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['subsidy'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['margin_money_rs'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['loan_amount_rs'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : number_format((float)($row['interest_pct'] ?? 0), 2) . '%' ?></td><td><?= $key === 'self_funded' ? '—' : number_format((float)($row['tenure_years'] ?? 0), 1) . ' yrs' ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['emi_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['monthly_outflow_rs'] ?? 0), $showDecimals) ?></td><td><?= htmlspecialchars((string)($row['payback_display'] ?? '—'), ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table></section>
 <section class="card sf-glance-wrap"><div class="h sec">☀️ Solar at a Glance</div><div class="sf-glance-grid" id="glancePanel"></div></section>
 <section class="card chart-responsive-card"><div class="h sec">📊 Monthly Outflow Comparison</div><canvas id="monthlyChart" height="130"></canvas><img id="monthlyChartPrint" class="chart-print-img" alt="Monthly outflow chart for print"></section>
 <section class="card chart-responsive-card"><div class="h sec">📈 Cumulative Expense Over 25 Years</div><canvas id="cumulativeChart" height="130"></canvas><img id="cumulativeChartPrint" class="chart-print-img" alt="Cumulative expense chart for print"></section>
@@ -452,72 +605,59 @@ $primaryScenarioLabel = (string)($scenarioOrder[$financialClarity['primary_finan
 <section class="card footer"><div class="footer-brand-row"><?php if ($hasLogo): ?><div class="footer-logo"><img src="<?= htmlspecialchars($logoSrc, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($companyName, ENT_QUOTES) ?> logo" /></div><?php endif; ?><div class="footer-brand-name"><?= htmlspecialchars($companyName, ENT_QUOTES) ?></div></div><div>Registered office: <?= htmlspecialchars((string)($company['address_line'] ?? ''), ENT_QUOTES) ?></div><div>📞 <?= htmlspecialchars((string)($company['phone_primary'] ?? ''), ENT_QUOTES) ?><?= $whatsappDisplay !== '' ? ' · 💬 ' . htmlspecialchars($whatsappDisplay, ENT_QUOTES) : '' ?> · ✉️ <?= htmlspecialchars((string)($company['email_primary'] ?? ''), ENT_QUOTES) ?> · 🌐 <?= htmlspecialchars($website, ENT_QUOTES) ?></div><div>GSTIN: <?= htmlspecialchars((string)($company['gstin'] ?? ''), ENT_QUOTES) ?> · UDYAM: <?= htmlspecialchars((string)($company['udyam'] ?? ''), ENT_QUOTES) ?> · PAN: <?= htmlspecialchars((string)($company['pan'] ?? ''), ENT_QUOTES) ?></div><div>JREDA: <?= htmlspecialchars((string)($company['jreda_license'] ?? ''), ENT_QUOTES) ?> · DWSD: <?= htmlspecialchars((string)($company['dwsd_license'] ?? ''), ENT_QUOTES) ?></div><div><small>🧾 <?= htmlspecialchars((string)($quoteDefaults['global']['quotation_ui']['footer_disclaimer'] ?? 'Values are indicative and subject to site conditions, DISCOM approvals, and policy updates.'), ENT_QUOTES) ?></small></div></section>
 </div>
 <script>
-const q={
-  gross:<?= json_encode((float)($financialClarity['gross'] ?? 0)) ?>,
-  subsidy:<?= json_encode((float)($financialClarity['subsidy'] ?? 0)) ?>,
-  selfUpfrontNet:<?= json_encode((float)($financialClarity['self_upfront_net_rs'] ?? 0)) ?>,
-  subsidyProvided:<?= json_encode($subsidyProvided) ?>,
-  monthly:<?= json_encode((float)($financialClarity['monthly_bill_before_rs'] ?? 0)) ?>,
-  unit:<?= json_encode((float)($financialClarity['unit_rate_rs_per_kwh'] ?? 0)) ?>,
-  cap:<?= json_encode((float)($financialClarity['capacity_kwp'] ?? 0)) ?>,
-  gen:<?= json_encode((float)($financialClarity['annual_generation_kwh_per_kw'] ?? 0)) ?>,
-  margin:<?= json_encode((float)($financialClarity['margin_amount_rs'] ?? 0)) ?>,
-  loan:<?= json_encode((float)($financialClarity['loan_eligible_rs'] ?? 0)) ?>,
-  loanEff:<?= json_encode((float)($financialClarity['effective_principal_rs'] ?? 0)) ?>,
-  emi:<?= json_encode((float)($financialClarity['emi_rs'] ?? 0)) ?>,
-  residual:<?= json_encode((float)($financialClarity['residual_bill'] ?? 0)) ?>,
-  out:<?= json_encode((float)($financialClarity['loan_total_outflow_rs'] ?? 0)) ?>,
-  systemType:<?= json_encode((string)($quote['system_type'] ?? 'Ongrid')) ?>,
-  mainSolar:<?= json_encode($hasMainSolarSplit ? $mainSolarKwp : null) ?>,
-  complimentarySolar:<?= json_encode($hasMainSolarSplit ? $complimentarySolarKwp : null) ?>,
-  loanEnabled:<?= json_encode((bool)($savingsSnapshot['bank_loan_enabled'] ?? true)) ?>,
-  loanTenureMonths:<?= json_encode($loanTenureMonths) ?>,
-  loanInterest:<?= json_encode($loanInterest) ?>,
-  inverterKva:<?= json_encode((string)($quote['hybrid_inverter_kva'] ?? $quote['inverter_kva'] ?? '')) ?>,
-  batteryCount:<?= json_encode((string)($quote['hybrid_battery_count'] ?? $quote['battery_count'] ?? '')) ?>,
-  phase:<?= json_encode((string)($quote['hybrid_phase'] ?? $quote['phase'] ?? '')) ?>,
-  transport:<?= json_encode((float)($calc['transportation_rs'] ?? 0)) ?>,
-  discount:<?= json_encode((float)($calc['discount_rs'] ?? 0)) ?>,
-  loanAmountRaw:<?= json_encode((float)($quote['finance_inputs']['loan']['loan_amount'] ?? 0)) ?>,
-  annualGenerationPerKw:<?= json_encode($annualGeneration) ?>
-};
+const finance=<?= json_encode($financialClarity, JSON_UNESCAPED_UNICODE) ?>;
 const showDecimals=<?= json_encode($showDecimals) ?>;
 const r=x=>'₹'+Number(x||0).toLocaleString('en-IN',{minimumFractionDigits:showDecimals?2:0,maximumFractionDigits:showDecimals?2:0});
 const nUnits=x=>Number(x||0).toLocaleString('en-IN',{maximumFractionDigits:0});
 const num=v=>{const n=Number(v);return Number.isFinite(n)?n:0;};
-const monthlyBill=Math.max(0,num(q.monthly));
-const residual=Math.max(0,num(q.residual));
-const gross=Math.max(0,num(q.gross));
-const subsidy=Math.max(0,num(q.subsidy));
-const loanEligible=Math.max(0,num(q.loan));
-const margin=Math.max(0,num(q.margin));
-const emi=Math.max(0,num(q.emi));
-const outflowLoan=Math.max(0,num(q.out));
-const tenureMonths=Math.max(1,Math.round(num(q.loanTenureMonths)||120));
-const upfrontNetRaw=num(q.selfUpfrontNet);
-const upfrontNet=Math.max(0,upfrontNetRaw>0?upfrontNetRaw:(gross-subsidy));
-const monthlySaving=Math.max(0,monthlyBill-residual);
+const scenarioOrder=['self_funded','loan_upto_2_lacs','loan_above_2_lacs'];
+const scenarioLabels={
+  self_funded:'Self Funded',
+  loan_upto_2_lacs:'Loan up to ₹2 lacs',
+  loan_above_2_lacs:'Loan above ₹2 lacs'
+};
+const scenarioColors={
+  self_funded:'#f59e0b',
+  loan_upto_2_lacs:'#0f766e',
+  loan_above_2_lacs:'#1d4ed8'
+};
+const scenarios=(finance&&typeof finance==='object'&&finance.finance_scenarios&&typeof finance.finance_scenarios==='object')?finance.finance_scenarios:{};
+const monthlyBill=Math.max(0,num(finance.no_solar_monthly_bill_rs));
+const primaryScenario=String(finance.primary_finance_scenario||'loan_upto_2_lacs');
+const getScenario=(key)=>{const row=scenarios[key];return row&&typeof row==='object'?row:{};};
+const isScenarioApplicable=(key)=>{
+  const row=getScenario(key);
+  if(key==='loan_above_2_lacs'){return !!row.applicable;}
+  return !Object.prototype.hasOwnProperty.call(row,'applicable') || !!row.applicable;
+};
+const orderedApplicableScenarios=scenarioOrder.filter((key)=>isScenarioApplicable(key));
+const selfScenario=getScenario('self_funded');
+const primaryLoanKey=(primaryScenario!=='self_funded' && isScenarioApplicable(primaryScenario))?primaryScenario:(isScenarioApplicable('loan_upto_2_lacs')?'loan_upto_2_lacs':(isScenarioApplicable('loan_above_2_lacs')?'loan_above_2_lacs':''));
+const loanScenario=primaryLoanKey!==''?getScenario(primaryLoanKey):{};
+const selfOutflow=Math.max(0,num(selfScenario.monthly_outflow_rs));
+const selfResidual=Math.max(0,num(selfScenario.residual_bill_rs));
+const selfNetInvestment=Math.max(0,num(selfScenario.net_investment_after_subsidy));
+const monthlySaving=Math.max(0,monthlyBill-selfOutflow);
 const annualSaving=monthlySaving*12;
 const saving25=annualSaving*25;
-const annualUnits=Math.max(0,num(q.cap)*num(q.annualGenerationPerKw));
+const annualUnits=Math.max(0,num(finance.capacity_kwp)*num(finance.annual_generation_kwh_per_kw));
 const monthlyUnits=annualUnits/12;
 const units25=annualUnits*25;
-const roofArea= Math.max(0,num(q.cap)*100);
-const billOffset=Math.min(100,(monthlyBill>0?(monthlyUnits*num(q.unit))/monthlyBill*100:0));
+const roofArea= Math.max(0,num(finance.capacity_kwp)*100);
+const billOffset=Math.min(100,(monthlyBill>0?(monthlyUnits*num(finance.unit_rate_rs_per_kwh))/monthlyBill*100:0));
 const annualCo2=annualUnits*<?= json_encode($emissionFactor) ?>;
 const co225=annualCo2*25;
 const treeFactor=Math.max(0.1,<?= json_encode($treeAbsorption) ?>);
 const annualTrees=annualCo2/treeFactor;
 const trees25=co225/treeFactor;
-const loanBaseline=Math.max(0,margin>0?margin:Math.max(0,gross-loanEligible));
-const monthlyOutflowSelf=residual;
-const hasLoanScenario=!!q.loanEnabled && (loanEligible>0 || emi>0 || outflowLoan>0);
+const hasLoanScenario=primaryLoanKey!=='';
+const loanOutflow=Math.max(0,num(loanScenario.monthly_outflow_rs));
 
 const setText=(id,val)=>{const node=document.getElementById(id);if(node){node.textContent=val;}};
-setText('upfront',r(gross));
-setText('upfrontNet',r(upfrontNet));
-setText('heroOutflowBank',hasLoanScenario?r(outflowLoan):'—');
-setText('heroOutflowSelf',r(monthlyOutflowSelf));
+setText('upfront',r(num(finance.gross)));
+setText('upfrontNet',r(selfNetInvestment));
+setText('heroOutflowBank',hasLoanScenario?r(loanOutflow):'—');
+setText('heroOutflowSelf',r(selfOutflow));
 setText('heroSaving',r(monthlySaving));
 
 const fmtMonths=(months)=>{
@@ -529,13 +669,6 @@ const fmtMonths=(months)=>{
   if(m===0) return `${y} year${y===1?'':'s'}`;
   return `${y} year${y===1?'':'s'} ${m} month${m===1?'':'s'}`;
 };
-const selfPaybackMonths=monthlySaving>0?Math.round((upfrontNet/monthlySaving)):Infinity;
-let loanPaybackMonth=null;
-if(hasLoanScenario){
-  let cumLoan=loanBaseline, cumNoSolar=0;
-  for(let m=1;m<=25*12;m++){cumLoan+=outflowLoan;cumNoSolar+=monthlyBill;if(cumLoan<=cumNoSolar){loanPaybackMonth=m;break;}}
-}
-
 const glanceGroups=[
   {title:'Generation & Savings',rows:[
     ['Expected monthly generation',`${nUnits(monthlyUnits)} units`],
@@ -546,11 +679,15 @@ const glanceGroups=[
     ['Estimated savings in 25 years',r(saving25)]
   ]},
   {title:'Payback & Monthly Outflow',rows:[
-    ...(hasLoanScenario?[['Estimated payback period — Loan',fmtMonths(loanPaybackMonth)]]:[]),
-    ['Estimated payback period — Self Funded',fmtMonths(selfPaybackMonths)],
     ['No Solar',r(monthlyBill)],
-    ...(hasLoanScenario?[['With Solar (Loan)',r(outflowLoan)]]:[]),
-    ['With Solar (Self Funded)',r(monthlyOutflowSelf)]
+    ...orderedApplicableScenarios.map((scenarioKey)=>{
+      const row=getScenario(scenarioKey);
+      return [`${scenarioLabels[scenarioKey]} — Monthly Outflow`,r(num(row.monthly_outflow_rs))];
+    }),
+    ...orderedApplicableScenarios.map((scenarioKey)=>{
+      const row=getScenario(scenarioKey);
+      return [`${scenarioLabels[scenarioKey]} — Payback`,String(row.payback_display||fmtMonths(num(row.payback_months)))];
+    })
   ]},
   {title:'Feasibility / Impact',rows:[
     ['Roof area needed',`${roofArea.toFixed(0)} sq.ft`],
@@ -567,28 +704,51 @@ if(glancePanel){
 }
 
 const monthlyLabels=['No Solar'];const monthlyData=[monthlyBill];const monthlyColors=['#9ca3af'];
-if(hasLoanScenario){monthlyLabels.push('With Solar (Loan)');monthlyData.push(outflowLoan);monthlyColors.push('#0f766e');}
-monthlyLabels.push('With Solar (Self Funded)');monthlyData.push(monthlyOutflowSelf);monthlyColors.push('#f59e0b');
+orderedApplicableScenarios.forEach((scenarioKey)=>{
+  const row=getScenario(scenarioKey);
+  monthlyLabels.push(scenarioLabels[scenarioKey]);
+  monthlyData.push(Math.max(0,num(row.monthly_outflow_rs)));
+  monthlyColors.push(scenarioColors[scenarioKey]||'#0f766e');
+});
 const years=[...Array(26).keys()];
-const cumulativeDatasets=[
-  {label:'No Solar',data:years.map(y=>y*12*monthlyBill),borderColor:'#9ca3af',backgroundColor:'#9ca3af'},
-  ...(hasLoanScenario?[{label:'With Solar (Loan)',data:years.map(y=>{const m=y*12;const emiPart=Math.min(m,tenureMonths)*emi;const residualPart=m*residual;return loanBaseline+emiPart+residualPart;}),borderColor:'#0f766e',backgroundColor:'#0f766e'}]:[]),
-  {label:'With Solar (Self Funded)',data:years.map(y=>upfrontNet+y*12*residual),borderColor:'#f59e0b',backgroundColor:'#f59e0b'}
-];
+const cumulativeDatasets=[{label:'No Solar',data:years.map(y=>y*12*monthlyBill),borderColor:'#9ca3af',backgroundColor:'#9ca3af'}];
+orderedApplicableScenarios.forEach((scenarioKey)=>{
+  const row=getScenario(scenarioKey);
+  const data=Array.isArray(row.cumulative_series)&&row.cumulative_series.length===years.length
+    ? row.cumulative_series.map((point)=>Math.max(0,num(point)))
+    : years.map((year)=>{
+      const months=year*12;
+      if(scenarioKey==='self_funded'){return Math.max(0,num(row.net_investment_after_subsidy))+(months*Math.max(0,num(row.residual_bill_rs)));}
+      const emiMonths=Math.min(months,Math.max(1,Math.round(num(row.tenure_months)||120)));
+      return Math.max(0,num(row.margin_money_rs))+(emiMonths*Math.max(0,num(row.emi_rs)))+(months*Math.max(0,num(row.residual_bill_rs)));
+    });
+  cumulativeDatasets.push({label:scenarioLabels[scenarioKey],data,borderColor:scenarioColors[scenarioKey]||'#0f766e',backgroundColor:scenarioColors[scenarioKey]||'#0f766e'});
+});
 
 const paybackMeters=document.getElementById('paybackMeters');
 if(paybackMeters){
-  const meterItems=[];
-  if(hasLoanScenario){meterItems.push(['Payback meter (Loan)',fmtMonths(loanPaybackMonth),loanPaybackMonth]);}
-  meterItems.push(['Payback meter (Self Funded)',fmtMonths(selfPaybackMonths),selfPaybackMonths]);
+  const meterItems=orderedApplicableScenarios.map((scenarioKey)=>{
+    const row=getScenario(scenarioKey);
+    return [`Payback meter (${scenarioLabels[scenarioKey]})`,String(row.payback_display||fmtMonths(num(row.payback_months))),Math.max(0,num(row.payback_months))];
+  });
   paybackMeters.innerHTML=meterItems.map(([label,val,months])=>{const pct=Number.isFinite(months)?Math.max(0,Math.min(100,(months/(25*12))*100)):0;return `<div class="sf-metric"><strong>${label}</strong><div>${val}</div><div class="payback-meter"><div class="payback-meter-fill" style="width:${pct.toFixed(1)}%"></div></div></div>`;}).join('');
 }
 
 const financeBoxes=document.getElementById('financeBoxes');
 if(financeBoxes){
   const cards=[[ 'No Solar', [['Monthly bill',r(monthlyBill)],['25 year expense',r(monthlyBill*12*25)]] ]];
-  if(hasLoanScenario){cards.push(['Loan scenario',[['System cost',r(gross)],['Subsidy',r(subsidy)],['Margin money',r(loanBaseline)],['Loan amount / effective principal',r(Math.max(0,loanEligible-subsidy))],['EMI',r(emi)],['Residual bill',r(residual)],['Total monthly outflow',r(outflowLoan)],['Monthly saving',r(Math.max(0,monthlyBill-outflowLoan))],['Annual saving',r(Math.max(0,monthlyBill-outflowLoan)*12)]]]);}
-  cards.push(['Self Funded',[['System cost',r(gross)],['Subsidy',r(subsidy)],['Net investment',r(upfrontNet)],['Residual bill',r(residual)],['Total monthly outflow',r(monthlyOutflowSelf)],['Monthly saving',r(monthlySaving)],['Annual saving',r(annualSaving)]]]);
+  orderedApplicableScenarios.forEach((scenarioKey)=>{
+    const row=getScenario(scenarioKey);
+    if(scenarioKey==='self_funded'){
+      cards.push([scenarioLabels[scenarioKey],[
+        ['Price',r(num(row.price))],['Subsidy',r(num(row.subsidy))],['Net investment after subsidy',r(num(row.net_investment_after_subsidy))],['Residual bill',r(num(row.residual_bill_rs))],['Monthly outflow',r(num(row.monthly_outflow_rs))],['Payback',String(row.payback_display||'—')]
+      ]]);
+      return;
+    }
+    cards.push([scenarioLabels[scenarioKey],[
+      ['Price',r(num(row.price))],['Subsidy',r(num(row.subsidy))],['Margin money',r(num(row.margin_money_rs))],['Loan amount',r(num(row.loan_amount_rs))],['Effective principal',r(num(row.effective_loan_principal_rs))],['Interest',`${num(row.interest_pct).toFixed(2)}%`],['Tenure',`${num(row.tenure_years).toFixed(1)} yrs`],['EMI',r(num(row.emi_rs))],['Residual bill',r(num(row.residual_bill_rs))],['Monthly outflow',r(num(row.monthly_outflow_rs))],['Payback',String(row.payback_display||'—')]
+    ]]);
+  });
   financeBoxes.innerHTML=cards.map(([t,rows])=>`<div class='sf-metric'><strong>${t}</strong><ul>${rows.map(([k,v])=>`<li>${k}: <b>${v}</b></li>`).join('')}</ul></div>`).join('');
 }
 
