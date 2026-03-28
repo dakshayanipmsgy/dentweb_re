@@ -52,6 +52,22 @@ usort($complaints, static function (array $left, array $right): int {
 
 $assigneeOptions = array_unique(array_merge(['Unassigned'], array_map(static fn ($item) => complaint_display_assignee($item['assignee'] ?? ''), $complaints), complaint_assignee_options()));
 $categoryOptions = array_unique(array_merge(['All'], complaint_problem_categories()));
+$divisionOptions = [];
+$subDivisionOptions = [];
+foreach ($customers as $customer) {
+    $divisionName = trim((string) ($customer['division_name'] ?? ''));
+    if ($divisionName !== '') {
+        $divisionOptions[$divisionName] = true;
+    }
+    $subDivisionName = trim((string) ($customer['sub_division_name'] ?? ''));
+    if ($subDivisionName !== '') {
+        $subDivisionOptions[$subDivisionName] = true;
+    }
+}
+$divisionOptions = array_keys($divisionOptions);
+$subDivisionOptions = array_keys($subDivisionOptions);
+sort($divisionOptions, SORT_NATURAL | SORT_FLAG_CASE);
+sort($subDivisionOptions, SORT_NATURAL | SORT_FLAG_CASE);
 
 $noStatusFilterApplied = $statusFilterRaw === null || $statusFilterRaw === '';
 
@@ -111,7 +127,7 @@ function complaints_overview_excel_col_name(int $index): string
     return $name;
 }
 
-function complaints_overview_build_xlsx(array $rows, int $freezeHeaderRow, string $sheetName = 'Complaints'): string
+function complaints_overview_build_xlsx(array $rows, int $freezeHeaderRow, array $rowStyles = [], string $sheetName = 'Complaints'): string
 {
     if (!class_exists('ZipArchive')) {
         throw new RuntimeException('ZipArchive extension is required to create Excel files.');
@@ -134,6 +150,7 @@ function complaints_overview_build_xlsx(array $rows, int $freezeHeaderRow, strin
     $xmlRows = [];
     foreach ($rows as $rowIndex => $row) {
         $sheetRowNumber = $rowIndex + 1;
+        $rowStyle = (string) ($rowStyles[$sheetRowNumber] ?? '');
         $cells = '';
         foreach ($row as $columnIndex => $cellValue) {
             $columnName = complaints_overview_excel_col_name($columnIndex + 1);
@@ -146,6 +163,11 @@ function complaints_overview_build_xlsx(array $rows, int $freezeHeaderRow, strin
                 $styleId = 3;
             } elseif ($columnIndex === ($maxColumns - 1) && $sheetRowNumber > $freezeHeaderRow) {
                 $styleId = 4;
+            }
+            if ($sheetRowNumber > $freezeHeaderRow && $columnIndex === ($maxColumns - 1) && $rowStyle === 'highlight') {
+                $styleId = 6;
+            } elseif ($sheetRowNumber > $freezeHeaderRow && $rowStyle === 'highlight') {
+                $styleId = 5;
             }
 
             $escapedValue = htmlspecialchars((string) $cellValue, ENT_QUOTES | ENT_XML1 | ENT_SUBSTITUTE, 'UTF-8');
@@ -178,18 +200,25 @@ function complaints_overview_build_xlsx(array $rows, int $freezeHeaderRow, strin
         . '<sheets><sheet name="' . $sheetNameEscaped . '" sheetId="1" r:id="rId1"/></sheets>'
         . '</workbook>';
 
+    $highlightColor = strtoupper(trim((string) ($rowStyles['_highlight_color'] ?? 'FFFFF3B0')));
+    if ($highlightColor === '' || !preg_match('/^[A-F0-9]{8}$/', $highlightColor)) {
+        $highlightColor = 'FFFFF3B0';
+    }
+
     $stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         . '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
         . '<fonts count="4"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="16"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><sz val="11"/><name val="Calibri"/></font></fonts>'
-        . '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF1FF"/><bgColor indexed="64"/></patternFill></fill></fills>'
+        . '<fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF1FF"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="' . $highlightColor . '"/><bgColor indexed="64"/></patternFill></fill></fills>'
         . '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders>'
         . '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-        . '<cellXfs count="5">'
+        . '<cellXfs count="7">'
         . '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0"/>'
         . '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
         . '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
         . '<xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>'
         . '<xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>'
+        . '<xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFill="1" applyBorder="1"/>'
+        . '<xf numFmtId="0" fontId="3" fillId="3" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>'
         . '</cellXfs>'
         . '</styleSheet>';
 
@@ -344,15 +373,32 @@ $exportError = '';
 $exportAssignees = complaints_overview_normalize_selection($_POST['export_assignees'] ?? []);
 $exportCategories = complaints_overview_normalize_selection($_POST['export_categories'] ?? []);
 $exportStatuses = complaints_overview_normalize_selection($_POST['export_statuses'] ?? []);
+$exportHighlightDivisions = complaints_overview_normalize_selection($_POST['highlight_divisions'] ?? []);
+$exportHighlightSubDivisions = complaints_overview_normalize_selection($_POST['highlight_sub_divisions'] ?? []);
+$highlightColorOptions = [
+    'none' => ['label' => 'No Highlight', 'argb' => ''],
+    'yellow' => ['label' => 'Yellow', 'argb' => 'FFFFF3B0'],
+    'light_green' => ['label' => 'Light Green', 'argb' => 'FFE9FCD8'],
+    'light_blue' => ['label' => 'Light Blue', 'argb' => 'FFDDEBFF'],
+    'pink' => ['label' => 'Pink', 'argb' => 'FFFFE0EC'],
+];
+$exportHighlightColor = strtolower(trim((string) ($_POST['highlight_color'] ?? 'yellow')));
+if (!isset($highlightColorOptions[$exportHighlightColor])) {
+    $exportHighlightColor = 'yellow';
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'export_excel') {
     $validAssigneeMap = array_fill_keys($assigneeOptions, true);
     $validCategoryMap = array_fill_keys(complaint_problem_categories(), true);
     $validStatusMap = array_fill_keys(array_keys(array_diff_key($statusOptions, ['all' => 'All statuses'])), true);
+    $validDivisionMap = array_fill_keys($divisionOptions, true);
+    $validSubDivisionMap = array_fill_keys($subDivisionOptions, true);
 
     $exportAssignees = array_values(array_filter($exportAssignees, static fn (string $item): bool => isset($validAssigneeMap[$item])));
     $exportCategories = array_values(array_filter($exportCategories, static fn (string $item): bool => isset($validCategoryMap[$item])));
     $exportStatuses = array_values(array_filter($exportStatuses, static fn (string $item): bool => isset($validStatusMap[$item])));
+    $exportHighlightDivisions = array_values(array_filter($exportHighlightDivisions, static fn (string $item): bool => isset($validDivisionMap[$item])));
+    $exportHighlightSubDivisions = array_values(array_filter($exportHighlightSubDivisions, static fn (string $item): bool => isset($validSubDivisionMap[$item])));
 
     if ($exportAssignees === [] && $exportCategories === [] && $exportStatuses === []) {
         $exportError = 'Please select at least one filter to create the sheet.';
@@ -372,14 +418,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
         if ($matchingComplaints === []) {
             $exportError = 'No matching complaints found for selected filters.';
         } else {
+            $highlightEnabled = $exportHighlightColor !== 'none' && ($exportHighlightDivisions !== [] || $exportHighlightSubDivisions !== []);
             $rows = [];
             $rows[] = ['Dakshayani Enterprises'];
             $rows[] = ['Filters Used'];
             $rows[] = ['Assignees', $exportAssignees === [] ? 'Not filtered' : implode(', ', $exportAssignees)];
             $rows[] = ['Categories', $exportCategories === [] ? 'Not filtered' : implode(', ', $exportCategories)];
             $rows[] = ['Status', $exportStatuses === [] ? 'Not filtered' : implode(', ', array_map(static fn (string $status): string => $statusOptions[$status] ?? ucfirst($status), $exportStatuses))];
+            $rows[] = ['Highlight Used', $highlightEnabled ? 'Configured' : 'None'];
+            if ($highlightEnabled) {
+                $rows[] = ['Division Highlight', $exportHighlightDivisions === [] ? 'None' : implode(', ', $exportHighlightDivisions)];
+                $rows[] = ['Sub Division Highlight', $exportHighlightSubDivisions === [] ? 'None' : implode(', ', $exportHighlightSubDivisions)];
+                $rows[] = ['Highlight Color', $highlightColorOptions[$exportHighlightColor]['label']];
+            }
             $rows[] = [];
             $tableHeaderRow = count($rows) + 1;
+            $rowStyles = [];
             $rows[] = [
                 'Name',
                 'Mobile Number',
@@ -399,12 +453,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
             foreach ($matchingComplaints as $complaint) {
                 $mobile = (string) ($complaint['customer_mobile'] ?? '');
                 $customer = $customerByMobile[$mobile] ?? [];
+                $divisionName = trim((string) ($customer['division_name'] ?? ''));
+                $subDivisionName = trim((string) ($customer['sub_division_name'] ?? ''));
                 $rows[] = [
                     complaints_overview_value_or_dash((string) ($customer['name'] ?? '')),
                     complaints_overview_value_or_dash($mobile),
                     complaints_overview_value_or_dash((string) ($customer['application_id'] ?? '')),
-                    complaints_overview_value_or_dash((string) ($customer['division_name'] ?? '')),
-                    complaints_overview_value_or_dash((string) ($customer['sub_division_name'] ?? '')),
+                    complaints_overview_value_or_dash($divisionName),
+                    complaints_overview_value_or_dash($subDivisionName),
                     complaints_overview_value_or_dash((string) ($customer['jbvnl_account_number'] ?? '')),
                     complaints_overview_value_or_dash((string) ($customer['city'] ?? '')),
                     complaints_overview_value_or_dash((string) ($complaint['id'] ?? '')),
@@ -414,10 +470,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
                     complaints_overview_value_or_dash((string) ($complaint['created_at'] ?? '')),
                     complaints_overview_value_or_dash((string) ($complaint['description'] ?? '')),
                 ];
+
+                if ($highlightEnabled) {
+                    $divisionMatches = $exportHighlightDivisions !== [] && in_array($divisionName, $exportHighlightDivisions, true);
+                    $subDivisionMatches = $exportHighlightSubDivisions !== [] && in_array($subDivisionName, $exportHighlightSubDivisions, true);
+                    if ($divisionMatches || $subDivisionMatches) {
+                        $rowStyles[count($rows)] = 'highlight';
+                    }
+                }
             }
+            $rowStyles['_highlight_color'] = $highlightColorOptions[$exportHighlightColor]['argb'] ?? '';
 
             try {
-                $xlsxPath = complaints_overview_build_xlsx($rows, $tableHeaderRow);
+                $xlsxPath = complaints_overview_build_xlsx($rows, $tableHeaderRow, $rowStyles);
                 $filename = 'complaints_export_' . gmdate('Ymd_His') . '.xlsx';
 
                 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -473,6 +538,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
     .complaints-export-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.75rem; }
     .complaints-export select,.complaints-export button { width:100%; padding:.6rem .7rem; border:1px solid #d1d5db; border-radius:10px; font:inherit; }
     .complaints-export select { min-height:120px; background:#fff; }
+    .complaints-export select.single-select { min-height:auto; }
     .complaints-export button { max-width:220px; background:#1f4b99; color:#fff; border-color:#1f4b99; font-weight:700; cursor:pointer; margin-top:.75rem; }
     .complaints-export-note { margin:.35rem 0 0; font-size:.88rem; color:#475569; }
     .complaints-export-error { margin:.65rem 0 0; color:#991b1b; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:.6rem .8rem; }
@@ -537,8 +603,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
               <?php endforeach; ?>
             </select>
           </div>
+          <div>
+            <label for="highlight_divisions">Highlight by Division (optional)</label>
+            <select id="highlight_divisions" name="highlight_divisions[]" multiple>
+              <?php foreach ($divisionOptions as $division): ?>
+                <option value="<?= complaints_overview_safe($division) ?>" <?= in_array($division, $exportHighlightDivisions, true) ? 'selected' : '' ?>><?= complaints_overview_safe($division) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div>
+            <label for="highlight_sub_divisions">Highlight by Sub Division (optional)</label>
+            <select id="highlight_sub_divisions" name="highlight_sub_divisions[]" multiple>
+              <?php foreach ($subDivisionOptions as $subDivision): ?>
+                <option value="<?= complaints_overview_safe($subDivision) ?>" <?= in_array($subDivision, $exportHighlightSubDivisions, true) ? 'selected' : '' ?>><?= complaints_overview_safe($subDivision) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div>
+            <label for="highlight_color">Highlight color</label>
+            <select id="highlight_color" name="highlight_color" class="single-select">
+              <?php foreach ($highlightColorOptions as $colorKey => $meta): ?>
+                <option value="<?= complaints_overview_safe($colorKey) ?>" <?= $exportHighlightColor === $colorKey ? 'selected' : '' ?>><?= complaints_overview_safe((string) $meta['label']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
         </div>
-        <p class="complaints-export-note">Select at least one Assignee, Category, or Status to create the sheet.</p>
+        <p class="complaints-export-note">Select at least one Assignee, Category, or Status to create the sheet. Highlighting is optional and visual only.</p>
         <button type="submit">Create Excel Sheet</button>
         <?php if ($exportError !== ''): ?>
           <div class="complaints-export-error"><?= complaints_overview_safe($exportError) ?></div>
