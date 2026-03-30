@@ -520,9 +520,8 @@ $defaults = $settings['defaults'] ?? [];
         `<div class="sf-finance-line"><strong>System Price (Loan up to ₹2 lacs):</strong> ${INR(costUp2)}</div>`,
         higherLoanApplicable?`<div class="sf-finance-line"><strong>System Price (Loan above ₹2 lacs):</strong> ${INR(costAbove2)}</div>`:'',
         `<div class="sf-finance-line"><strong>Subsidy:</strong> ${INR(subsidy)}</div>`,
-        `<div class="sf-finance-line"><strong>Residual Bill (same across all scenarios):</strong> ${INR(residual)}/month</div>`,
       ].filter(Boolean).join('');
-      financeBoxes.innerHTML=`<div class="sf-finance-summary">${financeSummaryLines}</div><div class="sf-finance-table-wrap"><table class="sf-finance-table"><thead><tr><th>Metric</th>${scenarioColumns.map(s=>`<th>${s.label}</th>`).join('')}</tr></thead><tbody>${financeRows.map(([rowLabel,rowKey])=>`<tr><th scope="row">${rowLabel}</th>${scenarioColumns.map(s=>`<td><b>${s.metrics[rowKey]??'—'}</b></td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      financeBoxes.innerHTML=`<div class="sf-finance-summary">${financeSummaryLines}</div><div class="sf-finance-table-wrap"><table class="sf-finance-table"><thead><tr><th>Metric</th>${scenarioColumns.map(s=>`<th>${s.label}</th>`).join('')}</tr></thead><tbody>${financeRows.map(([rowLabel,rowKey])=>`<tr><th scope="row">${rowLabel}</th>${scenarioColumns.map(s=>`<td><b>${s.metrics[rowKey]??'—'}</b></td>`).join('')}</tr>`).join('')}</tbody></table></div><div class="sf-finance-note"><strong>Residual Bill (same across all scenarios):</strong> ${INR(residual)}/month</div>`;
 
       if(mChart) mChart.destroy(); if(cChart) cChart.destroy();
       mChart=new Chart(monthlyChart,{type:'bar',data:{labels:monthlyLabels,datasets:[{label:'Monthly Outflow (₹)',data:monthlyData,backgroundColor:monthlyColors}]},options:{plugins:{legend:{display:true}},scales:{x:{title:{display:true,text:'Scenario'}},y:{title:{display:true,text:'Monthly Outflow (₹)'}}}}});
