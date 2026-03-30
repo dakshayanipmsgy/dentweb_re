@@ -222,7 +222,6 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
     ];
 
     $resolvedScenarios = [];
-    $subsidyCreditMonthDefault = max(1, $toInt($snapshot['subsidy_credit_month'] ?? $quote['finance_inputs']['subsidy_credit_month'] ?? null, 12));
 
     foreach ($order as $scenarioKey => $scenarioLabel) {
         $row = is_array($financeScenariosRaw[$scenarioKey] ?? null) ? $financeScenariosRaw[$scenarioKey] : [];
@@ -260,7 +259,6 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
         $loanAmount = max(0, $toFloat($row['loan_amount_rs'] ?? 0));
         $emi = max(0, $toFloat($row['emi_rs'] ?? 0));
         $residualBillScenario = $hasValue($row, 'residual_bill_rs') ? max(0, $toFloat($row['residual_bill_rs'])) : $residualBill;
-        $subsidyCreditMonth = max(1, $toInt($row['subsidy_credit_month'] ?? null, $subsidyCreditMonthDefault));
 
         $applicable = true;
         if ($isAbove2) {
@@ -312,7 +310,7 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
 
             $monthlyOutflow = max(0, $toFloat($row['monthly_outflow_rs'] ?? $row['monthly_outflow'] ?? ($emi + $residualBillScenario)));
             $netInvestment = max(0, $toFloat($row['net_investment_after_subsidy'] ?? ($grossPayable - $scenarioSubsidy)));
-            $netOwnAfterSubsidy = max(0, $toFloat($row['net_own_investment_after_subsidy'] ?? ($marginMoney - $scenarioSubsidy)));
+            $netOwnAfterSubsidy = max(0, $toFloat($row['initial_investment_after_subsidy_credit_rs'] ?? $row['net_own_investment_after_subsidy'] ?? ($marginMoney - $scenarioSubsidy)));
         }
 
         $paybackMonths = $toInt($row['payback_months'] ?? null, 0);
@@ -326,7 +324,7 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
             if ($isSelfFunded) {
                 $paybackMonths = $calculatePaybackMonths($netInvestment, $monthlyOutflow, $noSolarMonthlyBill);
             } elseif ($isSubsidyNotToLoan) {
-                $paybackMonths = $calculatePaybackMonths($marginMoney, $monthlyOutflow, $noSolarMonthlyBill, $scenarioSubsidy, $subsidyCreditMonth);
+                $paybackMonths = $calculatePaybackMonths($netOwnAfterSubsidy, $monthlyOutflow, $noSolarMonthlyBill);
             } else {
                 $paybackMonths = $calculatePaybackMonths($marginMoney, $monthlyOutflow, $noSolarMonthlyBill);
             }
@@ -349,10 +347,8 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
                     continue;
                 }
                 $emiMonths = min($months, $tenureMonths);
-                $value = $marginMoney + ($emiMonths * $emi) + ($months * $residualBillScenario);
-                if ($isSubsidyNotToLoan && $months >= $subsidyCreditMonth) {
-                    $value = max(0, $value - $scenarioSubsidy);
-                }
+                $startValue = $isSubsidyNotToLoan ? $netOwnAfterSubsidy : $marginMoney;
+                $value = $startValue + ($emiMonths * $emi) + ($months * $residualBillScenario);
                 $cumulativeSeries[] = $value;
             }
         }
@@ -364,6 +360,7 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
             'subsidy' => $scenarioSubsidy,
             'gross_payable' => $grossPayable,
             'net_investment_after_subsidy' => $netInvestment,
+            'initial_investment_after_subsidy_credit_rs' => $netOwnAfterSubsidy,
             'net_own_investment_after_subsidy' => $netOwnAfterSubsidy,
             'margin_money_rs' => $marginMoney,
             'loan_amount_rs' => $loanAmount,
@@ -374,7 +371,7 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
             'emi_rs' => $emi,
             'residual_bill_rs' => $residualBillScenario,
             'monthly_outflow_rs' => $monthlyOutflow,
-            'subsidy_credit_month' => $subsidyCreditMonth,
+            'subsidy_credit_month' => 1,
             'payback_months' => $paybackMonths,
             'payback_display' => $paybackDisplay,
             'cumulative_series' => $cumulativeSeries,
@@ -680,7 +677,7 @@ $scenarioOrder = [
 $scenarioRows = is_array($financialClarity['finance_scenarios'] ?? null) ? $financialClarity['finance_scenarios'] : [];
 $primaryScenarioLabel = (string)($scenarioOrder[$financialClarity['primary_finance_scenario'] ?? ''] ?? 'Loan up to 2 lacs (if subsidy is transferred from savings to loan account)');
 ?>
-<section class="card"><div class="h sec">Funding Options at a Glance <span class="muted">(Primary: <?= htmlspecialchars($primaryScenarioLabel, ENT_QUOTES) ?>)</span></div><table><thead><tr><th>Scenario</th><th>Price</th><th>Subsidy</th><th>Margin Money</th><th>Loan Amount</th><th>Interest</th><th>Tenure</th><th>EMI</th><th>Residual Bill</th><th>Monthly Outflow</th><th>Net Own Contribution After Subsidy Credit</th><th>Payback</th></tr></thead><tbody><?php foreach ($scenarioOrder as $key => $label): $row = is_array($scenarioRows[$key] ?? null) ? $scenarioRows[$key] : []; if (str_contains($key, 'loan_above_2_lacs') && empty($row['applicable'])) { continue; } ?><tr><td><?= htmlspecialchars($label, ENT_QUOTES) ?><?php if (!empty($row['is_primary'])): ?><span class="primary-badge">Primary</span><?php endif; ?></td><td><?= quotation_format_inr_indian((float)($row['price'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['subsidy'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['margin_money_rs'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['loan_amount_rs'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : number_format((float)($row['interest_pct'] ?? 0), 2) . '%' ?></td><td><?= $key === 'self_funded' ? '—' : number_format((float)($row['tenure_years'] ?? 0), 1) . ' yrs' ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['emi_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['residual_bill_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['monthly_outflow_rs'] ?? 0), $showDecimals) ?></td><td><?= ($key === 'self_funded' || !str_contains($key, 'subsidy_not_to_loan')) ? '—' : quotation_format_inr_indian((float)($row['net_own_investment_after_subsidy'] ?? 0), $showDecimals) ?></td><td><?= htmlspecialchars((string)($row['payback_display'] ?? '—'), ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table></section>
+<section class="card"><div class="h sec">Funding Options at a Glance <span class="muted">(Primary: <?= htmlspecialchars($primaryScenarioLabel, ENT_QUOTES) ?>)</span></div><table><thead><tr><th>Scenario</th><th>Price</th><th>Subsidy</th><th>Margin Money</th><th>Loan Amount</th><th>Interest</th><th>Tenure</th><th>EMI</th><th>Residual Bill</th><th>Monthly Outflow</th><th>Initial Investment After Subsidy Credit</th><th>Payback</th></tr></thead><tbody><?php foreach ($scenarioOrder as $key => $label): $row = is_array($scenarioRows[$key] ?? null) ? $scenarioRows[$key] : []; if (str_contains($key, 'loan_above_2_lacs') && empty($row['applicable'])) { continue; } ?><tr><td><?= htmlspecialchars($label, ENT_QUOTES) ?><?php if (!empty($row['is_primary'])): ?><span class="primary-badge">Primary</span><?php endif; ?></td><td><?= quotation_format_inr_indian((float)($row['price'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['subsidy'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['margin_money_rs'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['loan_amount_rs'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : number_format((float)($row['interest_pct'] ?? 0), 2) . '%' ?></td><td><?= $key === 'self_funded' ? '—' : number_format((float)($row['tenure_years'] ?? 0), 1) . ' yrs' ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['emi_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['residual_bill_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['monthly_outflow_rs'] ?? 0), $showDecimals) ?></td><td><?= ($key === 'self_funded' || !str_contains($key, 'subsidy_not_to_loan')) ? '—' : quotation_format_inr_indian((float)($row['initial_investment_after_subsidy_credit_rs'] ?? $row['net_own_investment_after_subsidy'] ?? 0), $showDecimals) ?></td><td><?= htmlspecialchars((string)($row['payback_display'] ?? '—'), ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table></section>
 <section class="card sf-glance-wrap"><div class="h sec">☀️ Solar at a Glance</div><div class="sf-glance-grid" id="glancePanel"></div></section>
 <section class="card chart-responsive-card"><div class="h sec">📊 Monthly Outflow Comparison</div><canvas id="monthlyChart" height="130"></canvas><img id="monthlyChartPrint" class="chart-print-img" alt="Monthly outflow chart for print"></section>
 <section class="card chart-responsive-card cumulative-chart-card"><div class="h sec">📈 Cumulative Expense Over 25 Years</div><canvas id="cumulativeChart" height="180"></canvas><img id="cumulativeChartPrint" class="chart-print-img" alt="Cumulative expense chart for print"></section>
@@ -821,7 +818,8 @@ orderedApplicableScenarios.forEach((scenarioKey)=>{
       const months=year*12;
       if(scenarioKey==='self_funded'){return Math.max(0,num(row.net_investment_after_subsidy))+(months*Math.max(0,num(row.residual_bill_rs)));}
       const emiMonths=Math.min(months,Math.max(1,Math.round(num(row.tenure_months)||120)));
-      return Math.max(0,num(row.margin_money_rs))+(emiMonths*Math.max(0,num(row.emi_rs)))+(months*Math.max(0,num(row.residual_bill_rs)));
+      const start=scenarioKey.includes('subsidy_not_to_loan')?Math.max(0,num(row.initial_investment_after_subsidy_credit_rs||row.net_own_investment_after_subsidy)):Math.max(0,num(row.margin_money_rs));
+      return start+(emiMonths*Math.max(0,num(row.emi_rs)))+(months*Math.max(0,num(row.residual_bill_rs)));
     });
   cumulativeDatasets.push({label:scenarioLabels[scenarioKey],data,borderColor:scenarioColors[scenarioKey]||'#0f766e',backgroundColor:scenarioColors[scenarioKey]||'#0f766e'});
 });
@@ -847,7 +845,7 @@ if(financeBoxes){
       return;
     }
     cards.push([scenarioLabels[scenarioKey],[
-      ['Price',r(num(row.price))],['Subsidy',r(num(row.subsidy))],['Margin money',r(num(row.margin_money_rs))],['Loan amount',r(num(row.loan_amount_rs))],['Loan amount used for EMI',r(num(row.effective_loan_principal_rs))],...(scenarioKey.includes('subsidy_not_to_loan')?[['Net own contribution after subsidy credit',r(num(row.net_own_investment_after_subsidy))],['Subsidy credit month',String(num(row.subsidy_credit_month)||12)]]:[['Loan amount after subsidy transfer',r(num(row.effective_loan_principal_rs))]]),['Interest',`${num(row.interest_pct).toFixed(2)}%`],['Tenure',`${num(row.tenure_years).toFixed(1)} yrs`],['EMI',r(num(row.emi_rs))],['Residual bill',r(num(row.residual_bill_rs))],['Monthly outflow',r(num(row.monthly_outflow_rs))],['Payback',String(row.payback_display||'—')]
+      ['Price',r(num(row.price))],['Subsidy',r(num(row.subsidy))],['Margin Money',r(num(row.margin_money_rs))],['Loan amount',r(num(row.loan_amount_rs))],['Loan Amount Used for EMI',r(num(row.effective_loan_principal_rs))],...(scenarioKey.includes('subsidy_not_to_loan')?[['Initial Investment After Subsidy Credit',r(num(row.initial_investment_after_subsidy_credit_rs||row.net_own_investment_after_subsidy))]]:[['Loan amount after subsidy transfer',r(num(row.effective_loan_principal_rs))]]),['Interest',`${num(row.interest_pct).toFixed(2)}%`],['Tenure',`${num(row.tenure_years).toFixed(1)} yrs`],['EMI',r(num(row.emi_rs))],['Residual bill',r(num(row.residual_bill_rs))],['Monthly outflow',r(num(row.monthly_outflow_rs))],['Payback',String(row.payback_display||'—')]
     ]]);
   });
   financeBoxes.innerHTML=cards.map(([t,rows])=>`<div class='sf-metric'><strong>${t}</strong><ul>${rows.map(([k,v])=>`<li>${k}: <b>${v}</b></li>`).join('')}</ul></div>`).join('');

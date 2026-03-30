@@ -577,8 +577,8 @@ function create_or_update_solar_finance_quote(array $payload): array
             'margin_money_rs' => (float) ($inputs['margin_money_up2'] ?? 0), 'loan_amount_rs' => (float) ($inputs['loan_amount_up2'] ?? 0),
             'effective_loan_principal_rs' => max(0, (float) ($inputs['loan_amount_up2'] ?? 0) - $subsidy), 'interest_pct' => (float) ($inputs['interest_rate_up2'] ?? 0),
             'tenure_years' => $loanTenureYears, 'emi_rs' => 0, 'residual_bill_rs' => 0,
+            'initial_investment_after_subsidy_credit_rs' => max(0, (float) ($inputs['margin_money_up2'] ?? 0) - $subsidy),
             'net_own_investment_after_subsidy' => max(0, (float) ($inputs['margin_money_up2'] ?? 0) - $subsidy),
-            'subsidy_credit_month' => 12,
         ],
         'loan_upto_2_lacs_subsidy_not_to_loan' => [
             'price' => $systemCostUp2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostUp2,
@@ -586,8 +586,8 @@ function create_or_update_solar_finance_quote(array $payload): array
             'margin_money_rs' => (float) ($inputs['margin_money_up2'] ?? 0), 'loan_amount_rs' => (float) ($inputs['loan_amount_up2'] ?? 0),
             'effective_loan_principal_rs' => max(0, (float) ($inputs['loan_amount_up2'] ?? 0)), 'interest_pct' => (float) ($inputs['interest_rate_up2'] ?? 0),
             'tenure_years' => $loanTenureYears, 'emi_rs' => 0, 'residual_bill_rs' => 0,
+            'initial_investment_after_subsidy_credit_rs' => max(0, (float) ($inputs['margin_money_up2'] ?? 0) - $subsidy),
             'net_own_investment_after_subsidy' => max(0, (float) ($inputs['margin_money_up2'] ?? 0) - $subsidy),
-            'subsidy_credit_month' => 12,
         ],
         'loan_above_2_lacs_subsidy_to_loan' => [
             'price' => $systemCostAbove2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostAbove2,
@@ -596,8 +596,8 @@ function create_or_update_solar_finance_quote(array $payload): array
             'margin_money_rs' => (float) ($inputs['margin_money_above2'] ?? 0), 'loan_amount_rs' => (float) ($inputs['loan_amount_above2'] ?? 0),
             'effective_loan_principal_rs' => max(0, (float) ($inputs['loan_amount_above2'] ?? 0) - $subsidy), 'interest_pct' => (float) ($inputs['interest_rate_above2'] ?? 0),
             'tenure_years' => $loanTenureYears, 'emi_rs' => 0, 'residual_bill_rs' => 0,
+            'initial_investment_after_subsidy_credit_rs' => max(0, (float) ($inputs['margin_money_above2'] ?? 0) - $subsidy),
             'net_own_investment_after_subsidy' => max(0, (float) ($inputs['margin_money_above2'] ?? 0) - $subsidy),
-            'subsidy_credit_month' => 12,
         ],
         'loan_above_2_lacs_subsidy_not_to_loan' => [
             'price' => $systemCostAbove2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostAbove2,
@@ -606,8 +606,8 @@ function create_or_update_solar_finance_quote(array $payload): array
             'margin_money_rs' => (float) ($inputs['margin_money_above2'] ?? 0), 'loan_amount_rs' => (float) ($inputs['loan_amount_above2'] ?? 0),
             'effective_loan_principal_rs' => max(0, (float) ($inputs['loan_amount_above2'] ?? 0)), 'interest_pct' => (float) ($inputs['interest_rate_above2'] ?? 0),
             'tenure_years' => $loanTenureYears, 'emi_rs' => 0, 'residual_bill_rs' => 0,
+            'initial_investment_after_subsidy_credit_rs' => max(0, (float) ($inputs['margin_money_above2'] ?? 0) - $subsidy),
             'net_own_investment_after_subsidy' => max(0, (float) ($inputs['margin_money_above2'] ?? 0) - $subsidy),
-            'subsidy_credit_month' => 12,
         ],
         'loan_upto_2_lacs' => [
             'price' => $systemCostUp2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostUp2, 'applicable' => true,
