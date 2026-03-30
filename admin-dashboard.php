@@ -305,6 +305,7 @@ $cardConfigs[] = [
   <meta name="description" content="At-a-glance admin overview with live counts and recent activity across Dentweb operations." />
   <link rel="icon" href="<?= htmlspecialchars($pathFor('images/favicon.ico'), ENT_QUOTES) ?>" />
   <link rel="stylesheet" href="<?= htmlspecialchars($pathFor('style.css'), ENT_QUOTES) ?>" />
+  <link rel="stylesheet" href="<?= htmlspecialchars($pathFor('assets/css/admin-unified.css'), ENT_QUOTES) ?>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -453,8 +454,8 @@ $cardConfigs[] = [
     }
   </style>
 </head>
-<body class="admin-overview" data-theme="light">
-  <main class="admin-overview__shell">
+<body class="admin-overview admin-shell" data-theme="light">
+  <main class="admin-overview__shell admin-page">
     <?php if ($flashMessage !== ''): ?>
     <div class="admin-alert admin-alert--<?= htmlspecialchars($flashTone, ENT_QUOTES) ?>" role="status" aria-live="polite">
       <i class="fa-solid <?= htmlspecialchars($flashIcon, ENT_QUOTES) ?>" aria-hidden="true"></i>
@@ -481,54 +482,42 @@ $cardConfigs[] = [
             </time>
           </div>
         </div>
-        <a href="<?= htmlspecialchars($pathFor('admin-users.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
-          <i class="fa-solid fa-users-gear" aria-hidden="true"></i>
-          Users
-        </a>
-        <a href="<?= htmlspecialchars($pathFor('admin-requests.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
-          <i class="fa-solid fa-inbox" aria-hidden="true"></i>
-          Requests
-        </a>
-        <a href="<?= htmlspecialchars($pathFor('admin-tasks.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
-          <i class="fa-solid fa-list-check" aria-hidden="true"></i>
-          Tasks
-        </a>
-        <a href="<?= htmlspecialchars($pathFor('admin-ai-studio.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
-          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
-          AI Studio
-        </a>
-        <a href="<?= htmlspecialchars($pathFor('admin-smart-marketing.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
-          <i class="fa-solid fa-bullhorn" aria-hidden="true"></i>
-          Smart Marketing
-        </a>
-        <a href="<?= htmlspecialchars($pathFor('admin-handover-templates.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
-          <i class="fa-solid fa-file-signature" aria-hidden="true"></i>
-          Handover Templates
-        </a>
-        <a href="<?= htmlspecialchars($pathFor('admin-documents.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
-          <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
-          Documents &amp; Billing
-        </a>
-        <a href="<?= htmlspecialchars($pathFor('admin/website-settings/'), ENT_QUOTES) ?>" class="btn btn-ghost">
-          <i class="fa-solid fa-palette" aria-hidden="true"></i>
-          Website Content &amp; Theme
-        </a>
-        <a href="<?= htmlspecialchars($pathFor('admin-solar-finance-settings.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
-          <i class="fa-solid fa-chart-line" aria-hidden="true"></i>
-          Solar &amp; Finance Settings
-        </a>
-        <a href="<?= htmlspecialchars($pathFor('admin-blog-manager.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
-          <i class="fa-solid fa-newspaper" aria-hidden="true"></i>
-          Blog Manager
-        </a>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+          <a href="<?= htmlspecialchars($pathFor('admin-tasks.php'), ENT_QUOTES) ?>" class="btn btn-primary"><i class="fa-solid fa-list-check" aria-hidden="true"></i> Tasks</a>
+          <a href="<?= htmlspecialchars($pathFor('complaints-overview.php'), ENT_QUOTES) ?>" class="btn btn-ghost"><i class="fa-solid fa-headset" aria-hidden="true"></i> Complaints</a>
+          <a href="<?= htmlspecialchars($pathFor('leads-dashboard.php'), ENT_QUOTES) ?>" class="btn btn-ghost"><i class="fa-solid fa-address-card" aria-hidden="true"></i> Leads</a>
+          <a href="<?= htmlspecialchars($pathFor('logout.php'), ENT_QUOTES) ?>" class="btn btn-primary"><i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i> Log out</a>
+        </div>
+        <div class="dashboard-action-groups" aria-label="Quick actions">
+          <div class="dashboard-action-group">
+            <h3>Operations</h3>
+            <div class="dashboard-action-links">
+              <a href="<?= htmlspecialchars($pathFor('admin-users.php'), ENT_QUOTES) ?>">Users</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-requests.php'), ENT_QUOTES) ?>">Requests</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-documents.php'), ENT_QUOTES) ?>">Documents &amp; Billing</a>
+            </div>
+          </div>
+          <div class="dashboard-action-group">
+            <h3>Growth &amp; outreach</h3>
+            <div class="dashboard-action-links">
+              <a href="<?= htmlspecialchars($pathFor('admin-smart-marketing.php'), ENT_QUOTES) ?>">Smart Marketing</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-blog-manager.php'), ENT_QUOTES) ?>">Blog Manager</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-ai-studio.php'), ENT_QUOTES) ?>">AI Studio</a>
+            </div>
+          </div>
+          <div class="dashboard-action-group">
+            <h3>Settings &amp; content</h3>
+            <div class="dashboard-action-links">
+              <a href="<?= htmlspecialchars($pathFor('admin/website-settings/'), ENT_QUOTES) ?>">Website Content &amp; Theme</a>
+              <a href="<?= htmlspecialchars($solarFinanceSettingsUrl, ENT_QUOTES) ?>">Solar &amp; Finance Settings</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-handover-templates.php'), ENT_QUOTES) ?>">Handover Templates</a>
+            </div>
+          </div>
+        </div>
         <button type="button" class="btn btn-ghost" data-theme-toggle>
           <i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i>
           Theme
         </button>
-        <a href="<?= htmlspecialchars($pathFor('logout.php'), ENT_QUOTES) ?>" class="btn btn-primary">
-          <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
-          Log out
-        </a>
       </div>
     </header>
 
