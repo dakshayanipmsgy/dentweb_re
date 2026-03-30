@@ -271,7 +271,7 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
 
         if ($isSelfFunded) {
             $netInvestment = max(0, $toFloat($row['net_investment_after_subsidy'] ?? ($grossPayable - $scenarioSubsidy)));
-            $monthlyOutflow = max(0, $toFloat($row['monthly_outflow_rs'] ?? $row['monthly_outflow'] ?? $residualBillScenario));
+            $monthlyOutflow = max(0, $residualBillScenario);
             $effectivePrincipal = 0.0;
             $loanAmount = 0.0;
             $marginMoney = 0.0;
@@ -310,49 +310,29 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
                 }
             }
 
-            $monthlyOutflow = max(0, $toFloat($row['monthly_outflow_rs'] ?? $row['monthly_outflow'] ?? ($emi + $residualBillScenario)));
+            $monthlyOutflow = max(0, $emi + $residualBillScenario);
             $netInvestment = max(0, $toFloat($row['net_investment_after_subsidy'] ?? ($grossPayable - $scenarioSubsidy)));
             $netOwnAfterSubsidy = $initialInvestmentAfterSubsidyCredit;
         }
 
-        $paybackMonths = $toInt($row['payback_months'] ?? null, 0);
-        if ($paybackMonths <= 0) {
-            $legacyYears = $toFloat($row['payback'] ?? 0);
-            if ($legacyYears > 0) {
-                $paybackMonths = max(1, (int) round($legacyYears * 12));
-            }
+        if ($isSelfFunded) {
+            $paybackMonths = $calculatePaybackMonths($netInvestment, $monthlyOutflow, $noSolarMonthlyBill);
+        } elseif ($isSubsidyNotToLoan) {
+            $paybackMonths = $calculatePaybackMonths($netOwnAfterSubsidy, $monthlyOutflow, $noSolarMonthlyBill);
+        } else {
+            $paybackMonths = $calculatePaybackMonths($marginMoney, $monthlyOutflow, $noSolarMonthlyBill);
         }
-        if ($paybackMonths <= 0) {
-            if ($isSelfFunded) {
-                $paybackMonths = $calculatePaybackMonths($netInvestment, $monthlyOutflow, $noSolarMonthlyBill);
-            } elseif ($isSubsidyNotToLoan) {
-                $paybackMonths = $calculatePaybackMonths($netOwnAfterSubsidy, $monthlyOutflow, $noSolarMonthlyBill);
-            } else {
-                $paybackMonths = $calculatePaybackMonths($marginMoney, $monthlyOutflow, $noSolarMonthlyBill);
-            }
-        }
-        $paybackDisplay = trim((string) ($row['payback_display'] ?? ''));
-        if ($paybackDisplay === '') {
-            $paybackDisplay = $formatPaybackMonths($paybackMonths);
-        }
+        $paybackDisplay = $formatPaybackMonths($paybackMonths);
 
         $cumulativeSeries = [];
-        if (is_array($row['cumulative_series'] ?? null) && $row['cumulative_series'] !== []) {
-            foreach ($row['cumulative_series'] as $point) {
-                $cumulativeSeries[] = $toFloat($point);
+        for ($year = 0; $year <= 25; $year++) {
+            $months = $year * 12;
+            if ($isSelfFunded) {
+                $cumulativeSeries[] = $netInvestment + ($months * $residualBillScenario);
+                continue;
             }
-        } else {
-            for ($year = 0; $year <= 25; $year++) {
-                $months = $year * 12;
-                if ($isSelfFunded) {
-                    $cumulativeSeries[] = $netInvestment + ($months * $residualBillScenario);
-                    continue;
-                }
-                $emiMonths = min($months, $tenureMonths);
-                $startValue = $isSubsidyNotToLoan ? $netOwnAfterSubsidy : $marginMoney;
-                $value = $startValue + ($emiMonths * $emi) + ($months * $residualBillScenario);
-                $cumulativeSeries[] = $value;
-            }
+            $startValue = $isSubsidyNotToLoan ? $netOwnAfterSubsidy : $marginMoney;
+            $cumulativeSeries[] = $startValue + ($months * $monthlyOutflow);
         }
 
         $resolvedScenarios[$scenarioKey] = [
@@ -819,9 +799,8 @@ orderedApplicableScenarios.forEach((scenarioKey)=>{
     : years.map((year)=>{
       const months=year*12;
       if(scenarioKey==='self_funded'){return Math.max(0,num(row.net_investment_after_subsidy))+(months*Math.max(0,num(row.residual_bill_rs)));}
-      const emiMonths=Math.min(months,Math.max(1,Math.round(num(row.tenure_months)||120)));
       const start=scenarioKey.includes('subsidy_not_to_loan')?Math.max(0,num(row.initial_investment_after_subsidy_credit_rs||row.net_own_investment_after_subsidy)):Math.max(0,num(row.margin_money_rs));
-      return start+(emiMonths*Math.max(0,num(row.emi_rs)))+(months*Math.max(0,num(row.residual_bill_rs)));
+      return start+(months*Math.max(0,num(row.monthly_outflow_rs)));
     });
   cumulativeDatasets.push({label:scenarioLabels[scenarioKey],data,borderColor:scenarioColors[scenarioKey]||'#0f766e',backgroundColor:scenarioColors[scenarioKey]||'#0f766e'});
 });
