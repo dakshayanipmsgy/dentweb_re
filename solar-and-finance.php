@@ -352,21 +352,29 @@ $defaults = $settings['defaults'] ?? [];
       const higherLoanApplicable=isHigherLoanApplicableForCost(costAbove2);
       const loanHigh=higherLoanApplicable?(Math.max(num(el.loanAmountAbove2.value),0)||Math.round(costAbove2*0.8)):0;
       const marginHigh=higherLoanApplicable?(Math.max(num(el.marginMoneyAbove2.value),0)||Math.max(costAbove2-loanHigh,Math.round(costAbove2*0.2))):0;
-      const effUp=Math.max(loanUp-subsidy,0), effHigh=higherLoanApplicable?Math.max(loanHigh-subsidy,0):0;
-      const tenure=num(el.loanTenure.value,10); const emiUp=emi(effUp,num(el.interestRateUp2.value,d.interest_upto_2_lacs||6),tenure);
-      const emiHigh=higherLoanApplicable?emi(effHigh,num(el.interestRateAbove2.value,d.interest_above_2_lacs||8.15),tenure):0;
+      const effUpToLoan=Math.max(loanUp-subsidy,0), effHighToLoan=higherLoanApplicable?Math.max(loanHigh-subsidy,0):0;
+      const effUpNotToLoan=Math.max(loanUp,0), effHighNotToLoan=higherLoanApplicable?Math.max(loanHigh,0):0;
+      const tenure=num(el.loanTenure.value,10);
+      const emiUpToLoan=emi(effUpToLoan,num(el.interestRateUp2.value,d.interest_upto_2_lacs||6),tenure);
+      const emiUpNotToLoan=emi(effUpNotToLoan,num(el.interestRateUp2.value,d.interest_upto_2_lacs||6),tenure);
+      const emiHighToLoan=higherLoanApplicable?emi(effHighToLoan,num(el.interestRateAbove2.value,d.interest_above_2_lacs||8.15),tenure):0;
+      const emiHighNotToLoan=higherLoanApplicable?emi(effHighNotToLoan,num(el.interestRateAbove2.value,d.interest_above_2_lacs||8.15),tenure):0;
 
-      const monthlyLabels=['No Solar','Loan ≤2L']; const monthlyData=[monthlyBill,emiUp+residual]; const monthlyColors=['#9ca3af','#0f766e'];
-      if(higherLoanApplicable){monthlyLabels.push('Loan >2L'); monthlyData.push(emiHigh+residual); monthlyColors.push('#1d4ed8');}
+      const monthlyLabels=['No Solar','Loan ≤2L (subsidy to loan)','Loan ≤2L (subsidy not to loan)'];
+      const monthlyData=[monthlyBill,emiUpToLoan+residual,emiUpNotToLoan+residual];
+      const monthlyColors=['#9ca3af','#0f766e','#14b8a6'];
+      if(higherLoanApplicable){monthlyLabels.push('Loan >2L (subsidy to loan)'); monthlyData.push(emiHighToLoan+residual); monthlyColors.push('#1d4ed8'); monthlyLabels.push('Loan >2L (subsidy not to loan)'); monthlyData.push(emiHighNotToLoan+residual); monthlyColors.push('#6366f1');}
       monthlyLabels.push('Self Funded'); monthlyData.push(residual); monthlyColors.push('#f59e0b');
 
       const years=[...Array(26).keys()];
-      const cumul=(start,mEmi,mRes)=>years.map(y=>{const paidEmi=y*12<=tenure*12?y*12*mEmi:tenure*12*mEmi; const post=Math.max(y*12-tenure*12,0)*mRes; return start+paidEmi+post+Math.min(y*12,tenure*12)*mRes;});
+      const subsidyCreditMonth=12;
+      const cumul=(start,mEmi,mRes,credit=0)=>years.map(y=>{const months=y*12; const paidEmi=months<=tenure*12?months*mEmi:tenure*12*mEmi; const base=start+paidEmi+(months*mRes); return (credit>0 && months>=subsidyCreditMonth)?Math.max(0,base-credit):base;});
       const cumulativeDatasets=[
         {label:'No Solar',data:years.map(y=>y*12*monthlyBill),borderColor:'#9ca3af'},
-        {label:'Loan ≤2L',data:cumul(marginUp,emiUp,residual),borderColor:'#0f766e'}
+        {label:'Loan ≤2L (subsidy to loan)',data:cumul(marginUp,emiUpToLoan,residual,0),borderColor:'#0f766e'},
+        {label:'Loan ≤2L (subsidy not to loan)',data:cumul(marginUp,emiUpNotToLoan,residual,subsidy),borderColor:'#14b8a6'}
       ];
-      if(higherLoanApplicable){cumulativeDatasets.push({label:'Loan >2L',data:cumul(marginHigh,emiHigh,residual),borderColor:'#1d4ed8'});}
+      if(higherLoanApplicable){cumulativeDatasets.push({label:'Loan >2L (subsidy to loan)',data:cumul(marginHigh,emiHighToLoan,residual,0),borderColor:'#1d4ed8'}); cumulativeDatasets.push({label:'Loan >2L (subsidy not to loan)',data:cumul(marginHigh,emiHighNotToLoan,residual,subsidy),borderColor:'#6366f1'});}
       cumulativeDatasets.push({label:'Self Funded',data:years.map(y=>costSelf-subsidy+y*12*residual),borderColor:'#f59e0b'});
 
       const PAYBACK_HORIZON_MONTHS=25*12;
@@ -400,8 +408,10 @@ $defaults = $settings['defaults'] ?? [];
       const monthlySaving=Math.max(monthlyBill-residual,0);
       const annualSaving=monthlySaving*12;
       const saving25=annualSaving*25;
-      const monthlyOutflowLoanUp2=emiUp+residual;
-      const monthlyOutflowLoanHigh=emiHigh+residual;
+      const monthlyOutflowLoanUp2ToLoan=emiUpToLoan+residual;
+      const monthlyOutflowLoanUp2NotToLoan=emiUpNotToLoan+residual;
+      const monthlyOutflowLoanHighToLoan=emiHighToLoan+residual;
+      const monthlyOutflowLoanHighNotToLoan=emiHighNotToLoan+residual;
       const roofArea=(size*Number(d.roof_area_sqft_per_kw||100)).toFixed(0);
       const billOffset=Math.min((solarValue/Math.max(monthlyBill,1))*100,100).toFixed(1);
       const annualCo2=((solarUnits*12)*Number(d.co2_factor_kg_per_unit||0.82));
@@ -444,12 +454,14 @@ $defaults = $settings['defaults'] ?? [];
           title:'Group 4 — Payback & Outflow',
           rows:[
             ['Estimated payback period — Self Funded',formatSelfFundedPayback(selfFundedPaybackYears)],
-            ['Estimated payback period — Loan up to 2 lacs',formatLoanPayback(findLoanPaybackMonth(marginUp,monthlyOutflowLoanUp2,monthlyBill))],
-            ...(higherLoanApplicable?[['Estimated payback period — Loan above 2 lacs',formatLoanPayback(findLoanPaybackMonth(marginHigh,monthlyOutflowLoanHigh,monthlyBill))]]:[]),
+            ['Estimated payback period — Loan up to 2 lacs (if subsidy is transferred from savings to loan account)',formatLoanPayback(findLoanPaybackMonth(marginUp,monthlyOutflowLoanUp2ToLoan,monthlyBill))],
+            ['Estimated payback period — Loan up to 2 lacs (if subsidy is not transferred from savings to loan account)',formatLoanPayback(findLoanPaybackMonth(Math.max(marginUp-subsidy,0),monthlyOutflowLoanUp2NotToLoan,monthlyBill))],
+            ...(higherLoanApplicable?[[ 'Estimated payback period — Loan above 2 lacs (if subsidy is transferred from savings to loan account)',formatLoanPayback(findLoanPaybackMonth(marginHigh,monthlyOutflowLoanHighToLoan,monthlyBill))],[ 'Estimated payback period — Loan above 2 lacs (if subsidy is not transferred from savings to loan account)',formatLoanPayback(findLoanPaybackMonth(Math.max(marginHigh-subsidy,0),monthlyOutflowLoanHighNotToLoan,monthlyBill))]]:[]),
             ['Monthly outflow — No Solar',INR(monthlyBill)],
             ['Monthly outflow — Self Funded',INR(residual)],
-            ['Monthly outflow — Loan up to 2 lacs',INR(monthlyOutflowLoanUp2)],
-            ...(higherLoanApplicable?[['Monthly outflow — Loan above 2 lacs',INR(monthlyOutflowLoanHigh)]]:[])
+            ['Monthly outflow — Loan up to 2 lacs (subsidy to loan)',INR(monthlyOutflowLoanUp2ToLoan)],
+            ['Monthly outflow — Loan up to 2 lacs (subsidy not to loan)',INR(monthlyOutflowLoanUp2NotToLoan)],
+            ...(higherLoanApplicable?[[ 'Monthly outflow — Loan above 2 lacs (subsidy to loan)',INR(monthlyOutflowLoanHighToLoan)],[ 'Monthly outflow — Loan above 2 lacs (subsidy not to loan)',INR(monthlyOutflowLoanHighNotToLoan)]]:[])
           ]
         },
         {
@@ -466,19 +478,22 @@ $defaults = $settings['defaults'] ?? [];
       ];
       glancePanel.innerHTML=groupedGlanceData.map(group=>`<article class="sf-glance-group"><h3>${group.title}</h3><div class="sf-glance-list">${group.rows.filter(([,v])=>v!==''&&v!==null&&v!==undefined).map(([label,value])=>`<div class="sf-glance-item"><span class="sf-glance-label">${label}</span><span class="sf-glance-value">${value}</span></div>`).join('')}</div></article>`).join('');
 
-      const payback=[['Loan up to 2 lacs',formatLoanPayback(findLoanPaybackMonth(marginUp,monthlyOutflowLoanUp2,monthlyBill))]];
+      const payback=[[ 'Loan up to 2 lacs (if subsidy is transferred from savings to loan account)',formatLoanPayback(findLoanPaybackMonth(marginUp,monthlyOutflowLoanUp2ToLoan,monthlyBill))],[ 'Loan up to 2 lacs (if subsidy is not transferred from savings to loan account)',formatLoanPayback(findLoanPaybackMonth(Math.max(marginUp-subsidy,0),monthlyOutflowLoanUp2NotToLoan,monthlyBill))]];
       if(higherLoanApplicable){
-        payback.push(['Loan above 2 lacs',formatLoanPayback(findLoanPaybackMonth(marginHigh,monthlyOutflowLoanHigh,monthlyBill))]);
+        payback.push(['Loan above 2 lacs (if subsidy is transferred from savings to loan account)',formatLoanPayback(findLoanPaybackMonth(marginHigh,monthlyOutflowLoanHighToLoan,monthlyBill))]);
+        payback.push(['Loan above 2 lacs (if subsidy is not transferred from savings to loan account)',formatLoanPayback(findLoanPaybackMonth(Math.max(marginHigh-subsidy,0),monthlyOutflowLoanHighNotToLoan,monthlyBill))]);
       }
       payback.push(['Self Funded',formatSelfFundedPayback(selfFundedPaybackYears)]);
       paybackMeters.innerHTML=payback.map(([n,p])=>`<div class='sf-metric'><strong>${n}</strong><div>${p}</div></div>`).join('');
 
       const finData=[
         ['No Solar',[['Monthly bill',INR(monthlyBill)],['25 year expense',INR(monthlyBill*12*25)]]],
-        ['Loan up to 2 lacs',[['System cost',INR(costUp2)],['Subsidy',INR(subsidy)],['Loan amount',INR(loanUp)],['Loan - subsidy',INR(effUp)],['Margin',INR(marginUp)],['Interest',`${el.interestRateUp2.value||d.interest_upto_2_lacs||6}%`],['Tenure',`${tenure} years`],['EMI',INR(emiUp)],['Residual bill',INR(residual)],['Total monthly outflow',INR(emiUp+residual)]]],
+        ['Loan up to 2 lacs (if subsidy is transferred from savings to loan account)',[['System cost',INR(costUp2)],['Subsidy',INR(subsidy)],['Loan amount',INR(loanUp)],['Loan amount after subsidy transfer',INR(effUpToLoan)],['Margin money',INR(marginUp)],['Interest',`${el.interestRateUp2.value||d.interest_upto_2_lacs||6}%`],['Tenure',`${tenure} years`],['EMI',INR(emiUpToLoan)],['Residual bill',INR(residual)],['Total monthly outflow',INR(emiUpToLoan+residual)]]],
+        ['Loan up to 2 lacs (if subsidy is not transferred from savings to loan account)',[['System cost',INR(costUp2)],['Subsidy',INR(subsidy)],['Loan amount',INR(loanUp)],['Loan amount used for EMI',INR(effUpNotToLoan)],['Margin money',INR(marginUp)],['Net own contribution after subsidy credit',INR(Math.max(marginUp-subsidy,0))],['Interest',`${el.interestRateUp2.value||d.interest_upto_2_lacs||6}%`],['Tenure',`${tenure} years`],['EMI',INR(emiUpNotToLoan)],['Residual bill',INR(residual)],['Total monthly outflow',INR(emiUpNotToLoan+residual)]]],
       ];
       if(higherLoanApplicable){
-        finData.push(['Loan above 2 lacs',[['System cost',INR(costAbove2)],['Subsidy',INR(subsidy)],['Loan amount',INR(loanHigh)],['Loan - subsidy',INR(effHigh)],['Margin',INR(marginHigh)],['Interest',`${el.interestRateAbove2.value||d.interest_above_2_lacs||8.15}%`],['Tenure',`${tenure} years`],['EMI',INR(emiHigh)],['Residual bill',INR(residual)],['Total monthly outflow',INR(emiHigh+residual)]]]);
+        finData.push(['Loan above 2 lacs (if subsidy is transferred from savings to loan account)',[['System cost',INR(costAbove2)],['Subsidy',INR(subsidy)],['Loan amount',INR(loanHigh)],['Loan amount after subsidy transfer',INR(effHighToLoan)],['Margin money',INR(marginHigh)],['Interest',`${el.interestRateAbove2.value||d.interest_above_2_lacs||8.15}%`],['Tenure',`${tenure} years`],['EMI',INR(emiHighToLoan)],['Residual bill',INR(residual)],['Total monthly outflow',INR(emiHighToLoan+residual)]]]);
+        finData.push(['Loan above 2 lacs (if subsidy is not transferred from savings to loan account)',[['System cost',INR(costAbove2)],['Subsidy',INR(subsidy)],['Loan amount',INR(loanHigh)],['Loan amount used for EMI',INR(effHighNotToLoan)],['Margin money',INR(marginHigh)],['Net own contribution after subsidy credit',INR(Math.max(marginHigh-subsidy,0))],['Interest',`${el.interestRateAbove2.value||d.interest_above_2_lacs||8.15}%`],['Tenure',`${tenure} years`],['EMI',INR(emiHighNotToLoan)],['Residual bill',INR(residual)],['Total monthly outflow',INR(emiHighNotToLoan+residual)]]]);
       }
       finData.push(['Self Funded',[['System cost',INR(costSelf)],['Subsidy',INR(subsidy)],['Net investment',INR(costSelf-subsidy)],['Residual bill',INR(residual)],['Monthly saving',INR(monthlyBill-residual)],['Annual saving',INR((monthlyBill-residual)*12)]]]);
       financeBoxes.innerHTML=finData.map(([t,rows])=>`<div class='sf-metric'><strong>${t}</strong><ul>${rows.map(r=>`<li>${r[0]}: <b>${r[1]}</b></li>`).join('')}</ul></div>`).join('');
@@ -488,7 +503,8 @@ $defaults = $settings['defaults'] ?? [];
       cChart=new Chart(cumulativeChart,{type:'line',data:{labels:years,datasets:cumulativeDatasets},options:{scales:{x:{title:{display:true,text:'Years'}},y:{title:{display:true,text:'Cumulative Expense (₹)'}}}}});
 
       const hy=el.systemType.value==='Hybrid'?`Hybrid: ${el.inverterKva.value} kVA, ${el.phase.value}, ${el.batteryCount.value} batteries`:'N/A';
-      const monthlyOutflowHigh=higherLoanApplicable?(emiHigh+residual):0;
+      const monthlyOutflowHighToLoan=higherLoanApplicable?(emiHighToLoan+residual):0;
+      const monthlyOutflowHighNotToLoan=higherLoanApplicable?(emiHighNotToLoan+residual):0;
       latestSnapshot={
         customer:{
           name:(el.customerName.value||'').trim(),
@@ -506,11 +522,15 @@ $defaults = $settings['defaults'] ?? [];
           environment:{annual_co2_kg:(solarUnits*12)*Number(d.co2_factor_kg_per_unit||0.82),co2_25_year_kg:(solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82),tree_equivalent:((solarUnits*12*25)*Number(d.co2_factor_kg_per_unit||0.82))/Number(d.tree_factor_kg_per_tree||21)},
           finance:{
             no_solar:{monthly_bill:monthlyBill,expense_25_year:monthlyBill*12*25},
-            loan_upto_2:{system_cost:costUp2,subsidy,loan_amount:loanUp,effective_loan:effUp,margin_money:marginUp,interest_rate:num(el.interestRateUp2.value,d.interest_upto_2_lacs||6),tenure_years:tenure,emi:emiUp,residual_bill:residual,total_monthly_outflow:monthlyOutflowLoanUp2},
-            loan_above_2:higherLoanApplicable?{system_cost:costAbove2,subsidy,loan_amount:loanHigh,effective_loan:effHigh,margin_money:marginHigh,interest_rate:num(el.interestRateAbove2.value,d.interest_above_2_lacs||8.15),tenure_years:tenure,emi:emiHigh,residual_bill:residual,total_monthly_outflow:monthlyOutflowHigh}:null,
+            loan_upto_2_lacs_subsidy_to_loan:{system_cost:costUp2,subsidy,loan_amount:loanUp,effective_loan:effUpToLoan,margin_money:marginUp,interest_rate:num(el.interestRateUp2.value,d.interest_upto_2_lacs||6),tenure_years:tenure,emi:emiUpToLoan,residual_bill:residual,total_monthly_outflow:monthlyOutflowLoanUp2ToLoan,net_own_investment_after_subsidy:Math.max(marginUp-subsidy,0),subsidy_credit_month:12},
+            loan_upto_2_lacs_subsidy_not_to_loan:{system_cost:costUp2,subsidy,loan_amount:loanUp,effective_loan:effUpNotToLoan,margin_money:marginUp,interest_rate:num(el.interestRateUp2.value,d.interest_upto_2_lacs||6),tenure_years:tenure,emi:emiUpNotToLoan,residual_bill:residual,total_monthly_outflow:monthlyOutflowLoanUp2NotToLoan,net_own_investment_after_subsidy:Math.max(marginUp-subsidy,0),subsidy_credit_month:12},
+            loan_above_2_lacs_subsidy_to_loan:higherLoanApplicable?{system_cost:costAbove2,subsidy,loan_amount:loanHigh,effective_loan:effHighToLoan,margin_money:marginHigh,interest_rate:num(el.interestRateAbove2.value,d.interest_above_2_lacs||8.15),tenure_years:tenure,emi:emiHighToLoan,residual_bill:residual,total_monthly_outflow:monthlyOutflowHighToLoan,net_own_investment_after_subsidy:Math.max(marginHigh-subsidy,0),subsidy_credit_month:12}:null,
+            loan_above_2_lacs_subsidy_not_to_loan:higherLoanApplicable?{system_cost:costAbove2,subsidy,loan_amount:loanHigh,effective_loan:effHighNotToLoan,margin_money:marginHigh,interest_rate:num(el.interestRateAbove2.value,d.interest_above_2_lacs||8.15),tenure_years:tenure,emi:emiHighNotToLoan,residual_bill:residual,total_monthly_outflow:monthlyOutflowHighNotToLoan,net_own_investment_after_subsidy:Math.max(marginHigh-subsidy,0),subsidy_credit_month:12}:null,
+            loan_upto_2:{system_cost:costUp2,subsidy,loan_amount:loanUp,effective_loan:effUpToLoan,margin_money:marginUp,interest_rate:num(el.interestRateUp2.value,d.interest_upto_2_lacs||6),tenure_years:tenure,emi:emiUpToLoan,residual_bill:residual,total_monthly_outflow:monthlyOutflowLoanUp2ToLoan},
+            loan_above_2:higherLoanApplicable?{system_cost:costAbove2,subsidy,loan_amount:loanHigh,effective_loan:effHighToLoan,margin_money:marginHigh,interest_rate:num(el.interestRateAbove2.value,d.interest_above_2_lacs||8.15),tenure_years:tenure,emi:emiHighToLoan,residual_bill:residual,total_monthly_outflow:monthlyOutflowHighToLoan}:null,
             self_funded:{system_cost:costSelf,subsidy,net_investment:costSelf-subsidy,residual_bill:residual,monthly_saving:monthlyBill-residual,annual_saving:(monthlyBill-residual)*12,payback_years:selfFundedPaybackYears}
           },
-          payback:{loan_upto_2:formatLoanPayback(findLoanPaybackMonth(marginUp,monthlyOutflowLoanUp2,monthlyBill)),loan_above_2:higherLoanApplicable?formatLoanPayback(findLoanPaybackMonth(marginHigh,monthlyOutflowHigh,monthlyBill)):'',self_funded:formatSelfFundedPayback(selfFundedPaybackYears)},
+          payback:{loan_upto_2_lacs_subsidy_to_loan:formatLoanPayback(findLoanPaybackMonth(marginUp,monthlyOutflowLoanUp2ToLoan,monthlyBill)),loan_upto_2_lacs_subsidy_not_to_loan:formatLoanPayback(findLoanPaybackMonth(Math.max(marginUp-subsidy,0),monthlyOutflowLoanUp2NotToLoan,monthlyBill)),loan_above_2_lacs_subsidy_to_loan:higherLoanApplicable?formatLoanPayback(findLoanPaybackMonth(marginHigh,monthlyOutflowHighToLoan,monthlyBill)):'',loan_above_2_lacs_subsidy_not_to_loan:higherLoanApplicable?formatLoanPayback(findLoanPaybackMonth(Math.max(marginHigh-subsidy,0),monthlyOutflowHighNotToLoan,monthlyBill)):'',self_funded:formatSelfFundedPayback(selfFundedPaybackYears)},
           charts:{monthly_labels:monthlyLabels,monthly_data:monthlyData,cumulative_years:years,cumulative_datasets:cumulativeDatasets.map(ds=>({label:ds.label,data:ds.data,borderColor:ds.borderColor}))}
         }
       };

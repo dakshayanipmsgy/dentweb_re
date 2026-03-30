@@ -634,9 +634,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['discount_rs'] = $discountRs;
         $quote['discount_note'] = $discountNote;
 
-        $primaryScenario = safe_text((string) ($_POST['primary_finance_scenario'] ?? 'loan_above_2_lacs'));
-        if (!in_array($primaryScenario, ['self_funded', 'loan_upto_2_lacs', 'loan_above_2_lacs'], true)) {
-            $primaryScenario = 'loan_above_2_lacs';
+        $primaryScenario = safe_text((string) ($_POST['primary_finance_scenario'] ?? 'loan_upto_2_lacs_subsidy_to_loan'));
+        if (!in_array($primaryScenario, ['self_funded', 'loan_upto_2_lacs_subsidy_to_loan', 'loan_upto_2_lacs_subsidy_not_to_loan', 'loan_above_2_lacs_subsidy_to_loan', 'loan_above_2_lacs_subsidy_not_to_loan', 'loan_upto_2_lacs', 'loan_above_2_lacs'], true)) {
+            $primaryScenario = 'loan_upto_2_lacs_subsidy_to_loan';
         }
         $quote['primary_finance_scenario'] = $primaryScenario;
         $priceSelfFunded = max(0, (float) ($_POST['scenario_price_self_funded'] ?? 0));
@@ -645,6 +645,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $loanAboveApplicable = ($priceLoanAbove2 * 0.8) >= 200000;
         $quote['scenario_prices'] = [
             'self_funded' => ['price' => $priceSelfFunded],
+            'loan_upto_2_lacs_subsidy_to_loan' => ['price' => $priceLoanUp2],
+            'loan_upto_2_lacs_subsidy_not_to_loan' => ['price' => $priceLoanUp2],
+            'loan_above_2_lacs_subsidy_to_loan' => ['price' => $priceLoanAbove2, 'applicable' => $loanAboveApplicable],
+            'loan_above_2_lacs_subsidy_not_to_loan' => ['price' => $priceLoanAbove2, 'applicable' => $loanAboveApplicable],
             'loan_upto_2_lacs' => ['price' => $priceLoanUp2],
             'loan_above_2_lacs' => ['price' => $priceLoanAbove2, 'applicable' => $loanAboveApplicable],
         ];
@@ -662,9 +666,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $priceForPrimary = $systemTotalInclGstRs;
         if ($primaryScenario === 'self_funded' && $priceSelfFunded > 0) {
             $priceForPrimary = $priceSelfFunded;
-        } elseif ($primaryScenario === 'loan_upto_2_lacs' && $priceLoanUp2 > 0) {
+        } elseif (in_array($primaryScenario, ['loan_upto_2_lacs', 'loan_upto_2_lacs_subsidy_to_loan', 'loan_upto_2_lacs_subsidy_not_to_loan'], true) && $priceLoanUp2 > 0) {
             $priceForPrimary = $priceLoanUp2;
-        } elseif ($primaryScenario === 'loan_above_2_lacs' && $priceLoanAbove2 > 0) {
+        } elseif (in_array($primaryScenario, ['loan_above_2_lacs', 'loan_above_2_lacs_subsidy_to_loan', 'loan_above_2_lacs_subsidy_not_to_loan'], true) && $priceLoanAbove2 > 0) {
             $priceForPrimary = $priceLoanAbove2;
         }
         $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, $transportationRs, $subsidyExpectedRs, $priceForPrimary, $quoteDefaults);
@@ -716,6 +720,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'loan_ratio_pct' => $loanRatio,
             ];
         };
+        $loanUp2Base = $buildLoanScenario('loan_upto_2_lacs', $priceLoanUp2, isset($_POST['loan_upto_2_lacs_applicable']));
+        $loanAbove2Base = $buildLoanScenario('loan_above_2_lacs', $priceLoanAbove2, $loanAboveApplicable && isset($_POST['loan_above_2_lacs_applicable']));
+        $deriveLoanScenario = static function (array $base, bool $subsidyToLoan, float $subsidyExpectedRs): array {
+            $base['effective_loan_principal_rs'] = $subsidyToLoan
+                ? max(0, (float) ($base['loan_amount_rs'] ?? 0) - $subsidyExpectedRs)
+                : max(0, (float) ($base['loan_amount_rs'] ?? 0));
+            $base['net_own_investment_after_subsidy'] = max(0, (float) ($base['margin_money_rs'] ?? 0) - $subsidyExpectedRs);
+            $base['subsidy_credit_month'] = 12;
+            return $base;
+        };
         $quote['finance_scenarios'] = [
             'self_funded' => [
                 'price' => $priceSelfFunded,
@@ -733,8 +747,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'emi_rs' => 0,
                 'residual_bill_rs' => 0,
             ],
-            'loan_upto_2_lacs' => $buildLoanScenario('loan_upto_2_lacs', $priceLoanUp2, isset($_POST['loan_upto_2_lacs_applicable'])),
-            'loan_above_2_lacs' => $buildLoanScenario('loan_above_2_lacs', $priceLoanAbove2, $loanAboveApplicable && isset($_POST['loan_above_2_lacs_applicable'])),
+            'loan_upto_2_lacs_subsidy_to_loan' => $deriveLoanScenario($loanUp2Base, true, $subsidyExpectedRs),
+            'loan_upto_2_lacs_subsidy_not_to_loan' => $deriveLoanScenario($loanUp2Base, false, $subsidyExpectedRs),
+            'loan_above_2_lacs_subsidy_to_loan' => $deriveLoanScenario($loanAbove2Base, true, $subsidyExpectedRs),
+            'loan_above_2_lacs_subsidy_not_to_loan' => $deriveLoanScenario($loanAbove2Base, false, $subsidyExpectedRs),
+            'loan_upto_2_lacs' => $loanUp2Base,
+            'loan_above_2_lacs' => $loanAbove2Base,
         ];
         $quote = documents_quote_apply_customer_savings_inputs($quote, $_POST, $quoteDefaults);
         $monthlyBillTouched = safe_text((string) ($_POST['monthly_bill_touched'] ?? '0')) === '1';
@@ -1187,7 +1205,7 @@ if ($savedAnnualGenerationForEdit === '') {
 <div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
 <div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Add kits/components from Items Master. Name/description snapshots are captured automatically.</div><table id="structuredItemsTable"><thead><tr><th>Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Quotation-specific description / note</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?></div><?php $masterPreview = (string)($sItem['master_description_snapshot'] ?? ($sItem['description_snapshot'] ?? '')); if (trim($masterPreview) !== ''): ?><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars($masterPreview, ENT_QUOTES) ?></div><?php endif; ?><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"><?= htmlspecialchars((string)($sItem['custom_description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
 <div style="grid-column:1/-1"><h3>Section 5 — Funding Scenarios</h3></div>
-<div><label>Primary Finance Scenario</label><select name="primary_finance_scenario"><option value="self_funded" <?= (($editing['primary_finance_scenario'] ?? '')==='self_funded')?'selected':'' ?>>Self Funded</option><option value="loan_upto_2_lacs" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_upto_2_lacs')?'selected':'' ?>>Loan up to ₹2 lacs</option><option value="loan_above_2_lacs" <?= (($editing['primary_finance_scenario'] ?? 'loan_above_2_lacs')==='loan_above_2_lacs')?'selected':'' ?>>Loan above ₹2 lacs</option></select></div>
+<div><label>Primary Finance Scenario</label><select name="primary_finance_scenario"><option value="self_funded" <?= (($editing['primary_finance_scenario'] ?? '')==='self_funded')?'selected':'' ?>>Self Funded</option><option value="loan_upto_2_lacs_subsidy_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_upto_2_lacs_subsidy_to_loan')?'selected':'' ?>>Loan up to 2 lacs (if subsidy is transferred from savings to loan account)</option><option value="loan_upto_2_lacs_subsidy_not_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_upto_2_lacs_subsidy_not_to_loan')?'selected':'' ?>>Loan up to 2 lacs (if subsidy is not transferred from savings to loan account)</option><option value="loan_above_2_lacs_subsidy_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_above_2_lacs_subsidy_to_loan')?'selected':'' ?>>Loan above 2 lacs (if subsidy is transferred from savings to loan account)</option><option value="loan_above_2_lacs_subsidy_not_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_above_2_lacs_subsidy_not_to_loan')?'selected':'' ?>>Loan above 2 lacs (if subsidy is not transferred from savings to loan account)</option></select></div>
 <div><label>Self Funded Price ₹</label><input type="number" step="0.01" name="scenario_price_self_funded" value="<?= htmlspecialchars((string)($editing['scenario_prices']['self_funded']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
 <div><label>Loan up to ₹2 lacs Price ₹</label><input type="number" step="0.01" name="scenario_price_loan_upto_2_lacs" value="<?= htmlspecialchars((string)($editing['scenario_prices']['loan_upto_2_lacs']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
 <div><label>Loan above ₹2 lacs Price ₹</label><input type="number" step="0.01" name="scenario_price_loan_above_2_lacs" value="<?= htmlspecialchars((string)($editing['scenario_prices']['loan_above_2_lacs']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>

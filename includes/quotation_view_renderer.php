@@ -143,7 +143,7 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
         }
         return $years . ' year' . ($years === 1 ? '' : 's') . ' ' . $remainingMonths . ' month' . ($remainingMonths === 1 ? '' : 's');
     };
-    $calculatePaybackMonths = static function (float $initialSolarCost, float $solarMonthlyOutflow, float $noSolarMonthlyBill): int {
+    $calculatePaybackMonths = static function (float $initialSolarCost, float $solarMonthlyOutflow, float $noSolarMonthlyBill, float $oneTimeCredit = 0.0, int $creditMonth = 12): int {
         if ($noSolarMonthlyBill <= 0) {
             return 0;
         }
@@ -152,6 +152,9 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
         $horizon = 25 * 12;
         for ($month = 1; $month <= $horizon; $month++) {
             $cumSolar += max(0, $solarMonthlyOutflow);
+            if ($oneTimeCredit > 0 && $month === max(1, $creditMonth)) {
+                $cumSolar = max(0, $cumSolar - $oneTimeCredit);
+            }
             $cumNoSolar += max(0, $noSolarMonthlyBill);
             if ($cumSolar <= $cumNoSolar) {
                 return $month;
@@ -160,13 +163,27 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
         return $horizon + 1;
     };
 
-    $primaryScenario = (string) ($quote['primary_finance_scenario'] ?? 'loan_above_2_lacs');
+    $supportedPrimary = [
+        'self_funded',
+        'loan_upto_2_lacs_subsidy_to_loan',
+        'loan_upto_2_lacs_subsidy_not_to_loan',
+        'loan_above_2_lacs_subsidy_to_loan',
+        'loan_above_2_lacs_subsidy_not_to_loan',
+        'loan_upto_2_lacs',
+        'loan_above_2_lacs',
+    ];
+    $primaryScenario = (string) ($quote['primary_finance_scenario'] ?? 'loan_upto_2_lacs_subsidy_to_loan');
+    if (!in_array($primaryScenario, $supportedPrimary, true)) {
+        $primaryScenario = 'loan_upto_2_lacs_subsidy_to_loan';
+    }
+
     $scenarioPrices = is_array($quote['scenario_prices'] ?? null) ? $quote['scenario_prices'] : [];
     $financeScenariosRaw = is_array($quote['finance_scenarios'] ?? null) ? $quote['finance_scenarios'] : [];
     $grossBeforeDiscount = max(0, $toFloat($calc['gross_payable_before_discount'] ?? 0));
     $discount = max(0, $toFloat($calc['discount_rs'] ?? 0));
     $grossFallback = max(0, $toFloat($calc['gross_payable'] ?? ($grossBeforeDiscount - $discount)));
     $subsidy = max(0, $toFloat($calc['subsidy_expected_rs'] ?? 0));
+
     $capacity = max(0, $toFloat($quote['capacity_kwp'] ?? $quote['system_capacity_kwp'] ?? 0));
     $tariff = max(0.1, $toFloat($snapshot['unit_rate_rs_per_kwh'] ?? null, 1));
     $annualGeneration = max(0, $toFloat($snapshot['annual_generation_kwh_per_kw'] ?? null, 0));
@@ -178,11 +195,11 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
     } elseif (($snapshot['monthly_bill_before_rs'] ?? null) !== null && (float) $snapshot['monthly_bill_before_rs'] > 0) {
         $monthlyUnitsBefore = (float) $snapshot['monthly_bill_before_rs'] / $tariff;
     }
-
     if ($monthlyUnitsBefore === null) {
         $fallbackBill = $toFloat($quote['finance_inputs']['monthly_bill_rs'] ?? 0);
         $monthlyUnitsBefore = $fallbackBill > 0 ? ($fallbackBill / $tariff) : 0.0;
     }
+
     $noSolarMonthlyBill = max(0, $toFloat($snapshot['monthly_bill_before_rs'] ?? null, $toFloat($quote['finance_inputs']['monthly_bill_rs'] ?? 0)));
     $solarValueMonthlyRs = max(0, $monthlyUnitsSolar * $tariff);
     $minimumResidualBillFloor = max(
@@ -193,72 +210,96 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
     );
     $residualBill = max($minimumResidualBillFloor, $noSolarMonthlyBill - $solarValueMonthlyRs);
 
+    $legacyUp2 = is_array($financeScenariosRaw['loan_upto_2_lacs'] ?? null) ? $financeScenariosRaw['loan_upto_2_lacs'] : [];
+    $legacyAbove2 = is_array($financeScenariosRaw['loan_above_2_lacs'] ?? null) ? $financeScenariosRaw['loan_above_2_lacs'] : [];
+
     $order = [
         'self_funded' => 'Self Funded',
-        'loan_upto_2_lacs' => 'Loan up to ₹2 lacs',
-        'loan_above_2_lacs' => 'Loan above ₹2 lacs',
+        'loan_upto_2_lacs_subsidy_to_loan' => 'Loan up to 2 lacs (if subsidy is transferred from savings to loan account)',
+        'loan_upto_2_lacs_subsidy_not_to_loan' => 'Loan up to 2 lacs (if subsidy is not transferred from savings to loan account)',
+        'loan_above_2_lacs_subsidy_to_loan' => 'Loan above 2 lacs (if subsidy is transferred from savings to loan account)',
+        'loan_above_2_lacs_subsidy_not_to_loan' => 'Loan above 2 lacs (if subsidy is not transferred from savings to loan account)',
     ];
+
     $resolvedScenarios = [];
+    $subsidyCreditMonthDefault = max(1, $toInt($snapshot['subsidy_credit_month'] ?? $quote['finance_inputs']['subsidy_credit_month'] ?? null, 12));
+
     foreach ($order as $scenarioKey => $scenarioLabel) {
         $row = is_array($financeScenariosRaw[$scenarioKey] ?? null) ? $financeScenariosRaw[$scenarioKey] : [];
-        $price = max(0, $toFloat($row['price'] ?? $scenarioPrices[$scenarioKey]['price'] ?? $grossFallback));
+        if ($row === []) {
+            if ($scenarioKey === 'loan_upto_2_lacs_subsidy_to_loan' || $scenarioKey === 'loan_upto_2_lacs_subsidy_not_to_loan') {
+                $row = $legacyUp2;
+            }
+            if ($scenarioKey === 'loan_above_2_lacs_subsidy_to_loan' || $scenarioKey === 'loan_above_2_lacs_subsidy_not_to_loan') {
+                $row = $legacyAbove2;
+            }
+        }
+
+        $isSelfFunded = $scenarioKey === 'self_funded';
+        $isSubsidyToLoan = str_contains($scenarioKey, 'subsidy_to_loan');
+        $isSubsidyNotToLoan = str_contains($scenarioKey, 'subsidy_not_to_loan');
+        $isAbove2 = str_contains($scenarioKey, 'loan_above_2_lacs');
+
+        $priceFallback = $scenarioPrices[$scenarioKey]['price']
+            ?? ($isAbove2 ? ($scenarioPrices['loan_above_2_lacs']['price'] ?? 0) : ($scenarioPrices['loan_upto_2_lacs']['price'] ?? 0));
+        if ($isSelfFunded) {
+            $priceFallback = $scenarioPrices['self_funded']['price'] ?? $grossFallback;
+        }
+
+        $price = max(0, $toFloat($row['price'] ?? $priceFallback ?? $grossFallback));
         if ($price <= 0) {
             $price = $grossFallback;
         }
+
         $grossPayable = max(0, $toFloat($row['gross_payable'] ?? $price));
         $scenarioSubsidy = max(0, $toFloat($row['subsidy'] ?? $subsidy));
-        $netInvestment = max(0, $toFloat($row['net_investment_after_subsidy'] ?? ($grossPayable - $scenarioSubsidy)));
         $interestPct = max(0, $toFloat($row['interest_pct'] ?? $snapshot['loan_interest_rate_percent'] ?? 0));
         $tenureYears = max(0, $toFloat($row['tenure_years'] ?? null, max(0.01, $toFloat($snapshot['loan_tenure_months'] ?? null, 120) / 12)));
         $tenureMonths = max(1, $toInt($row['tenure_months'] ?? null, (int) round($tenureYears * 12)));
         $marginMoney = max(0, $toFloat($row['margin_money_rs'] ?? 0));
         $loanAmount = max(0, $toFloat($row['loan_amount_rs'] ?? 0));
-        $effectivePrincipal = max(0, $toFloat($row['effective_loan_principal_rs'] ?? ($loanAmount - $scenarioSubsidy)));
         $emi = max(0, $toFloat($row['emi_rs'] ?? 0));
-        $residualBillScenario = $hasValue($row, 'residual_bill_rs')
-            ? max(0, $toFloat($row['residual_bill_rs']))
-            : $residualBill;
-        $monthlyOutflow = max(0, $toFloat($row['monthly_outflow_rs'] ?? $row['monthly_outflow'] ?? 0));
-        $applicable = $scenarioKey !== 'loan_above_2_lacs'
-            ? (bool) ($row['applicable'] ?? true)
-            : (bool) ($row['applicable'] ?? false);
+        $residualBillScenario = $hasValue($row, 'residual_bill_rs') ? max(0, $toFloat($row['residual_bill_rs'])) : $residualBill;
+        $subsidyCreditMonth = max(1, $toInt($row['subsidy_credit_month'] ?? null, $subsidyCreditMonthDefault));
 
-        if ($scenarioKey === 'self_funded') {
+        $applicable = true;
+        if ($isAbove2) {
+            $applicable = (bool) ($row['applicable'] ?? ($legacyAbove2['applicable'] ?? false));
+        } elseif (!$isSelfFunded) {
+            $applicable = (bool) ($row['applicable'] ?? ($legacyUp2['applicable'] ?? true));
+        } else {
             $applicable = (bool) ($row['applicable'] ?? true);
-            $marginMoney = 0.0;
-            $loanAmount = 0.0;
+        }
+
+        if ($isSelfFunded) {
+            $netInvestment = max(0, $toFloat($row['net_investment_after_subsidy'] ?? ($grossPayable - $scenarioSubsidy)));
+            $monthlyOutflow = max(0, $toFloat($row['monthly_outflow_rs'] ?? $row['monthly_outflow'] ?? $residualBillScenario));
             $effectivePrincipal = 0.0;
-            $emi = 0.0;
-            if ($monthlyOutflow <= 0) {
-                $monthlyOutflow = $residualBillScenario;
-            }
+            $loanAmount = 0.0;
+            $marginMoney = 0.0;
+            $netOwnAfterSubsidy = $netInvestment;
         } else {
             if ($marginMoney <= 0 && $loanAmount <= 0) {
                 $marginPct = max(0, min(100, $toFloat($row['margin_ratio_pct'] ?? 20)));
                 $loanPct = max(0, min(100, $toFloat($row['loan_ratio_pct'] ?? max(0, 100 - $marginPct))));
                 $marginMoney = ($marginPct / 100) * $grossPayable;
                 $loanAmount = ($loanPct / 100) * $grossPayable;
-                if (($marginMoney + $loanAmount) <= 0) {
-                    $marginMoney = max(0, $grossPayable - $loanAmount);
-                }
             }
-            if ($scenarioKey === 'loan_upto_2_lacs') {
+            if (str_contains($scenarioKey, 'loan_upto_2_lacs')) {
                 if ($hasValue($row, 'loan_amount_rs')) {
                     $loanAmount = min(max(0, $toFloat($row['loan_amount_rs'])), 200000);
-                    if (!$hasValue($row, 'margin_money_rs')) {
-                        $marginMoney = max(0, $grossPayable - $loanAmount);
-                    }
                 } elseif ($loanAmount <= 0) {
                     $loanAmount = min(max(0, $grossPayable - $marginMoney), 200000);
+                }
+                if (!$hasValue($row, 'margin_money_rs')) {
                     $marginMoney = max(0, $grossPayable - $loanAmount);
                 }
             }
-            if ($scenarioKey === 'loan_above_2_lacs' && $loanAmount > 200000) {
-                $applicable = (bool) ($row['applicable'] ?? true);
-            }
-            if ($effectivePrincipal <= 0) {
-                $effectivePrincipal = max(0, $loanAmount - $scenarioSubsidy);
-            }
+
+            $effectivePrincipal = $isSubsidyNotToLoan
+                ? max(0, $toFloat($row['effective_loan_principal_rs'] ?? $loanAmount))
+                : max(0, $toFloat($row['effective_loan_principal_rs'] ?? ($loanAmount - $scenarioSubsidy)));
+
             if ($emi <= 0 && $effectivePrincipal > 0) {
                 $monthlyRate = ($interestPct / 100) / 12;
                 if ($monthlyRate <= 0) {
@@ -268,44 +309,31 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
                     $emi = ($effectivePrincipal * $monthlyRate * $pow) / max(0.000001, $pow - 1);
                 }
             }
-            if (!$hasValue($row, 'monthly_outflow_rs') && !$hasValue($row, 'monthly_outflow')) {
-                $monthlyOutflow = max(0, $emi + $residualBillScenario);
-            }
-            if ($scenarioKey === 'loan_above_2_lacs' && !$applicable) {
-                $applicable = ($loanAmount > 200000) || ($price > 200000 && !empty($scenarioPrices['loan_above_2_lacs']));
-            }
+
+            $monthlyOutflow = max(0, $toFloat($row['monthly_outflow_rs'] ?? $row['monthly_outflow'] ?? ($emi + $residualBillScenario)));
+            $netInvestment = max(0, $toFloat($row['net_investment_after_subsidy'] ?? ($grossPayable - $scenarioSubsidy)));
+            $netOwnAfterSubsidy = max(0, $toFloat($row['net_own_investment_after_subsidy'] ?? ($marginMoney - $scenarioSubsidy)));
         }
 
-        if ($scenarioKey === 'self_funded') {
-            $paybackMonths = $toInt($row['payback_months'] ?? null, 0);
-            if ($paybackMonths <= 0) {
-                $legacyYears = $toFloat($row['payback'] ?? 0);
-                if ($legacyYears > 0) {
-                    $paybackMonths = max(1, (int) round($legacyYears * 12));
-                }
+        $paybackMonths = $toInt($row['payback_months'] ?? null, 0);
+        if ($paybackMonths <= 0) {
+            $legacyYears = $toFloat($row['payback'] ?? 0);
+            if ($legacyYears > 0) {
+                $paybackMonths = max(1, (int) round($legacyYears * 12));
             }
-            if ($paybackMonths <= 0) {
+        }
+        if ($paybackMonths <= 0) {
+            if ($isSelfFunded) {
                 $paybackMonths = $calculatePaybackMonths($netInvestment, $monthlyOutflow, $noSolarMonthlyBill);
-            }
-            $paybackDisplay = trim((string) ($row['payback_display'] ?? ''));
-            if ($paybackDisplay === '') {
-                $paybackDisplay = $formatPaybackMonths($paybackMonths);
-            }
-        } else {
-            $paybackMonths = $toInt($row['payback_months'] ?? null, 0);
-            if ($paybackMonths <= 0) {
-                $legacyYears = $toFloat($row['payback'] ?? 0);
-                if ($legacyYears > 0) {
-                    $paybackMonths = max(1, (int) round($legacyYears * 12));
-                }
-            }
-            if ($paybackMonths <= 0) {
+            } elseif ($isSubsidyNotToLoan) {
+                $paybackMonths = $calculatePaybackMonths($marginMoney, $monthlyOutflow, $noSolarMonthlyBill, $scenarioSubsidy, $subsidyCreditMonth);
+            } else {
                 $paybackMonths = $calculatePaybackMonths($marginMoney, $monthlyOutflow, $noSolarMonthlyBill);
             }
-            $paybackDisplay = trim((string) ($row['payback_display'] ?? ''));
-            if ($paybackDisplay === '') {
-                $paybackDisplay = $formatPaybackMonths($paybackMonths);
-            }
+        }
+        $paybackDisplay = trim((string) ($row['payback_display'] ?? ''));
+        if ($paybackDisplay === '') {
+            $paybackDisplay = $formatPaybackMonths($paybackMonths);
         }
 
         $cumulativeSeries = [];
@@ -316,12 +344,16 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
         } else {
             for ($year = 0; $year <= 25; $year++) {
                 $months = $year * 12;
-                if ($scenarioKey === 'self_funded') {
+                if ($isSelfFunded) {
                     $cumulativeSeries[] = $netInvestment + ($months * $residualBillScenario);
                     continue;
                 }
                 $emiMonths = min($months, $tenureMonths);
-                $cumulativeSeries[] = $marginMoney + ($emiMonths * $emi) + ($months * $residualBillScenario);
+                $value = $marginMoney + ($emiMonths * $emi) + ($months * $residualBillScenario);
+                if ($isSubsidyNotToLoan && $months >= $subsidyCreditMonth) {
+                    $value = max(0, $value - $scenarioSubsidy);
+                }
+                $cumulativeSeries[] = $value;
             }
         }
 
@@ -332,6 +364,7 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
             'subsidy' => $scenarioSubsidy,
             'gross_payable' => $grossPayable,
             'net_investment_after_subsidy' => $netInvestment,
+            'net_own_investment_after_subsidy' => $netOwnAfterSubsidy,
             'margin_money_rs' => $marginMoney,
             'loan_amount_rs' => $loanAmount,
             'effective_loan_principal_rs' => $effectivePrincipal,
@@ -341,6 +374,7 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
             'emi_rs' => $emi,
             'residual_bill_rs' => $residualBillScenario,
             'monthly_outflow_rs' => $monthlyOutflow,
+            'subsidy_credit_month' => $subsidyCreditMonth,
             'payback_months' => $paybackMonths,
             'payback_display' => $paybackDisplay,
             'cumulative_series' => $cumulativeSeries,
@@ -348,8 +382,14 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
         ];
     }
 
+    if ($primaryScenario === 'loan_upto_2_lacs') {
+        $primaryScenario = 'loan_upto_2_lacs_subsidy_to_loan';
+    }
+    if ($primaryScenario === 'loan_above_2_lacs') {
+        $primaryScenario = 'loan_above_2_lacs_subsidy_to_loan';
+    }
     if (!isset($resolvedScenarios[$primaryScenario])) {
-        $primaryScenario = 'loan_upto_2_lacs';
+        $primaryScenario = 'loan_upto_2_lacs_subsidy_to_loan';
     }
 
     return [
@@ -364,14 +404,14 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
         'capacity_kwp' => $capacity,
         'monthly_units_solar' => $monthlyUnitsSolar,
         'residual_bill' => (float) ($resolvedScenarios['self_funded']['residual_bill_rs'] ?? $residualBill),
-        'margin_amount_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs']['margin_money_rs'] ?? 0),
-        'loan_eligible_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs']['loan_amount_rs'] ?? 0),
+        'margin_amount_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs_subsidy_to_loan']['margin_money_rs'] ?? 0),
+        'loan_eligible_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs_subsidy_to_loan']['loan_amount_rs'] ?? 0),
         'loan_cap_rs' => max(0, $toFloat($snapshot['loan_cap_rs'] ?? null, 0)),
-        'loan_interest_rate_percent' => (float) ($resolvedScenarios['loan_upto_2_lacs']['interest_pct'] ?? 0),
-        'loan_tenure_months' => (int) ($resolvedScenarios['loan_upto_2_lacs']['tenure_months'] ?? 120),
-        'effective_principal_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs']['effective_loan_principal_rs'] ?? 0),
-        'emi_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs']['emi_rs'] ?? 0),
-        'loan_total_outflow_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs']['monthly_outflow_rs'] ?? 0),
+        'loan_interest_rate_percent' => (float) ($resolvedScenarios['loan_upto_2_lacs_subsidy_to_loan']['interest_pct'] ?? 0),
+        'loan_tenure_months' => (int) ($resolvedScenarios['loan_upto_2_lacs_subsidy_to_loan']['tenure_months'] ?? 120),
+        'effective_principal_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs_subsidy_to_loan']['effective_loan_principal_rs'] ?? 0),
+        'emi_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs_subsidy_to_loan']['emi_rs'] ?? 0),
+        'loan_total_outflow_rs' => (float) ($resolvedScenarios['loan_upto_2_lacs_subsidy_to_loan']['monthly_outflow_rs'] ?? 0),
         'self_upfront_rs' => (float) ($resolvedScenarios['self_funded']['price'] ?? $grossFallback),
         'self_upfront_net_rs' => (float) ($resolvedScenarios['self_funded']['net_investment_after_subsidy'] ?? 0),
         'self_residual_bill_rs' => (float) ($resolvedScenarios['self_funded']['residual_bill_rs'] ?? 0),
@@ -630,11 +670,17 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <?php if($specialReq!==''): ?><section class="card"><div class="h sec">✍️ Special Requests From Consumer (Inclusive in the rate)</div><div><?= quotation_sanitize_html($specialReq) ?></div><div><i>In case of conflict between annexures and special requests, special requests will be prioritized.</i></div></section><?php endif; ?>
 <section class="card"><div class="h sec">💰 Pricing summary</div><table><thead><tr><th>#</th><th>Particular</th><th class="right">Amount</th></tr></thead><tbody><tr><td>1</td><td>Total system price incl GST</td><td class="right"><?= quotation_format_inr_indian((float)($calc['system_total_incl_gst_rs'] ?? $quote['input_total_gst_inclusive'] ?? 0), $showDecimals) ?></td></tr><tr><td>2</td><td>Transportation</td><td class="right"><?= quotation_format_inr_indian((float)($calc['transportation_rs'] ?? 0), $showDecimals) ?></td></tr><?php if ($discountApplicable): ?><tr><td>3</td><td>Discount<?php $discountNote=(string)($calc['discount_note'] ?? ''); if(trim($discountNote)!==''): ?><div class="muted" style="font-size:.85em;margin-top:2px"><?= htmlspecialchars($discountNote, ENT_QUOTES) ?></div><?php endif; ?></td><td class="right">- <?= quotation_format_inr_indian($discountRsDisplay, $showDecimals) ?></td></tr><?php endif; ?><tr class="pricing-gross-row"><td><?= $discountApplicable ? '4' : '3' ?></td><td><?= htmlspecialchars($grossPayableLabel, ENT_QUOTES) ?></td><td class="right" id="upfront"></td></tr><tr><td><?= $discountApplicable ? '5' : '4' ?></td><td>Subsidy expected</td><td class="right"><?= quotation_format_inr_indian((float)($calc['subsidy_expected_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td><?= $discountApplicable ? '6' : '5' ?></td><td><b>Net Investment/Cost After Subsidy Credit</b></td><td class="right"><b id="upfrontNet"></b></td></tr></tbody></table></section>
 <?php
-$scenarioOrder = ['self_funded' => 'Self Funded', 'loan_upto_2_lacs' => 'Loan up to ₹2 lacs', 'loan_above_2_lacs' => 'Loan above ₹2 lacs'];
+$scenarioOrder = [
+    'self_funded' => 'Self Funded',
+    'loan_upto_2_lacs_subsidy_to_loan' => 'Loan up to 2 lacs (if subsidy is transferred from savings to loan account)',
+    'loan_upto_2_lacs_subsidy_not_to_loan' => 'Loan up to 2 lacs (if subsidy is not transferred from savings to loan account)',
+    'loan_above_2_lacs_subsidy_to_loan' => 'Loan above 2 lacs (if subsidy is transferred from savings to loan account)',
+    'loan_above_2_lacs_subsidy_not_to_loan' => 'Loan above 2 lacs (if subsidy is not transferred from savings to loan account)',
+];
 $scenarioRows = is_array($financialClarity['finance_scenarios'] ?? null) ? $financialClarity['finance_scenarios'] : [];
-$primaryScenarioLabel = (string)($scenarioOrder[$financialClarity['primary_finance_scenario'] ?? ''] ?? 'Loan above ₹2 lacs');
+$primaryScenarioLabel = (string)($scenarioOrder[$financialClarity['primary_finance_scenario'] ?? ''] ?? 'Loan up to 2 lacs (if subsidy is transferred from savings to loan account)');
 ?>
-<section class="card"><div class="h sec">Funding Options at a Glance <span class="muted">(Primary: <?= htmlspecialchars($primaryScenarioLabel, ENT_QUOTES) ?>)</span></div><table><thead><tr><th>Scenario</th><th>Price</th><th>Subsidy</th><th>Margin Money</th><th>Loan Amount</th><th>Interest</th><th>Tenure</th><th>EMI</th><th>Monthly Outflow</th><th>Payback</th></tr></thead><tbody><?php foreach ($scenarioOrder as $key => $label): $row = is_array($scenarioRows[$key] ?? null) ? $scenarioRows[$key] : []; if ($key === 'loan_above_2_lacs' && empty($row['applicable'])) { continue; } ?><tr><td><?= htmlspecialchars($label, ENT_QUOTES) ?><?php if (!empty($row['is_primary'])): ?><span class="primary-badge">Primary</span><?php endif; ?></td><td><?= quotation_format_inr_indian((float)($row['price'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['subsidy'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['margin_money_rs'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['loan_amount_rs'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : number_format((float)($row['interest_pct'] ?? 0), 2) . '%' ?></td><td><?= $key === 'self_funded' ? '—' : number_format((float)($row['tenure_years'] ?? 0), 1) . ' yrs' ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['emi_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['monthly_outflow_rs'] ?? 0), $showDecimals) ?></td><td><?= htmlspecialchars((string)($row['payback_display'] ?? '—'), ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table></section>
+<section class="card"><div class="h sec">Funding Options at a Glance <span class="muted">(Primary: <?= htmlspecialchars($primaryScenarioLabel, ENT_QUOTES) ?>)</span></div><table><thead><tr><th>Scenario</th><th>Price</th><th>Subsidy</th><th>Margin Money</th><th>Loan Amount</th><th>Interest</th><th>Tenure</th><th>EMI</th><th>Residual Bill</th><th>Monthly Outflow</th><th>Net Own Contribution After Subsidy Credit</th><th>Payback</th></tr></thead><tbody><?php foreach ($scenarioOrder as $key => $label): $row = is_array($scenarioRows[$key] ?? null) ? $scenarioRows[$key] : []; if (str_contains($key, 'loan_above_2_lacs') && empty($row['applicable'])) { continue; } ?><tr><td><?= htmlspecialchars($label, ENT_QUOTES) ?><?php if (!empty($row['is_primary'])): ?><span class="primary-badge">Primary</span><?php endif; ?></td><td><?= quotation_format_inr_indian((float)($row['price'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['subsidy'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['margin_money_rs'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['loan_amount_rs'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : number_format((float)($row['interest_pct'] ?? 0), 2) . '%' ?></td><td><?= $key === 'self_funded' ? '—' : number_format((float)($row['tenure_years'] ?? 0), 1) . ' yrs' ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['emi_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['residual_bill_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['monthly_outflow_rs'] ?? 0), $showDecimals) ?></td><td><?= ($key === 'self_funded' || !str_contains($key, 'subsidy_not_to_loan')) ? '—' : quotation_format_inr_indian((float)($row['net_own_investment_after_subsidy'] ?? 0), $showDecimals) ?></td><td><?= htmlspecialchars((string)($row['payback_display'] ?? '—'), ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table></section>
 <section class="card sf-glance-wrap"><div class="h sec">☀️ Solar at a Glance</div><div class="sf-glance-grid" id="glancePanel"></div></section>
 <section class="card chart-responsive-card"><div class="h sec">📊 Monthly Outflow Comparison</div><canvas id="monthlyChart" height="130"></canvas><img id="monthlyChartPrint" class="chart-print-img" alt="Monthly outflow chart for print"></section>
 <section class="card chart-responsive-card cumulative-chart-card"><div class="h sec">📈 Cumulative Expense Over 25 Years</div><canvas id="cumulativeChart" height="180"></canvas><img id="cumulativeChartPrint" class="chart-print-img" alt="Cumulative expense chart for print"></section>
@@ -654,32 +700,40 @@ const showDecimals=<?= json_encode($showDecimals) ?>;
 const r=x=>'₹'+Number(x||0).toLocaleString('en-IN',{minimumFractionDigits:showDecimals?2:0,maximumFractionDigits:showDecimals?2:0});
 const nUnits=x=>Number(x||0).toLocaleString('en-IN',{maximumFractionDigits:0});
 const num=v=>{const n=Number(v);return Number.isFinite(n)?n:0;};
-const scenarioOrder=['self_funded','loan_upto_2_lacs','loan_above_2_lacs'];
+const scenarioOrder=['self_funded','loan_upto_2_lacs_subsidy_to_loan','loan_upto_2_lacs_subsidy_not_to_loan','loan_above_2_lacs_subsidy_to_loan','loan_above_2_lacs_subsidy_not_to_loan'];
 const scenarioLabels={
   self_funded:'Self Funded',
-  loan_upto_2_lacs:'Loan up to ₹2 lacs',
-  loan_above_2_lacs:'Loan above ₹2 lacs'
+  loan_upto_2_lacs_subsidy_to_loan:'Loan ≤2L (subsidy to loan)',
+  loan_upto_2_lacs_subsidy_not_to_loan:'Loan ≤2L (subsidy not to loan)',
+  loan_above_2_lacs_subsidy_to_loan:'Loan >2L (subsidy to loan)',
+  loan_above_2_lacs_subsidy_not_to_loan:'Loan >2L (subsidy not to loan)'
 };
 const scenarioColors={
   self_funded:'#f59e0b',
-  loan_upto_2_lacs:'#0f766e',
-  loan_above_2_lacs:'#1d4ed8'
+  loan_upto_2_lacs_subsidy_to_loan:'#0f766e',
+  loan_upto_2_lacs_subsidy_not_to_loan:'#14b8a6',
+  loan_above_2_lacs_subsidy_to_loan:'#1d4ed8',
+  loan_above_2_lacs_subsidy_not_to_loan:'#6366f1'
 };
 const scenarios=(finance&&typeof finance==='object'&&finance.finance_scenarios&&typeof finance.finance_scenarios==='object')?finance.finance_scenarios:{};
 const monthlyBill=Math.max(0,num(finance.no_solar_monthly_bill_rs));
 const getScenario=(key)=>{const row=scenarios[key];return row&&typeof row==='object'?row:{};};
 const isScenarioApplicable=(key)=>{
   const row=getScenario(key);
-  if(key==='loan_above_2_lacs'){return !!row.applicable;}
+  if(key.includes('loan_above_2_lacs')){return !!row.applicable;}
   return !Object.prototype.hasOwnProperty.call(row,'applicable') || !!row.applicable;
 };
 const orderedApplicableScenarios=scenarioOrder.filter((key)=>isScenarioApplicable(key));
 const selfScenario=getScenario('self_funded');
-const loanUp2Scenario=getScenario('loan_upto_2_lacs');
-const loanAbove2Scenario=getScenario('loan_above_2_lacs');
+const loanUp2Scenario=getScenario('loan_upto_2_lacs_subsidy_to_loan');
+const loanUp2NotScenario=getScenario('loan_upto_2_lacs_subsidy_not_to_loan');
+const loanAbove2Scenario=getScenario('loan_above_2_lacs_subsidy_to_loan');
+const loanAbove2NotScenario=getScenario('loan_above_2_lacs_subsidy_not_to_loan');
 const selfOutflow=Math.max(0,num(selfScenario.monthly_outflow_rs));
 const loanUp2Outflow=Math.max(0,num(loanUp2Scenario.monthly_outflow_rs));
+const loanUp2NotOutflow=Math.max(0,num(loanUp2NotScenario.monthly_outflow_rs));
 const loanAbove2Outflow=Math.max(0,num(loanAbove2Scenario.monthly_outflow_rs));
+const loanAbove2NotOutflow=Math.max(0,num(loanAbove2NotScenario.monthly_outflow_rs));
 const selfResidual=Math.max(0,num(selfScenario.residual_bill_rs));
 const selfNetInvestment=Math.max(0,num(selfScenario.net_investment_after_subsidy));
 const monthlySaving=Math.max(0,monthlyBill-selfOutflow);
@@ -698,12 +752,12 @@ const trees25=co225/treeFactor;
 const setText=(id,val)=>{const node=document.getElementById(id);if(node){node.textContent=val;}};
 setText('upfront',r(num(finance.gross)));
 setText('upfrontNet',r(selfNetInvestment));
-setText('heroOutflowLoanUp2',isScenarioApplicable('loan_upto_2_lacs')?r(loanUp2Outflow):'—');
-setText('heroOutflowLoanAbove2',isScenarioApplicable('loan_above_2_lacs')?r(loanAbove2Outflow):'—');
+setText('heroOutflowLoanUp2',isScenarioApplicable('loan_upto_2_lacs_subsidy_to_loan')?r(loanUp2Outflow):'—');
+setText('heroOutflowLoanAbove2',isScenarioApplicable('loan_above_2_lacs_subsidy_to_loan')?r(loanAbove2Outflow):'—');
 setText('heroOutflowSelf',r(selfOutflow));
 setText('heroSaving',r(monthlySaving));
 const heroCardLoanAbove2=document.getElementById('heroCardLoanAbove2');
-if(heroCardLoanAbove2 && !isScenarioApplicable('loan_above_2_lacs')){
+if(heroCardLoanAbove2 && !isScenarioApplicable('loan_above_2_lacs_subsidy_to_loan')){
   heroCardLoanAbove2.style.display='none';
 }
 
@@ -793,7 +847,7 @@ if(financeBoxes){
       return;
     }
     cards.push([scenarioLabels[scenarioKey],[
-      ['Price',r(num(row.price))],['Subsidy',r(num(row.subsidy))],['Margin money',r(num(row.margin_money_rs))],['Loan amount',r(num(row.loan_amount_rs))],['Effective principal',r(num(row.effective_loan_principal_rs))],['Interest',`${num(row.interest_pct).toFixed(2)}%`],['Tenure',`${num(row.tenure_years).toFixed(1)} yrs`],['EMI',r(num(row.emi_rs))],['Residual bill',r(num(row.residual_bill_rs))],['Monthly outflow',r(num(row.monthly_outflow_rs))],['Payback',String(row.payback_display||'—')]
+      ['Price',r(num(row.price))],['Subsidy',r(num(row.subsidy))],['Margin money',r(num(row.margin_money_rs))],['Loan amount',r(num(row.loan_amount_rs))],['Loan amount used for EMI',r(num(row.effective_loan_principal_rs))],...(scenarioKey.includes('subsidy_not_to_loan')?[['Net own contribution after subsidy credit',r(num(row.net_own_investment_after_subsidy))],['Subsidy credit month',String(num(row.subsidy_credit_month)||12)]]:[['Loan amount after subsidy transfer',r(num(row.effective_loan_principal_rs))]]),['Interest',`${num(row.interest_pct).toFixed(2)}%`],['Tenure',`${num(row.tenure_years).toFixed(1)} yrs`],['EMI',r(num(row.emi_rs))],['Residual bill',r(num(row.residual_bill_rs))],['Monthly outflow',r(num(row.monthly_outflow_rs))],['Payback',String(row.payback_display||'—')]
     ]]);
   });
   financeBoxes.innerHTML=cards.map(([t,rows])=>`<div class='sf-metric'><strong>${t}</strong><ul>${rows.map(([k,v])=>`<li>${k}: <b>${v}</b></li>`).join('')}</ul></div>`).join('');

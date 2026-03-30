@@ -487,10 +487,14 @@ function create_or_update_solar_finance_quote(array $payload): array
     $quote['auto_sync_enabled'] = true;
     $quote['auto_source'] = 'solar_and_finance';
     $quote['auto_sync_updated_at'] = date('c');
-    $quote['auto_sync_scenario'] = $useAbove2Scenario ? 'loan_above_2_lacs' : 'loan_upto_2_lacs';
+    $quote['auto_sync_scenario'] = $useAbove2Scenario ? 'loan_above_2_lacs_subsidy_to_loan' : 'loan_upto_2_lacs_subsidy_to_loan';
     $quote['primary_finance_scenario'] = $quote['auto_sync_scenario'];
     $quote['scenario_prices'] = [
         'self_funded' => ['price' => max(0, (float) ($inputs['system_cost_self_funded'] ?? $systemCostUp2))],
+        'loan_upto_2_lacs_subsidy_to_loan' => ['price' => $systemCostUp2],
+        'loan_upto_2_lacs_subsidy_not_to_loan' => ['price' => $systemCostUp2],
+        'loan_above_2_lacs_subsidy_to_loan' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000)],
+        'loan_above_2_lacs_subsidy_not_to_loan' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000)],
         'loan_upto_2_lacs' => ['price' => $systemCostUp2],
         'loan_above_2_lacs' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000)],
     ];
@@ -567,20 +571,56 @@ function create_or_update_solar_finance_quote(array $payload): array
             'payback' => 0,
             'applicable' => true,
         ],
-        'loan_upto_2_lacs' => [
+        'loan_upto_2_lacs_subsidy_to_loan' => [
             'price' => $systemCostUp2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostUp2,
             'net_investment_after_subsidy' => max(0, $systemCostUp2 - $subsidy), 'monthly_outflow' => 0, 'payback' => 0, 'applicable' => true,
             'margin_money_rs' => (float) ($inputs['margin_money_up2'] ?? 0), 'loan_amount_rs' => (float) ($inputs['loan_amount_up2'] ?? 0),
             'effective_loan_principal_rs' => max(0, (float) ($inputs['loan_amount_up2'] ?? 0) - $subsidy), 'interest_pct' => (float) ($inputs['interest_rate_up2'] ?? 0),
-            'tenure_years' => $loanTenureYears, 'emi_rs' => (float) ($inputs['monthly_emi_up2'] ?? 0), 'residual_bill_rs' => 0,
+            'tenure_years' => $loanTenureYears, 'emi_rs' => 0, 'residual_bill_rs' => 0,
+            'net_own_investment_after_subsidy' => max(0, (float) ($inputs['margin_money_up2'] ?? 0) - $subsidy),
+            'subsidy_credit_month' => 12,
         ],
-        'loan_above_2_lacs' => [
+        'loan_upto_2_lacs_subsidy_not_to_loan' => [
+            'price' => $systemCostUp2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostUp2,
+            'net_investment_after_subsidy' => max(0, $systemCostUp2 - $subsidy), 'monthly_outflow' => 0, 'payback' => 0, 'applicable' => true,
+            'margin_money_rs' => (float) ($inputs['margin_money_up2'] ?? 0), 'loan_amount_rs' => (float) ($inputs['loan_amount_up2'] ?? 0),
+            'effective_loan_principal_rs' => max(0, (float) ($inputs['loan_amount_up2'] ?? 0)), 'interest_pct' => (float) ($inputs['interest_rate_up2'] ?? 0),
+            'tenure_years' => $loanTenureYears, 'emi_rs' => 0, 'residual_bill_rs' => 0,
+            'net_own_investment_after_subsidy' => max(0, (float) ($inputs['margin_money_up2'] ?? 0) - $subsidy),
+            'subsidy_credit_month' => 12,
+        ],
+        'loan_above_2_lacs_subsidy_to_loan' => [
             'price' => $systemCostAbove2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostAbove2,
             'net_investment_after_subsidy' => max(0, $systemCostAbove2 - $subsidy), 'monthly_outflow' => 0, 'payback' => 0,
             'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000),
             'margin_money_rs' => (float) ($inputs['margin_money_above2'] ?? 0), 'loan_amount_rs' => (float) ($inputs['loan_amount_above2'] ?? 0),
             'effective_loan_principal_rs' => max(0, (float) ($inputs['loan_amount_above2'] ?? 0) - $subsidy), 'interest_pct' => (float) ($inputs['interest_rate_above2'] ?? 0),
-            'tenure_years' => $loanTenureYears, 'emi_rs' => (float) ($inputs['monthly_emi_above2'] ?? 0), 'residual_bill_rs' => 0,
+            'tenure_years' => $loanTenureYears, 'emi_rs' => 0, 'residual_bill_rs' => 0,
+            'net_own_investment_after_subsidy' => max(0, (float) ($inputs['margin_money_above2'] ?? 0) - $subsidy),
+            'subsidy_credit_month' => 12,
+        ],
+        'loan_above_2_lacs_subsidy_not_to_loan' => [
+            'price' => $systemCostAbove2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostAbove2,
+            'net_investment_after_subsidy' => max(0, $systemCostAbove2 - $subsidy), 'monthly_outflow' => 0, 'payback' => 0,
+            'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000),
+            'margin_money_rs' => (float) ($inputs['margin_money_above2'] ?? 0), 'loan_amount_rs' => (float) ($inputs['loan_amount_above2'] ?? 0),
+            'effective_loan_principal_rs' => max(0, (float) ($inputs['loan_amount_above2'] ?? 0)), 'interest_pct' => (float) ($inputs['interest_rate_above2'] ?? 0),
+            'tenure_years' => $loanTenureYears, 'emi_rs' => 0, 'residual_bill_rs' => 0,
+            'net_own_investment_after_subsidy' => max(0, (float) ($inputs['margin_money_above2'] ?? 0) - $subsidy),
+            'subsidy_credit_month' => 12,
+        ],
+        'loan_upto_2_lacs' => [
+            'price' => $systemCostUp2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostUp2, 'applicable' => true,
+            'margin_money_rs' => (float) ($inputs['margin_money_up2'] ?? 0), 'loan_amount_rs' => (float) ($inputs['loan_amount_up2'] ?? 0),
+            'effective_loan_principal_rs' => max(0, (float) ($inputs['loan_amount_up2'] ?? 0) - $subsidy), 'interest_pct' => (float) ($inputs['interest_rate_up2'] ?? 0),
+            'tenure_years' => $loanTenureYears,
+        ],
+        'loan_above_2_lacs' => [
+            'price' => $systemCostAbove2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostAbove2,
+            'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000),
+            'margin_money_rs' => (float) ($inputs['margin_money_above2'] ?? 0), 'loan_amount_rs' => (float) ($inputs['loan_amount_above2'] ?? 0),
+            'effective_loan_principal_rs' => max(0, (float) ($inputs['loan_amount_above2'] ?? 0) - $subsidy), 'interest_pct' => (float) ($inputs['interest_rate_above2'] ?? 0),
+            'tenure_years' => $loanTenureYears,
         ],
     ];
 
