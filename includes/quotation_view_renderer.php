@@ -113,6 +113,19 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
         }
         return (int) round((float) $value);
     };
+    $hasValue = static function (array $row, string $key): bool {
+        if (!array_key_exists($key, $row)) {
+            return false;
+        }
+        $value = $row[$key];
+        if ($value === null) {
+            return false;
+        }
+        if (is_string($value) && trim($value) === '') {
+            return false;
+        }
+        return true;
+    };
     $formatPaybackMonths = static function (int $months): string {
         if ($months <= 0) {
             return '—';
@@ -202,7 +215,9 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
         $loanAmount = max(0, $toFloat($row['loan_amount_rs'] ?? 0));
         $effectivePrincipal = max(0, $toFloat($row['effective_loan_principal_rs'] ?? ($loanAmount - $scenarioSubsidy)));
         $emi = max(0, $toFloat($row['emi_rs'] ?? 0));
-        $residualBillScenario = $residualBill;
+        $residualBillScenario = $hasValue($row, 'residual_bill_rs')
+            ? max(0, $toFloat($row['residual_bill_rs']))
+            : $residualBill;
         $monthlyOutflow = max(0, $toFloat($row['monthly_outflow_rs'] ?? $row['monthly_outflow'] ?? 0));
         $applicable = $scenarioKey !== 'loan_above_2_lacs'
             ? (bool) ($row['applicable'] ?? true)
@@ -227,9 +242,16 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
                     $marginMoney = max(0, $grossPayable - $loanAmount);
                 }
             }
-            if ($scenarioKey === 'loan_upto_2_lacs' && $loanAmount <= 0) {
-                $loanAmount = min(max(0, $grossPayable - $marginMoney), 200000);
-                $marginMoney = max(0, $grossPayable - $loanAmount);
+            if ($scenarioKey === 'loan_upto_2_lacs') {
+                if ($hasValue($row, 'loan_amount_rs')) {
+                    $loanAmount = min(max(0, $toFloat($row['loan_amount_rs'])), 200000);
+                    if (!$hasValue($row, 'margin_money_rs')) {
+                        $marginMoney = max(0, $grossPayable - $loanAmount);
+                    }
+                } elseif ($loanAmount <= 0) {
+                    $loanAmount = min(max(0, $grossPayable - $marginMoney), 200000);
+                    $marginMoney = max(0, $grossPayable - $loanAmount);
+                }
             }
             if ($scenarioKey === 'loan_above_2_lacs' && $loanAmount > 200000) {
                 $applicable = (bool) ($row['applicable'] ?? true);
@@ -246,7 +268,9 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
                     $emi = ($effectivePrincipal * $monthlyRate * $pow) / max(0.000001, $pow - 1);
                 }
             }
-            $monthlyOutflow = max(0, $emi + $residualBillScenario);
+            if (!$hasValue($row, 'monthly_outflow_rs') && !$hasValue($row, 'monthly_outflow')) {
+                $monthlyOutflow = max(0, $emi + $residualBillScenario);
+            }
             if ($scenarioKey === 'loan_above_2_lacs' && !$applicable) {
                 $applicable = ($loanAmount > 200000) || ($price > 200000 && !empty($scenarioPrices['loan_above_2_lacs']));
             }
@@ -268,8 +292,20 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
                 $paybackDisplay = $formatPaybackMonths($paybackMonths);
             }
         } else {
-            $paybackMonths = $calculatePaybackMonths($marginMoney, $monthlyOutflow, $noSolarMonthlyBill);
-            $paybackDisplay = $formatPaybackMonths($paybackMonths);
+            $paybackMonths = $toInt($row['payback_months'] ?? null, 0);
+            if ($paybackMonths <= 0) {
+                $legacyYears = $toFloat($row['payback'] ?? 0);
+                if ($legacyYears > 0) {
+                    $paybackMonths = max(1, (int) round($legacyYears * 12));
+                }
+            }
+            if ($paybackMonths <= 0) {
+                $paybackMonths = $calculatePaybackMonths($marginMoney, $monthlyOutflow, $noSolarMonthlyBill);
+            }
+            $paybackDisplay = trim((string) ($row['payback_display'] ?? ''));
+            if ($paybackDisplay === '') {
+                $paybackDisplay = $formatPaybackMonths($paybackMonths);
+            }
         }
 
         $cumulativeSeries = [];
