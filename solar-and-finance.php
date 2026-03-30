@@ -203,8 +203,9 @@ $defaults = $settings['defaults'] ?? [];
     const getScenarioPrices=row=>{
       if(!row){return {up2:0,self:0,above2:0};}
       const up2=Math.max(num(row.loan_upto_2_lacs),0);
+      const selfRaw=Math.max(num(row.self_funded_price ?? row.system_cost_self ?? row.system_cost_self_funded),0);
       const aboveRaw=Math.max(num(row.loan_above_2_lacs),0);
-      return {up2,self:up2,above2:aboveRaw||up2};
+      return {up2,self:selfRaw||up2,above2:aboveRaw||up2};
     };
     const isHigherLoanApplicableForCost=cost=>Math.round(cost*0.8) >= 200000;
 
@@ -539,7 +540,7 @@ $defaults = $settings['defaults'] ?? [];
         },
         inputs:{
           monthly_bill:monthlyBill,monthly_units:units||Math.round(monthlyBill/rate),system_type:el.systemType.value,solar_size_kw:size,daily_generation_per_kw:gen,unit_rate:rate,
-          subsidy,loan_tenure_years:tenure,system_cost_self:costSelf,system_cost_up2:costUp2,system_cost_above2:costAbove2,loan_amount_up2:loanUp,margin_money_up2:marginUp,interest_rate_up2:num(el.interestRateUp2.value,d.interest_upto_2_lacs||6),
+          subsidy,loan_tenure_years:tenure,system_cost_self:costSelf,system_cost_self_funded:costSelf,system_cost_up2:costUp2,system_cost_above2:costAbove2,loan_amount_up2:loanUp,margin_money_up2:marginUp,interest_rate_up2:num(el.interestRateUp2.value,d.interest_upto_2_lacs||6),
           loan_amount_above2:loanHigh,margin_money_above2:marginHigh,interest_rate_above2:num(el.interestRateAbove2.value,d.interest_above_2_lacs||8.15),higher_loan_applicable:higherLoanApplicable,hybrid_variation:hy
         },
         results:{
