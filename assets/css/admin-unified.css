@@ -59,4 +59,20 @@
 .complaints-page .status-pill { background: #eef2ff; color: #1e3a8a; }
 .complaints-page .status-pill.closed,.complaints-page .status-pill.resolved { background: #dcfce7; color: #166534; }
 .complaints-page .urgency-pill { background: #fff7ed; color: #9a3412; }
+.admin-records .admin-records__shell,
+.admin-ai-studio .admin-ai-studio__shell { max-width: 1600px; margin: 0 auto; }
+.admin-records .admin-records__header { background: #fff; border: 1px solid var(--admin-border); border-radius: 18px; padding: 1rem 1.1rem; box-shadow: var(--admin-shadow); margin-bottom: 1rem; }
+.admin-records .admin-records__meta { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.admin-records .admin-section,
+.admin-records .admin-users__roles,
+.admin-records .admin-table-wrapper,
+.admin-records .admin-records__filter--panel { border: 1px solid var(--admin-border); border-radius: 14px; background: #fff; box-shadow: var(--admin-shadow); }
+.admin-records .admin-records__filter--panel { padding: .9rem; }
+.admin-records .admin-filter-form { display: grid; gap: .65rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; }
+.admin-records .admin-table thead { background: #f8fbff; }
+.admin-records .admin-table th { color: #334155; font-size: .82rem; letter-spacing: .01em; }
+.admin-records .admin-alert { border-radius: 12px; border-width: 1px; }
+.admin-records .btn,
+.admin-overview .btn,
+.admin-ai-studio .btn { border-radius: 10px; font-weight: 600; }
 @media (max-width: 1100px) { .admin-page { padding: .9rem; } .admin-table th,.admin-table td { font-size: .82rem; padding: .5rem .45rem; } }
