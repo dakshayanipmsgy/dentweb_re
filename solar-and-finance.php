@@ -169,7 +169,7 @@ $defaults = $settings['defaults'] ?? [];
     const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
     const glancePanel=document.getElementById('glancePanel'),paybackMeters=document.getElementById('paybackMeters'),financeBoxes=document.getElementById('financeBoxes'),waQuote=document.getElementById('waQuote');
     let latestSnapshot=null, latestReportUrl='';
-    let autoQuoteState={quoteId:'',mobileKey:'',lastSyncHash:'',timer:null,inFlight:false,inFlightPromise:null,lastResult:null};
+    let autoQuoteState={quoteId:'',mobileKey:'',lastSyncHash:'',timer:null,inFlight:false};
 
     const num=(v,fallback=0)=>{const n=Number(v); return Number.isFinite(n)?n:fallback;};
     const floorRecommendedSize=v=>{
@@ -220,29 +220,14 @@ $defaults = $settings['defaults'] ?? [];
       return normalized?normalized.slice(-10):'';
     };
     const setCustomerError=(msg)=>{el.customerError.textContent=msg||'';};
-    const makeAutoQuoteResult=(success,action,message='',extras={})=>({success:Boolean(success),action:String(action||''),message:String(message||''),quote_id:String(extras.quote_id||''),quote_no:String(extras.quote_no||''),scenario:String(extras.scenario||'')});
-    const showAutoQuoteWarning=message=>{
-      if(!message) return;
-      console.warn('[SolarFinance] Auto quotation sync warning:',message);
-      setCustomerError(message);
-    };
 
-    async function syncAutoQuotation(reason='',options={}){
-      const force=Boolean(options?.force);
-      if(force && autoQuoteState.timer){clearTimeout(autoQuoteState.timer); autoQuoteState.timer=null;}
-      if(autoQuoteState.inFlightPromise){
-        if(force) return autoQuoteState.inFlightPromise;
-        return makeAutoQuoteResult(true,'skipped_in_flight','Auto quotation sync already in progress.',{quote_id:autoQuoteState.quoteId});
-      }
-      if(!latestSnapshot || document.getElementById('results').hidden){
-        return makeAutoQuoteResult(true,'skipped_no_results','Solar estimate not ready yet.',{quote_id:autoQuoteState.quoteId});
-      }
+    async function syncAutoQuotation(reason=''){
+      if(autoQuoteState.inFlight) return;
+      if(!latestSnapshot || document.getElementById('results').hidden) return;
       const name=(el.customerName.value||'').trim();
       const location=(el.customerLocation.value||'').trim();
       const normalizedMobile=normalizeIndianMobile(el.customerMobile.value||'');
-      if(!name||!location||!normalizedMobile){
-        return makeAutoQuoteResult(true,'skipped_missing_customer','Customer details missing for auto quotation sync.',{quote_id:autoQuoteState.quoteId});
-      }
+      if(!name||!location||!normalizedMobile) return;
       const snapshot={...latestSnapshot,customer:{name,location,mobile_normalized:normalizedMobile,mobile_raw:(el.customerMobile.value||'').trim()}};
       const payload={
         ...snapshot,
@@ -268,35 +253,20 @@ $defaults = $settings['defaults'] ?? [];
         snapshot.inputs?.margin_money_up2,
         snapshot.inputs?.margin_money_above2
       ]);
-      if(!force && autoQuoteState.lastSyncHash===syncHash && autoQuoteState.mobileKey===nextMobileKey){
-        return makeAutoQuoteResult(true,'skipped_no_change','No quotation changes detected.',{quote_id:autoQuoteState.quoteId});
-      }
+      if(autoQuoteState.lastSyncHash===syncHash && autoQuoteState.mobileKey===nextMobileKey) return;
       autoQuoteState.inFlight=true;
-      autoQuoteState.inFlightPromise=(async()=>{
-        try{
-          const res=await fetch('/solar-and-finance-auto-quotation.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-          let data={};
-          try{data=await res.json();}catch(_parseErr){data={};}
-          if(res.ok && data?.success){
-            autoQuoteState.quoteId=String(data.quote_id||autoQuoteState.quoteId||'');
-            autoQuoteState.mobileKey=nextMobileKey;
-            autoQuoteState.lastSyncHash=syncHash;
-            return makeAutoQuoteResult(true,data.action||'updated',data.message||'',data);
-          }
-          const failResult=makeAutoQuoteResult(false,data?.action||'failed',data?.message||'Unable to auto-create quotation.',data||{});
-          console.error('[SolarFinance] Auto quotation sync failed:',{reason,force,status:res.status,response:data});
-          return failResult;
-        }catch(err){
-          console.error('[SolarFinance] Auto quotation sync exception:',err);
-          return makeAutoQuoteResult(false,'failed',err?.message||'Unable to auto-create quotation.');
-        }finally{
-          autoQuoteState.inFlight=false;
-          autoQuoteState.inFlightPromise=null;
+      try{
+        const res=await fetch('/solar-and-finance-auto-quotation.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        const data=await res.json();
+        if(res.ok && data?.success){
+          autoQuoteState.quoteId=String(data.quote_id||autoQuoteState.quoteId||'');
+          autoQuoteState.mobileKey=nextMobileKey;
+          autoQuoteState.lastSyncHash=syncHash;
         }
-      })();
-      const result=await autoQuoteState.inFlightPromise;
-      autoQuoteState.lastResult=result;
-      return result;
+      }catch(_err){
+      }finally{
+        autoQuoteState.inFlight=false;
+      }
     }
     function scheduleAutoQuotationSync(reason=''){
       clearTimeout(autoQuoteState.timer);
@@ -583,10 +553,6 @@ $defaults = $settings['defaults'] ?? [];
       }
       setCustomerError('');
       latestSnapshot.customer={name,location,mobile_normalized:normalizedMobile,mobile_raw:(el.customerMobile.value||'').trim()};
-      const syncResult=await syncAutoQuotation('generate_report_click',{force:true});
-      if(!syncResult.success){
-        showAutoQuoteWarning(syncResult.message||'Quotation auto-sync failed before report generation.');
-      }
       const monthlyImg=document.getElementById('monthlyChart')?.toDataURL('image/png')||'';
       const cumulativeImg=document.getElementById('cumulativeChart')?.toDataURL('image/png')||'';
       const payload={...latestSnapshot,charts_images:{monthly_outflow:monthlyImg,cumulative_expense:cumulativeImg}};
@@ -603,30 +569,13 @@ $defaults = $settings['defaults'] ?? [];
         alert(err?.message||'Unable to generate report.');
       }
     }
-    async function handleRequestQuotationClick(event){
-      event.preventDefault();
-      recalculateSolarFinance({changedField:'manualTrigger'});
-      const whatsappUrl=waQuote.href||'';
-      if(!whatsappUrl || whatsappUrl==='#'){
-        alert('Please calculate your solar estimate first.');
-        return;
-      }
-      const syncResult=await syncAutoQuotation('request_quote_click',{force:true});
-      if(!syncResult.success){
-        showAutoQuoteWarning(syncResult.message||'Quotation auto-sync failed before opening WhatsApp.');
-        alert(`Quotation auto-sync warning: ${syncResult.message||'Unable to auto-create quotation.'}`);
-      }else{
-        setCustomerError('');
-      }
-      window.open(whatsappUrl,'_blank','noopener');
-    }
     function resetAllFields(){
       manualOverride.clear();
       Object.entries(defaultState).forEach(([key,val])=>setField(key,val));
       debouncedIds.forEach(clearUserEdited);
       [el.inverterKva,el.phase,el.batteryCount].forEach(node=>{node.innerHTML='';});
       setField('customerName',''); setField('customerLocation',''); setField('customerMobile','');
-      autoQuoteState={quoteId:'',mobileKey:'',lastSyncHash:'',timer:null,inFlight:false,inFlightPromise:null,lastResult:null};
+      autoQuoteState={quoteId:'',mobileKey:'',lastSyncHash:'',timer:null,inFlight:false};
       latestSnapshot=null; latestReportUrl=''; setCustomerError('');
       clearResults();
       recalculateSolarFinance({changedField:'reset'});
@@ -650,7 +599,6 @@ $defaults = $settings['defaults'] ?? [];
     document.getElementById('calcBtn').addEventListener('click',()=>recalculateSolarFinance({changedField:'manualTrigger'}));
     document.getElementById('resetBtn').addEventListener('click',resetAllFields);
     el.generateReportBtn.addEventListener('click',generateReport);
-    waQuote.addEventListener('click',handleRequestQuotationClick);
     resetAllFields();
   </script>
 
