@@ -726,8 +726,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $base['effective_loan_principal_rs'] = $subsidyToLoan
                 ? max(0, (float) ($base['loan_amount_rs'] ?? 0) - $subsidyExpectedRs)
                 : max(0, (float) ($base['loan_amount_rs'] ?? 0));
-            $base['net_own_investment_after_subsidy'] = max(0, (float) ($base['margin_money_rs'] ?? 0) - $subsidyExpectedRs);
-            $base['subsidy_credit_month'] = 12;
+            $base['initial_investment_after_subsidy_credit_rs'] = max(0, (float) ($base['margin_money_rs'] ?? 0) - $subsidyExpectedRs);
+            $base['net_own_investment_after_subsidy'] = $base['initial_investment_after_subsidy_credit_rs'];
             return $base;
         };
         $quote['finance_scenarios'] = [
