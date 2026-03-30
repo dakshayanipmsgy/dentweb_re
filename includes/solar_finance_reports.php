@@ -197,7 +197,7 @@ function solar_finance_create_or_update_lead(array $report): array
 function solar_finance_find_matching_kit(string $systemType): ?array
 {
     $targetName = strtolower(trim($systemType)) === 'hybrid'
-        ? 'hybrid solar power generation system'
+        ? 'hybrid solar power generation system tbased'
         : 'ongrid solar power generation system';
 
     foreach (documents_inventory_kits(false) as $kit) {
