@@ -366,6 +366,194 @@ function solar_finance_apply_template_snapshot_to_quote(array $quote, bool $isCr
     return $quote;
 }
 
+function solar_finance_supported_scenario_labels(): array
+{
+    return [
+        'self_funded' => 'Self Funded',
+        'loan_upto_2_lacs_subsidy_to_loan' => 'Loan up to ₹2 lacs (subsidy to loan)',
+        'loan_upto_2_lacs_subsidy_not_to_loan' => 'Loan up to ₹2 lacs (subsidy self kept)',
+        'loan_above_2_lacs_subsidy_to_loan' => 'Loan above ₹2 lacs (subsidy to loan)',
+        'loan_above_2_lacs_subsidy_not_to_loan' => 'Loan above ₹2 lacs (subsidy self kept)',
+    ];
+}
+
+function solar_finance_normalize_for_quote_render(array $quote, array $calc, array $snapshot): array
+{
+    $toFloat = static function ($value, float $fallback = 0.0): float {
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            return $fallback;
+        }
+        return (float) $value;
+    };
+    $toInt = static function ($value, int $fallback = 0): int {
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            return $fallback;
+        }
+        return (int) round((float) $value);
+    };
+    $formatPaybackMonths = static function (int $months): string {
+        if ($months <= 0) {
+            return '—';
+        }
+        if ($months > 25 * 12) {
+            return 'Not within 25 years';
+        }
+        $years = intdiv($months, 12);
+        $remainingMonths = $months % 12;
+        if ($years <= 0) {
+            return $remainingMonths . ' month' . ($remainingMonths === 1 ? '' : 's');
+        }
+        if ($remainingMonths <= 0) {
+            return $years . ' year' . ($years === 1 ? '' : 's');
+        }
+        return $years . ' year' . ($years === 1 ? '' : 's') . ' ' . $remainingMonths . ' month' . ($remainingMonths === 1 ? '' : 's');
+    };
+    $calculatePaybackMonths = static function (float $initialSolarCost, callable $solarMonthlyOutflowResolver, float $noSolarMonthlyBill): int {
+        if ($noSolarMonthlyBill <= 0) {
+            return 0;
+        }
+        $cumSolar = max(0, $initialSolarCost);
+        $cumNoSolar = 0.0;
+        $horizon = 25 * 12;
+        for ($month = 1; $month <= $horizon; $month++) {
+            $cumSolar += max(0, (float) $solarMonthlyOutflowResolver($month));
+            $cumNoSolar += max(0, $noSolarMonthlyBill);
+            if ($cumSolar <= $cumNoSolar) {
+                return $month;
+            }
+        }
+        return $horizon + 1;
+    };
+
+    $supportedPrimary = array_merge(array_keys(solar_finance_supported_scenario_labels()), ['loan_upto_2_lacs', 'loan_above_2_lacs']);
+    $primaryScenario = (string) ($quote['primary_finance_scenario'] ?? 'loan_upto_2_lacs_subsidy_to_loan');
+    if (!in_array($primaryScenario, $supportedPrimary, true)) {
+        $primaryScenario = 'loan_upto_2_lacs_subsidy_to_loan';
+    }
+
+    $scenarioPrices = is_array($quote['scenario_prices'] ?? null) ? $quote['scenario_prices'] : [];
+    $financeScenariosRaw = is_array($quote['finance_scenarios'] ?? null) ? $quote['finance_scenarios'] : [];
+    $grossFallback = max(0, $toFloat($calc['gross_payable'] ?? ($calc['gross_payable_before_discount'] ?? 0)));
+    $subsidy = max(0, $toFloat($calc['subsidy_expected_rs'] ?? 0));
+    $capacity = max(0, $toFloat($quote['capacity_kwp'] ?? $quote['system_capacity_kwp'] ?? 0));
+    $tariff = max(0.1, $toFloat($snapshot['unit_rate_rs_per_kwh'] ?? null, 1));
+    $annualGeneration = max(0, $toFloat($snapshot['annual_generation_kwh_per_kw'] ?? null, 0));
+    $monthlyUnitsSolar = ($capacity * $annualGeneration) / 12;
+    $noSolarMonthlyBill = max(0, $toFloat($snapshot['monthly_bill_before_rs'] ?? null, $toFloat($quote['finance_inputs']['monthly_bill_rs'] ?? 0)));
+    $residualBill = max(0, $noSolarMonthlyBill - ($monthlyUnitsSolar * $tariff));
+    $monthlyUnitsBefore = $noSolarMonthlyBill > 0 ? ($noSolarMonthlyBill / $tariff) : 0;
+    $legacyUp2 = is_array($financeScenariosRaw['loan_upto_2_lacs'] ?? null) ? $financeScenariosRaw['loan_upto_2_lacs'] : [];
+    $legacyAbove2 = is_array($financeScenariosRaw['loan_above_2_lacs'] ?? null) ? $financeScenariosRaw['loan_above_2_lacs'] : [];
+
+    $resolvedScenarios = [];
+    foreach (solar_finance_supported_scenario_labels() as $scenarioKey => $scenarioLabel) {
+        $row = is_array($financeScenariosRaw[$scenarioKey] ?? null) ? $financeScenariosRaw[$scenarioKey] : [];
+        if ($row === [] && str_contains($scenarioKey, 'loan_upto_2_lacs')) {
+            $row = $legacyUp2;
+        }
+        if ($row === [] && str_contains($scenarioKey, 'loan_above_2_lacs')) {
+            $row = $legacyAbove2;
+        }
+        $isSelfFunded = $scenarioKey === 'self_funded';
+        $isSubsidyNotToLoan = str_contains($scenarioKey, 'subsidy_not_to_loan');
+        $isAbove2 = str_contains($scenarioKey, 'loan_above_2_lacs');
+        $priceFallback = $scenarioPrices[$scenarioKey]['price']
+            ?? ($isAbove2 ? ($scenarioPrices['loan_above_2_lacs']['price'] ?? 0) : ($scenarioPrices['loan_upto_2_lacs']['price'] ?? 0));
+        if ($isSelfFunded) {
+            $priceFallback = $scenarioPrices['self_funded']['price'] ?? $grossFallback;
+        }
+        $price = max(0, $toFloat($row['price'] ?? $priceFallback ?? $grossFallback));
+        $scenarioSubsidy = max(0, $toFloat($row['subsidy'] ?? $subsidy));
+        $interestPct = max(0, $toFloat($row['interest_pct'] ?? $snapshot['loan_interest_rate_percent'] ?? 0));
+        $tenureMonths = max(1, $toInt($row['tenure_months'] ?? null, (int) round(max(0, $toFloat($row['tenure_years'] ?? null, 10)) * 12)));
+        $tenureYears = $tenureMonths / 12;
+        $marginMoney = max(0, $toFloat($row['margin_money_rs'] ?? 0));
+        $loanAmount = max(0, $toFloat($row['loan_amount_rs'] ?? 0));
+        $scenarioResidual = max(0, $toFloat($row['residual_bill_rs'] ?? $residualBill));
+        $applicable = $isAbove2 ? (bool) ($row['applicable'] ?? ($legacyAbove2['applicable'] ?? false)) : (bool) ($row['applicable'] ?? true);
+        $effectivePrincipal = 0.0;
+        $initialInvestment = max(0, $price - $scenarioSubsidy);
+        $emi = 0.0;
+        if (!$isSelfFunded) {
+            if ($marginMoney <= 0 && $loanAmount <= 0) {
+                $loanAmount = max(0, $price * 0.8);
+                $marginMoney = max(0, $price - $loanAmount);
+            }
+            if ($isSubsidyNotToLoan) {
+                $remainingSubsidy = max(0, $scenarioSubsidy - $marginMoney);
+                $effectivePrincipal = max(0, $loanAmount - $remainingSubsidy);
+                $initialInvestment = max(0, $marginMoney - $scenarioSubsidy);
+            } else {
+                $effectivePrincipal = max(0, $toFloat($row['effective_loan_principal_rs'] ?? ($loanAmount - $scenarioSubsidy)));
+                $initialInvestment = $marginMoney;
+            }
+            $emi = max(0, $toFloat($row['emi_rs'] ?? 0));
+            if ($emi <= 0 && $effectivePrincipal > 0) {
+                $monthlyRate = ($interestPct / 100) / 12;
+                $emi = $monthlyRate <= 0
+                    ? ($effectivePrincipal / max(1, $tenureMonths))
+                    : (($effectivePrincipal * $monthlyRate * pow(1 + $monthlyRate, $tenureMonths)) / max(0.000001, pow(1 + $monthlyRate, $tenureMonths) - 1));
+            }
+        }
+        $monthlyOutflow = $isSelfFunded ? $scenarioResidual : ($emi + $scenarioResidual);
+        $paybackMonths = $calculatePaybackMonths($isSelfFunded ? max(0, $price - $scenarioSubsidy) : $initialInvestment, static function (int $month) use ($isSelfFunded, $emi, $scenarioResidual, $tenureMonths): float {
+            if ($isSelfFunded) {
+                return $scenarioResidual;
+            }
+            return ($month <= $tenureMonths ? $emi : 0.0) + $scenarioResidual;
+        }, $noSolarMonthlyBill);
+        $cumulativeSeries = [];
+        for ($year = 0; $year <= 25; $year++) {
+            $months = $year * 12;
+            if ($isSelfFunded) {
+                $cumulativeSeries[] = max(0, $price - $scenarioSubsidy) + ($months * $scenarioResidual);
+            } else {
+                $monthsWithinTenure = min($months, $tenureMonths);
+                $monthsAfterTenure = max(0, $months - $tenureMonths);
+                $cumulativeSeries[] = $initialInvestment + ($monthsWithinTenure * ($emi + $scenarioResidual)) + ($monthsAfterTenure * $scenarioResidual);
+            }
+        }
+        $resolvedScenarios[$scenarioKey] = [
+            'label' => $scenarioLabel,
+            'applicable' => $applicable,
+            'price' => $price,
+            'subsidy' => $scenarioSubsidy,
+            'margin_money_rs' => $isSelfFunded ? 0 : $marginMoney,
+            'initial_investment_after_subsidy_credit_rs' => $isSelfFunded ? max(0, $price - $scenarioSubsidy) : $initialInvestment,
+            'loan_amount_rs' => $isSelfFunded ? 0 : $loanAmount,
+            'effective_loan_principal_rs' => $effectivePrincipal,
+            'interest_pct' => $interestPct,
+            'tenure_years' => $tenureYears,
+            'tenure_months' => $tenureMonths,
+            'emi_rs' => $emi,
+            'residual_bill_rs' => $scenarioResidual,
+            'monthly_outflow_rs' => $monthlyOutflow,
+            'payback_months' => $paybackMonths,
+            'payback_display' => $formatPaybackMonths($paybackMonths),
+            'cumulative_series' => $cumulativeSeries,
+            'is_primary' => $primaryScenario === $scenarioKey,
+            'net_investment_after_subsidy' => $isSelfFunded ? max(0, $price - $scenarioSubsidy) : max(0, $price - $scenarioSubsidy),
+            'net_own_investment_after_subsidy' => $isSelfFunded ? max(0, $price - $scenarioSubsidy) : $initialInvestment,
+        ];
+    }
+
+    return [
+        'primary_finance_scenario' => $primaryScenario,
+        'gross' => (float) ($resolvedScenarios[$primaryScenario]['price'] ?? $grossFallback),
+        'subsidy' => $subsidy,
+        'monthly_bill_before_rs' => $noSolarMonthlyBill,
+        'no_solar_monthly_bill_rs' => $noSolarMonthlyBill,
+        'monthly_units_before' => $monthlyUnitsBefore,
+        'unit_rate_rs_per_kwh' => $tariff,
+        'annual_generation_kwh_per_kw' => $annualGeneration,
+        'capacity_kwp' => $capacity,
+        'monthly_units_solar' => $monthlyUnitsSolar,
+        'residual_bill' => (float) ($resolvedScenarios['self_funded']['residual_bill_rs'] ?? $residualBill),
+        'finance_scenarios' => $resolvedScenarios,
+        'scenario_prices' => $scenarioPrices,
+    ];
+}
+
 function create_or_update_solar_finance_quote(array $payload): array
 {
     $customer = is_array($payload['customer'] ?? null) ? $payload['customer'] : [];
@@ -386,6 +574,7 @@ function create_or_update_solar_finance_quote(array $payload): array
     }
 
     $higherLoanApplicable = (bool) ($inputs['higher_loan_applicable'] ?? false);
+    $systemCostSelf = max(0, (float) ($inputs['system_cost_self'] ?? ($inputs['system_cost_self_funded'] ?? 0)));
     $systemCostUp2 = max(0, (float) ($inputs['system_cost_up2'] ?? 0));
     $systemCostAbove2 = max(0, (float) ($inputs['system_cost_above2'] ?? 0));
     $useAbove2Scenario = $higherLoanApplicable && $systemCostAbove2 > 0;
@@ -500,7 +689,7 @@ function create_or_update_solar_finance_quote(array $payload): array
     $quote['auto_sync_scenario'] = $useAbove2Scenario ? 'loan_above_2_lacs_subsidy_to_loan' : 'loan_upto_2_lacs_subsidy_to_loan';
     $quote['primary_finance_scenario'] = $quote['auto_sync_scenario'];
     $quote['scenario_prices'] = [
-        'self_funded' => ['price' => max(0, (float) ($inputs['system_cost_self_funded'] ?? $systemCostUp2))],
+        'self_funded' => ['price' => $systemCostSelf > 0 ? $systemCostSelf : $systemCostUp2],
         'loan_upto_2_lacs_subsidy_to_loan' => ['price' => $systemCostUp2],
         'loan_upto_2_lacs_subsidy_not_to_loan' => ['price' => $systemCostUp2],
         'loan_above_2_lacs_subsidy_to_loan' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000)],
@@ -575,51 +764,35 @@ function create_or_update_solar_finance_quote(array $payload): array
         'self_funded' => [
             'price' => (float) ($quote['scenario_prices']['self_funded']['price'] ?? 0),
             'subsidy' => $subsidy,
-            'gross_payable' => (float) ($quote['scenario_prices']['self_funded']['price'] ?? 0),
-            'net_investment_after_subsidy' => max(0, (float) ($quote['scenario_prices']['self_funded']['price'] ?? 0) - $subsidy),
-            'monthly_outflow' => 0,
-            'payback' => 0,
             'applicable' => true,
         ],
         'loan_upto_2_lacs_subsidy_to_loan' => [
-            'price' => $systemCostUp2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostUp2,
-            'net_investment_after_subsidy' => max(0, $systemCostUp2 - $subsidy), 'monthly_outflow' => 0, 'payback' => 0, 'applicable' => true,
+            'price' => $systemCostUp2, 'subsidy' => $subsidy, 'applicable' => true,
             'margin_money_rs' => $marginUp2, 'loan_amount_rs' => $loanUp2,
             'effective_loan_principal_rs' => max(0, $loanUp2 - $subsidy), 'interest_pct' => (float) ($inputs['interest_rate_up2'] ?? 0),
-            'tenure_years' => $loanTenureYears, 'emi_rs' => 0, 'residual_bill_rs' => 0,
-            'initial_investment_after_subsidy_credit_rs' => $initialInvestmentUp2AfterSubsidy,
-            'net_own_investment_after_subsidy' => $initialInvestmentUp2AfterSubsidy,
+            'tenure_years' => $loanTenureYears,
         ],
         'loan_upto_2_lacs_subsidy_not_to_loan' => [
-            'price' => $systemCostUp2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostUp2,
-            'net_investment_after_subsidy' => max(0, $systemCostUp2 - $subsidy), 'monthly_outflow' => 0, 'payback' => 0, 'applicable' => true,
+            'price' => $systemCostUp2, 'subsidy' => $subsidy, 'applicable' => true,
             'margin_money_rs' => $marginUp2, 'loan_amount_rs' => $loanUp2,
             'remaining_subsidy_after_margin_adjustment_rs' => $remainingSubsidyUp2AfterMargin,
             'effective_loan_principal_rs' => $effectiveLoanUp2NotToLoan, 'interest_pct' => (float) ($inputs['interest_rate_up2'] ?? 0),
-            'tenure_years' => $loanTenureYears, 'emi_rs' => 0, 'residual_bill_rs' => 0,
-            'initial_investment_after_subsidy_credit_rs' => $initialInvestmentUp2AfterSubsidy,
-            'net_own_investment_after_subsidy' => $initialInvestmentUp2AfterSubsidy,
+            'tenure_years' => $loanTenureYears,
         ],
         'loan_above_2_lacs_subsidy_to_loan' => [
-            'price' => $systemCostAbove2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostAbove2,
-            'net_investment_after_subsidy' => max(0, $systemCostAbove2 - $subsidy), 'monthly_outflow' => 0, 'payback' => 0,
+            'price' => $systemCostAbove2, 'subsidy' => $subsidy,
             'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000),
             'margin_money_rs' => $marginAbove2, 'loan_amount_rs' => $loanAbove2,
             'effective_loan_principal_rs' => max(0, $loanAbove2 - $subsidy), 'interest_pct' => (float) ($inputs['interest_rate_above2'] ?? 0),
-            'tenure_years' => $loanTenureYears, 'emi_rs' => 0, 'residual_bill_rs' => 0,
-            'initial_investment_after_subsidy_credit_rs' => $initialInvestmentAbove2AfterSubsidy,
-            'net_own_investment_after_subsidy' => $initialInvestmentAbove2AfterSubsidy,
+            'tenure_years' => $loanTenureYears,
         ],
         'loan_above_2_lacs_subsidy_not_to_loan' => [
-            'price' => $systemCostAbove2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostAbove2,
-            'net_investment_after_subsidy' => max(0, $systemCostAbove2 - $subsidy), 'monthly_outflow' => 0, 'payback' => 0,
+            'price' => $systemCostAbove2, 'subsidy' => $subsidy,
             'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000),
             'margin_money_rs' => $marginAbove2, 'loan_amount_rs' => $loanAbove2,
             'remaining_subsidy_after_margin_adjustment_rs' => $remainingSubsidyAbove2AfterMargin,
             'effective_loan_principal_rs' => $effectiveLoanAbove2NotToLoan, 'interest_pct' => (float) ($inputs['interest_rate_above2'] ?? 0),
-            'tenure_years' => $loanTenureYears, 'emi_rs' => 0, 'residual_bill_rs' => 0,
-            'initial_investment_after_subsidy_credit_rs' => $initialInvestmentAbove2AfterSubsidy,
-            'net_own_investment_after_subsidy' => $initialInvestmentAbove2AfterSubsidy,
+            'tenure_years' => $loanTenureYears,
         ],
         'loan_upto_2_lacs' => [
             'price' => $systemCostUp2, 'subsidy' => $subsidy, 'gross_payable' => $systemCostUp2, 'applicable' => true,
@@ -635,6 +808,14 @@ function create_or_update_solar_finance_quote(array $payload): array
             'tenure_years' => $loanTenureYears,
         ],
     ];
+    $normalizedFinance = solar_finance_normalize_for_quote_render($quote, ['gross_payable' => $selectedSystemPrice, 'subsidy_expected_rs' => $subsidy], [
+        'monthly_bill_before_rs' => $monthlyBill,
+        'unit_rate_rs_per_kwh' => $unitRate,
+        'annual_generation_kwh_per_kw' => $annualGenerationPerKw,
+    ]);
+    $quote['finance_scenarios'] = is_array($normalizedFinance['finance_scenarios'] ?? null)
+        ? $normalizedFinance['finance_scenarios']
+        : $quote['finance_scenarios'];
 
     $quoteDefaults = documents_get_quote_defaults_settings();
     $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, 0.0, $subsidy, $selectedSystemPrice, $quoteDefaults);

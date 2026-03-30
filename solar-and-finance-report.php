@@ -35,23 +35,32 @@ $fmtCurrency = static fn ($value): string => '₹' . number_format((float) $valu
 $fmtNum = static fn ($value, int $decimals = 0): string => number_format((float) $value, $decimals, '.', ',');
 $reportDate = (string) ($report['created_at'] ?? date('Y-m-d H:i:s'));
 
-$scenarioLabelMap = [
-    'self_funded' => 'Self Funded',
-    'loan_upto_2_lacs_subsidy_to_loan' => 'Loan up to ₹2 lacs (subsidy to loan)',
-    'loan_upto_2_lacs_subsidy_not_to_loan' => 'Loan up to ₹2 lacs (subsidy self kept)',
-    'loan_above_2_lacs_subsidy_to_loan' => 'Loan above ₹2 lacs (subsidy to loan)',
-    'loan_above_2_lacs_subsidy_not_to_loan' => 'Loan above ₹2 lacs (subsidy self kept)',
-];
-$scenarioKeys = [
-    'self_funded',
-    'loan_upto_2_lacs_subsidy_to_loan',
-    'loan_upto_2_lacs_subsidy_not_to_loan',
-    'loan_above_2_lacs_subsidy_to_loan',
-    'loan_above_2_lacs_subsidy_not_to_loan',
-];
+$normalizedFinance = solar_finance_normalize_for_quote_render(
+    [
+        'primary_finance_scenario' => 'loan_upto_2_lacs_subsidy_to_loan',
+        'capacity_kwp' => (float) ($input['solar_size_kw'] ?? 0),
+        'scenario_prices' => [
+            'self_funded' => ['price' => (float) ($input['system_cost_self'] ?? ($input['system_cost_self_funded'] ?? 0))],
+            'loan_upto_2_lacs_subsidy_to_loan' => ['price' => (float) ($input['system_cost_up2'] ?? 0)],
+            'loan_upto_2_lacs_subsidy_not_to_loan' => ['price' => (float) ($input['system_cost_up2'] ?? 0)],
+            'loan_above_2_lacs_subsidy_to_loan' => ['price' => (float) ($input['system_cost_above2'] ?? 0), 'applicable' => (bool) ($input['higher_loan_applicable'] ?? false)],
+            'loan_above_2_lacs_subsidy_not_to_loan' => ['price' => (float) ($input['system_cost_above2'] ?? 0), 'applicable' => (bool) ($input['higher_loan_applicable'] ?? false)],
+        ],
+        'finance_scenarios' => $finance,
+        'finance_inputs' => ['monthly_bill_rs' => (float) ($input['monthly_bill'] ?? 0)],
+    ],
+    ['gross_payable' => (float) ($input['system_cost_up2'] ?? 0), 'subsidy_expected_rs' => (float) ($input['subsidy'] ?? 0)],
+    [
+        'monthly_bill_before_rs' => (float) ($input['monthly_bill'] ?? 0),
+        'unit_rate_rs_per_kwh' => (float) ($input['unit_rate'] ?? 0),
+        'annual_generation_kwh_per_kw' => ((float) ($input['daily_generation_per_kw'] ?? 0)) * 360,
+    ]
+);
+$scenarioLabelMap = solar_finance_supported_scenario_labels();
+$scenarioKeys = array_keys($scenarioLabelMap);
 $scenarioList = [];
 foreach ($scenarioKeys as $scenarioKey) {
-    $scenarioData = is_array($finance[$scenarioKey] ?? null) ? $finance[$scenarioKey] : [];
+    $scenarioData = is_array($normalizedFinance['finance_scenarios'][$scenarioKey] ?? null) ? $normalizedFinance['finance_scenarios'][$scenarioKey] : [];
     if ($scenarioData === []) {
         continue;
     }
@@ -62,7 +71,7 @@ foreach ($scenarioKeys as $scenarioKey) {
         'key' => $scenarioKey,
         'label' => $scenarioLabelMap[$scenarioKey] ?? $scenarioKey,
         'data' => $scenarioData,
-        'payback' => (string) ($payback[$scenarioKey] ?? '—'),
+        'payback' => (string) ($scenarioData['payback_display'] ?? ($payback[$scenarioKey] ?? '—')),
     ];
 }
 ?>
@@ -127,6 +136,7 @@ body{font-family:Arial,sans-serif;background:#f7fafc;color:#0f172a;margin:0}.wra
         <div class="finance-line"><strong>System Price (Loan above ₹2 lacs):</strong> <?= $fmtCurrency($input['system_cost_above2'] ?? 0) ?></div>
       <?php endif; ?>
       <div class="finance-line"><strong>Subsidy:</strong> <?= $fmtCurrency($input['subsidy'] ?? 0) ?></div>
+      <div class="finance-line"><strong>Residual Bill (same across all scenarios):</strong> <?= $fmtCurrency($normalizedFinance['residual_bill'] ?? 0) ?>/month</div>
     </div>
     <div class="table-wrap">
     <table class="table">
@@ -141,16 +151,16 @@ body{font-family:Arial,sans-serif;background:#f7fafc;color:#0f172a;margin:0}.wra
       <tbody>
       <?php
       $rows = [
-          'Margin Money' => static fn (array $scenario, array $data): string => $scenario['key'] === 'self_funded' ? '—' : $fmtCurrency($data['margin_money'] ?? 0),
+          'Margin Money' => static fn (array $scenario, array $data): string => $scenario['key'] === 'self_funded' ? '—' : $fmtCurrency($data['margin_money_rs'] ?? 0),
           'Margin Money - Subsidy' => static fn (array $scenario, array $data): string => $scenario['key'] === 'self_funded'
-              ? $fmtCurrency($data['net_investment'] ?? 0)
+              ? $fmtCurrency($data['net_investment_after_subsidy'] ?? 0)
               : (str_ends_with((string) $scenario['key'], '_subsidy_not_to_loan')
-                  ? $fmtCurrency($data['initial_investment_after_subsidy_credit'] ?? ($data['net_own_investment_after_subsidy'] ?? 0))
+                  ? $fmtCurrency($data['initial_investment_after_subsidy_credit_rs'] ?? ($data['net_own_investment_after_subsidy'] ?? 0))
                   : '—'),
-          'Loan Amount' => static fn (array $scenario, array $data): string => $scenario['key'] === 'self_funded' ? '—' : $fmtCurrency($data['loan_amount'] ?? 0),
-          'Loan - Subsidy' => static fn (array $scenario, array $data): string => $scenario['key'] === 'self_funded' ? '—' : $fmtCurrency($data['effective_loan'] ?? ($data['effective_loan_amount_after_remaining_subsidy_adjustment'] ?? 0)),
-          'EMI' => static fn (array $scenario, array $data): string => $scenario['key'] === 'self_funded' ? '—' : $fmtCurrency($data['emi'] ?? 0),
-          'Monthly Outflow' => static fn (array $scenario, array $data): string => $fmtCurrency($data['total_monthly_outflow'] ?? ($data['residual_bill'] ?? 0)),
+          'Loan Amount' => static fn (array $scenario, array $data): string => $scenario['key'] === 'self_funded' ? '—' : $fmtCurrency($data['loan_amount_rs'] ?? 0),
+          'Loan - Subsidy' => static fn (array $scenario, array $data): string => $scenario['key'] === 'self_funded' ? '—' : $fmtCurrency($data['effective_loan_principal_rs'] ?? 0),
+          'EMI' => static fn (array $scenario, array $data): string => $scenario['key'] === 'self_funded' ? '—' : $fmtCurrency($data['emi_rs'] ?? 0),
+          'Monthly Outflow' => static fn (array $scenario, array $data): string => $fmtCurrency($data['monthly_outflow_rs'] ?? ($data['residual_bill_rs'] ?? 0)),
           'Payback Time' => static fn (array $scenario, array $data): string => htmlspecialchars((string) ($scenario['payback'] ?? '—'), ENT_QUOTES),
       ];
       ?>
@@ -165,19 +175,6 @@ body{font-family:Arial,sans-serif;background:#f7fafc;color:#0f172a;margin:0}.wra
       <?php endforeach; ?>
       </tbody>
     </table>
-    </div>
-    <div class="finance-note">
-      <?php
-      $residualBill = 0.0;
-      foreach ($scenarioList as $scenario) {
-          $scenarioData = is_array($scenario['data']) ? $scenario['data'] : [];
-          if (isset($scenarioData['residual_bill'])) {
-              $residualBill = (float) $scenarioData['residual_bill'];
-              break;
-          }
-      }
-      ?>
-      <strong>Residual Bill (same across all scenarios):</strong> <?= $fmtCurrency($residualBill) ?>/month
     </div>
   </section>
 
