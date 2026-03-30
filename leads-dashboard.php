@@ -468,21 +468,21 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
       <td><a href="tel:<?php echo leads_safe($leadMobileRaw); ?>"><?php echo leads_safe($leadMobileRaw); ?></a></td>
       <td><?php echo leads_safe((string) ($lead['city'] ?? '')); ?></td>
       <td><?php echo leads_safe(leads_value_or_dash($lead, 'monthly_bill')); ?></td>
-      <td><span class="badge pill"><?php echo leads_safe((string) ($lead['status'] ?? '')); ?></span></td>
+      <td><span class="badge pill admin-chip--soft"><?php echo leads_safe((string) ($lead['status'] ?? '')); ?></span></td>
       <td><?php echo leads_safe(trim(((string) ($lead['next_followup_date'] ?? '')) . ' ' . ((string) ($lead['next_followup_time'] ?? '')))); ?></td>
       <td><?php echo leads_safe((string) ($lead['last_contacted_at'] ?? '')); ?></td>
       <td class="lead-message-status-cell">
         <?php if ($whatsappSent): ?>
-          <span class="badge pill" style="background:#dcfce7;color:#166534;">WA Intro</span>
+          <span class="badge pill admin-chip--success">WA Intro</span>
         <?php endif; ?>
         <?php if ($emailSent): ?>
-          <span class="badge pill" style="background:#dbeafe;color:#1e40af;">Email Intro</span>
+          <span class="badge pill admin-chip--soft">Email Intro</span>
         <?php endif; ?>
         <?php if ($whatsappDetailsSent): ?>
-          <span class="badge pill" style="background:#ede9fe;color:#5b21b6;">WA Details</span>
+          <span class="badge pill admin-chip--soft">WA Details</span>
         <?php endif; ?>
         <?php if ($emailDetailsSent): ?>
-          <span class="badge pill" style="background:#ffe4e6;color:#9f1239;">Email Details</span>
+          <span class="badge pill admin-chip--danger">Email Details</span>
         <?php endif; ?>
         <?php if (!$whatsappSent && !$emailSent && !$whatsappDetailsSent && !$emailDetailsSent): ?>
           <span style="color:#9ca3af;">&mdash;</span>
@@ -492,11 +492,11 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
       <td><?php echo leads_safe(leads_value_or_dash($lead, 'best_time_to_call')); ?></td>
       <td>
         <div class="table-actions">
-          <a class="btn-secondary lead-action action-btn" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">WhatsApp</a>
-          <button type="button" class="btn lead-action action-btn" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#10b981;">Mark Contacted Now</button>
-          <button type="button" class="btn lead-action action-btn" data-action="mark_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#2563eb;">Interested</button>
-          <button type="button" class="btn-secondary lead-action action-btn" data-action="mark_not_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#fbbf24; color:#1f2937;" <?php echo $isNotInterested ? 'disabled title="Already marked Not Interested"' : ''; ?>>Not Interested</button>
-          <button type="button" class="btn-secondary lead-action action-btn" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" style="background:#fee2e2; color:#991b1b;">Call not Picked</button>
+          <a class="btn-secondary lead-action action-btn primary-action" data-action="whatsapp" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">WhatsApp</a>
+          <button type="button" class="btn lead-action action-btn success-action" data-action="mark_contacted" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Mark Contacted</button>
+          <button type="button" class="btn lead-action action-btn primary-action" data-action="mark_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Interested</button>
+          <button type="button" class="btn-secondary lead-action action-btn warning-action" data-action="mark_not_interested" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" <?php echo $isNotInterested ? 'disabled title="Already marked Not Interested"' : ''; ?>>Not Interested</button>
+          <button type="button" class="btn-secondary lead-action action-btn danger-action" data-action="call_not_picked" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>">Call not Picked</button>
           <div class="action-more">
             <button type="button" class="btn-secondary action-btn more-toggle">More ▾</button>
             <div class="action-more-menu">
@@ -1427,6 +1427,7 @@ ksort($duplicateGroups);
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Leads Dashboard | Dakshayani Enterprises</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <style>
     body { background: #f7f8fb; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
     .fullwidth-wrapper {
@@ -1543,9 +1544,9 @@ ksort($duplicateGroups);
     textarea { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d1d5db; border-radius: 10px; font: inherit; }
   </style>
 </head>
-<body>
-  <div class="fullwidth-wrapper">
-    <div class="card">
+<body class="admin-shell leads-page">
+  <div class="fullwidth-wrapper admin-page">
+    <div class="card admin-panel">
       <div class="header-row">
         <div>
           <h1>Leads Dashboard</h1>
@@ -1558,8 +1559,8 @@ ksort($duplicateGroups);
       </div>
     </div>
 
-    <div class="card">
-      <div class="section-tabs">
+    <div class="card admin-panel">
+      <div class="section-tabs admin-section-tabs">
         <?php $sectionQuery = $_GET; $sectionQuery['section'] = 'leads'; ?>
         <a class="section-tab <?php echo $activeSection === 'leads' ? 'active' : ''; ?>" href="/leads-dashboard.php?<?php echo leads_safe(http_build_query($sectionQuery)); ?>">Leads</a>
         <?php $sectionQuery['section'] = 'quick-add'; ?>
@@ -1584,7 +1585,7 @@ ksort($duplicateGroups);
     <?php endif; ?>
 
     <?php if ($activeSection === 'quick-add'): ?>
-    <div class="card">
+    <div class="card admin-panel">
       <h2 style="margin-top:0;">Quick Add Lead</h2>
       <form method="post" class="grid grid-3">
         <input type="hidden" name="intent" value="quick_add" />
@@ -1654,7 +1655,7 @@ ksort($duplicateGroups);
     <?php endif; ?>
 
     <?php if ($activeSection === 'import'): ?>
-    <div class="card">
+    <div class="card admin-panel">
       <h2 style="margin-top:0;">Import Leads (CSV)</h2>
       <p style="margin-top:0;color:#4b5563;">Upload a CSV with columns: #, Name, Mobile, Email, City, Area Pincode, Monthly Bill, Finance &amp; Subsidy, Property Type, Roof Type, Best Time to Call, Status, Rating, Next Follow-Up, Assigned To, Last Contacted, Campaign, Actions. Older CSV formats still work.</p>
       <p style="margin:0.5rem 0 0.75rem;">
@@ -1675,14 +1676,14 @@ ksort($duplicateGroups);
     <?php endif; ?>
 
     <?php if ($activeSection === 'leads'): ?>
-    <div class="card">
+    <div class="card admin-panel">
       <h2 style="margin-top:0;">Duplicate Mobiles</h2>
       <p style="margin-top:0;color:#4b5563;">Review leads that share the same mobile number and merge them into one record.</p>
       <?php if ($duplicateGroups === []): ?>
         <p style="margin:0;color:#6b7280;">No duplicate mobile numbers detected.</p>
       <?php else: ?>
-        <div style="overflow-x:auto;">
-          <table>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
             <thead>
               <tr>
                 <th>Mobile</th>
@@ -1722,7 +1723,7 @@ ksort($duplicateGroups);
     <?php endif; ?>
 
     <?php if ($loggedInAdmin && $activeSection === 'settings'): ?>
-      <div class="card">
+      <div class="card admin-panel">
         <h2 style="margin-top:0;">Settings</h2>
         <p style="margin-top:0;color:#4b5563;">Admin-only controls for lead communication templates and /solar-details.php content.</p>
 
@@ -1819,14 +1820,14 @@ ksort($duplicateGroups);
         </div>
       </div>
     <?php elseif (!$loggedInAdmin && $activeSection === 'settings'): ?>
-      <div class="card">
+      <div class="card admin-panel">
         <h2 style="margin-top:0;">Messaging Templates (View)</h2>
         <p style="margin-top:0;color:#4b5563;">Current details page link: <a href="<?php echo leads_safe((string) ($messageSettings['details_page_url'] ?? '/solar-details.php')); ?>" target="_blank" rel="noopener"><?php echo leads_safe((string) ($messageSettings['details_page_url'] ?? '/solar-details.php')); ?></a></p>
       </div>
     <?php endif; ?>
 
     <?php if ($activeSection === 'leads'): ?>
-    <div class="card">
+    <div class="card admin-panel">
       <h2 style="margin-top:0;">Leads</h2>
       <div class="lead-filters">
         <?php $baseQuery = $_GET; ?>
@@ -1837,7 +1838,7 @@ ksort($duplicateGroups);
         <a href="/leads-dashboard.php?<?php echo leads_safe(http_build_query($archivedQuery)); ?>" class="<?php echo $view === 'archived' ? 'active' : ''; ?>">Archived Leads</a>
         <a href="/leads-dashboard.php?<?php echo leads_safe(http_build_query($allQuery)); ?>" class="<?php echo $view === 'all' ? 'active' : ''; ?>">All Leads</a>
       </div>
-      <form method="get" class="filters">
+      <form method="get" class="filters admin-filter-bar">
         <input type="hidden" name="view" value="<?php echo leads_safe($view); ?>" />
         <input type="hidden" name="sort_by" value="<?php echo leads_safe($sortBy); ?>" />
         <input type="hidden" name="sort_dir" value="<?php echo leads_safe($sortDir); ?>" />
@@ -1888,8 +1889,8 @@ ksort($duplicateGroups);
         <button type="submit" class="btn-secondary" onclick="return confirm('Apply this action to selected leads?');">Apply</button>
       </form>
 
-      <div style="overflow-x:auto;">
-        <table>
+      <div class="admin-table-wrap">
+        <table class="admin-table leads-main-table">
           <thead>
             <tr>
               <th>

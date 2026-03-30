@@ -308,7 +308,7 @@ function complaints_overview_render_table(array $filtered, array $customerByMobi
       <div class="empty-state">No complaints match your filters.</div>
     <?php else: ?>
       <div class="complaints-table-wrap">
-      <table class="complaints-table">
+      <table class="complaints-table admin-table">
         <thead><tr><th>ID</th><th>Customer Name</th><th>Customer mobile</th><th>Title</th><th>Category</th><th>Assignee</th><th>Status</th><th>Forwarded</th><th>Created</th><th>Action</th></tr></thead>
         <tbody>
         <?php foreach ($filtered as $complaint):
@@ -325,7 +325,9 @@ function complaints_overview_render_table(array $filtered, array $customerByMobi
             };
             $statusRaw = (string) ($complaint['status'] ?? 'open');
             $status = strtolower(trim($statusRaw));
+            $statusLabel = ucfirst($statusRaw);
             $rowClass = '';
+            $ageLabel = 'Fresh';
             if (!in_array($status, ['closed', 'resolved'], true)) {
                 $createdAt = $complaint['created_at'] ?? null;
                 $days = 0;
@@ -336,6 +338,7 @@ function complaints_overview_render_table(array $filtered, array $customerByMobi
                     }
                 }
                 $rowClass = $days <= 1 ? 'complaint-age-0-1' : ($days <= 3 ? 'complaint-age-2-3' : ($days <= 7 ? 'complaint-age-4-7' : ($days <= 14 ? 'complaint-age-8-14' : 'complaint-age-15plus')));
+                $ageLabel = $days <= 1 ? 'Fresh' : ($days <= 3 ? 'Needs follow-up' : ($days <= 7 ? 'Attention' : ($days <= 14 ? 'Urgent' : 'Critical')));
             }
             ?>
           <tr class="<?= complaints_overview_safe($rowClass) ?>">
@@ -345,8 +348,13 @@ function complaints_overview_render_table(array $filtered, array $customerByMobi
             <td><?= complaints_overview_safe($title !== '' ? $title : 'Complaint') ?></td>
             <td><?= complaints_overview_safe((string) ($complaint['problem_category'] ?? '')) ?></td>
             <td><?= complaints_overview_safe(complaint_display_assignee($complaint['assignee'] ?? '')) ?></td>
-            <td><?= complaints_overview_safe(ucfirst((string) ($complaint['status'] ?? 'open'))) ?></td>
-            <td><?= complaints_overview_safe($forwardedLabel) ?></td>
+            <td><span class="status-pill <?= complaints_overview_safe($status) ?>"><?= complaints_overview_safe($statusLabel) ?></span></td>
+            <td>
+              <span class="admin-chip admin-chip--muted"><?= complaints_overview_safe($forwardedLabel) ?></span>
+              <?php if (!in_array($status, ['closed', 'resolved'], true)): ?>
+                <span class="urgency-pill admin-chip"><?= complaints_overview_safe($ageLabel) ?></span>
+              <?php endif; ?>
+            </td>
             <td><?= $created ?></td>
             <td><a href="complaint-detail.php?id=<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" class="js-complaint-open" data-complaint-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>">View / Edit</a></td>
           </tr>
@@ -506,6 +514,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Customer Complaints | Dakshayani Enterprises</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <style>
     .complaints-shell { width:100%; max-width:none; margin:1.5rem 0; padding:0 1.25rem; box-sizing:border-box; }
     .complaints-header { display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
@@ -544,8 +553,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
     .complaints-export-error { margin:.65rem 0 0; color:#991b1b; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:.6rem .8rem; }
   </style>
 </head>
-<body>
-  <div class="complaints-shell" id="complaintsApp">
+<body class="admin-shell complaints-page">
+  <div class="complaints-shell admin-page" id="complaintsApp">
     <div class="complaints-header">
       <div>
         <h1 class="complaints-title">Customer Complaints</h1>
