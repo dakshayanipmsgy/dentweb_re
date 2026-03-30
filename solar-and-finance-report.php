@@ -34,6 +34,37 @@ $chartsImages = is_array($report['charts_images'] ?? null) ? $report['charts_ima
 $fmtCurrency = static fn ($value): string => '₹' . number_format((float) $value, 0, '.', ',');
 $fmtNum = static fn ($value, int $decimals = 0): string => number_format((float) $value, $decimals, '.', ',');
 $reportDate = (string) ($report['created_at'] ?? date('Y-m-d H:i:s'));
+
+$scenarioLabelMap = [
+    'self_funded' => 'Self Funded',
+    'loan_upto_2_lacs_subsidy_to_loan' => 'Loan up to ₹2 lacs (subsidy credited to loan account)',
+    'loan_upto_2_lacs_subsidy_not_to_loan' => 'Loan up to ₹2 lacs (subsidy self kept)',
+    'loan_above_2_lacs_subsidy_to_loan' => 'Loan above ₹2 lacs (subsidy credited to loan account)',
+    'loan_above_2_lacs_subsidy_not_to_loan' => 'Loan above ₹2 lacs (subsidy self kept)',
+];
+$scenarioKeys = [
+    'self_funded',
+    'loan_upto_2_lacs_subsidy_to_loan',
+    'loan_upto_2_lacs_subsidy_not_to_loan',
+    'loan_above_2_lacs_subsidy_to_loan',
+    'loan_above_2_lacs_subsidy_not_to_loan',
+];
+$scenarioList = [];
+foreach ($scenarioKeys as $scenarioKey) {
+    $scenarioData = is_array($finance[$scenarioKey] ?? null) ? $finance[$scenarioKey] : [];
+    if ($scenarioData === []) {
+        continue;
+    }
+    if (array_key_exists('applicable', $scenarioData) && !$scenarioData['applicable']) {
+        continue;
+    }
+    $scenarioList[] = [
+        'key' => $scenarioKey,
+        'label' => $scenarioLabelMap[$scenarioKey] ?? $scenarioKey,
+        'data' => $scenarioData,
+        'payback' => (string) ($payback[$scenarioKey] ?? '—'),
+    ];
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -91,13 +122,42 @@ body{font-family:Arial,sans-serif;background:#f7fafc;color:#0f172a;margin:0}.wra
   <section class="card">
     <h3>Financial Summary</h3>
     <table class="table">
-      <thead><tr><th>Scenario</th><th>System cost</th><th>Subsidy</th><th>Loan / Effective</th><th>Margin</th><th>EMI</th><th>Residual bill</th><th>Total monthly outflow</th><th>Payback</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Scenario</th>
+          <th>System Price</th>
+          <th>Margin Money</th>
+          <th>Loan Amount</th>
+          <th>EMI</th>
+          <th>Residual Bill</th>
+          <th>Monthly Outflow</th>
+          <th>Payback</th>
+          <th>Main Investment Note</th>
+        </tr>
+      </thead>
       <tbody>
-        <tr><td>Self funded</td><td><?= $fmtCurrency($finance['self_funded']['system_cost'] ?? 0) ?></td><td><?= $fmtCurrency($finance['self_funded']['subsidy'] ?? 0) ?></td><td>—</td><td><?= $fmtCurrency($finance['self_funded']['net_investment'] ?? 0) ?></td><td>—</td><td><?= $fmtCurrency($finance['self_funded']['residual_bill'] ?? 0) ?></td><td><?= $fmtCurrency($finance['self_funded']['residual_bill'] ?? 0) ?></td><td><?= htmlspecialchars((string) ($payback['self_funded'] ?? '—'), ENT_QUOTES) ?></td></tr>
-        <tr><td>Loan up to 2 lacs</td><td><?= $fmtCurrency($finance['loan_upto_2']['system_cost'] ?? 0) ?></td><td><?= $fmtCurrency($finance['loan_upto_2']['subsidy'] ?? 0) ?></td><td><?= $fmtCurrency($finance['loan_upto_2']['loan_amount'] ?? 0) ?> / <?= $fmtCurrency($finance['loan_upto_2']['effective_loan'] ?? 0) ?></td><td><?= $fmtCurrency($finance['loan_upto_2']['margin_money'] ?? 0) ?></td><td><?= $fmtCurrency($finance['loan_upto_2']['emi'] ?? 0) ?></td><td><?= $fmtCurrency($finance['loan_upto_2']['residual_bill'] ?? 0) ?></td><td><?= $fmtCurrency($finance['loan_upto_2']['total_monthly_outflow'] ?? 0) ?></td><td><?= htmlspecialchars((string) ($payback['loan_upto_2'] ?? '—'), ENT_QUOTES) ?></td></tr>
-        <?php if (is_array($finance['loan_above_2'] ?? null)): ?>
-        <tr><td>Loan above 2 lacs</td><td><?= $fmtCurrency($finance['loan_above_2']['system_cost'] ?? 0) ?></td><td><?= $fmtCurrency($finance['loan_above_2']['subsidy'] ?? 0) ?></td><td><?= $fmtCurrency($finance['loan_above_2']['loan_amount'] ?? 0) ?> / <?= $fmtCurrency($finance['loan_above_2']['effective_loan'] ?? 0) ?></td><td><?= $fmtCurrency($finance['loan_above_2']['margin_money'] ?? 0) ?></td><td><?= $fmtCurrency($finance['loan_above_2']['emi'] ?? 0) ?></td><td><?= $fmtCurrency($finance['loan_above_2']['residual_bill'] ?? 0) ?></td><td><?= $fmtCurrency($finance['loan_above_2']['total_monthly_outflow'] ?? 0) ?></td><td><?= htmlspecialchars((string) ($payback['loan_above_2'] ?? '—'), ENT_QUOTES) ?></td></tr>
-        <?php endif; ?>
+      <?php foreach ($scenarioList as $scenario): ?>
+        <?php $scenarioData = is_array($scenario['data']) ? $scenario['data'] : []; ?>
+        <tr>
+          <td><?= htmlspecialchars((string) $scenario['label'], ENT_QUOTES) ?></td>
+          <td><?= $fmtCurrency($scenarioData['system_cost'] ?? 0) ?></td>
+          <td><?= $scenario['key'] === 'self_funded' ? '—' : $fmtCurrency($scenarioData['margin_money'] ?? 0) ?></td>
+          <td><?= $scenario['key'] === 'self_funded' ? '—' : $fmtCurrency($scenarioData['loan_amount'] ?? 0) ?></td>
+          <td><?= $scenario['key'] === 'self_funded' ? '—' : $fmtCurrency($scenarioData['emi'] ?? 0) ?></td>
+          <td><?= $fmtCurrency($scenarioData['residual_bill'] ?? 0) ?></td>
+          <td><?= $fmtCurrency($scenarioData['total_monthly_outflow'] ?? ($scenarioData['residual_bill'] ?? 0)) ?></td>
+          <td><?= htmlspecialchars((string) $scenario['payback'], ENT_QUOTES) ?></td>
+          <td>
+            <?php if ($scenario['key'] === 'self_funded'): ?>
+              Subsidy: <?= $fmtCurrency($scenarioData['subsidy'] ?? 0) ?> · Net Investment: <?= $fmtCurrency($scenarioData['net_investment'] ?? 0) ?>
+            <?php elseif (str_ends_with((string) $scenario['key'], '_subsidy_not_to_loan')): ?>
+              Initial Investment After Subsidy Credit: <?= $fmtCurrency($scenarioData['initial_investment_after_subsidy_credit'] ?? 0) ?>
+            <?php else: ?>
+              —
+            <?php endif; ?>
+          </td>
+        </tr>
+      <?php endforeach; ?>
       </tbody>
     </table>
   </section>
@@ -111,10 +171,36 @@ body{font-family:Arial,sans-serif;background:#f7fafc;color:#0f172a;margin:0}.wra
   <section class="card">
     <h3>Detailed Financial Clarity</h3>
     <div class="grid">
-      <div class="metric"><strong>No Solar (25 years)</strong><div><?= $fmtCurrency($finance['no_solar']['expense_25_year'] ?? 0) ?></div></div>
-      <div class="metric"><strong>Loan up to 2 lacs</strong><div>Monthly outflow: <?= $fmtCurrency($finance['loan_upto_2']['total_monthly_outflow'] ?? 0) ?></div></div>
-      <?php if (is_array($finance['loan_above_2'] ?? null)): ?><div class="metric"><strong>Loan above 2 lacs</strong><div>Monthly outflow: <?= $fmtCurrency($finance['loan_above_2']['total_monthly_outflow'] ?? 0) ?></div></div><?php endif; ?>
-      <div class="metric"><strong>Self funded</strong><div>Annual saving: <?= $fmtCurrency($finance['self_funded']['annual_saving'] ?? 0) ?></div></div>
+      <?php foreach ($scenarioList as $scenario): ?>
+        <?php $scenarioData = is_array($scenario['data']) ? $scenario['data'] : []; ?>
+        <div class="metric">
+          <strong><?= htmlspecialchars((string) $scenario['label'], ENT_QUOTES) ?></strong>
+          <ul style="margin:8px 0 0 16px;padding:0;line-height:1.55;">
+            <li>System Price: <b><?= $fmtCurrency($scenarioData['system_cost'] ?? 0) ?></b></li>
+            <li>Subsidy: <b><?= $fmtCurrency($scenarioData['subsidy'] ?? 0) ?></b></li>
+            <li>Residual Bill: <b><?= $fmtCurrency($scenarioData['residual_bill'] ?? 0) ?></b></li>
+            <li>Monthly Outflow: <b><?= $fmtCurrency($scenarioData['total_monthly_outflow'] ?? ($scenarioData['residual_bill'] ?? 0)) ?></b></li>
+            <li>Payback: <b><?= htmlspecialchars((string) $scenario['payback'], ENT_QUOTES) ?></b></li>
+            <?php if ($scenario['key'] === 'self_funded'): ?>
+              <li>Initial Investment / Net Investment After Subsidy: <b><?= $fmtCurrency($scenarioData['net_investment'] ?? 0) ?></b></li>
+            <?php else: ?>
+              <li>Margin Money: <b><?= $fmtCurrency($scenarioData['margin_money'] ?? 0) ?></b></li>
+              <li>Loan Amount: <b><?= $fmtCurrency($scenarioData['loan_amount'] ?? 0) ?></b></li>
+              <li>Interest: <b><?= $fmtNum($scenarioData['interest_rate'] ?? 0, 2) ?>%</b></li>
+              <li>Tenure: <b><?= $fmtNum($scenarioData['tenure_years'] ?? 0) ?> years</b></li>
+              <li>EMI: <b><?= $fmtCurrency($scenarioData['emi'] ?? 0) ?></b></li>
+              <?php if (str_ends_with((string) $scenario['key'], '_subsidy_to_loan')): ?>
+                <li>Effective Loan After Subsidy Credit: <b><?= $fmtCurrency($scenarioData['effective_loan'] ?? 0) ?></b></li>
+              <?php endif; ?>
+              <?php if (str_ends_with((string) $scenario['key'], '_subsidy_not_to_loan')): ?>
+                <li>Initial Investment After Subsidy Credit: <b><?= $fmtCurrency($scenarioData['initial_investment_after_subsidy_credit'] ?? 0) ?></b></li>
+                <li>Remaining Subsidy After Margin Adjustment: <b><?= $fmtCurrency($scenarioData['remaining_subsidy_after_margin_adjustment'] ?? 0) ?></b></li>
+                <li>Effective Loan Amount After Remaining Subsidy Adjustment: <b><?= $fmtCurrency($scenarioData['effective_loan_amount_after_remaining_subsidy_adjustment'] ?? ($scenarioData['effective_loan'] ?? 0)) ?></b></li>
+              <?php endif; ?>
+            <?php endif; ?>
+          </ul>
+        </div>
+      <?php endforeach; ?>
     </div>
   </section>
 
