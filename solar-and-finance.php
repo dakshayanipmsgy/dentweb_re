@@ -21,8 +21,14 @@ $defaults = $settings['defaults'] ?? [];
     .sf-card{padding:1.1rem}.sf-card h3{margin:.4rem 0}.sf-flex{display:grid;grid-template-columns:1fr;gap:1rem}.sf-pro{margin-top:1rem}
     .sf-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.8rem}.sf-inputs label{display:flex;flex-direction:column;gap:.35rem;font-weight:600;font-size:.92rem}
     .sf-inputs input,.sf-inputs select{padding:.55rem .65rem;border:1px solid #c6d1e2;border-radius:10px}.sf-results{margin-top:1.2rem}.sf-metric{background:#f5f8ff;border:1px solid #d4def1;border-radius:12px;padding:.85rem}
-    .sf-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.7rem}.sf-finance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.8rem}
-    .sf-finance-grid ul{margin:.4rem 0 0;padding-left:1rem}.sf-btn{background:#0f766e;color:#fff;padding:.7rem 1rem;border:none;border-radius:10px;font-weight:700;cursor:pointer}
+    .sf-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.7rem}
+    .sf-finance-table-wrap{margin-top:.65rem;overflow-x:auto}
+    .sf-finance-table{width:100%;min-width:760px;border-collapse:collapse;background:#fbfdff}
+    .sf-finance-table th,.sf-finance-table td{border:1px solid #dbe4f0;padding:.6rem .65rem;text-align:left;vertical-align:top}
+    .sf-finance-table thead th{background:#f1f6ff;font-size:.92rem}
+    .sf-finance-table tbody th{font-weight:700;color:#1f2d46;background:#f8fbff;white-space:nowrap}
+    .sf-finance-note{margin-top:.75rem;background:#ecfeff;border:1px solid #a5f3fc;border-radius:12px;padding:.7rem .85rem;font-size:.92rem;color:#164e63}
+    .sf-btn{background:#0f766e;color:#fff;padding:.7rem 1rem;border:none;border-radius:10px;font-weight:700;cursor:pointer}
     .sf-btn.alt{background:#1d4ed8}.sf-btn.report{background:#0b5ed7}.sf-note{font-size:.85rem;color:#51607a}.sf-customer{margin-top:1rem}.sf-error{font-size:.82rem;color:#b91c1c;margin-top:.35rem}
     .sf-glance{margin-top:1rem}.sf-glance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem}
     .sf-glance-group{background:#f8faff;border:1px solid #dbe6f7;border-radius:14px;padding:1rem}
@@ -110,7 +116,7 @@ $defaults = $settings['defaults'] ?? [];
         <article class="sf-card"><h3>Cumulative Expense Over 25 Years</h3><canvas id="cumulativeChart" height="180"></canvas></article>
       </div>
       <article class="sf-card" style="margin-bottom:1rem"><h3>Payback meters</h3><div id="paybackMeters" class="sf-kpis"></div></article>
-      <article class="sf-card"><h3>Financial Clarity</h3><div id="financeBoxes" class="sf-finance-grid"></div></article>
+      <article class="sf-card"><h3>Detailed Financial Summary</h3><div id="financeBoxes"></div></article>
       <section class="sf-card sf-customer">
         <h2>Customer details (for report generation)</h2>
         <p class="sf-note">You can explore the calculator without these details. They are required only when you click <strong>Generate Report</strong>.</p>
@@ -490,17 +496,27 @@ $defaults = $settings['defaults'] ?? [];
       payback.push(['Self Funded',formatSelfFundedPayback(selfFundedPaybackYears)]);
       paybackMeters.innerHTML=payback.map(([n,p])=>`<div class='sf-metric'><strong>${n}</strong><div>${p}</div></div>`).join('');
 
-      const finData=[
-        ['No Solar',[['Monthly bill',INR(monthlyBill)],['25 year expense',INR(monthlyBill*12*25)]]],
-        ['Loan up to ₹2 lacs (subsidy to loan)',[['System cost',INR(costUp2)],['Subsidy',INR(subsidy)],['Loan amount',INR(loanUp)],['Loan amount after subsidy transfer',INR(effUpToLoan)],['Margin money',INR(marginUp)],['Interest',`${el.interestRateUp2.value||d.interest_upto_2_lacs||6}%`],['Tenure',`${tenure} years`],['EMI',INR(emiUpToLoan)],['Residual bill',INR(residual)],['Total monthly outflow',INR(emiUpToLoan+residual)]]],
-        ['Loan up to ₹2 lacs (subsidy self kept)',[['System cost',INR(costUp2)],['Subsidy',INR(subsidy)],['Margin Money',INR(marginUp)],['Initial Investment After Subsidy Credit',INR(initialInvestmentUpNotToLoan)],['Loan Amount',INR(loanUp)],['Remaining Subsidy After Margin Adjustment',INR(remainingSubsidyUpNotToLoan)],['Effective Loan Amount After Remaining Subsidy Adjustment',INR(effUpNotToLoan)],['Interest',`${el.interestRateUp2.value||d.interest_upto_2_lacs||6}%`],['Tenure',`${tenure} years`],['EMI',INR(emiUpNotToLoan)],['Residual bill',INR(residual)],['Monthly Outflow',INR(emiUpNotToLoan+residual)]]],
+      const scenarioColumns=[
+        {label:'Self Funded',metrics:{systemPrice:INR(costSelf),subsidy:INR(subsidy),marginMoney:'—',marginMoneySubsidy:INR(costSelf-subsidy),loanAmount:'—',loanSubsidy:'—',emi:'—',monthlyOutflow:INR(residual),payback:formatSelfFundedPayback(selfFundedPaybackYears)}},
+        {label:'Loan up to ₹2 lacs (subsidy to loan)',metrics:{systemPrice:INR(costUp2),subsidy:INR(subsidy),marginMoney:INR(marginUp),marginMoneySubsidy:'—',loanAmount:INR(loanUp),loanSubsidy:INR(effUpToLoan),emi:INR(emiUpToLoan),monthlyOutflow:INR(monthlyOutflowLoanUp2ToLoan),payback:formatLoanPayback(findLoanPaybackMonth(marginUp,monthlyOutflowLoanUp2ToLoan,monthlyBill))}},
+        {label:'Loan up to ₹2 lacs (subsidy self kept)',metrics:{systemPrice:INR(costUp2),subsidy:INR(subsidy),marginMoney:INR(marginUp),marginMoneySubsidy:INR(initialInvestmentUpNotToLoan),loanAmount:INR(loanUp),loanSubsidy:INR(effUpNotToLoan),emi:INR(emiUpNotToLoan),monthlyOutflow:INR(monthlyOutflowLoanUp2NotToLoan),payback:formatLoanPayback(findLoanPaybackMonth(initialInvestmentUpNotToLoan,monthlyOutflowLoanUp2NotToLoan,monthlyBill))}}
       ];
       if(higherLoanApplicable){
-        finData.push(['Loan above ₹2 lacs (subsidy to loan)',[['System cost',INR(costAbove2)],['Subsidy',INR(subsidy)],['Loan amount',INR(loanHigh)],['Loan amount after subsidy transfer',INR(effHighToLoan)],['Margin money',INR(marginHigh)],['Interest',`${el.interestRateAbove2.value||d.interest_above_2_lacs||8.15}%`],['Tenure',`${tenure} years`],['EMI',INR(emiHighToLoan)],['Residual bill',INR(residual)],['Total monthly outflow',INR(emiHighToLoan+residual)]]]);
-        finData.push(['Loan above ₹2 lacs (subsidy self kept)',[['System cost',INR(costAbove2)],['Subsidy',INR(subsidy)],['Margin Money',INR(marginHigh)],['Initial Investment After Subsidy Credit',INR(initialInvestmentHighNotToLoan)],['Loan Amount',INR(loanHigh)],['Remaining Subsidy After Margin Adjustment',INR(remainingSubsidyHighNotToLoan)],['Effective Loan Amount After Remaining Subsidy Adjustment',INR(effHighNotToLoan)],['Interest',`${el.interestRateAbove2.value||d.interest_above_2_lacs||8.15}%`],['Tenure',`${tenure} years`],['EMI',INR(emiHighNotToLoan)],['Residual bill',INR(residual)],['Monthly Outflow',INR(emiHighNotToLoan+residual)]]]);
+        scenarioColumns.push({label:'Loan above ₹2 lacs (subsidy to loan)',metrics:{systemPrice:INR(costAbove2),subsidy:INR(subsidy),marginMoney:INR(marginHigh),marginMoneySubsidy:'—',loanAmount:INR(loanHigh),loanSubsidy:INR(effHighToLoan),emi:INR(emiHighToLoan),monthlyOutflow:INR(monthlyOutflowLoanHighToLoan),payback:formatLoanPayback(findLoanPaybackMonth(marginHigh,monthlyOutflowLoanHighToLoan,monthlyBill))}});
+        scenarioColumns.push({label:'Loan above ₹2 lacs (subsidy self kept)',metrics:{systemPrice:INR(costAbove2),subsidy:INR(subsidy),marginMoney:INR(marginHigh),marginMoneySubsidy:INR(initialInvestmentHighNotToLoan),loanAmount:INR(loanHigh),loanSubsidy:INR(effHighNotToLoan),emi:INR(emiHighNotToLoan),monthlyOutflow:INR(monthlyOutflowLoanHighNotToLoan),payback:formatLoanPayback(findLoanPaybackMonth(initialInvestmentHighNotToLoan,monthlyOutflowLoanHighNotToLoan,monthlyBill))}});
       }
-      finData.push(['Self Funded',[['System cost',INR(costSelf)],['Subsidy',INR(subsidy)],['Net investment',INR(costSelf-subsidy)],['Residual bill',INR(residual)],['Monthly saving',INR(monthlyBill-residual)],['Annual saving',INR((monthlyBill-residual)*12)]]]);
-      financeBoxes.innerHTML=finData.map(([t,rows])=>`<div class='sf-metric'><strong>${t}</strong><ul>${rows.map(r=>`<li>${r[0]}: <b>${r[1]}</b></li>`).join('')}</ul></div>`).join('');
+      const financeRows=[
+        ['System Price','systemPrice'],
+        ['Subsidy','subsidy'],
+        ['Margin Money','marginMoney'],
+        ['Margin Money - Subsidy','marginMoneySubsidy'],
+        ['Loan Amount','loanAmount'],
+        ['Loan - Subsidy','loanSubsidy'],
+        ['EMI','emi'],
+        ['Monthly Outflow','monthlyOutflow'],
+        ['Payback Time','payback'],
+      ];
+      financeBoxes.innerHTML=`<div class="sf-finance-table-wrap"><table class="sf-finance-table"><thead><tr><th>Metric</th>${scenarioColumns.map(s=>`<th>${s.label}</th>`).join('')}</tr></thead><tbody>${financeRows.map(([rowLabel,rowKey])=>`<tr><th scope="row">${rowLabel}</th>${scenarioColumns.map(s=>`<td><b>${s.metrics[rowKey]??'—'}</b></td>`).join('')}</tr>`).join('')}</tbody></table></div><div class="sf-finance-note"><strong>Residual Bill (same across all scenarios):</strong> ${INR(residual)}/month</div>`;
 
       if(mChart) mChart.destroy(); if(cChart) cChart.destroy();
       mChart=new Chart(monthlyChart,{type:'bar',data:{labels:monthlyLabels,datasets:[{label:'Monthly Outflow (₹)',data:monthlyData,backgroundColor:monthlyColors}]},options:{plugins:{legend:{display:true}},scales:{x:{title:{display:true,text:'Scenario'}},y:{title:{display:true,text:'Monthly Outflow (₹)'}}}}});
