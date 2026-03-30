@@ -482,11 +482,11 @@ $cardConfigs[] = [
             </time>
           </div>
         </div>
-        <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+        <div class="admin-overview__primary-actions">
           <a href="<?= htmlspecialchars($pathFor('admin-tasks.php'), ENT_QUOTES) ?>" class="btn btn-primary"><i class="fa-solid fa-list-check" aria-hidden="true"></i> Tasks</a>
           <a href="<?= htmlspecialchars($pathFor('complaints-overview.php'), ENT_QUOTES) ?>" class="btn btn-ghost"><i class="fa-solid fa-headset" aria-hidden="true"></i> Complaints</a>
           <a href="<?= htmlspecialchars($pathFor('leads-dashboard.php'), ENT_QUOTES) ?>" class="btn btn-ghost"><i class="fa-solid fa-address-card" aria-hidden="true"></i> Leads</a>
-          <a href="<?= htmlspecialchars($pathFor('logout.php'), ENT_QUOTES) ?>" class="btn btn-primary"><i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i> Log out</a>
+          <a href="<?= htmlspecialchars($pathFor('logout.php'), ENT_QUOTES) ?>" class="btn btn-secondary"><i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i> Log out</a>
         </div>
         <div class="dashboard-action-groups" aria-label="Quick actions">
           <div class="dashboard-action-group">
@@ -561,7 +561,7 @@ $cardConfigs[] = [
       <div class="admin-task-widget__header">
         <div>
           <h2 style="margin:0;">Pending Tasks (All Employees)</h2>
-          <p style="margin:0;color:#475569;">Lightweight view of overdue, today, and near-term tasks.</p>
+          <p class="admin-muted" style="margin:0;">Lightweight view of overdue, today, and near-term tasks.</p>
         </div>
         <a href="<?= htmlspecialchars($pathFor('admin-tasks.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
           <i class="fa-solid fa-list-check" aria-hidden="true"></i>
@@ -576,11 +576,11 @@ $cardConfigs[] = [
         </div>
         <div class="admin-task-widget__count">
           <p class="admin-task-widget__count-title">Overdue</p>
-          <p class="admin-task-widget__count-value" style="color:#b91c1c;"><?= number_format((int) $pendingOverdue) ?></p>
+          <p class="admin-task-widget__count-value admin-task-widget__count-value--danger"><?= number_format((int) $pendingOverdue) ?></p>
         </div>
         <div class="admin-task-widget__count">
           <p class="admin-task-widget__count-title">Due today</p>
-          <p class="admin-task-widget__count-value" style="color:#4338ca;"><?= number_format((int) $pendingToday) ?></p>
+          <p class="admin-task-widget__count-value admin-task-widget__count-value--today"><?= number_format((int) $pendingToday) ?></p>
         </div>
       </div>
 

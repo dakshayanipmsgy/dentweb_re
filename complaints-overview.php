@@ -583,7 +583,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
       <div><button type="submit">Apply filters</button></div>
     </form>
 
-    <section class="complaints-export">
+    <section class="complaints-export complaints-export--secondary">
       <h2>Export Excel</h2>
       <form method="post" target="_blank" rel="noopener">
         <input type="hidden" name="action" value="export_excel" />

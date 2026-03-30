@@ -296,8 +296,8 @@ usort($filteredTasks, static function (array $left, array $right): int {
       <article class="overview-card"><div class="overview-card__label">Completed this week</div><div class="overview-card__value"><?= (int) $completedThisWeekCount ?></div></article>
     </section>
 
-    <section class="admin-workspace-grid">
-      <article class="admin-panel-card">
+    <section class="admin-workspace-grid admin-workspace-grid--tasks">
+      <article class="admin-panel-card admin-panel-card--create">
         <h2>Assign Task</h2>
         <form method="post" class="users-form-grid">
           <input type="hidden" name="task_action" value="admin_assign" />
@@ -342,7 +342,7 @@ usort($filteredTasks, static function (array $left, array $right): int {
         </form>
       </article>
 
-      <article class="admin-panel-card">
+      <article class="admin-panel-card admin-panel-card--filters">
         <h2>Filters</h2>
         <form method="get" class="users-form-grid">
           <div>
@@ -399,7 +399,7 @@ usort($filteredTasks, static function (array $left, array $right): int {
                   <form method="post" class="admin-inline-form">
                     <input type="hidden" name="task_action" value="<?= empty($task['archived_flag']) ? 'admin_archive' : 'admin_unarchive' ?>" />
                     <input type="hidden" name="task_id" value="<?= tasks_safe((string) ($task['id'] ?? '')) ?>" />
-                    <button type="submit" class="btn btn-secondary btn-xs"><?= empty($task['archived_flag']) ? 'Archive' : 'Unarchive' ?></button>
+                    <button type="submit" class="btn btn-ghost btn-xs"><?= empty($task['archived_flag']) ? 'Archive' : 'Unarchive' ?></button>
                   </form>
                 </div>
                 <?php if (!empty($task['completion_log']) && is_array($task['completion_log'])): ?>

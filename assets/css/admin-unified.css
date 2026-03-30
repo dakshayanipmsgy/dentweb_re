@@ -76,3 +76,128 @@
 .admin-overview .btn,
 .admin-ai-studio .btn { border-radius: 10px; font-weight: 600; }
 @media (max-width: 1100px) { .admin-page { padding: .9rem; } .admin-table th,.admin-table td { font-size: .82rem; padding: .5rem .45rem; } }
+
+/* 2026 UX consistency pass */
+:root {
+  --admin-radius-sm: 10px;
+  --admin-radius-lg: 18px;
+  --admin-shadow-soft: 0 8px 20px rgba(15, 23, 42, 0.06);
+  --admin-shadow-strong: 0 16px 36px rgba(15, 23, 42, 0.1);
+}
+.admin-page { max-width: 1480px; padding: 1rem 1.1rem 1.4rem; }
+.admin-panel,
+.users-card,
+.admin-panel-card,
+.complaints-export,
+.admin-table-wrapper,
+.admin-task-widget,
+.admin-overview__highlights,
+.admin-ai-studio__header,
+.ai-studio-nav,
+.ai-studio-section,
+.leads-page .card,
+.complaints-page .complaints-header,
+.complaints-page .complaints-filters,
+.complaints-page .complaints-table-wrap { box-shadow: var(--admin-shadow-soft); border-radius: var(--admin-radius); }
+
+.admin-overview .admin-overview__header { padding: 1.1rem 1.2rem; }
+.admin-overview .admin-overview__actions { gap: .75rem; }
+.admin-overview .admin-overview__primary-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
+.admin-overview .admin-overview__actions .btn { min-width: 120px; }
+.admin-overview .overview-card { border: 1px solid var(--admin-border); border-radius: 14px; transition: transform .15s ease, box-shadow .15s ease; }
+.admin-overview .overview-card:hover { transform: translateY(-1px); box-shadow: var(--admin-shadow-soft); }
+
+.dashboard-action-group { background: linear-gradient(180deg, #fcfdff, #f6f9ff); }
+.dashboard-action-group h3 { font-size: .76rem; text-transform: uppercase; letter-spacing: .04em; }
+.dashboard-action-links a { padding: .35rem .4rem; border-radius: 8px; }
+.dashboard-action-links a:hover { background: #eef4ff; text-decoration: none; }
+
+.admin-records__header h1,
+.admin-ai-studio__title,
+.complaints-title,
+.leads-page h1 { font-size: clamp(1.35rem, 2.2vw, 1.9rem); margin-bottom: .25rem; }
+.admin-records__header { margin-bottom: .85rem; }
+.admin-records__meta { gap: .65rem; }
+.admin-link { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid var(--admin-border); background: #f8fbff; border-radius: 10px; padding: .48rem .72rem; text-decoration: none; }
+
+.admin-overview__cards,
+.complaints-summary,
+.admin-overview__cards--compact { gap: .6rem; }
+.overview-card { background: #fff; }
+.overview-card__label { color: #64748b; font-weight: 600; }
+.overview-card__value { font-size: 1.55rem; }
+.admin-task-widget__count-value--danger { color:#b91c1c; }
+.admin-task-widget__count-value--today { color:#4338ca; }
+
+.admin-table th { font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; color: #475569; }
+.admin-table td { padding: .62rem .58rem; }
+.admin-table__actions .admin-row-actions { justify-content: flex-end; flex-wrap: wrap; gap: .38rem; }
+.admin-row-actions .btn-xs { padding: .34rem .6rem; }
+.admin-payload summary { cursor: pointer; font-weight: 600; color: #1e3a8a; }
+
+.status-pill,
+.dashboard-status,
+.users-status { border-radius: 999px; border: 1px solid transparent; font-weight: 700; }
+.status-pill--danger,
+.dashboard-status--rejected { background: #ffe8e8; color: #991b1b; border-color: #fecaca; }
+.dashboard-status--pending { background: #fff7e6; color: #92400e; border-color: #fcd34d; }
+.dashboard-status--approved { background: #e8f7ed; color: #166534; border-color: #bbf7d0; }
+.admin-btn-danger { background: #fff1f2 !important; border-color: #fecdd3 !important; color: #9f1239 !important; }
+
+.leads-page .fullwidth-wrapper { max-width: 1480px !important; padding: 1rem 1.1rem 1.4rem !important; margin: 0 auto; }
+.leads-page .leads-panel--header { margin-bottom: .75rem; }
+.leads-page .leads-panel--tabs { position: sticky; top: .35rem; z-index: 5; }
+.leads-page .leads-panel--duplicates { opacity: .95; }
+.leads-page .leads-panel--settings .subsection-card { background: #fbfdff; border-color: #dfe8f6; }
+.leads-page .header-row { align-items: flex-start; }
+.leads-page .section-tabs { gap: .45rem; }
+.leads-page .section-tab { padding: .45rem .78rem; font-size: .86rem; }
+.leads-page .filters { background: #f8fbff; border: 1px solid var(--admin-border); border-radius: 12px; padding: .6rem; margin-bottom: .75rem; }
+.leads-page .lead-filters { padding-bottom: .55rem; border-bottom: 1px dashed #dce6f5; }
+.leads-page .lead-filters a { font-size: .82rem; font-weight: 600; }
+.leads-page .messages .alert { box-shadow: none; border-radius: 11px; }
+.leads-page .table-actions .action-btn { font-size: .68rem; min-height: 1.4rem; }
+.leads-page .table-actions .action-btn.btn-secondary { background: #f8fafc; color: #334155; border-color: #d7dfec; }
+.leads-page .table-actions .action-btn.danger-action { background: #fff1f2; border-color: #fecdd3; }
+.leads-page .table-actions .action-btn.warning-action { background: #fffbeb; border-color: #fde68a; }
+.leads-page .table-actions .action-btn.success-action { background: #ecfdf3; border-color: #bbf7d0; }
+
+.complaints-page .complaints-shell { max-width: 1480px; padding: 1rem 1.1rem 1.4rem; }
+.complaints-page .complaints-header { padding: 1rem 1.1rem; }
+.complaints-page .complaints-filters { top: .35rem; background: #fff; }
+.complaints-page .complaints-export { background: #fbfdff; }
+.complaints-page .complaints-export--secondary { border-style: dashed; }
+.complaints-page .complaints-export h2 { color: #334155; font-size: 1rem; }
+.complaints-page .complaints-table tr:hover { background: #f8fbff; }
+
+.admin-records .users-toolbar,
+.admin-records .users-form-grid,
+.admin-records .admin-filter-form { gap: .55rem .75rem; }
+.admin-records .users-form-section { border-radius: 12px; }
+.admin-records .users-subtab { font-size: .84rem; }
+.admin-records .users-subtab.is-active { background: #1d4ed8; border-color: #1d4ed8; }
+
+.admin-records .admin-workspace-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: .75rem; }
+.admin-records .admin-panel-card { border: 1px solid var(--admin-border); background: #fff; border-radius: 14px; padding: .95rem; }
+.admin-records .admin-panel-card h2 { margin-top: 0; font-size: 1.02rem; }
+.admin-records .admin-dialog__body { display: grid; gap: .6rem; }
+.admin-records .admin-dialog textarea { border: 1px solid #d4deea; border-radius: 10px; padding: .6rem .7rem; }
+
+.admin-ai-studio__header { border: 1px solid var(--admin-border); background: #fff; padding: 1rem 1.1rem; margin-bottom: .75rem; }
+.ai-studio-nav { border: 1px solid var(--admin-border); background: #fff; padding: .55rem; margin-bottom: .75rem; }
+.ai-studio-nav__tab { border-radius: 999px; border: 1px solid #d8e0ec; background: #f8fbff; padding: .42rem .7rem; font-weight: 600; }
+.ai-studio-nav__tab.is-active,
+.ai-studio-nav__tab[aria-selected="true"] { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+.ai-studio-section { border: 1px solid var(--admin-border); background: #fff; margin-bottom: .7rem; }
+
+@media (max-width: 980px) {
+  .admin-records .admin-workspace-grid { grid-template-columns: 1fr; }
+  .admin-overview .dashboard-action-groups { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 720px) {
+  .admin-page,
+  .complaints-page .complaints-shell,
+  .leads-page .fullwidth-wrapper { padding: .85rem .75rem 1rem !important; }
+  .admin-overview .dashboard-action-groups { grid-template-columns: 1fr; }
+  .admin-table th,.admin-table td { white-space: nowrap; }
+}

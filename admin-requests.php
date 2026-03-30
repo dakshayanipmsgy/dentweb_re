@@ -223,7 +223,7 @@ function admin_requests_format_time(?string $value): string
       </form>
     </section>
 
-    <div class="admin-table-wrapper">
+    <div class="admin-table-wrapper admin-table-wrapper--queue">
       <table class="admin-table admin-table--requests">
         <thead>
           <tr>
@@ -285,7 +285,7 @@ function admin_requests_format_time(?string $value): string
                   <input type="hidden" name="request_id" value="<?= $requestId ?>" />
                   <button type="submit" class="btn btn-primary btn-xs">Approve</button>
                 </form>
-                <button type="button" class="btn btn-secondary btn-xs js-open-reject" data-request-id="<?= $requestId ?>">Reject</button>
+                <button type="button" class="btn btn-secondary btn-xs admin-btn-danger js-open-reject" data-request-id="<?= $requestId ?>">Reject</button>
               </div>
               <?php else: ?>
                 <?php if (!empty($request['decidedByName'])): ?>
@@ -317,7 +317,7 @@ function admin_requests_format_time(?string $value): string
         <label for="reject-note">Rejection note (optional)</label>
         <textarea id="reject-note" name="note" rows="4" class="admin-textarea" placeholder="Provide context for rejection"></textarea>
         <div class="admin-dialog__actions">
-          <button type="submit" class="btn btn-secondary">Reject request</button>
+          <button type="submit" class="btn btn-secondary admin-btn-danger">Reject request</button>
         </div>
       </form>
     </dialog>

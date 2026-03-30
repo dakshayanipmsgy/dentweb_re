@@ -1546,7 +1546,7 @@ ksort($duplicateGroups);
 </head>
 <body class="admin-shell leads-page">
   <div class="fullwidth-wrapper admin-page">
-    <div class="card admin-panel">
+    <div class="card admin-panel leads-panel leads-panel--header">
       <div class="header-row">
         <div>
           <h1>Leads Dashboard</h1>
@@ -1559,7 +1559,7 @@ ksort($duplicateGroups);
       </div>
     </div>
 
-    <div class="card admin-panel">
+    <div class="card admin-panel leads-panel leads-panel--tabs">
       <div class="section-tabs admin-section-tabs">
         <?php $sectionQuery = $_GET; $sectionQuery['section'] = 'leads'; ?>
         <a class="section-tab <?php echo $activeSection === 'leads' ? 'active' : ''; ?>" href="/leads-dashboard.php?<?php echo leads_safe(http_build_query($sectionQuery)); ?>">Leads</a>
@@ -1585,7 +1585,7 @@ ksort($duplicateGroups);
     <?php endif; ?>
 
     <?php if ($activeSection === 'quick-add'): ?>
-    <div class="card admin-panel">
+    <div class="card admin-panel leads-panel leads-panel--quick-add">
       <h2 style="margin-top:0;">Quick Add Lead</h2>
       <form method="post" class="grid grid-3">
         <input type="hidden" name="intent" value="quick_add" />
@@ -1655,7 +1655,7 @@ ksort($duplicateGroups);
     <?php endif; ?>
 
     <?php if ($activeSection === 'import'): ?>
-    <div class="card admin-panel">
+    <div class="card admin-panel leads-panel leads-panel--import">
       <h2 style="margin-top:0;">Import Leads (CSV)</h2>
       <p style="margin-top:0;color:#4b5563;">Upload a CSV with columns: #, Name, Mobile, Email, City, Area Pincode, Monthly Bill, Finance &amp; Subsidy, Property Type, Roof Type, Best Time to Call, Status, Rating, Next Follow-Up, Assigned To, Last Contacted, Campaign, Actions. Older CSV formats still work.</p>
       <p style="margin:0.5rem 0 0.75rem;">
@@ -1676,7 +1676,7 @@ ksort($duplicateGroups);
     <?php endif; ?>
 
     <?php if ($activeSection === 'leads'): ?>
-    <div class="card admin-panel">
+    <div class="card admin-panel leads-panel leads-panel--duplicates">
       <h2 style="margin-top:0;">Duplicate Mobiles</h2>
       <p style="margin-top:0;color:#4b5563;">Review leads that share the same mobile number and merge them into one record.</p>
       <?php if ($duplicateGroups === []): ?>
@@ -1710,7 +1710,7 @@ ksort($duplicateGroups);
                       <input type="hidden" name="intent" value="merge_duplicates" />
                       <input type="hidden" name="current_section" value="leads" />
                       <input type="hidden" name="mobile_key" value="<?php echo leads_safe((string) $mobileKey); ?>" />
-                      <button type="submit" class="btn-secondary" onclick="return confirm('Merge all leads with this mobile number?');">Merge</button>
+                      <button type="submit" class="btn btn-secondary" onclick="return confirm('Merge all leads with this mobile number?');">Merge</button>
                     </form>
                   </td>
                 </tr>
@@ -1723,7 +1723,7 @@ ksort($duplicateGroups);
     <?php endif; ?>
 
     <?php if ($loggedInAdmin && $activeSection === 'settings'): ?>
-      <div class="card admin-panel">
+      <div class="card admin-panel leads-panel leads-panel--settings">
         <h2 style="margin-top:0;">Settings</h2>
         <p style="margin-top:0;color:#4b5563;">Admin-only controls for lead communication templates and /solar-details.php content.</p>
 
