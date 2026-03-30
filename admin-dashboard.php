@@ -490,19 +490,27 @@ $cardConfigs[] = [
         </div>
         <div class="dashboard-action-groups" aria-label="Quick actions">
           <div class="dashboard-action-group">
-            <h3>Operations</h3>
+            <h3>Daily operations</h3>
             <div class="dashboard-action-links">
-              <a href="<?= htmlspecialchars($pathFor('admin-users.php'), ENT_QUOTES) ?>">Users</a>
-              <a href="<?= htmlspecialchars($pathFor('admin-requests.php'), ENT_QUOTES) ?>">Requests</a>
-              <a href="<?= htmlspecialchars($pathFor('admin-documents.php'), ENT_QUOTES) ?>">Documents &amp; Billing</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-tasks.php'), ENT_QUOTES) ?>">Task board</a>
+              <a href="<?= htmlspecialchars($pathFor('complaints-overview.php'), ENT_QUOTES) ?>">Complaints queue</a>
+              <a href="<?= htmlspecialchars($pathFor('leads-dashboard.php'), ENT_QUOTES) ?>">Leads dashboard</a>
             </div>
           </div>
           <div class="dashboard-action-group">
-            <h3>Growth &amp; outreach</h3>
+            <h3>People &amp; approvals</h3>
             <div class="dashboard-action-links">
+              <a href="<?= htmlspecialchars($pathFor('admin-users.php'), ENT_QUOTES) ?>">Users</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-requests.php'), ENT_QUOTES) ?>">Requests</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-documents.php'), ENT_QUOTES) ?>">Documents</a>
+            </div>
+          </div>
+          <div class="dashboard-action-group">
+            <h3>AI &amp; growth studio</h3>
+            <div class="dashboard-action-links">
+              <a href="<?= htmlspecialchars($pathFor('admin-ai-studio.php'), ENT_QUOTES) ?>">AI Studio</a>
               <a href="<?= htmlspecialchars($pathFor('admin-smart-marketing.php'), ENT_QUOTES) ?>">Smart Marketing</a>
               <a href="<?= htmlspecialchars($pathFor('admin-blog-manager.php'), ENT_QUOTES) ?>">Blog Manager</a>
-              <a href="<?= htmlspecialchars($pathFor('admin-ai-studio.php'), ENT_QUOTES) ?>">AI Studio</a>
             </div>
           </div>
           <div class="dashboard-action-group">

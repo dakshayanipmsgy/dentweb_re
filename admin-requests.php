@@ -143,13 +143,14 @@ function admin_requests_format_time(?string $value): string
   <meta name="description" content="Approve or reject employee requests spanning profile changes, reminders, leads, and field operations." />
   <link rel="icon" href="<?= htmlspecialchars($pathFor('images/favicon.ico'), ENT_QUOTES) ?>" />
   <link rel="stylesheet" href="<?= htmlspecialchars($pathFor('style.css'), ENT_QUOTES) ?>" />
+  <link rel="stylesheet" href="<?= htmlspecialchars($pathFor('assets/css/admin-unified.css'), ENT_QUOTES) ?>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
-<body class="admin-records" data-theme="light">
-  <main class="admin-records__shell">
+<body class="admin-records admin-shell" data-theme="light">
+  <main class="admin-records__shell admin-page">
     <?php if ($flashMessage !== ''): ?>
     <div class="admin-alert admin-alert--<?= htmlspecialchars($flashTone, ENT_QUOTES) ?>" role="status" aria-live="polite">
       <i class="fa-solid <?= htmlspecialchars($flashIcon, ENT_QUOTES) ?>" aria-hidden="true"></i>

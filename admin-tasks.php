@@ -271,9 +271,10 @@ usort($filteredTasks, static function (array $left, array $right): int {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tasks | Dakshayani Enterprises</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="assets/css/admin-unified.css" />
 </head>
-<body class="admin-records" data-theme="light">
-  <main class="admin-records__shell">
+<body class="admin-records admin-shell" data-theme="light">
+  <main class="admin-records__shell admin-page">
     <header class="admin-records__header">
       <div>
         <h1>Task Management</h1>

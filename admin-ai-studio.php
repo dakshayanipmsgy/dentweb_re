@@ -238,10 +238,11 @@ if ($flashMessage !== '') {
     crossorigin="anonymous"
     referrerpolicy="no-referrer"
   />
+  <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <meta name="csrf-token" content="<?= htmlspecialchars($csrfToken, ENT_QUOTES) ?>" />
 </head>
-<body class="admin-ai-studio" data-theme="light">
-  <main class="admin-ai-studio__shell">
+<body class="admin-ai-studio admin-shell" data-theme="light">
+  <main class="admin-ai-studio__shell admin-page">
     <header class="admin-ai-studio__header">
       <div>
         <p class="admin-ai-studio__subtitle">Admin workspace</p>
@@ -254,7 +255,18 @@ if ($flashMessage !== '') {
       </div>
     </header>
 
-    <section class="admin-panel" aria-labelledby="ai-settings">
+    <nav class="ai-studio-nav" aria-label="AI Studio sections">
+      <button type="button" class="ai-studio-nav__tab" data-ai-studio-tab="settings"><i class="fa-solid fa-sliders"></i> AI Settings</button>
+      <button type="button" class="ai-studio-nav__tab" data-ai-studio-tab="brand"><i class="fa-solid fa-id-card"></i> Brand Profile</button>
+      <button type="button" class="ai-studio-nav__tab" data-ai-studio-tab="greetings"><i class="fa-solid fa-gift"></i> Greetings / Festival Studio</button>
+      <button type="button" class="ai-studio-nav__tab" data-ai-studio-tab="chat"><i class="fa-solid fa-comments"></i> AI Chat</button>
+      <button type="button" class="ai-studio-nav__tab" data-ai-studio-tab="content"><i class="fa-solid fa-pen-ruler"></i> Blog + Image + TTS Studio</button>
+      <button type="button" class="ai-studio-nav__tab" data-ai-studio-tab="sandbox"><i class="fa-solid fa-flask-vial"></i> Sandbox</button>
+      <button type="button" class="ai-studio-nav__tab" data-ai-studio-tab="scheduler"><i class="fa-solid fa-calendar-days"></i> Automation Scheduler</button>
+      <button type="button" class="ai-studio-nav__tab" data-ai-studio-tab="usage"><i class="fa-solid fa-chart-column"></i> Usage &amp; Logs</button>
+    </nav>
+
+    <section class="admin-panel ai-studio-section" data-ai-section="settings" aria-labelledby="ai-settings">
       <div class="admin-panel__header">
         <div>
           <h2 id="ai-settings">AI Settings (Gemini-only)</h2>
@@ -349,7 +361,7 @@ if ($flashMessage !== '') {
       </form>
     </section>
 
-    <section class="admin-panel" aria-labelledby="brand-profile">
+    <section class="admin-panel ai-studio-section" data-ai-section="brand" aria-labelledby="brand-profile">
       <div class="admin-panel__header">
         <div>
           <h2 id="brand-profile">Brand Profile</h2>
@@ -483,7 +495,7 @@ if ($flashMessage !== '') {
       </form>
     </section>
 
-    <section class="admin-panel" aria-labelledby="festival-greetings">
+    <section class="admin-panel ai-studio-section" data-ai-section="greetings" aria-labelledby="festival-greetings">
       <div class="admin-panel__header">
         <div>
           <h2 id="festival-greetings">Festival &amp; Occasion Greetings</h2>
@@ -704,7 +716,7 @@ if ($flashMessage !== '') {
       </div>
     </section>
 
-    <section class="admin-panel" aria-labelledby="ai-chat">
+    <section class="admin-panel ai-studio-section" data-ai-section="chat" aria-labelledby="ai-chat">
       <div class="admin-panel__header">
         <div>
           <h2 id="ai-chat">AI Chat (Gemini)</h2>
@@ -752,7 +764,7 @@ if ($flashMessage !== '') {
       </div>
     </section>
 
-    <section class="admin-panel" aria-labelledby="ai-blog-generator">
+    <section class="admin-panel ai-studio-section" data-ai-section="content" aria-labelledby="ai-blog-generator">
       <div class="admin-panel__header">
         <div>
           <h2 id="ai-blog-generator">Blog Generator (Gemini text)</h2>
@@ -854,7 +866,7 @@ if ($flashMessage !== '') {
       </div>
     </section>
 
-    <section class="admin-panel" aria-labelledby="ai-image-generator">
+    <section class="admin-panel ai-studio-section" data-ai-section="content" aria-labelledby="ai-image-generator">
       <div class="admin-panel__header">
         <div>
           <h2 id="ai-image-generator">AI Image Generator (Gemini image)</h2>
@@ -924,7 +936,7 @@ if ($flashMessage !== '') {
       </div>
     </section>
 
-    <section class="admin-panel" aria-labelledby="ai-tts-generator">
+    <section class="admin-panel ai-studio-section" data-ai-section="content" aria-labelledby="ai-tts-generator">
       <div class="admin-panel__header">
         <div>
           <h2 id="ai-tts-generator">TTS Generator (Gemini voice)</h2>
@@ -961,7 +973,7 @@ if ($flashMessage !== '') {
       </div>
     </section>
 
-    <section class="admin-panel" aria-labelledby="ai-sandbox">
+    <section class="admin-panel ai-studio-section" data-ai-section="sandbox" aria-labelledby="ai-sandbox">
       <div class="admin-panel__header">
         <div>
           <h2 id="ai-sandbox">AI Sandbox (Gemini only)</h2>
@@ -1095,7 +1107,7 @@ if ($flashMessage !== '') {
       </div>
     </section>
 
-    <section class="admin-panel" aria-labelledby="automation-scheduler" data-scheduler-shell>
+    <section class="admin-panel ai-studio-section" data-ai-section="scheduler" aria-labelledby="automation-scheduler" data-scheduler-shell>
       <div class="admin-panel__header">
         <div>
           <h2 id="automation-scheduler">Automation Scheduler</h2>
@@ -1200,7 +1212,7 @@ if ($flashMessage !== '') {
       </div>
     </section>
 
-    <section class="admin-panel" aria-labelledby="usage-logs">
+    <section class="admin-panel ai-studio-section" data-ai-section="usage" aria-labelledby="usage-logs">
       <div class="admin-panel__header">
         <div>
           <h2 id="usage-logs">Usage &amp; Logs</h2>
@@ -1274,6 +1286,52 @@ if ($flashMessage !== '') {
       const tempValue = document.querySelector('[data-ai-temp-value]');
       const revealButton = document.querySelector('[data-ai-reveal]');
       const toastContainer = document.querySelector('[data-ai-toast-container]');
+      const studioTabs = Array.from(document.querySelectorAll('[data-ai-studio-tab]'));
+      const studioSections = Array.from(document.querySelectorAll('[data-ai-section]'));
+      const sectionKeys = ['settings', 'brand', 'greetings', 'chat', 'content', 'sandbox', 'scheduler', 'usage'];
+
+      function resolveInitialSection() {
+        const hash = (window.location.hash || '').replace('#', '').trim().toLowerCase();
+        if (sectionKeys.includes(hash)) {
+          return hash;
+        }
+        if (window.aiToastMeta && window.aiToastMeta.context === 'brand') {
+          return 'brand';
+        }
+        if (window.aiToastMeta && window.aiToastMeta.context === 'settings') {
+          return 'settings';
+        }
+        const stored = window.localStorage.getItem('aiStudioActiveSection');
+        if (stored && sectionKeys.includes(stored)) {
+          return stored;
+        }
+        return 'settings';
+      }
+
+      function activateStudioSection(key) {
+        const target = sectionKeys.includes(key) ? key : 'settings';
+        studioTabs.forEach((tab) => {
+          const active = tab.getAttribute('data-ai-studio-tab') === target;
+          tab.classList.toggle('is-active', active);
+          tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        studioSections.forEach((section) => {
+          const visible = section.getAttribute('data-ai-section') === target;
+          section.hidden = !visible;
+        });
+        window.localStorage.setItem('aiStudioActiveSection', target);
+        window.history.replaceState(null, '', `#${target}`);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      if (studioTabs.length > 0) {
+        studioTabs.forEach((tab) => {
+          tab.addEventListener('click', () => {
+            activateStudioSection(tab.getAttribute('data-ai-studio-tab') || 'settings');
+          });
+        });
+        activateStudioSection(resolveInitialSection());
+      }
 
       function showToast(message, tone = 'info') {
         if (!toastContainer) {

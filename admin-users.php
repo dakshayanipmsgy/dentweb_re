@@ -700,6 +700,7 @@ function admin_users_build_welcome_subject(array $customer): string
   <meta name="description" content="Administer Dentweb user accounts." />
   <link rel="icon" href="images/favicon.ico" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -1042,8 +1043,8 @@ function admin_users_build_welcome_subject(array $customer): string
     }
   </style>
 </head>
-<body class="admin-records" data-theme="light">
-  <main class="admin-records__shell">
+<body class="admin-records admin-shell" data-theme="light">
+  <main class="admin-records__shell admin-page">
     <header class="admin-records__header">
       <div>
         <h1><?= $isEmployeePortal ? 'Customer Workspace' : 'User Management' ?></h1>
