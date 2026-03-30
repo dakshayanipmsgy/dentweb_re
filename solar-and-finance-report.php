@@ -73,7 +73,7 @@ foreach ($scenarioKeys as $scenarioKey) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Solar and Finance Report</title>
 <style>
-body{font-family:Arial,sans-serif;background:#f7fafc;color:#0f172a;margin:0}.wrap{max-width:1100px;margin:0 auto;padding:16px}.card{background:#fff;border:1px solid #dbe4f0;border-radius:12px;padding:16px;margin-bottom:12px;break-inside:avoid}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.metric{border:1px solid #dbe4f0;background:#f8fbff;border-radius:10px;padding:10px}.header{display:flex;justify-content:space-between;gap:12px;align-items:center}.logo{max-height:56px}.title{font-size:1.4rem;font-weight:700}.sub{font-size:.92rem;color:#475569}.table-wrap{overflow-x:auto;margin-top:8px}.table{width:100%;min-width:780px;border-collapse:collapse}.table th,.table td{border:1px solid #dbe4f0;padding:8px;text-align:left;font-size:.92rem}.table thead th{background:#f1f6ff}.table tbody th{background:#f8fbff;font-weight:700;white-space:nowrap}.finance-note{margin-top:10px;padding:10px;border:1px solid #a5f3fc;background:#ecfeff;border-radius:10px;color:#155e75;font-size:.92rem}.cta{background:#ecfeff;border-color:#99f6e4}.print-btn{position:sticky;top:8px;display:inline-block;background:#0f766e;color:#fff;border:0;padding:8px 12px;border-radius:8px;cursor:pointer}.chart{width:100%;border:1px solid #dbe4f0;border-radius:10px;background:#fff}
+body{font-family:Arial,sans-serif;background:#f7fafc;color:#0f172a;margin:0}.wrap{max-width:1100px;margin:0 auto;padding:16px}.card{background:#fff;border:1px solid #dbe4f0;border-radius:12px;padding:16px;margin-bottom:12px;break-inside:avoid}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.metric{border:1px solid #dbe4f0;background:#f8fbff;border-radius:10px;padding:10px}.header{display:flex;justify-content:space-between;gap:12px;align-items:center}.logo{max-height:56px}.title{font-size:1.4rem;font-weight:700}.sub{font-size:.92rem;color:#475569}.table-wrap{overflow-x:auto;margin-top:8px}.table{width:100%;min-width:780px;border-collapse:collapse}.table th,.table td{border:1px solid #dbe4f0;padding:8px;text-align:left;font-size:.92rem}.table thead th{background:#f1f6ff}.table tbody th{background:#f8fbff;font-weight:700;white-space:nowrap}.finance-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:8px 0}.finance-line{border:1px solid #dbe4f0;background:#f8fbff;border-radius:10px;padding:10px;font-size:.92rem;color:#1f2d46}.finance-note{margin-top:10px;padding:10px;border:1px solid #a5f3fc;background:#ecfeff;border-radius:10px;color:#155e75;font-size:.92rem}.cta{background:#ecfeff;border-color:#99f6e4}.print-btn{position:sticky;top:8px;display:inline-block;background:#0f766e;color:#fff;border:0;padding:8px 12px;border-radius:8px;cursor:pointer}.chart{width:100%;border:1px solid #dbe4f0;border-radius:10px;background:#fff}
 @media print{body{background:#fff}.print-hide{display:none}.card{box-shadow:none}}
 </style>
 </head>
@@ -121,6 +121,13 @@ body{font-family:Arial,sans-serif;background:#f7fafc;color:#0f172a;margin:0}.wra
 
   <section class="card">
     <h3>Detailed Financial Summary</h3>
+    <div class="finance-summary">
+      <div class="finance-line"><strong>System Price (Loan up to ₹2 lacs):</strong> <?= $fmtCurrency($input['system_cost_up2'] ?? 0) ?></div>
+      <?php if (($input['higher_loan_applicable'] ?? false)): ?>
+        <div class="finance-line"><strong>System Price (Loan above ₹2 lacs):</strong> <?= $fmtCurrency($input['system_cost_above2'] ?? 0) ?></div>
+      <?php endif; ?>
+      <div class="finance-line"><strong>Subsidy:</strong> <?= $fmtCurrency($input['subsidy'] ?? 0) ?></div>
+    </div>
     <div class="table-wrap">
     <table class="table">
       <thead>
@@ -134,8 +141,6 @@ body{font-family:Arial,sans-serif;background:#f7fafc;color:#0f172a;margin:0}.wra
       <tbody>
       <?php
       $rows = [
-          'System Price' => static fn (array $scenario, array $data): string => $fmtCurrency($data['system_cost'] ?? 0),
-          'Subsidy' => static fn (array $scenario, array $data): string => $fmtCurrency($data['subsidy'] ?? 0),
           'Margin Money' => static fn (array $scenario, array $data): string => $scenario['key'] === 'self_funded' ? '—' : $fmtCurrency($data['margin_money'] ?? 0),
           'Margin Money - Subsidy' => static fn (array $scenario, array $data): string => $scenario['key'] === 'self_funded'
               ? $fmtCurrency($data['net_investment'] ?? 0)

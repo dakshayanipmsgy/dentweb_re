@@ -27,6 +27,8 @@ $defaults = $settings['defaults'] ?? [];
     .sf-finance-table th,.sf-finance-table td{border:1px solid #dbe4f0;padding:.6rem .65rem;text-align:left;vertical-align:top}
     .sf-finance-table thead th{background:#f1f6ff;font-size:.92rem}
     .sf-finance-table tbody th{font-weight:700;color:#1f2d46;background:#f8fbff;white-space:nowrap}
+    .sf-finance-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.6rem;margin:.65rem 0}
+    .sf-finance-line{background:#f8fbff;border:1px solid #dbe4f0;border-radius:10px;padding:.6rem .75rem;font-size:.92rem;color:#1f2d46}
     .sf-finance-note{margin-top:.75rem;background:#ecfeff;border:1px solid #a5f3fc;border-radius:12px;padding:.7rem .85rem;font-size:.92rem;color:#164e63}
     .sf-btn{background:#0f766e;color:#fff;padding:.7rem 1rem;border:none;border-radius:10px;font-weight:700;cursor:pointer}
     .sf-btn.alt{background:#1d4ed8}.sf-btn.report{background:#0b5ed7}.sf-note{font-size:.85rem;color:#51607a}.sf-customer{margin-top:1rem}.sf-error{font-size:.82rem;color:#b91c1c;margin-top:.35rem}
@@ -506,8 +508,6 @@ $defaults = $settings['defaults'] ?? [];
         scenarioColumns.push({label:'Loan above ₹2 lacs (subsidy self kept)',metrics:{systemPrice:INR(costAbove2),subsidy:INR(subsidy),marginMoney:INR(marginHigh),marginMoneySubsidy:INR(initialInvestmentHighNotToLoan),loanAmount:INR(loanHigh),loanSubsidy:INR(effHighNotToLoan),emi:INR(emiHighNotToLoan),monthlyOutflow:INR(monthlyOutflowLoanHighNotToLoan),payback:formatLoanPayback(findLoanPaybackMonth(initialInvestmentHighNotToLoan,monthlyOutflowLoanHighNotToLoan,monthlyBill))}});
       }
       const financeRows=[
-        ['System Price','systemPrice'],
-        ['Subsidy','subsidy'],
         ['Margin Money','marginMoney'],
         ['Margin Money - Subsidy','marginMoneySubsidy'],
         ['Loan Amount','loanAmount'],
@@ -516,7 +516,12 @@ $defaults = $settings['defaults'] ?? [];
         ['Monthly Outflow','monthlyOutflow'],
         ['Payback Time','payback'],
       ];
-      financeBoxes.innerHTML=`<div class="sf-finance-table-wrap"><table class="sf-finance-table"><thead><tr><th>Metric</th>${scenarioColumns.map(s=>`<th>${s.label}</th>`).join('')}</tr></thead><tbody>${financeRows.map(([rowLabel,rowKey])=>`<tr><th scope="row">${rowLabel}</th>${scenarioColumns.map(s=>`<td><b>${s.metrics[rowKey]??'—'}</b></td>`).join('')}</tr>`).join('')}</tbody></table></div><div class="sf-finance-note"><strong>Residual Bill (same across all scenarios):</strong> ${INR(residual)}/month</div>`;
+      const financeSummaryLines=[
+        `<div class="sf-finance-line"><strong>System Price (Loan up to ₹2 lacs):</strong> ${INR(costUp2)}</div>`,
+        higherLoanApplicable?`<div class="sf-finance-line"><strong>System Price (Loan above ₹2 lacs):</strong> ${INR(costAbove2)}</div>`:'',
+        `<div class="sf-finance-line"><strong>Subsidy:</strong> ${INR(subsidy)}</div>`,
+      ].filter(Boolean).join('');
+      financeBoxes.innerHTML=`<div class="sf-finance-summary">${financeSummaryLines}</div><div class="sf-finance-table-wrap"><table class="sf-finance-table"><thead><tr><th>Metric</th>${scenarioColumns.map(s=>`<th>${s.label}</th>`).join('')}</tr></thead><tbody>${financeRows.map(([rowLabel,rowKey])=>`<tr><th scope="row">${rowLabel}</th>${scenarioColumns.map(s=>`<td><b>${s.metrics[rowKey]??'—'}</b></td>`).join('')}</tr>`).join('')}</tbody></table></div><div class="sf-finance-note"><strong>Residual Bill (same across all scenarios):</strong> ${INR(residual)}/month</div>`;
 
       if(mChart) mChart.destroy(); if(cChart) cChart.destroy();
       mChart=new Chart(monthlyChart,{type:'bar',data:{labels:monthlyLabels,datasets:[{label:'Monthly Outflow (₹)',data:monthlyData,backgroundColor:monthlyColors}]},options:{plugins:{legend:{display:true}},scales:{x:{title:{display:true,text:'Scenario'}},y:{title:{display:true,text:'Monthly Outflow (₹)'}}}}});
