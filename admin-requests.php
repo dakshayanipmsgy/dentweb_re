@@ -114,7 +114,13 @@ ksort($pendingByType);
 $availableTypes = array_values(array_unique(array_map(static fn (array $request): string => strtolower((string) ($request['type'] ?? 'general')), $allRequests)));
 sort($availableTypes);
 
-$overviewCounts = admin_overview_counts($db);
+$requestCounts = ['pending' => 0, 'approved' => 0, 'rejected' => 0];
+foreach ($allRequests as $requestCounter) {
+    $statusKey = strtolower((string) ($requestCounter['status'] ?? 'pending'));
+    if (isset($requestCounts[$statusKey])) {
+        $requestCounts[$statusKey]++;
+    }
+}
 
 function admin_requests_format_time(?string $value): string
 {
@@ -127,7 +133,6 @@ function admin_requests_format_time(?string $value): string
     }
     return date('d M Y · H:i', $timestamp);
 }
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -140,16 +145,8 @@ function admin_requests_format_time(?string $value): string
   <link rel="stylesheet" href="<?= htmlspecialchars($pathFor('style.css'), ENT_QUOTES) ?>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap"
-    rel="stylesheet"
-  />
-  <link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
-    crossorigin="anonymous"
-    referrerpolicy="no-referrer"
-  />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 <body class="admin-records" data-theme="light">
   <main class="admin-records__shell">
@@ -162,8 +159,8 @@ function admin_requests_format_time(?string $value): string
 
     <header class="admin-records__header">
       <div>
-        <h1>Requests Center</h1>
-        <p class="admin-muted">Review employee-submitted requests and apply approved changes across Dentweb operations.</p>
+        <h1>Requests Approval Queue</h1>
+        <p class="admin-muted">Fast triage for employee requests. Filter by status and type, review payload, then approve or reject with context.</p>
       </div>
       <div class="admin-records__meta">
         <a class="admin-link" href="<?= htmlspecialchars($pathFor('admin-dashboard.php'), ENT_QUOTES) ?>"><i class="fa-solid fa-gauge-high"></i> Back to overview</a>
@@ -171,20 +168,28 @@ function admin_requests_format_time(?string $value): string
     </header>
 
     <section class="admin-overview__cards admin-overview__cards--compact">
-      <article class="admin-overview__card">
-        <h2>Active employees</h2>
-        <p><?= (int) ($overviewCounts['employees'] ?? 0) ?></p>
+      <article class="overview-card">
+        <div class="overview-card__label">Pending</div>
+        <div class="overview-card__value"><?= (int) $requestCounts['pending'] ?></div>
       </article>
-      <article class="admin-overview__card">
-        <h2>New leads</h2>
-        <p><?= (int) ($overviewCounts['leads'] ?? 0) ?></p>
+      <article class="overview-card">
+        <div class="overview-card__label">Approved</div>
+        <div class="overview-card__value"><?= (int) $requestCounts['approved'] ?></div>
+      </article>
+      <article class="overview-card">
+        <div class="overview-card__label">Rejected</div>
+        <div class="overview-card__value"><?= (int) $requestCounts['rejected'] ?></div>
+      </article>
+      <article class="overview-card">
+        <div class="overview-card__label">Request types</div>
+        <div class="overview-card__value"><?= count($availableTypes) ?></div>
       </article>
     </section>
 
     <section class="admin-users__roles">
       <h2>Pending by type</h2>
       <?php if (empty($pendingByType)): ?>
-      <p class="admin-muted">No pending approvals. Enjoy the clear runway!</p>
+      <p class="admin-muted">No pending approvals.</p>
       <?php else: ?>
       <ul class="admin-users__role-list">
         <?php foreach ($pendingByType as $type => $count): ?>
@@ -194,11 +199,11 @@ function admin_requests_format_time(?string $value): string
       <?php endif; ?>
     </section>
 
-    <section class="admin-records__filter">
+    <section class="admin-records__filter admin-records__filter--panel">
       <form method="get" action="<?= htmlspecialchars($requestsPath, ENT_QUOTES) ?>" class="admin-filter-form admin-filter-form--gap">
         <label>
           Status
-          <select name="status" onchange="this.form.submit()">
+          <select name="status">
             <?php foreach ($validStatuses as $statusOption): ?>
             <option value="<?= htmlspecialchars($statusOption, ENT_QUOTES) ?>" <?= $statusFilter === $statusOption ? 'selected' : '' ?>><?= htmlspecialchars(ucfirst($statusOption), ENT_QUOTES) ?></option>
             <?php endforeach; ?>
@@ -206,13 +211,14 @@ function admin_requests_format_time(?string $value): string
         </label>
         <label>
           Type
-          <select name="type" onchange="this.form.submit()">
+          <select name="type">
             <option value="all" <?= $typeFilter === 'all' ? 'selected' : '' ?>>All</option>
             <?php foreach ($availableTypes as $typeOption): ?>
             <option value="<?= htmlspecialchars($typeOption, ENT_QUOTES) ?>" <?= $typeFilter === $typeOption ? 'selected' : '' ?>><?= htmlspecialchars(ucwords(str_replace('_', ' ', $typeOption)), ENT_QUOTES) ?></option>
             <?php endforeach; ?>
           </select>
         </label>
+        <button class="btn btn-primary" type="submit">Apply filters</button>
       </form>
     </section>
 
@@ -248,7 +254,7 @@ function admin_requests_format_time(?string $value): string
               <p class="admin-muted text-sm">Type: <?= htmlspecialchars($typeLabel, ENT_QUOTES) ?></p>
               <?php if (!empty($payload) && is_array($payload)): ?>
               <details class="admin-payload">
-                <summary>View details</summary>
+                <summary>View request payload</summary>
                 <ul>
                   <?php foreach ($payload as $key => $value): ?>
                   <li><strong><?= htmlspecialchars(ucwords(str_replace('_', ' ', (string) $key)), ENT_QUOTES) ?>:</strong> <?= htmlspecialchars(is_scalar($value) ? (string) $value : json_encode($value, JSON_PRETTY_PRINT), ENT_QUOTES) ?></li>
@@ -271,29 +277,22 @@ function admin_requests_format_time(?string $value): string
             <td><span class="dashboard-status dashboard-status--<?= htmlspecialchars($status, ENT_QUOTES) ?>"><?= htmlspecialchars(ucfirst($status), ENT_QUOTES) ?></span></td>
             <td class="admin-table__actions">
               <?php if ($isPending): ?>
-              <form method="post" action="<?= htmlspecialchars($requestsPath, ENT_QUOTES) ?>" class="admin-inline-form">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES) ?>" />
-                <input type="hidden" name="action" value="approve" />
-                <input type="hidden" name="request_id" value="<?= $requestId ?>" />
-                <button type="submit" class="btn btn-primary btn-xs">Approve</button>
-              </form>
-              <form method="post" action="<?= htmlspecialchars($requestsPath, ENT_QUOTES) ?>" class="admin-inline-form">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES) ?>" />
-                <input type="hidden" name="action" value="reject" />
-                <input type="hidden" name="request_id" value="<?= $requestId ?>" />
-                <label class="admin-inline-form__field">
-                  <span class="sr-only">Rejection note</span>
-                  <input type="text" name="note" placeholder="Reason" />
-                </label>
-                <button type="submit" class="btn btn-secondary btn-xs">Reject</button>
-              </form>
+              <div class="admin-row-actions">
+                <form method="post" action="<?= htmlspecialchars($requestsPath, ENT_QUOTES) ?>" class="admin-inline-form">
+                  <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES) ?>" />
+                  <input type="hidden" name="action" value="approve" />
+                  <input type="hidden" name="request_id" value="<?= $requestId ?>" />
+                  <button type="submit" class="btn btn-primary btn-xs">Approve</button>
+                </form>
+                <button type="button" class="btn btn-secondary btn-xs js-open-reject" data-request-id="<?= $requestId ?>">Reject</button>
+              </div>
               <?php else: ?>
-              <?php if (!empty($request['decidedByName'])): ?>
-              <p class="text-sm admin-muted">By <?= htmlspecialchars($request['decidedByName'], ENT_QUOTES) ?></p>
-              <?php endif; ?>
-              <?php if (!empty($request['decisionNote'])): ?>
-              <p class="text-sm admin-muted">Note: <?= nl2br(htmlspecialchars($request['decisionNote'], ENT_QUOTES)) ?></p>
-              <?php endif; ?>
+                <?php if (!empty($request['decidedByName'])): ?>
+                <p class="text-sm admin-muted">By <?= htmlspecialchars($request['decidedByName'], ENT_QUOTES) ?></p>
+                <?php endif; ?>
+                <?php if (!empty($request['decisionNote'])): ?>
+                <p class="text-sm admin-muted">Note: <?= nl2br(htmlspecialchars($request['decisionNote'], ENT_QUOTES)) ?></p>
+                <?php endif; ?>
               <?php endif; ?>
             </td>
           </tr>
@@ -302,6 +301,42 @@ function admin_requests_format_time(?string $value): string
         </tbody>
       </table>
     </div>
+
+    <dialog id="reject-dialog" class="admin-dialog">
+      <form method="dialog" class="admin-dialog__frame js-reject-cancel">
+        <header class="admin-dialog__header">
+          <h2>Reject request</h2>
+          <button class="btn btn-secondary btn-xs" value="cancel">Close</button>
+        </header>
+      </form>
+      <form method="post" action="<?= htmlspecialchars($requestsPath, ENT_QUOTES) ?>" class="admin-dialog__body">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES) ?>" />
+        <input type="hidden" name="action" value="reject" />
+        <input type="hidden" name="request_id" id="reject-request-id" value="" />
+        <label for="reject-note">Rejection note (optional)</label>
+        <textarea id="reject-note" name="note" rows="4" class="admin-textarea" placeholder="Provide context for rejection"></textarea>
+        <div class="admin-dialog__actions">
+          <button type="submit" class="btn btn-secondary">Reject request</button>
+        </div>
+      </form>
+    </dialog>
   </main>
+  <script>
+    (function () {
+      const dialog = document.getElementById('reject-dialog');
+      if (!dialog) return;
+      const requestInput = document.getElementById('reject-request-id');
+      const openButtons = document.querySelectorAll('.js-open-reject');
+
+      openButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          requestInput.value = button.getAttribute('data-request-id') || '';
+          if (typeof dialog.showModal === 'function') {
+            dialog.showModal();
+          }
+        });
+      });
+    })();
+  </script>
 </body>
 </html>

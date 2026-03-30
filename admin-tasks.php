@@ -186,6 +186,7 @@ $flashMsg = isset($_GET['msg']) && is_string($_GET['msg']) ? trim((string) $_GET
 $overdueCount = 0;
 $todayCount = 0;
 $completedThisWeek = [];
+$highPriorityOpen = 0;
 foreach ($tasks as $task) {
     if (!empty($task['archived_flag'])) {
         continue;
@@ -197,6 +198,10 @@ foreach ($tasks as $task) {
             $overdueCount++;
         } elseif ($due !== '' && strcmp($due, $today) === 0) {
             $todayCount++;
+        }
+
+        if (strtolower((string) ($task['priority'] ?? '')) === 'high') {
+            $highPriorityOpen++;
         }
     }
 
@@ -266,242 +271,173 @@ usort($filteredTasks, static function (array $left, array $right): int {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tasks | Dakshayani Enterprises</title>
   <link rel="stylesheet" href="style.css" />
-  <style>
-    body { background: #f6f8fb; font-family: Arial, sans-serif; }
-    .shell { max-width: 1100px; margin: 20px auto 40px; padding: 0 16px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
-    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); }
-    .message { padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; }
-    .message.success { background: #ecfdf3; border: 1px solid #bbf7d0; color: #166534; }
-    .message.error { background: #fef2f2; border: 1px solid #fecdd3; color: #991b1b; }
-    .badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #d1d5db; background: #fff; margin-right: 4px; margin-top: 4px; }
-    .btn { display: inline-block; padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; background: #111827; color: #fff; text-decoration: none; font-weight: 600; }
-    .btn-secondary { background: #fff; color: #111; }
-    .table { width: 100%; border-collapse: collapse; }
-    .table th, .table td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
-    .table th { background: #f9fafb; }
-    .input, select, textarea { width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; }
-  </style>
 </head>
-<body>
-  <div class="shell">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+<body class="admin-records" data-theme="light">
+  <main class="admin-records__shell">
+    <header class="admin-records__header">
       <div>
-        <a href="admin-dashboard.php" class="btn-secondary btn">&larr; Back to Dashboard</a>
-        <h2 style="margin:8px 0 0;">Tasks</h2>
+        <h1>Task Management</h1>
+        <p class="admin-muted">Assign, track, and close recurring or one-time tasks with cleaner operational visibility.</p>
       </div>
-    </div>
+      <div class="admin-records__meta">
+        <a class="admin-link" href="admin-dashboard.php">&larr; Back to Dashboard</a>
+      </div>
+    </header>
 
-    <?php if ($flashMsg !== ''): ?>
-      <div class="message success"><?= tasks_safe($flashMsg) ?></div>
-    <?php endif; ?>
-    <?php if ($messages['success'] !== ''): ?>
-      <div class="message success"><?= tasks_safe($messages['success']) ?></div>
-    <?php endif; ?>
-    <?php if ($messages['error'] !== ''): ?>
-      <div class="message error"><?= tasks_safe($messages['error']) ?></div>
-    <?php endif; ?>
+    <?php if ($flashMsg !== ''): ?><div class="admin-alert admin-alert--success" role="status"><?= tasks_safe($flashMsg) ?></div><?php endif; ?>
+    <?php if ($messages['success'] !== ''): ?><div class="admin-alert admin-alert--success" role="status"><?= tasks_safe($messages['success']) ?></div><?php endif; ?>
+    <?php if ($messages['error'] !== ''): ?><div class="admin-alert admin-alert--error" role="alert"><?= tasks_safe($messages['error']) ?></div><?php endif; ?>
 
-    <div class="grid" style="align-items:start;">
-      <div class="card">
-        <h3 style="margin-top:0;">Assign Task</h3>
-        <form method="post">
+    <section class="admin-overview__cards admin-overview__cards--compact">
+      <article class="overview-card"><div class="overview-card__label">Overdue</div><div class="overview-card__value"><?= (int) $overdueCount ?></div></article>
+      <article class="overview-card"><div class="overview-card__label">Due today</div><div class="overview-card__value"><?= (int) $todayCount ?></div></article>
+      <article class="overview-card"><div class="overview-card__label">High priority open</div><div class="overview-card__value"><?= (int) $highPriorityOpen ?></div></article>
+      <article class="overview-card"><div class="overview-card__label">Completed this week</div><div class="overview-card__value"><?= (int) $completedThisWeekCount ?></div></article>
+    </section>
+
+    <section class="admin-workspace-grid">
+      <article class="admin-panel-card">
+        <h2>Assign Task</h2>
+        <form method="post" class="users-form-grid">
           <input type="hidden" name="task_action" value="admin_assign" />
-          <label for="assign_to_id">Employee</label>
-          <select id="assign_to_id" name="assign_to_id" required>
-            <option value="">Select employee</option>
-            <?php foreach ($employees as $emp): ?>
-              <option value="<?= tasks_safe((string) ($emp['id'] ?? '')) ?>"><?= tasks_safe((string) ($emp['name'] ?? '')) ?></option>
-            <?php endforeach; ?>
-          </select>
-          <label for="title">Title *</label>
-          <input class="input" type="text" id="title" name="title" required />
-          <label for="description">Description</label>
-          <textarea id="description" name="description" rows="3" class="input"></textarea>
-          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
-            <div>
-              <label for="priority">Priority</label>
-              <select id="priority" name="priority">
-                <option value="low">Low</option>
-                <option value="medium" selected>Medium</option>
-                <option value="high">High</option>
-              </select>
-            </div>
-            <div>
-              <label for="frequency_type">Frequency</label>
-              <select id="frequency_type" name="frequency_type">
-                <option value="once">Once</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-                <option value="custom">Custom</option>
-              </select>
-            </div>
-            <div>
-              <label for="custom_every_n_days">Custom every N days</label>
-              <input class="input" type="number" id="custom_every_n_days" name="custom_every_n_days" min="1" value="1" />
-            </div>
-            <div>
-              <label for="start_date">Start date</label>
-              <input class="input" type="date" id="start_date" name="start_date" value="<?= tasks_safe($today) ?>" />
-            </div>
-            <div>
-              <?php
-                $tz = new DateTimeZone(TASKS_TIMEZONE);
-                $defaultDue = (new DateTimeImmutable('today', $tz))->modify('+7 days')->format('Y-m-d');
-              ?>
-              <label for="due_date">Due date (once)</label>
-              <input class="input" type="date" id="due_date" name="due_date" value="<?= tasks_safe($defaultDue) ?>" />
-            </div>
-            <div>
-              <label for="next_due_date">Next due date (recurring)</label>
-              <input class="input" type="date" id="next_due_date" name="next_due_date" value="<?= tasks_safe($today) ?>" />
-            </div>
+          <div>
+            <label for="assign_to_id">Employee</label>
+            <select id="assign_to_id" name="assign_to_id" class="users-select" required>
+              <option value="">Select employee</option>
+              <?php foreach ($employees as $emp): ?>
+                <option value="<?= tasks_safe((string) ($emp['id'] ?? '')) ?>"><?= tasks_safe((string) ($emp['name'] ?? '')) ?></option>
+              <?php endforeach; ?>
+            </select>
           </div>
-          <div style="margin-top:12px;">
-            <button type="submit" class="btn">Assign Task</button>
+          <div>
+            <label for="title">Title *</label>
+            <input class="users-input" type="text" id="title" name="title" required />
           </div>
+          <div style="grid-column: 1 / -1;">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="3" class="users-input"></textarea>
+          </div>
+          <div>
+            <label for="priority">Priority</label>
+            <select id="priority" name="priority" class="users-select">
+              <option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option>
+            </select>
+          </div>
+          <div>
+            <label for="frequency_type">Frequency</label>
+            <select id="frequency_type" name="frequency_type" class="users-select">
+              <option value="once">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="custom">Custom</option>
+            </select>
+          </div>
+          <div>
+            <label for="custom_every_n_days">Custom every N days</label>
+            <input class="users-input" type="number" id="custom_every_n_days" name="custom_every_n_days" min="1" value="1" />
+          </div>
+          <div><label for="start_date">Start date</label><input class="users-input" type="date" id="start_date" name="start_date" value="<?= tasks_safe($today) ?>" /></div>
+          <?php $defaultDue = (new DateTimeImmutable('today', new DateTimeZone(TASKS_TIMEZONE)))->modify('+7 days')->format('Y-m-d'); ?>
+          <div><label for="due_date">Due date (once)</label><input class="users-input" type="date" id="due_date" name="due_date" value="<?= tasks_safe($defaultDue) ?>" /></div>
+          <div><label for="next_due_date">Next due (recurring)</label><input class="users-input" type="date" id="next_due_date" name="next_due_date" value="<?= tasks_safe($today) ?>" /></div>
+          <div class="users-form-actions" style="grid-column:1 / -1;"><button type="submit" class="btn btn-primary">Assign task</button></div>
         </form>
-      </div>
+      </article>
 
-      <div class="card">
-        <h3 style="margin-top:0;">Counters</h3>
-        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
-          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;">
-            <div style="font-weight:700;">Overdue</div>
-            <div style="font-size:20px;"><?= (int) $overdueCount ?></div>
+      <article class="admin-panel-card">
+        <h2>Filters</h2>
+        <form method="get" class="users-form-grid">
+          <div>
+            <label for="employee">Employee</label>
+            <select id="employee" name="employee" class="users-select">
+              <option value="all">All</option>
+              <?php foreach ($employees as $emp): ?>
+                <option value="<?= tasks_safe((string) ($emp['id'] ?? '')) ?>" <?= $filterEmployee === (string) ($emp['id'] ?? '') ? 'selected' : '' ?>><?= tasks_safe((string) ($emp['name'] ?? '')) ?></option>
+              <?php endforeach; ?>
+            </select>
           </div>
-          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;">
-            <div style="font-weight:700;">Pending today</div>
-            <div style="font-size:20px;"><?= (int) $todayCount ?></div>
-          </div>
-          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;">
-            <div style="font-weight:700;">Completed this week</div>
-            <div style="font-size:20px;"><?= (int) $completedThisWeekCount ?></div>
-          </div>
-        </div>
-        <form method="get" style="margin-top:16px;">
-          <h4 style="margin:0 0 8px;">Filters</h4>
-          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));">
-            <div>
-              <label for="employee">Employee</label>
-              <select id="employee" name="employee">
-                <option value="all">All</option>
-                <?php foreach ($employees as $emp): ?>
-                  <option value="<?= tasks_safe((string) ($emp['id'] ?? '')) ?>" <?= $filterEmployee === (string) ($emp['id'] ?? '') ? 'selected' : '' ?>>
-                    <?= tasks_safe((string) ($emp['name'] ?? '')) ?>
-                  </option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-            <div>
-              <label for="status">Status</label>
-              <select id="status" name="status">
-                <option value="all" <?= $filterStatus === 'all' ? 'selected' : '' ?>>All</option>
-                <option value="open" <?= $filterStatus === 'open' ? 'selected' : '' ?>>Open</option>
-                <option value="completed" <?= $filterStatus === 'completed' ? 'selected' : '' ?>>Completed</option>
-              </select>
-            </div>
-            <div>
-              <label for="view">View</label>
-              <select id="view" name="view">
-                <option value="active" <?= $filterView === 'active' ? 'selected' : '' ?>>Active</option>
-                <option value="archived" <?= $filterView === 'archived' ? 'selected' : '' ?>>Archived</option>
-                <option value="all" <?= $filterView === 'all' ? 'selected' : '' ?>>All</option>
-              </select>
-            </div>
-            <div>
-              <label for="due">Due</label>
-              <select id="due" name="due">
-                <option value="all" <?= $filterDue === 'all' ? 'selected' : '' ?>>All</option>
-                <option value="overdue" <?= $filterDue === 'overdue' ? 'selected' : '' ?>>Overdue</option>
-                <option value="today" <?= $filterDue === 'today' ? 'selected' : '' ?>>Today</option>
-                <option value="upcoming" <?= $filterDue === 'upcoming' ? 'selected' : '' ?>>Upcoming</option>
-              </select>
-            </div>
-          </div>
-          <button type="submit" class="btn" style="margin-top:10px;">Apply</button>
+          <div><label for="status">Status</label><select id="status" name="status" class="users-select"><option value="all" <?= $filterStatus === 'all' ? 'selected' : '' ?>>All</option><option value="open" <?= $filterStatus === 'open' ? 'selected' : '' ?>>Open</option><option value="completed" <?= $filterStatus === 'completed' ? 'selected' : '' ?>>Completed</option></select></div>
+          <div><label for="view">View</label><select id="view" name="view" class="users-select"><option value="active" <?= $filterView === 'active' ? 'selected' : '' ?>>Active</option><option value="archived" <?= $filterView === 'archived' ? 'selected' : '' ?>>Archived</option><option value="all" <?= $filterView === 'all' ? 'selected' : '' ?>>All</option></select></div>
+          <div><label for="due">Due</label><select id="due" name="due" class="users-select"><option value="all" <?= $filterDue === 'all' ? 'selected' : '' ?>>All</option><option value="overdue" <?= $filterDue === 'overdue' ? 'selected' : '' ?>>Overdue</option><option value="today" <?= $filterDue === 'today' ? 'selected' : '' ?>>Today</option><option value="upcoming" <?= $filterDue === 'upcoming' ? 'selected' : '' ?>>Upcoming</option></select></div>
+          <div class="users-form-actions" style="grid-column:1 / -1;"><button type="submit" class="btn btn-secondary">Apply filters</button></div>
         </form>
-      </div>
-    </div>
+      </article>
+    </section>
 
-    <div class="card" style="margin-top:16px;">
-      <h3 style="margin-top:0;">All Tasks</h3>
-      <div style="overflow-x:auto;">
-        <table class="table">
-          <thead>
+    <section class="admin-table-wrapper">
+      <table class="admin-table" aria-label="All tasks">
+        <thead>
+          <tr><th>Due</th><th>Task</th><th>Assignee</th><th>Schedule</th><th>Priority</th><th>Status</th><th>Last Completed</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          <?php if ($filteredTasks === []): ?>
+            <tr><td colspan="8" class="admin-records__empty">No tasks match the current filters.</td></tr>
+          <?php endif; ?>
+          <?php foreach ($filteredTasks as $task): ?>
+            <?php
+              $dueDate = get_effective_due_date($task);
+              $isOverdue = $dueDate !== '' && strcmp($dueDate, $today) < 0 && strtolower((string) ($task['status'] ?? '')) === 'open';
+              $isToday = $dueDate !== '' && strcmp($dueDate, $today) === 0 && strtolower((string) ($task['status'] ?? '')) === 'open';
+              $priorityText = strtolower((string) ($task['priority'] ?? 'medium'));
+            ?>
             <tr>
-              <th>Due / Next Due</th>
-              <th>Title</th>
-              <th>Employee</th>
-              <th>Frequency</th>
-              <th>Priority</th>
-              <th>Status</th>
-              <th>Last Completed</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php if ($filteredTasks === []): ?>
-              <tr><td colspan="8" style="text-align:center;color:#6b7280;">No tasks.</td></tr>
-            <?php endif; ?>
-            <?php foreach ($filteredTasks as $task): ?>
-              <tr>
-                <td><?= tasks_safe(get_effective_due_date($task) ?: '-') ?></td>
-                <td>
-                  <strong><?= tasks_safe((string) ($task['title'] ?? '')) ?></strong><br/>
-                  <small><?= nl2br(tasks_safe((string) ($task['description'] ?? ''))) ?></small>
-                </td>
-                <td><?= tasks_safe((string) ($task['assigned_to_name'] ?? '')) ?></td>
-                <td><?= tasks_safe((string) ($task['frequency_type'] ?? '')) ?></td>
-                <td><?= tasks_safe((string) ($task['priority'] ?? '')) ?></td>
-                <td><?= tasks_safe((string) ($task['status'] ?? '')) ?></td>
-                <td><?= tasks_safe((string) ($task['last_completed_at'] ?? '')) ?></td>
-                <td>
+              <td>
+                <span class="status-pill <?= $isOverdue ? 'status-pill--danger' : ($isToday ? 'status-pill--warning' : '') ?>"><?= tasks_safe($dueDate !== '' ? $dueDate : '-') ?></span>
+              </td>
+              <td>
+                <strong><?= tasks_safe((string) ($task['title'] ?? '')) ?></strong>
+                <?php if (trim((string) ($task['description'] ?? '')) !== ''): ?><p class="admin-muted text-sm"><?= nl2br(tasks_safe((string) ($task['description'] ?? ''))) ?></p><?php endif; ?>
+              </td>
+              <td><?= tasks_safe((string) ($task['assigned_to_name'] ?? '')) ?></td>
+              <td><?= tasks_safe(ucfirst((string) ($task['frequency_type'] ?? 'once'))) ?></td>
+              <td><span class="status-pill <?= $priorityText === 'high' ? 'status-pill--danger' : '' ?>"><?= tasks_safe((string) ($task['priority'] ?? 'Medium')) ?></span></td>
+              <td><?= tasks_safe((string) ($task['status'] ?? '')) ?></td>
+              <td><?= tasks_safe((string) ($task['last_completed_at'] ?? '')) ?></td>
+              <td>
+                <div class="admin-row-actions">
                   <?php if (($task['status'] ?? 'Open') === 'Open'): ?>
-                    <form method="post" style="margin-bottom:6px;">
-                      <input type="hidden" name="task_action" value="admin_complete" />
-                      <input type="hidden" name="task_id" value="<?= tasks_safe((string) ($task['id'] ?? '')) ?>" />
-                      <textarea name="note" rows="2" class="input" placeholder="Note (optional)"></textarea>
-                      <button type="submit" class="btn" style="margin-top:4px;">Mark Completed</button>
-                    </form>
+                    <button type="button" class="btn btn-primary btn-xs js-open-complete" data-task-id="<?= tasks_safe((string) ($task['id'] ?? '')) ?>">Complete</button>
                   <?php endif; ?>
-                  <?php if (empty($task['archived_flag'])): ?>
-                    <form method="post" style="margin:0;">
-                      <input type="hidden" name="task_action" value="admin_archive" />
-                      <input type="hidden" name="task_id" value="<?= tasks_safe((string) ($task['id'] ?? '')) ?>" />
-                      <button type="submit" class="btn-secondary btn" style="margin-top:4px;">Archive</button>
-                    </form>
-                  <?php else: ?>
-                    <form method="post" style="margin:0;">
-                      <input type="hidden" name="task_action" value="admin_unarchive" />
-                      <input type="hidden" name="task_id" value="<?= tasks_safe((string) ($task['id'] ?? '')) ?>" />
-                      <button type="submit" class="btn-secondary btn" style="margin-top:4px;">Unarchive</button>
-                    </form>
-                  <?php endif; ?>
-                  <?php if (!empty($task['completion_log'])): ?>
-                    <details style="margin-top:6px;">
-                      <summary>View Log</summary>
-                      <ul style="padding-left:16px; margin:6px 0 0;">
-                        <?php foreach (array_reverse($task['completion_log']) as $entry): ?>
-                          <li>
-                            <?= tasks_safe((string) ($entry['completed_at'] ?? '')) ?>
-                            by <?= tasks_safe((string) ($entry['completed_by_type'] ?? '')) ?>
-                            <?php if (trim((string) ($entry['note'] ?? '')) !== ''): ?>
-                              — <?= tasks_safe((string) $entry['note']) ?>
-                            <?php endif; ?>
-                          </li>
-                        <?php endforeach; ?>
-                      </ul>
-                    </details>
-                  <?php endif; ?>
-                </td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+                  <form method="post" class="admin-inline-form">
+                    <input type="hidden" name="task_action" value="<?= empty($task['archived_flag']) ? 'admin_archive' : 'admin_unarchive' ?>" />
+                    <input type="hidden" name="task_id" value="<?= tasks_safe((string) ($task['id'] ?? '')) ?>" />
+                    <button type="submit" class="btn btn-secondary btn-xs"><?= empty($task['archived_flag']) ? 'Archive' : 'Unarchive' ?></button>
+                  </form>
+                </div>
+                <?php if (!empty($task['completion_log']) && is_array($task['completion_log'])): ?>
+                  <details class="admin-payload"><summary>View completion log</summary><ul>
+                    <?php foreach (array_reverse($task['completion_log']) as $entry): ?>
+                      <li><?= tasks_safe((string) ($entry['completed_at'] ?? '')) ?><?php if (trim((string) ($entry['note'] ?? '')) !== ''): ?> — <?= tasks_safe((string) $entry['note']) ?><?php endif; ?></li>
+                    <?php endforeach; ?>
+                  </ul></details>
+                <?php endif; ?>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </section>
+
+    <dialog id="complete-dialog" class="admin-dialog">
+      <form method="dialog" class="admin-dialog__frame"><header class="admin-dialog__header"><h2>Mark task complete</h2><button class="btn btn-secondary btn-xs" value="cancel">Close</button></header></form>
+      <form method="post" class="admin-dialog__body">
+        <input type="hidden" name="task_action" value="admin_complete" />
+        <input type="hidden" name="task_id" id="complete-task-id" value="" />
+        <label for="complete-note">Completion note (optional)</label>
+        <textarea id="complete-note" name="note" rows="4" class="admin-textarea" placeholder="Add what was completed"></textarea>
+        <div class="admin-dialog__actions"><button type="submit" class="btn btn-primary">Save completion</button></div>
+      </form>
+    </dialog>
+  </main>
+  <script>
+    (function () {
+      const dialog = document.getElementById('complete-dialog');
+      const input = document.getElementById('complete-task-id');
+      if (!dialog || !input) return;
+      document.querySelectorAll('.js-open-complete').forEach((button) => {
+        button.addEventListener('click', function () {
+          input.value = this.getAttribute('data-task-id') || '';
+          if (typeof dialog.showModal === 'function') dialog.showModal();
+        });
+      });
+    })();
+  </script>
 </body>
 </html>

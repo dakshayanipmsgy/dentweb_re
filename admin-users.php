@@ -370,6 +370,18 @@ if ($activeTab === 'customers') {
     }
 
     $handoverTemplates = load_handover_templates();
+
+    $customerTypeCounts = ['pm' => 0, 'non_pm' => 0, 'other' => 0];
+    foreach ($customers as $customerRow) {
+        $typeValue = strtolower(trim((string) ($customerRow['customer_type'] ?? '')));
+        if ($typeValue === 'pm surya ghar') {
+            $customerTypeCounts['pm']++;
+        } elseif ($typeValue === 'non pm surya ghar') {
+            $customerTypeCounts['non_pm']++;
+        } else {
+            $customerTypeCounts['other']++;
+        }
+    }
 }
 
 if ($activeTab === 'employees') {
@@ -991,6 +1003,43 @@ function admin_users_build_welcome_subject(array $customer): string
     .admin-alert ul {
       margin: 0.35rem 0 0 1rem;
     }
+
+    .users-subtabs {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    .users-subtab {
+      border: 1px solid #cfd8e6;
+      background: #f8fafc;
+      border-radius: 999px;
+      padding: 0.45rem 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .users-subtab.is-active {
+      background: #0f172a;
+      color: #fff;
+      border-color: #0f172a;
+    }
+
+    .users-status--ok {
+      background: #e7f8ee;
+      color: #0f766e;
+    }
+
+    .users-status--warn {
+      background: #fff3da;
+      color: #92400e;
+    }
+
+    .users-status--muted {
+      background: #eef2f7;
+      color: #475569;
+    }
   </style>
 </head>
 <body class="admin-records" data-theme="light">
@@ -1050,7 +1099,9 @@ function admin_users_build_welcome_subject(array $customer): string
           <div>
             <label class="sr-only" for="customer-type">Customer type</label>
             <select id="customer-type" class="users-select">
-              <option>Customer Type (PM Surya Ghar / Non-PM)</option>
+              <option value="all">All customer types</option>
+              <option value="pm">PM Surya Ghar (<?= (int) ($customerTypeCounts['pm'] ?? 0) ?>)</option>
+              <option value="non_pm">Non PM Surya Ghar (<?= (int) ($customerTypeCounts['non_pm'] ?? 0) ?>)</option>
             </select>
           </div>
           <div class="users-toolbar__actions">
@@ -1311,12 +1362,19 @@ function admin_users_build_welcome_subject(array $customer): string
               <p class="admin-muted">Update details for <?= admin_users_safe($editingCustomer['name'] ?? $editingCustomer['mobile']) ?>.</p>
             </div>
           </div>
-          <form method="post" class="users-form">
+          <form method="post" class="users-form" id="customer-edit-form">
+            <div class="users-subtabs" role="tablist" aria-label="Customer edit sections">
+              <button type="button" class="users-subtab is-active" data-target="profile">Profile</button>
+              <button type="button" class="users-subtab" data-target="project">Project / PM Surya Ghar</button>
+              <button type="button" class="users-subtab" data-target="communication">Communication</button>
+              <button type="button" class="users-subtab" data-target="handover">Handover</button>
+              <button type="button" class="users-subtab" data-target="complaints">Complaints</button>
+            </div>
             <input type="hidden" name="welcome_sent_via" value="<?= admin_users_safe($editingCustomer['welcome_sent_via'] ?? 'none') ?>" />
             <input type="hidden" name="original_mobile" value="<?= admin_users_safe($editingCustomer['mobile'] ?? '') ?>" />
             <input type="hidden" name="view_mobile" value="<?= admin_users_safe($editingCustomer['mobile'] ?? '') ?>" />
 
-            <div class="users-form-section">
+            <div class="users-form-section" data-edit-group="profile">
               <div class="users-form-section__header">
                 <h4 class="users-form-section__title">A. Basic Information</h4>
                 <p class="admin-muted" style="margin: 0;">Leave password blank to keep the current one.</p>
@@ -1362,7 +1420,7 @@ function admin_users_build_welcome_subject(array $customer): string
               </div>
             </div>
 
-            <div class="users-form-section">
+            <div class="users-form-section" data-edit-group="profile">
               <div class="users-form-section__header">
                 <h4 class="users-form-section__title">B. Location &amp; Meter Details</h4>
               </div>
@@ -1402,7 +1460,7 @@ function admin_users_build_welcome_subject(array $customer): string
               </div>
             </div>
 
-            <div class="users-form-section">
+            <div class="users-form-section" data-edit-group="project">
               <div class="users-form-section__header">
                 <h4 class="users-form-section__title">C. PM Surya Ghar / Application Details</h4>
               </div>
@@ -1438,7 +1496,7 @@ function admin_users_build_welcome_subject(array $customer): string
               </div>
             </div>
 
-            <div class="users-form-section">
+            <div class="users-form-section" data-edit-group="project">
               <div class="users-form-section__header">
                 <h4 class="users-form-section__title">D. Loan &amp; Financial Details</h4>
               </div>
@@ -1470,7 +1528,7 @@ function admin_users_build_welcome_subject(array $customer): string
               </div>
             </div>
 
-            <div class="users-form-section">
+            <div class="users-form-section" data-edit-group="complaints">
               <div class="users-form-section__header">
                 <h4 class="users-form-section__title">E. Complaint summary</h4>
               </div>
@@ -1485,7 +1543,7 @@ function admin_users_build_welcome_subject(array $customer): string
               </div>
             </div>
 
-            <div class="users-form-section">
+            <div class="users-form-section" data-edit-group="communication">
               <div class="users-form-section__header">
                 <h4 class="users-form-section__title">F. Welcome / Communication</h4>
                 <p class="admin-muted" style="margin: 0;">Welcome message includes the password only if you set it just before sending.</p>
@@ -1550,7 +1608,7 @@ function admin_users_build_welcome_subject(array $customer): string
                 '{{solar_plant_installation_date}}',
               ];
             ?>
-            <div class="users-form-section">
+            <div class="users-form-section" data-edit-group="handover">
               <div class="users-form-section__header">
                 <h4 class="users-form-section__title">G. Handover Section Overrides (optional)</h4>
                 <p class="admin-muted" style="margin: 0;">Leave any field blank to use the global template. Available placeholders: <?= admin_users_safe(implode(', ', $handoverPlaceholders)) ?>.</p>
@@ -1598,7 +1656,7 @@ function admin_users_build_welcome_subject(array $customer): string
             <?php
               $handoverHtmlPath = trim((string) ($editingCustomer['handover_html_path'] ?? ($editingCustomer['handover_document_path'] ?? '')));
             ?>
-            <div class="users-form-section">
+            <div class="users-form-section" data-edit-group="handover">
               <div class="users-form-section__header">
                 <h4 class="users-form-section__title">Handover Document</h4>
                 <p class="admin-muted" style="margin: 0;">Generate and share the customer handover pack.</p>
@@ -1624,7 +1682,7 @@ function admin_users_build_welcome_subject(array $customer): string
           </form>
         </div>
 
-        <div class="users-card" aria-labelledby="customer-complaints-heading">
+        <div class="users-card" aria-labelledby="customer-complaints-heading" data-edit-group="complaints">
           <div class="users-card__header">
             <div>
               <h3 id="customer-complaints-heading">Complaints</h3>
@@ -1751,7 +1809,7 @@ function admin_users_build_welcome_subject(array $customer): string
             </thead>
             <tbody>
               <?php if ($customers === []): ?>
-              <tr>
+              <tr data-customer-row="1" data-name="<?= admin_users_safe(strtolower((string) ($customer['name'] ?? ''))) ?>" data-mobile="<?= admin_users_safe((string) ($customer['mobile'] ?? '')) ?>" data-type="<?= admin_users_safe($typeKey === 'pm surya ghar' ? 'pm' : ($typeKey === 'non pm surya ghar' ? 'non_pm' : 'other')) ?>">
                 <td colspan="9" class="text-center admin-muted">No customers found.</td>
               </tr>
               <?php else: ?>
@@ -1803,8 +1861,8 @@ function admin_users_build_welcome_subject(array $customer): string
                 <td><span class="<?= admin_users_safe($typeClass) ?>"><?= admin_users_safe($customerType) ?></span></td>
                 <td><?= admin_users_safe($customer['city'] ?? '') ?></td>
                 <td><span class="<?= admin_users_safe($statusClass) ?>"><?= admin_users_safe($statusRaw) ?></span></td>
-                <td class="<?= admin_users_safe($welcomeClass) ?>"><?= admin_users_safe(admin_users_display_welcome_status($customer['welcome_sent_via'] ?? '')) ?></td>
-                <td class="<?= admin_users_safe($complaintClass) ?>"><span class="users-status"><?= $hasComplaint ? 'Yes' : 'No' ?></span></td>
+                <td><span class="users-status <?= $welcomeSent ? 'users-status--ok' : 'users-status--muted' ?>"><?= admin_users_safe(admin_users_display_welcome_status($customer['welcome_sent_via'] ?? '')) ?></span></td>
+                <td><span class="users-status <?= $hasComplaint ? 'users-status--warn' : 'users-status--ok' ?>"><?= $hasComplaint ? 'Raised' : 'None' ?></span></td>
                 <td class="users-actions text-right"><a href="admin-users.php?tab=customers&amp;view=<?= urlencode((string) ($customer['mobile'] ?? '')) ?>">View / Edit</a></td>
               </tr>
               <?php endforeach; ?>
@@ -1830,7 +1888,7 @@ function admin_users_build_welcome_subject(array $customer): string
           <div>
             <label class="sr-only" for="employee-role">Designation</label>
             <select id="employee-role" class="users-select">
-              <option>Filter by designation</option>
+              <option value="all">All designations</option>
             </select>
           </div>
           <div class="users-toolbar__actions">
@@ -1962,7 +2020,7 @@ function admin_users_build_welcome_subject(array $customer): string
             </thead>
             <tbody>
               <?php if ($employees === []): ?>
-              <tr>
+              <tr data-employee-row="1" data-name="<?= admin_users_safe(strtolower((string) ($employee['name'] ?? ''))) ?>" data-login="<?= admin_users_safe(strtolower((string) ($employee['login_id'] ?? ''))) ?>" data-designation="<?= admin_users_safe(strtolower((string) ($employee['designation'] ?? ''))) ?>">
                 <td colspan="5" class="text-center admin-muted">No employees found.</td>
               </tr>
               <?php else: ?>
@@ -1983,5 +2041,62 @@ function admin_users_build_welcome_subject(array $customer): string
       <?php endif; ?>
     </section>
   </main>
+  <script>
+    (function () {
+      const customerSearch = document.getElementById('customer-search');
+      const customerType = document.getElementById('customer-type');
+      const customerRows = Array.from(document.querySelectorAll('[data-customer-row="1"]'));
+      const applyCustomerFilter = () => {
+        const query = (customerSearch?.value || '').trim().toLowerCase();
+        const type = customerType?.value || 'all';
+        customerRows.forEach((row) => {
+          const haystack = `${row.dataset.name || ''} ${row.dataset.mobile || ''}`;
+          const matchesSearch = query === '' || haystack.includes(query);
+          const matchesType = type === 'all' || (row.dataset.type || '') === type;
+          row.style.display = matchesSearch && matchesType ? '' : 'none';
+        });
+      };
+      customerSearch?.addEventListener('input', applyCustomerFilter);
+      customerType?.addEventListener('change', applyCustomerFilter);
+
+      const employeeSearch = document.getElementById('employee-search');
+      const employeeRole = document.getElementById('employee-role');
+      const employeeRows = Array.from(document.querySelectorAll('[data-employee-row="1"]'));
+      const designations = Array.from(new Set(employeeRows.map((row) => row.dataset.designation || '').filter(Boolean)));
+      designations.sort().forEach((designation) => {
+        const option = document.createElement('option');
+        option.value = designation;
+        option.textContent = designation;
+        employeeRole?.appendChild(option);
+      });
+      const applyEmployeeFilter = () => {
+        const query = (employeeSearch?.value || '').trim().toLowerCase();
+        const role = employeeRole?.value || 'all';
+        employeeRows.forEach((row) => {
+          const haystack = `${row.dataset.name || ''} ${row.dataset.login || ''} ${row.dataset.designation || ''}`;
+          const matchesSearch = query === '' || haystack.includes(query);
+          const matchesRole = role === 'all' || (row.dataset.designation || '') === role;
+          row.style.display = matchesSearch && matchesRole ? '' : 'none';
+        });
+      };
+      employeeSearch?.addEventListener('input', applyEmployeeFilter);
+      employeeRole?.addEventListener('change', applyEmployeeFilter);
+
+      const subtabs = Array.from(document.querySelectorAll('.users-subtab'));
+      const sections = Array.from(document.querySelectorAll('[data-edit-group]'));
+      const setGroup = (group) => {
+        subtabs.forEach((tab) => tab.classList.toggle('is-active', tab.dataset.target === group));
+        sections.forEach((section) => {
+          section.style.display = section.dataset.editGroup === group ? '' : 'none';
+        });
+      };
+      subtabs.forEach((tab) => {
+        tab.addEventListener('click', () => setGroup(tab.dataset.target || 'profile'));
+      });
+      if (subtabs.length > 0) {
+        setGroup('profile');
+      }
+    })();
+  </script>
 </body>
 </html>
