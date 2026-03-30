@@ -65,6 +65,7 @@ register_shutdown_function(static function () use ($adminQuotationsWriteErrorLog
 
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
+require_once __DIR__ . '/includes/solar_finance_reports.php';
 
 require_login_any_role(['admin', 'employee']);
 documents_ensure_structure();
@@ -774,6 +775,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['finance_inputs']['transportation_rs'] = (string) $transportationRs;
         $quote['finance_inputs']['discount_rs'] = (string) $discountRs;
         $quote['finance_inputs']['discount_note'] = $discountNote;
+        $quoteNormalizedFinance = solar_finance_normalize_for_quote_render($quote, is_array($quote['calc'] ?? null) ? $quote['calc'] : [], [
+            'monthly_bill_before_rs' => (float) ($quote['customer_savings_inputs']['monthly_bill_before_rs'] ?? ($quote['finance_inputs']['monthly_bill_rs'] ?? 0)),
+            'unit_rate_rs_per_kwh' => (float) ($quote['customer_savings_inputs']['unit_rate_rs_per_kwh'] ?? ($quote['finance_inputs']['unit_rate_rs_per_kwh'] ?? 0)),
+            'annual_generation_kwh_per_kw' => (float) ($quote['customer_savings_inputs']['annual_generation_kwh_per_kw'] ?? ($quote['finance_inputs']['annual_generation_per_kw'] ?? 0)),
+            'loan_interest_rate_percent' => (float) ($quote['customer_savings_inputs']['loan_interest_rate_percent'] ?? ($quote['finance_inputs']['loan']['interest_pct'] ?? 0)),
+            'loan_tenure_months' => (float) ($quote['customer_savings_inputs']['loan_tenure_months'] ?? 0),
+        ]);
+        if (is_array($quoteNormalizedFinance['finance_scenarios'] ?? null)) {
+            $quote['finance_scenarios'] = $quoteNormalizedFinance['finance_scenarios'];
+        }
         $quote['style_overrides']['typography']['base_font_px'] = safe_text($_POST['style_base_font_px'] ?? '');
         $quote['style_overrides']['typography']['heading_scale'] = safe_text($_POST['style_heading_scale'] ?? '');
         $quote['style_overrides']['typography']['density'] = safe_text($_POST['style_density'] ?? '');
