@@ -35,6 +35,9 @@ $fmtCurrency = static fn ($value): string => '₹' . number_format((float) $valu
 $fmtNum = static fn ($value, int $decimals = 0): string => number_format((float) $value, $decimals, '.', ',');
 $reportDate = (string) ($report['created_at'] ?? date('Y-m-d H:i:s'));
 
+$normalizedScenariosFromReport = is_array($result['normalized_finance_scenarios'] ?? null)
+    ? $result['normalized_finance_scenarios']
+    : [];
 $normalizedFinance = solar_finance_normalize_for_quote_render(
     [
         'primary_finance_scenario' => 'loan_upto_2_lacs_subsidy_to_loan',
@@ -46,7 +49,7 @@ $normalizedFinance = solar_finance_normalize_for_quote_render(
             'loan_above_2_lacs_subsidy_to_loan' => ['price' => (float) ($input['system_cost_above2'] ?? 0), 'applicable' => (bool) ($input['higher_loan_applicable'] ?? false)],
             'loan_above_2_lacs_subsidy_not_to_loan' => ['price' => (float) ($input['system_cost_above2'] ?? 0), 'applicable' => (bool) ($input['higher_loan_applicable'] ?? false)],
         ],
-        'finance_scenarios' => $finance,
+        'finance_scenarios' => $normalizedScenariosFromReport !== [] ? $normalizedScenariosFromReport : $finance,
         'finance_inputs' => ['monthly_bill_rs' => (float) ($input['monthly_bill'] ?? 0)],
     ],
     ['gross_payable' => (float) ($input['system_cost_up2'] ?? 0), 'subsidy_expected_rs' => (float) ($input['subsidy'] ?? 0)],
