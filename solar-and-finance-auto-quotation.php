@@ -31,10 +31,11 @@ try {
         'message' => (string) ($result['message'] ?? ''),
     ]);
 } catch (Throwable $exception) {
+    error_log('Solar finance auto quotation failure: ' . $exception->getMessage());
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'message' => 'Unable to auto-create quotation.',
+        'action' => 'failed',
+        'message' => 'Unable to auto-create quotation. ' . $exception->getMessage(),
     ]);
 }
-

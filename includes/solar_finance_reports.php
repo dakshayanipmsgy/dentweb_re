@@ -347,6 +347,7 @@ function create_or_update_solar_finance_quote(array $payload): array
 {
     $customer = is_array($payload['customer'] ?? null) ? $payload['customer'] : [];
     $inputs = is_array($payload['inputs'] ?? null) ? $payload['inputs'] : [];
+    $syncReason = trim((string) ($payload['sync_reason'] ?? 'input'));
 
     $customerName = trim((string) ($customer['name'] ?? ''));
     $city = trim((string) ($customer['location'] ?? ''));
@@ -465,6 +466,7 @@ function create_or_update_solar_finance_quote(array $payload): array
     $quote['auto_source'] = 'solar_and_finance';
     $quote['auto_sync_updated_at'] = date('c');
     $quote['auto_sync_scenario'] = $useAbove2Scenario ? 'loan_above_2_lacs' : 'loan_upto_2_lacs';
+    $quote['auto_sync_reason'] = $syncReason !== '' ? $syncReason : 'input';
     $quote['primary_finance_scenario'] = $quote['auto_sync_scenario'];
     $quote['scenario_prices'] = [
         'self_funded' => ['price' => max(0, (float) ($inputs['system_cost_self_funded'] ?? $systemCostUp2))],
@@ -579,5 +581,6 @@ function create_or_update_solar_finance_quote(array $payload): array
         'quote_id' => (string) ($quote['id'] ?? ''),
         'quote_no' => (string) ($quote['quote_no'] ?? ''),
         'scenario' => $quote['auto_sync_scenario'],
+        'message' => $isCreate ? 'Draft quotation created.' : 'Draft quotation updated.',
     ];
 }
