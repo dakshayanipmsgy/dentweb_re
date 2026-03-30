@@ -201,3 +201,74 @@
   .admin-overview .dashboard-action-groups { grid-template-columns: 1fr; }
   .admin-table th,.admin-table td { white-space: nowrap; }
 }
+
+/* Remaining admin module alignment (documents/marketing/blog/settings/utilities) */
+.admin-documents .page,
+.admin-smart-marketing .fullwidth-wrapper,
+.admin-blog-manager .fullwidth-wrapper,
+.admin-solar-settings .admin-page,
+.admin-handover .fullwidth-wrapper,
+.website-settings-admin .fullwidth-wrapper { max-width: 1480px !important; margin: 0 auto; padding: 1rem 1.1rem 1.4rem !important; }
+
+.admin-documents .top,
+.admin-smart-marketing .smart-marketing__header,
+.admin-blog-manager .manager-header,
+.admin-solar-settings .admin-title-row,
+.admin-handover .admin-title-row,
+.website-settings-admin header { background:#fff; border:1px solid var(--admin-border); border-radius:16px; padding:1rem 1.1rem; box-shadow:var(--admin-shadow-soft); margin-bottom:.8rem; }
+
+.admin-documents .tabs,
+.admin-smart-marketing .smart-marketing__tabs,
+.admin-blog-manager .manager-tabs { display:flex; flex-wrap:wrap; gap:.45rem; background:#fff; border:1px solid var(--admin-border); border-radius:14px; padding:.5rem; box-shadow:var(--admin-shadow-soft); }
+.admin-documents .tab,
+.admin-smart-marketing .smart-marketing__tab,
+.admin-blog-manager .manager-tab { border:1px solid #d8e1ef; background:#f8fbff; color:#334155; border-radius:999px; padding:.46rem .82rem; font-weight:700; text-decoration:none; }
+.admin-documents .tab.active,
+.admin-smart-marketing .smart-marketing__tab.active,
+.admin-blog-manager .manager-tab.active { background:#1d4ed8; border-color:#1d4ed8; color:#fff; }
+
+.admin-documents .panel,
+.admin-documents .card,
+.admin-smart-marketing .card,
+.admin-blog-manager .card,
+.admin-solar-settings .admin-panel,
+.admin-handover .card,
+.website-settings-admin form > section { background:#fff; border:1px solid var(--admin-border); border-radius:14px; box-shadow:var(--admin-shadow-soft); }
+.admin-documents table,
+.admin-smart-marketing table,
+.admin-blog-manager table.manager-table { border-collapse: separate; border-spacing:0; border:1px solid var(--admin-border); border-radius:12px; overflow:hidden; background:#fff; }
+.admin-documents th,.admin-documents td,
+.admin-smart-marketing table th,.admin-smart-marketing table td,
+.admin-blog-manager table.manager-table th,.admin-blog-manager table.manager-table td { border-bottom:1px solid #e6edf6; padding:.62rem .58rem; font-size:.88rem; }
+.admin-documents th,.admin-smart-marketing table th,.admin-blog-manager table.manager-table th { background:#f8fbff; font-size:.78rem; text-transform:uppercase; letter-spacing:.03em; color:#475569; }
+
+.admin-documents .row-actions,
+.admin-smart-marketing .form-actions,
+.admin-blog-manager .actions { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; }
+.admin-documents .btn.warn,
+.admin-smart-marketing .btn-danger,
+.admin-blog-manager .btn-danger { background:#fff1f2 !important; color:#9f1239 !important; border:1px solid #fecdd3 !important; }
+.admin-documents .banner,
+.admin-smart-marketing .flash,
+.admin-blog-manager .flash { border-radius:12px; border:1px solid transparent; box-shadow:none; }
+
+.admin-documents .items-toolbar { display:flex; flex-wrap:wrap; gap:.45rem; margin-bottom:.65rem; }
+.admin-documents .items-toolbar .tab { font-size:.82rem; }
+.admin-documents .muted { color:#64748b; }
+.admin-documents .pill { border:1px solid transparent; }
+
+.admin-solar-settings .admin-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.7rem; }
+.admin-solar-settings .field { display:grid; gap:.35rem; }
+.admin-solar-settings input,.admin-solar-settings textarea,.admin-solar-settings select,
+.admin-handover textarea { width:100%; border:1px solid #cfdae8; border-radius:10px; padding:.62rem .72rem; font:inherit; }
+.admin-solar-settings textarea { min-height:140px; }
+.admin-solar-settings .admin-json { background:#f8fbff; border:1px dashed #c8d7ed; border-radius:12px; padding:.8rem; }
+.admin-solar-settings .helper { font-size:.8rem; color:#64748b; margin:0; }
+
+.admin-handover .card { padding:1rem 1.1rem; }
+.admin-handover .placeholder-note { background:#f8fbff; border:1px dashed #bfd2f0; border-radius:12px; padding:.8rem; }
+.admin-handover .field { margin-bottom:.8rem; }
+
+.website-settings-admin { background:var(--admin-bg); color:var(--admin-text); }
+.website-settings-admin form { display:grid; gap:.8rem; }
+.website-settings-admin .admin-save-btn { background:#1d4ed8 !important; color:#fff !important; border-radius:10px !important; }

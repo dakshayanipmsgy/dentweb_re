@@ -297,6 +297,7 @@ $globalJson = htmlspecialchars(json_encode($settings['global'] ?? []), ENT_QUOTE
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/assets/css/admin-unified.css">
     <style>
       .fullwidth-wrapper {
         width: 100% !important;
@@ -306,7 +307,7 @@ $globalJson = htmlspecialchars(json_encode($settings['global'] ?? []), ENT_QUOTE
       }
     </style>
   </head>
-  <body class="bg-slate-50 text-slate-900">
+  <body class="bg-slate-50 text-slate-900 website-settings-admin">
     <div class="fullwidth-wrapper py-8" x-data="websiteSettings(<?= $themeJson ?>, <?= $globalJson ?>)" x-init="initData(<?= $testimonialsJson ?>, <?= $offersJson ?>)">
       <header class="flex items-center justify-between mb-6">
         <div>
@@ -316,7 +317,7 @@ $globalJson = htmlspecialchars(json_encode($settings['global'] ?? []), ENT_QUOTE
         </div>
         <div class="flex items-center space-x-3">
           <a href="/admin-dashboard.php" class="text-sm text-slate-700 hover:text-slate-900">Back to overview</a>
-          <button type="button" class="px-3 py-2 text-sm font-medium bg-slate-900 text-white rounded-lg shadow" @click="submitForm()">Save</button>
+          <button type="button" class="px-3 py-2 text-sm font-medium bg-slate-900 text-white rounded-lg shadow admin-save-btn" @click="submitForm()">Save</button>
         </div>
       </header>
 

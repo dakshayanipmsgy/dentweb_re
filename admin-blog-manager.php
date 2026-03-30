@@ -377,9 +377,10 @@ function manager_resolve_thumbnail(array $record, array $draftThumbnails): strin
     <title>Blog Manager · Admin</title>
     <link rel="icon" href="images/favicon.ico" />
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="assets/css/admin-unified.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
-        body { background: #f5f7fb; font-family: 'Poppins', sans-serif; }
+        body { font-family: 'Poppins', sans-serif; }
         .fullwidth-wrapper { width: 100% !important; max-width: 100% !important; padding-left: 20px; padding-right: 20px; }
         .manager-wrapper { width: 100%; margin: 2rem 0 4rem; padding: 0; display: grid; gap: 2rem; }
         .manager-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
@@ -427,7 +428,7 @@ function manager_resolve_thumbnail(array $record, array $draftThumbnails): strin
             }
     </style>
 </head>
-<body>
+<body class="admin-blog-manager admin-shell">
     <div class="fullwidth-wrapper">
         <div class="manager-wrapper">
         <div class="manager-header">

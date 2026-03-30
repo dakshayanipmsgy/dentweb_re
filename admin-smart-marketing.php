@@ -3625,6 +3625,7 @@ if ($tab === 'assets') {
   <title>Smart Marketing CMO | Admin</title>
   <link rel="icon" href="images/favicon.ico" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -3638,7 +3639,7 @@ if ($tab === 'assets') {
     referrerpolicy="no-referrer"
   />
   <style>
-    body { background: #f5f7fb; font-family: 'Poppins', sans-serif; }
+    body { font-family: 'Poppins', sans-serif; }
     .fullwidth-wrapper { width: 100% !important; max-width: 100% !important; padding-left: 24px; padding-right: 24px; padding-top: 24px; padding-bottom: 32px; }
     .smart-marketing__shell { display: flex; flex-direction: column; gap: 1rem; }
     .smart-marketing__header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; flex-wrap: wrap; }
@@ -3701,7 +3702,7 @@ if ($tab === 'assets') {
     }
   </style>
 </head>
-<body class="admin-smart-marketing" data-theme="light">
+<body class="admin-smart-marketing admin-shell" data-theme="light">
   <div class="fullwidth-wrapper">
     <main class="smart-marketing__shell">
       <header class="smart-marketing__header">

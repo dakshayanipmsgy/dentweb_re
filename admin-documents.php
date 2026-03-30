@@ -3172,9 +3172,10 @@ usort($archivedRows, static function (array $a, array $b): int {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Documents &amp; Billing Control Center</title>
+  <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <style>
-    body { margin: 0; font-family: Arial, sans-serif; background: #f4f6fa; color: #111827; }
-    .page { width: 100%; max-width: none; padding: 1.25rem; box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; }
+    .page { width: 100%; box-sizing: border-box; }
     .top { display:flex; flex-wrap:wrap; gap:0.75rem; justify-content:space-between; align-items:center; margin-bottom:1rem; }
     .top h1 { margin:0; font-size:1.45rem; }
     .btn { display:inline-block; background:#1d4ed8; color:#fff; text-decoration:none; padding:0.55rem 0.8rem; border-radius:8px; border:none; cursor:pointer; font-size:0.92rem; }
@@ -3187,14 +3188,13 @@ usort($archivedRows, static function (array $a, array $b): int {
     .tab { text-decoration:none; background:#e2e8f0; color:#1f2937; padding:0.55rem 0.8rem; border-radius:8px; font-weight:600; }
     .tab.active { background:#1d4ed8; color:#fff; }
     .tab.disabled { opacity:0.55; pointer-events:none; }
-    .panel { background:#fff; border:1px solid #dbe1ea; border-radius:12px; padding:1rem; }
+    .panel { padding:1rem; }
     .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:0.8rem; }
     label { display:block; font-size:0.84rem; margin-bottom:0.3rem; font-weight:600; }
     input, select, textarea { width:100%; padding:0.5rem; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; }
     textarea { min-height:80px; }
-    table { width:100%; border-collapse: collapse; margin-bottom:1rem; }
-    th, td { border:1px solid #dbe1ea; padding:0.5rem; text-align:left; vertical-align:top; }
-    th { background:#f8fafc; }
+    table { width:100%; margin-bottom:1rem; }
+    th, td { text-align:left; vertical-align:top; }
     .logo-preview { max-height:90px; display:block; margin-top:0.5rem; }
     .muted { color:#64748b; font-size:0.86rem; }
     .pill { display:inline-block; padding:0.15rem 0.45rem; border-radius:999px; font-size:0.72rem; font-weight:700; }
@@ -3204,7 +3204,7 @@ usort($archivedRows, static function (array $a, array $b): int {
     .inline-form { display:inline-block; margin:0; }
   </style>
 </head>
-<body>
+<body class="admin-shell admin-documents">
   <main class="page">
     <div class="top">
       <div>
