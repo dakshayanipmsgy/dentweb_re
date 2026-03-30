@@ -1111,7 +1111,7 @@ function admin_users_build_welcome_subject(array $customer): string
           </div>
         </div>
 
-        <div id="customer-bulk-upload" class="users-card" aria-labelledby="bulk-upload-heading">
+        <div id="customer-bulk-upload" class="users-card users-card--bulk" aria-labelledby="bulk-upload-heading">
           <div class="users-card__header">
             <div>
               <h3 id="bulk-upload-heading">Bulk Upload (CSV)</h3>
