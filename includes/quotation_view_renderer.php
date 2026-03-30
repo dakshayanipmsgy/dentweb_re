@@ -258,7 +258,13 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
         $marginMoney = max(0, $toFloat($row['margin_money_rs'] ?? 0));
         $loanAmount = max(0, $toFloat($row['loan_amount_rs'] ?? 0));
         $emi = max(0, $toFloat($row['emi_rs'] ?? 0));
-        $residualBillScenario = $hasValue($row, 'residual_bill_rs') ? max(0, $toFloat($row['residual_bill_rs'])) : $residualBill;
+        $residualBillScenario = $residualBill;
+        if ($hasValue($row, 'residual_bill_rs')) {
+            $residualBillCandidate = max(0, $toFloat($row['residual_bill_rs']));
+            $residualBillScenario = ($residualBillCandidate > 0 || $residualBill <= 0)
+                ? $residualBillCandidate
+                : $residualBill;
+        }
 
         $applicable = true;
         if ($isAbove2) {
