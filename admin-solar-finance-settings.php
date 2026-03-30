@@ -35,23 +35,65 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
   }
 }
 ?>
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Solar & Finance Settings</title><link rel="stylesheet" href="/style.css"><style>main{max-width:none;padding:1rem 1.2rem}textarea{width:100%;min-height:160px} .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.8rem}</style></head>
-<body><main>
-  <h1>Solar &amp; Finance Settings</h1><p><a href="/admin-dashboard.php">← Back to dashboard</a></p>
-  <?php if($msg): ?><div class="admin-alert admin-alert--<?= htmlspecialchars($tone) ?>"><span><?= htmlspecialchars($msg) ?></span></div><?php endif; ?>
-  <form method="post">
-    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
-    <div class="grid">
-      <label>Page title<input name="page_title" value="<?= htmlspecialchars((string)$settings['content']['page_title']) ?>"></label>
-      <label>CTA text<input name="cta_text" value="<?= htmlspecialchars((string)$settings['content']['cta_text']) ?>"></label>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Solar & Finance Settings</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/assets/css/admin-unified.css">
+</head>
+<body class="admin-shell admin-solar-settings">
+<main class="admin-page">
+  <header class="admin-title-row">
+    <div>
+      <p class="admin-kicker">Admin · Settings</p>
+      <h1 class="admin-title">Solar &amp; Finance Settings</h1>
+      <p class="admin-subtitle">Configure content, calculator defaults, FAQs, and advanced pricing JSON in one consistent workflow.</p>
     </div>
-    <label>Hero text<textarea name="hero_text"><?= htmlspecialchars((string)$settings['content']['hero_text']) ?></textarea></label>
-    <h3>Calculator defaults</h3>
-    <div class="grid"><?php foreach(($settings['defaults']??[]) as $k=>$v): ?><label><?= htmlspecialchars($k) ?><input name="<?= htmlspecialchars($k) ?>" value="<?= htmlspecialchars((string)$v) ?>"></label><?php endforeach; ?></div>
-    <h3>Explainer cards JSON</h3><textarea name="explainer_cards"><?= htmlspecialchars((string)json_encode($settings['content']['explainer_cards'], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)) ?></textarea>
-    <h3>FAQ JSON</h3><textarea name="faq"><?= htmlspecialchars((string)json_encode($settings['content']['faq'], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)) ?></textarea>
-    <h3>On-grid prices JSON</h3><textarea name="on_grid_prices"><?= htmlspecialchars((string)json_encode($settings['on_grid_prices'], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)) ?></textarea>
-    <h3>Hybrid prices JSON</h3><textarea name="hybrid_prices"><?= htmlspecialchars((string)json_encode($settings['hybrid_prices'], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)) ?></textarea>
-    <p><button class="btn btn-primary" type="submit">Save</button></p>
+    <div><a class="btn btn-secondary" href="/admin-dashboard.php">← Back to dashboard</a></div>
+  </header>
+  <?php if($msg): ?><div class="admin-alert admin-alert--<?= htmlspecialchars($tone) ?>"><span><?= htmlspecialchars($msg) ?></span></div><?php endif; ?>
+  <form method="post" class="admin-layout" style="display:grid;gap:.8rem;">
+    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+    <section class="admin-panel">
+      <h2 style="margin-top:0;">Page content</h2>
+      <div class="admin-grid">
+        <label class="field">Page title <input name="page_title" value="<?= htmlspecialchars((string)$settings['content']['page_title']) ?>"></label>
+        <label class="field">CTA text <input name="cta_text" value="<?= htmlspecialchars((string)$settings['content']['cta_text']) ?>"></label>
+      </div>
+      <label class="field">Hero text <textarea name="hero_text"><?= htmlspecialchars((string)$settings['content']['hero_text']) ?></textarea></label>
+    </section>
+
+    <section class="admin-panel">
+      <h2 style="margin-top:0;">Calculator defaults</h2>
+      <p class="helper">These values drive the customer-facing estimator. Keep numbers in base units.</p>
+      <div class="admin-grid"><?php foreach(($settings['defaults']??[]) as $k=>$v): ?><label class="field"><?= htmlspecialchars($k) ?><input name="<?= htmlspecialchars($k) ?>" value="<?= htmlspecialchars((string)$v) ?>"></label><?php endforeach; ?></div>
+    </section>
+
+    <section class="admin-panel admin-json">
+      <h2 style="margin-top:0;">Advanced JSON · Explainer cards</h2>
+      <p class="helper">Array of cards shown on the solar/finance page.</p>
+      <textarea name="explainer_cards"><?= htmlspecialchars((string)json_encode($settings['content']['explainer_cards'], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)) ?></textarea>
+    </section>
+    <section class="admin-panel admin-json">
+      <h2 style="margin-top:0;">Advanced JSON · FAQ</h2>
+      <p class="helper">Array of question/answer blocks.</p>
+      <textarea name="faq"><?= htmlspecialchars((string)json_encode($settings['content']['faq'], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)) ?></textarea>
+    </section>
+    <section class="admin-panel admin-json">
+      <h2 style="margin-top:0;">Advanced JSON · On-grid prices</h2>
+      <p class="helper">Price table rows for on-grid calculator options.</p>
+      <textarea name="on_grid_prices"><?= htmlspecialchars((string)json_encode($settings['on_grid_prices'], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)) ?></textarea>
+    </section>
+    <section class="admin-panel admin-json">
+      <h2 style="margin-top:0;">Advanced JSON · Hybrid prices</h2>
+      <p class="helper">Price table rows for hybrid calculator options.</p>
+      <textarea name="hybrid_prices"><?= htmlspecialchars((string)json_encode($settings['hybrid_prices'], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)) ?></textarea>
+    </section>
+    <div><button class="btn btn-primary" type="submit">Save settings</button></div>
   </form>
-</main></body></html>
+</main>
+</body>
+</html>

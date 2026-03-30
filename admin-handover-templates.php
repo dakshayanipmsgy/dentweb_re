@@ -63,10 +63,11 @@ $placeholders = [
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Handover Templates | Admin</title>
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="assets/css/admin-unified.css" />
     <style>
-        body { background: #f5f7fb; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-        .fullwidth-wrapper { width: 100% !important; max-width: 100% !important; padding-left: 20px; padding-right: 20px; padding-top: 28px; padding-bottom: 40px; }
-        .card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 1.5rem; box-shadow: 0 18px 40px rgba(15,23,42,0.08); }
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        .fullwidth-wrapper { width: 100% !important; }
+        .card { padding: 1.5rem; }
         h1 { margin: 0 0 0.35rem; }
         p { color: #4b5563; }
         .placeholder-note { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 12px; padding: 0.9rem 1rem; margin-bottom: 1rem; }
@@ -83,11 +84,17 @@ $placeholders = [
         .alert-error { background: #fef2f2; border: 1px solid #fecdd3; color: #991b1b; }
     </style>
 </head>
-<body>
+<body class="admin-shell admin-handover">
 <div class="fullwidth-wrapper">
+    <header class="admin-title-row">
+        <div>
+            <p class="admin-kicker">Admin · Template Library</p>
+            <h1 class="admin-title">Handover Templates</h1>
+            <p class="admin-subtitle">Configure the default content for each handover section. HTML is allowed in all text areas.</p>
+        </div>
+        <div><a class="btn btn-secondary" href="admin-dashboard.php">Back to admin</a></div>
+    </header>
     <div class="card">
-        <h1>Handover Templates</h1>
-        <p>Configure the default content for each handover section. HTML is allowed in all text areas.</p>
 
         <?php if ($message !== ''): ?>
             <div class="alert alert-<?= $tone === 'success' ? 'success' : 'error' ?>" role="status"><?= admin_handover_safe($message) ?></div>
@@ -112,7 +119,6 @@ $placeholders = [
             <?php endforeach; ?>
 
             <div class="actions">
-                <a class="btn btn-secondary" href="admin-dashboard.php">Back to admin</a>
                 <button type="submit" class="btn btn-primary">Save templates</button>
             </div>
         </form>
