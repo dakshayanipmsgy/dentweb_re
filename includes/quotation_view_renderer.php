@@ -215,10 +215,10 @@ function documents_quote_resolve_finance_scenarios_for_render(array $quote, arra
 
     $order = [
         'self_funded' => 'Self Funded',
-        'loan_upto_2_lacs_subsidy_to_loan' => 'Loan up to 2 lacs (if subsidy is transferred from savings to loan account)',
-        'loan_upto_2_lacs_subsidy_not_to_loan' => 'Loan up to 2 lacs (if subsidy is not transferred from savings to loan account)',
-        'loan_above_2_lacs_subsidy_to_loan' => 'Loan above 2 lacs (if subsidy is transferred from savings to loan account)',
-        'loan_above_2_lacs_subsidy_not_to_loan' => 'Loan above 2 lacs (if subsidy is not transferred from savings to loan account)',
+        'loan_upto_2_lacs_subsidy_to_loan' => 'Loan up to ₹2 lacs (subsidy to loan)',
+        'loan_upto_2_lacs_subsidy_not_to_loan' => 'Loan up to ₹2 lacs (subsidy self kept)',
+        'loan_above_2_lacs_subsidy_to_loan' => 'Loan above ₹2 lacs (subsidy to loan)',
+        'loan_above_2_lacs_subsidy_not_to_loan' => 'Loan above ₹2 lacs (subsidy self kept)',
     ];
 
     $resolvedScenarios = [];
@@ -672,13 +672,13 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <?php
 $scenarioOrder = [
     'self_funded' => 'Self Funded',
-    'loan_upto_2_lacs_subsidy_to_loan' => 'Loan up to 2 lacs (if subsidy is transferred from savings to loan account)',
-    'loan_upto_2_lacs_subsidy_not_to_loan' => 'Loan up to 2 lacs (if subsidy is not transferred from savings to loan account)',
-    'loan_above_2_lacs_subsidy_to_loan' => 'Loan above 2 lacs (if subsidy is transferred from savings to loan account)',
-    'loan_above_2_lacs_subsidy_not_to_loan' => 'Loan above 2 lacs (if subsidy is not transferred from savings to loan account)',
+    'loan_upto_2_lacs_subsidy_to_loan' => 'Loan up to ₹2 lacs (subsidy to loan)',
+    'loan_upto_2_lacs_subsidy_not_to_loan' => 'Loan up to ₹2 lacs (subsidy self kept)',
+    'loan_above_2_lacs_subsidy_to_loan' => 'Loan above ₹2 lacs (subsidy to loan)',
+    'loan_above_2_lacs_subsidy_not_to_loan' => 'Loan above ₹2 lacs (subsidy self kept)',
 ];
 $scenarioRows = is_array($financialClarity['finance_scenarios'] ?? null) ? $financialClarity['finance_scenarios'] : [];
-$primaryScenarioLabel = (string)($scenarioOrder[$financialClarity['primary_finance_scenario'] ?? ''] ?? 'Loan up to 2 lacs (if subsidy is transferred from savings to loan account)');
+$primaryScenarioLabel = (string)($scenarioOrder[$financialClarity['primary_finance_scenario'] ?? ''] ?? 'Loan up to ₹2 lacs (subsidy to loan)');
 ?>
 <section class="card"><div class="h sec">Funding Options at a Glance <span class="muted">(Primary: <?= htmlspecialchars($primaryScenarioLabel, ENT_QUOTES) ?>)</span></div><table><thead><tr><th>Scenario</th><th>Price</th><th>Subsidy</th><th>Margin Money</th><th>Initial Investment After Subsidy Credit</th><th>Loan Amount</th><th>Remaining Subsidy After Margin Adjustment</th><th>Effective Loan Amount After Remaining Subsidy Adjustment</th><th>Interest</th><th>Tenure</th><th>EMI</th><th>Residual Bill</th><th>Monthly Outflow</th><th>Payback</th></tr></thead><tbody><?php foreach ($scenarioOrder as $key => $label): $row = is_array($scenarioRows[$key] ?? null) ? $scenarioRows[$key] : []; if (str_contains($key, 'loan_above_2_lacs') && empty($row['applicable'])) { continue; } $isNotToLoan = str_contains($key, 'subsidy_not_to_loan'); ?><tr><td><?= htmlspecialchars($label, ENT_QUOTES) ?><?php if (!empty($row['is_primary'])): ?><span class="primary-badge">Primary</span><?php endif; ?></td><td><?= quotation_format_inr_indian((float)($row['price'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['subsidy'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['margin_money_rs'] ?? 0), $showDecimals) ?></td><td><?= ($key === 'self_funded' || !$isNotToLoan) ? '—' : quotation_format_inr_indian((float)($row['initial_investment_after_subsidy_credit_rs'] ?? $row['net_own_investment_after_subsidy'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['loan_amount_rs'] ?? 0), $showDecimals) ?></td><td><?= ($key === 'self_funded' || !$isNotToLoan) ? '—' : quotation_format_inr_indian((float)($row['remaining_subsidy_after_margin_adjustment_rs'] ?? 0), $showDecimals) ?></td><td><?= ($key === 'self_funded' || !$isNotToLoan) ? '—' : quotation_format_inr_indian((float)($row['effective_loan_principal_rs'] ?? 0), $showDecimals) ?></td><td><?= $key === 'self_funded' ? '—' : number_format((float)($row['interest_pct'] ?? 0), 2) . '%' ?></td><td><?= $key === 'self_funded' ? '—' : number_format((float)($row['tenure_years'] ?? 0), 1) . ' yrs' ?></td><td><?= $key === 'self_funded' ? '—' : quotation_format_inr_indian((float)($row['emi_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['residual_bill_rs'] ?? 0), $showDecimals) ?></td><td><?= quotation_format_inr_indian((float)($row['monthly_outflow_rs'] ?? 0), $showDecimals) ?></td><td><?= htmlspecialchars((string)($row['payback_display'] ?? '—'), ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table></section>
 <section class="card sf-glance-wrap"><div class="h sec">☀️ Solar at a Glance</div><div class="sf-glance-grid" id="glancePanel"></div></section>
@@ -703,10 +703,10 @@ const num=v=>{const n=Number(v);return Number.isFinite(n)?n:0;};
 const scenarioOrder=['self_funded','loan_upto_2_lacs_subsidy_to_loan','loan_upto_2_lacs_subsidy_not_to_loan','loan_above_2_lacs_subsidy_to_loan','loan_above_2_lacs_subsidy_not_to_loan'];
 const scenarioLabels={
   self_funded:'Self Funded',
-  loan_upto_2_lacs_subsidy_to_loan:'Loan ≤2L (subsidy to loan)',
-  loan_upto_2_lacs_subsidy_not_to_loan:'Loan ≤2L (subsidy not to loan)',
-  loan_above_2_lacs_subsidy_to_loan:'Loan >2L (subsidy to loan)',
-  loan_above_2_lacs_subsidy_not_to_loan:'Loan >2L (subsidy not to loan)'
+  loan_upto_2_lacs_subsidy_to_loan:'Loan up to ₹2 lacs (subsidy to loan)',
+  loan_upto_2_lacs_subsidy_not_to_loan:'Loan up to ₹2 lacs (subsidy self kept)',
+  loan_above_2_lacs_subsidy_to_loan:'Loan above ₹2 lacs (subsidy to loan)',
+  loan_above_2_lacs_subsidy_not_to_loan:'Loan above ₹2 lacs (subsidy self kept)'
 };
 const scenarioColors={
   self_funded:'#f59e0b',

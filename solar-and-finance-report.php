@@ -37,9 +37,9 @@ $reportDate = (string) ($report['created_at'] ?? date('Y-m-d H:i:s'));
 
 $scenarioLabelMap = [
     'self_funded' => 'Self Funded',
-    'loan_upto_2_lacs_subsidy_to_loan' => 'Loan up to ₹2 lacs (subsidy credited to loan account)',
+    'loan_upto_2_lacs_subsidy_to_loan' => 'Loan up to ₹2 lacs (subsidy to loan)',
     'loan_upto_2_lacs_subsidy_not_to_loan' => 'Loan up to ₹2 lacs (subsidy self kept)',
-    'loan_above_2_lacs_subsidy_to_loan' => 'Loan above ₹2 lacs (subsidy credited to loan account)',
+    'loan_above_2_lacs_subsidy_to_loan' => 'Loan above ₹2 lacs (subsidy to loan)',
     'loan_above_2_lacs_subsidy_not_to_loan' => 'Loan above ₹2 lacs (subsidy self kept)',
 ];
 $scenarioKeys = [
