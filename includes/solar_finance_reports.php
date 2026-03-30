@@ -194,15 +194,38 @@ function solar_finance_create_or_update_lead(array $report): array
     return ['action' => 'created', 'lead_id' => (string) ($created['id'] ?? '')];
 }
 
+function solar_finance_normalize_kit_name(string $name): string
+{
+    $normalized = strtolower(trim($name));
+    return preg_replace('/\s+/', ' ', $normalized) ?? '';
+}
+
 function solar_finance_find_matching_kit(string $systemType): ?array
 {
-    $targetName = strtolower(trim($systemType)) === 'hybrid'
-        ? 'hybrid solar power generation system'
-        : 'ongrid solar power generation system';
+    $systemTypeKey = solar_finance_normalize_kit_name($systemType);
+    $aliasesBySystemType = [
+        'hybrid' => [
+            'hybrid solar power generation system',
+            'hybrid solar power generation system tbased',
+        ],
+        'ongrid' => [
+            'ongrid solar power generation system',
+        ],
+    ];
+
+    $targetNames = $aliasesBySystemType[$systemTypeKey] ?? $aliasesBySystemType['ongrid'];
+    $targetLookup = [];
+    foreach ($targetNames as $alias) {
+        $targetLookup[solar_finance_normalize_kit_name($alias)] = true;
+    }
 
     foreach (documents_inventory_kits(false) as $kit) {
-        $name = strtolower(trim((string) ($kit['name'] ?? '')));
-        if ($name === $targetName) {
+        if (!is_array($kit) || !empty($kit['inactive'])) {
+            continue;
+        }
+
+        $name = solar_finance_normalize_kit_name((string) ($kit['name'] ?? ''));
+        if ($name !== '' && isset($targetLookup[$name])) {
             return $kit;
         }
     }
