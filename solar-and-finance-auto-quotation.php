@@ -28,7 +28,6 @@ try {
         'quote_id' => (string) ($result['quote_id'] ?? ''),
         'quote_no' => (string) ($result['quote_no'] ?? ''),
         'scenario' => (string) ($result['scenario'] ?? ''),
-        'quote_view_url' => (string) ($result['quote_view_url'] ?? ''),
         'message' => (string) ($result['message'] ?? ''),
     ]);
 } catch (Throwable $exception) {
@@ -38,3 +37,4 @@ try {
         'message' => 'Unable to auto-create quotation.',
     ]);
 }
+
