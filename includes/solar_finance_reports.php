@@ -423,6 +423,31 @@ function solar_finance_compute_monthly_solar_units(float $capacityKw, float $ann
     return max(0.0, ($capacityKw * $annualGenerationPerKw) / 12);
 }
 
+function solar_finance_loan_up_to_2_lacs_cap_rs(): float
+{
+    return 200000.0;
+}
+
+function solar_finance_loan_above_2_lacs_threshold_ratio(): float
+{
+    return 0.9;
+}
+
+function solar_finance_is_above_2_lacs_applicable(float $systemPrice): bool
+{
+    return ($systemPrice * solar_finance_loan_above_2_lacs_threshold_ratio()) > solar_finance_loan_up_to_2_lacs_cap_rs();
+}
+
+function solar_finance_apply_up_to_2_lacs_cap(float $price, float $loanAmount): array
+{
+    $price = max(0, $price);
+    $cappedLoan = min(max(0, $loanAmount), solar_finance_loan_up_to_2_lacs_cap_rs(), $price);
+    return [
+        'loan_amount_rs' => $cappedLoan,
+        'margin_money_rs' => max(0, $price - $cappedLoan),
+    ];
+}
+
 function solar_finance_build_normalized_scenario_snapshot(array $inputs, array $results = []): array
 {
     $scenarioLabels = solar_finance_supported_scenario_labels();
@@ -449,7 +474,7 @@ function solar_finance_build_normalized_scenario_snapshot(array $inputs, array $
         $pow = pow(1 + $monthlyRate, $tenureMonths);
         return ($principal * $monthlyRate * $pow) / max(0.000001, $pow - 1);
     };
-    $calculatePayback = static function (float $initialSolarCost, float $monthlyOutflowLoan, float $noSolarMonthlyBill): int {
+    $calculatePayback = static function (float $initialSolarCost, callable $monthlyOutflowResolver, float $noSolarMonthlyBill): int {
         if ($noSolarMonthlyBill <= 0) {
             return 0;
         }
@@ -457,7 +482,7 @@ function solar_finance_build_normalized_scenario_snapshot(array $inputs, array $
         $cumNoSolar = 0.0;
         $horizon = 25 * 12;
         for ($month = 1; $month <= $horizon; $month++) {
-            $cumSolar += max(0, $monthlyOutflowLoan);
+            $cumSolar += max(0, (float) $monthlyOutflowResolver($month));
             $cumNoSolar += max(0, $noSolarMonthlyBill);
             if ($cumSolar <= $cumNoSolar) {
                 return $month;
@@ -484,16 +509,16 @@ function solar_finance_build_normalized_scenario_snapshot(array $inputs, array $
     $priceUp2 = max(0, $num($inputs['system_cost_up2'] ?? 0));
     $priceAbove2 = max(0, $num($inputs['system_cost_above2'] ?? 0));
     $priceSelf = $priceSelf > 0 ? $priceSelf : $priceUp2;
-    $isAbove2Applicable = $higherLoanApplicable && $priceAbove2 > 0 && (($priceAbove2 * 0.8) >= 200000);
+    $isAbove2Applicable = $higherLoanApplicable && $priceAbove2 > 0 && solar_finance_is_above_2_lacs_applicable($priceAbove2);
 
     $marginUp2 = max(0, $num($inputs['margin_money_up2'] ?? 0));
     $loanUp2 = max(0, $num($inputs['loan_amount_up2'] ?? 0));
     if ($priceUp2 > 0 && $loanUp2 <= 0) {
-        $loanUp2 = min(200000, round($priceUp2 * 0.9));
+        $loanUp2 = round($priceUp2 * solar_finance_loan_above_2_lacs_threshold_ratio());
     }
-    if ($priceUp2 > 0 && $marginUp2 <= 0) {
-        $marginUp2 = max($priceUp2 - $loanUp2, round($priceUp2 * 0.1));
-    }
+    $up2Capped = solar_finance_apply_up_to_2_lacs_cap($priceUp2, $loanUp2);
+    $loanUp2 = (float) $up2Capped['loan_amount_rs'];
+    $marginUp2 = (float) $up2Capped['margin_money_rs'];
     $marginAbove2 = max(0, $num($inputs['margin_money_above2'] ?? 0));
     $loanAbove2 = max(0, $num($inputs['loan_amount_above2'] ?? 0));
     if ($isAbove2Applicable && $loanAbove2 <= 0) {
@@ -533,7 +558,16 @@ function solar_finance_build_normalized_scenario_snapshot(array $inputs, array $
         }
         $emiRs = $isSelf ? 0.0 : $emi($effectivePrincipal, $interestPct, $tenureMonths);
         $monthlyOutflow = $isSelf ? $residualBill : ($emiRs + $residualBill);
-        $paybackMonths = $calculatePayback($initialInvestment, $monthlyOutflow, $monthlyBill);
+        $paybackMonths = $calculatePayback(
+            $initialInvestment,
+            static function (int $month) use ($isSelf, $emiRs, $residualBill, $tenureMonths): float {
+                if ($isSelf) {
+                    return $residualBill;
+                }
+                return ($month <= $tenureMonths ? $emiRs : 0.0) + $residualBill;
+            },
+            $monthlyBill
+        );
         $cumulative = [];
         for ($year = 0; $year <= 25; $year++) {
             $months = $year * 12;
@@ -695,14 +729,21 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         $marginMoney = max(0, $toFloat($row['margin_money_rs'] ?? 0));
         $loanAmount = max(0, $toFloat($row['loan_amount_rs'] ?? 0));
         $scenarioResidual = $residualBill;
-        $applicable = $isAbove2 ? (bool) ($row['applicable'] ?? ($legacyAbove2['applicable'] ?? false)) : (bool) ($row['applicable'] ?? true);
+        $applicable = $isAbove2
+            ? ((bool) ($row['applicable'] ?? ($legacyAbove2['applicable'] ?? false)) && solar_finance_is_above_2_lacs_applicable($price))
+            : (bool) ($row['applicable'] ?? true);
         $effectivePrincipal = 0.0;
         $initialInvestment = max(0, $price - $scenarioSubsidy);
         $emi = 0.0;
         if (!$isSelfFunded) {
             if ($marginMoney <= 0 && $loanAmount <= 0) {
-                $loanAmount = max(0, $price * 0.8);
+                $loanAmount = max(0, $price * solar_finance_loan_above_2_lacs_threshold_ratio());
                 $marginMoney = max(0, $price - $loanAmount);
+            }
+            if (!$isAbove2) {
+                $capped = solar_finance_apply_up_to_2_lacs_cap($price, $loanAmount);
+                $loanAmount = (float) $capped['loan_amount_rs'];
+                $marginMoney = (float) $capped['margin_money_rs'];
             }
             if ($isSubsidyNotToLoan) {
                 $remainingSubsidy = max(0, $scenarioSubsidy - $marginMoney);
@@ -818,6 +859,12 @@ function create_or_update_solar_finance_quote(array $payload): array
     $subsidy = max(0, (float) ($inputs['subsidy'] ?? 0));
     $marginUp2 = max(0, (float) ($inputs['margin_money_up2'] ?? 0));
     $loanUp2 = max(0, (float) ($inputs['loan_amount_up2'] ?? 0));
+    if ($loanUp2 <= 0 && $systemCostUp2 > 0) {
+        $loanUp2 = $systemCostUp2 * solar_finance_loan_above_2_lacs_threshold_ratio();
+    }
+    $up2Capped = solar_finance_apply_up_to_2_lacs_cap($systemCostUp2, $loanUp2);
+    $loanUp2 = (float) $up2Capped['loan_amount_rs'];
+    $marginUp2 = (float) $up2Capped['margin_money_rs'];
     $marginAbove2 = max(0, (float) ($inputs['margin_money_above2'] ?? 0));
     $loanAbove2 = max(0, (float) ($inputs['loan_amount_above2'] ?? 0));
     $monthlyBill = max(0, (float) ($inputs['monthly_bill'] ?? 0));
@@ -911,10 +958,10 @@ function create_or_update_solar_finance_quote(array $payload): array
         'self_funded' => ['price' => $systemCostSelf > 0 ? $systemCostSelf : $systemCostUp2],
         'loan_upto_2_lacs_subsidy_to_loan' => ['price' => $systemCostUp2],
         'loan_upto_2_lacs_subsidy_not_to_loan' => ['price' => $systemCostUp2],
-        'loan_above_2_lacs_subsidy_to_loan' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000)],
-        'loan_above_2_lacs_subsidy_not_to_loan' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000)],
+        'loan_above_2_lacs_subsidy_to_loan' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && solar_finance_is_above_2_lacs_applicable($systemCostAbove2)],
+        'loan_above_2_lacs_subsidy_not_to_loan' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && solar_finance_is_above_2_lacs_applicable($systemCostAbove2)],
         'loan_upto_2_lacs' => ['price' => $systemCostUp2],
-        'loan_above_2_lacs' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && (($systemCostAbove2 * 0.8) >= 200000)],
+        'loan_above_2_lacs' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && solar_finance_is_above_2_lacs_applicable($systemCostAbove2)],
     ];
     $quote['rate_chart_snapshot'] = [
         'source' => 'solar_and_finance',
