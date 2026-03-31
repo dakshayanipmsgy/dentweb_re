@@ -95,16 +95,6 @@ function solar_finance_generate_report_token(): string
     return bin2hex(random_bytes(24));
 }
 
-function solar_finance_quote_public_view_url(array $quote): string
-{
-    $token = safe_text((string) ($quote['public_share_token'] ?? ''));
-    if ($token === '') {
-        return '';
-    }
-
-    return '/quotation-public.php?t=' . rawurlencode($token);
-}
-
 function solar_finance_create_report(array $payload): array
 {
     $reports = solar_finance_load_reports();
@@ -989,13 +979,6 @@ function create_or_update_solar_finance_quote(array $payload): array
     }
     $quote = solar_finance_apply_template_snapshot_to_quote($quote, $isCreate);
 
-    if (safe_text((string) ($quote['public_share_token'] ?? '')) === '') {
-        $quote['public_share_token'] = documents_generate_quote_public_share_token();
-        $quote['public_share_created_at'] = date('c');
-    }
-    $quote['public_share_enabled'] = true;
-    $quote['public_share_revoked_at'] = null;
-
     $saved = documents_save_quote($quote);
     if (!($saved['ok'] ?? false)) {
         return ['success' => false, 'action' => 'failed', 'message' => (string) ($saved['error'] ?? 'Unable to save quotation.')];
@@ -1007,7 +990,5 @@ function create_or_update_solar_finance_quote(array $payload): array
         'quote_id' => (string) ($quote['id'] ?? ''),
         'quote_no' => (string) ($quote['quote_no'] ?? ''),
         'scenario' => $quote['auto_sync_scenario'],
-        'quote_view_url' => solar_finance_quote_public_view_url($quote),
-        'quote_print_html_url' => solar_finance_quote_public_view_url($quote),
     ];
 }
