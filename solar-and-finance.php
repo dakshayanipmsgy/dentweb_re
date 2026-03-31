@@ -32,6 +32,12 @@ $defaults = $settings['defaults'] ?? [];
     .sf-finance-note{margin-top:.75rem;background:#ecfeff;border:1px solid #a5f3fc;border-radius:12px;padding:.7rem .85rem;font-size:.92rem;color:#164e63}
     .sf-btn{background:#0f766e;color:#fff;padding:.7rem 1rem;border:none;border-radius:10px;font-weight:700;cursor:pointer}
     .sf-btn.alt{background:#1d4ed8}.sf-btn.report{background:#0b5ed7}.sf-note{font-size:.85rem;color:#51607a}.sf-customer{margin-top:1rem}.sf-error{font-size:.82rem;color:#b91c1c;margin-top:.35rem}
+    .sf-action-wrap{margin-top:1rem;display:flex;gap:.6rem;flex-wrap:wrap;align-items:center}
+    .sf-menu{position:relative;display:inline-flex}
+    .sf-menu-panel{position:absolute;top:calc(100% + .45rem);left:0;min-width:180px;background:#fff;border:1px solid #dbe4f0;border-radius:12px;box-shadow:0 14px 32px rgba(15,23,42,.16);padding:.35rem;z-index:12}
+    .sf-menu-panel[hidden]{display:none}
+    .sf-menu-item{display:block;width:100%;border:none;background:transparent;color:#0f172a;text-align:left;padding:.6rem .7rem;border-radius:9px;cursor:pointer;font-weight:600}
+    .sf-menu-item:hover,.sf-menu-item:focus{background:#eff6ff}
     .sf-glance{margin-top:1rem}.sf-glance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem}
     .sf-glance-group{background:#f8faff;border:1px solid #dbe6f7;border-radius:14px;padding:1rem}
     .sf-glance-group h3{margin:0 0 .7rem;font-size:1rem}
@@ -129,9 +135,16 @@ $defaults = $settings['defaults'] ?? [];
         </div>
         <div id="customerError" class="sf-error" role="alert" aria-live="polite"></div>
       </section>
-      <div style="margin-top:1rem;display:flex;gap:.6rem;flex-wrap:wrap">
+      <div class="sf-action-wrap">
         <button class="sf-btn report" type="button" id="generateReportBtn">Generate Report</button>
-        <a class="sf-btn alt" target="_blank" id="waQuote" href="#"><i class="fa-brands fa-whatsapp"></i> <?= htmlspecialchars((string) ($content['cta_text'] ?? 'Request a quotation')) ?></a>
+        <div class="sf-menu">
+          <button class="sf-btn" type="button" id="generateQuotationBtn" aria-expanded="false" aria-controls="quotationMenu">Generate Quotation <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button>
+          <div class="sf-menu-panel" id="quotationMenu" hidden>
+            <button class="sf-menu-item" type="button" id="openQuotationHtmlBtn">HTML View</button>
+            <button class="sf-menu-item" type="button" id="downloadQuotationPdfBtn">Create PDF</button>
+          </div>
+        </div>
+        <a class="sf-btn alt" target="_blank" id="waQuote" href="#"><i class="fa-brands fa-whatsapp"></i> <?= htmlspecialchars((string) ($content['cta_text'] ?? 'Show Interest')) ?></a>
       </div>
     </section>
 
@@ -173,7 +186,7 @@ $defaults = $settings['defaults'] ?? [];
     let mChart,cChart,debounceTimer=null,isProgrammaticUpdate=false;
     const manualOverride=new Set();
     const debouncedIds=['monthlyBill','monthlyUnits','solarSize','dailyGeneration','unitRate','subsidy','loanTenure','systemCostSelf','systemCostUp2','systemCostAbove2','loanAmountUp2','marginMoneyUp2','interestRateUp2','loanAmountAbove2','marginMoneyAbove2','interestRateAbove2'];
-    const ids=[...debouncedIds,'systemType','inverterKva','phase','batteryCount','loanAboveGroupWrap','customerName','customerLocation','customerMobile','customerError','generateReportBtn'];
+    const ids=[...debouncedIds,'systemType','inverterKva','phase','batteryCount','loanAboveGroupWrap','customerName','customerLocation','customerMobile','customerError','generateReportBtn','generateQuotationBtn','quotationMenu','openQuotationHtmlBtn','downloadQuotationPdfBtn'];
     const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
     const glancePanel=document.getElementById('glancePanel'),paybackMeters=document.getElementById('paybackMeters'),financeBoxes=document.getElementById('financeBoxes'),waQuote=document.getElementById('waQuote');
     let latestSnapshot=null, latestReportUrl='';
@@ -280,6 +293,85 @@ $defaults = $settings['defaults'] ?? [];
     function scheduleAutoQuotationSync(reason=''){
       clearTimeout(autoQuoteState.timer);
       autoQuoteState.timer=setTimeout(()=>{syncAutoQuotation(reason);},800);
+    }
+    function getSyncValidationMessage(){
+      if(!latestSnapshot || document.getElementById('results').hidden){
+        return 'Please calculate your solar estimate first.';
+      }
+      const name=(el.customerName.value||'').trim();
+      const location=(el.customerLocation.value||'').trim();
+      const normalizedMobile=normalizeIndianMobile(el.customerMobile.value||'');
+      if(!name||!location||!normalizedMobile){
+        return 'Please enter customer name, location and mobile number before generating quotation.';
+      }
+      return '';
+    }
+    async function ensureSolarFinanceQuotationReady(reason='manual_quotation_action'){
+      recalculateSolarFinance({changedField:'manualTrigger'});
+      const validationMessage=getSyncValidationMessage();
+      if(validationMessage){
+        setCustomerError(validationMessage);
+        alert(validationMessage);
+        return null;
+      }
+      setCustomerError('');
+      await syncAutoQuotation(reason);
+      if(!autoQuoteState.quoteId){
+        alert('Quotation could not be created yet. Please try again in a moment.');
+        return null;
+      }
+      try{
+        const res=await fetch('/solar-and-finance-auto-quotation.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          ...latestSnapshot,
+          customer:{
+            name:(el.customerName.value||'').trim(),
+            location:(el.customerLocation.value||'').trim(),
+            mobile_normalized:normalizeIndianMobile(el.customerMobile.value||''),
+            mobile_raw:(el.customerMobile.value||'').trim()
+          },
+          linked_quote_id:autoQuoteState.quoteId||'',
+          sync_reason:reason,
+          include_links:true
+        })});
+        const data=await res.json();
+        if(!res.ok || !data?.success){
+          throw new Error(data?.message||'Unable to prepare quotation link.');
+        }
+        autoQuoteState.quoteId=String(data.quote_id||autoQuoteState.quoteId||'');
+        if(data?.quote_html_url||data?.quote_pdf_url){
+          return {
+            quoteId:autoQuoteState.quoteId,
+            htmlUrl:String(data.quote_html_url||''),
+            pdfUrl:String(data.quote_pdf_url||'')
+          };
+        }
+      }catch(err){
+        alert(err?.message||'Unable to prepare quotation.');
+        return null;
+      }
+      return {quoteId:autoQuoteState.quoteId,htmlUrl:'',pdfUrl:''};
+    }
+    async function handleQuotationAction(action){
+      const ready=await ensureSolarFinanceQuotationReady(action);
+      if(!ready) return;
+      if(action==='html'){
+        if(ready.htmlUrl){
+          window.open(ready.htmlUrl,'_blank','noopener');
+        }else{
+          alert('Quotation link is not available right now.');
+        }
+      }else if(action==='pdf'){
+        if(ready.pdfUrl){
+          const link=document.createElement('a');
+          link.href=ready.pdfUrl;
+          link.download='';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+        }else{
+          alert('Quotation PDF is not available right now.');
+        }
+      }
     }
 
     function clearResults(){
@@ -562,7 +654,7 @@ $defaults = $settings['defaults'] ?? [];
       };
 
       const quoteLines=[
-        'Hello Dakshayani, I want a solar quotation.',
+        'Hello Dakshayani, I am interested in solar consultation.',
         `- Monthly bill: ${INR(monthlyBill)}`,`- Monthly units: ${units||Math.round(monthlyBill/rate)}`,`- System type: ${el.systemType.value}`,`- Solar size: ${size} kW`,
         `- System cost (Self): ${INR(costSelf)}`,`- System cost (Loan up to 2 lacs): ${INR(costUp2)}`,`- System cost (Loan above 2 lacs): ${INR(costAbove2)}`,`- Subsidy: ${INR(subsidy)}`,
         `- Loan amount (up to 2 lacs): ${INR(loanUp)}`,`- Margin money (up to 2 lacs): ${INR(marginUp)}`,`- Interest (up to 2 lacs): ${el.interestRateUp2.value||d.interest_upto_2_lacs||6}%`,
@@ -645,6 +737,28 @@ $defaults = $settings['defaults'] ?? [];
     document.getElementById('calcBtn').addEventListener('click',()=>recalculateSolarFinance({changedField:'manualTrigger'}));
     document.getElementById('resetBtn').addEventListener('click',resetAllFields);
     el.generateReportBtn.addEventListener('click',generateReport);
+    el.generateQuotationBtn.addEventListener('click',()=>{
+      const isOpen=!el.quotationMenu.hidden;
+      el.quotationMenu.hidden=isOpen;
+      el.generateQuotationBtn.setAttribute('aria-expanded',isOpen?'false':'true');
+    });
+    el.openQuotationHtmlBtn.addEventListener('click',async ()=>{
+      el.quotationMenu.hidden=true;
+      el.generateQuotationBtn.setAttribute('aria-expanded','false');
+      await handleQuotationAction('html');
+    });
+    el.downloadQuotationPdfBtn.addEventListener('click',async ()=>{
+      el.quotationMenu.hidden=true;
+      el.generateQuotationBtn.setAttribute('aria-expanded','false');
+      await handleQuotationAction('pdf');
+    });
+    document.addEventListener('click',(event)=>{
+      const target=event.target;
+      if(!(target instanceof Element)) return;
+      if(target.closest('.sf-menu')) return;
+      el.quotationMenu.hidden=true;
+      el.generateQuotationBtn.setAttribute('aria-expanded','false');
+    });
     resetAllFields();
   </script>
 
