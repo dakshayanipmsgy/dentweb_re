@@ -522,7 +522,7 @@ if(financeBoxes){
       label:scenarioLabels[scenarioKey],
       metrics:{
         marginMoney:scenarioKey==='self_funded'?'—':r(num(row.margin_money_rs)),
-        marginMoneySubsidy:scenarioKey==='self_funded'?'—':(scenarioKey.includes('subsidy_not_to_loan')?r(num(row.initial_investment_after_subsidy_credit_rs||row.net_own_investment_after_subsidy)):'—'),
+        marginMoneySubsidy:scenarioKey==='self_funded'?'—':r(num(row.initial_investment_after_subsidy_credit_rs||row.net_own_investment_after_subsidy)),
         loanAmount:scenarioKey==='self_funded'?'—':r(num(row.loan_amount_rs)),
         loanSubsidy:scenarioKey==='self_funded'?'—':r(num(row.effective_loan_principal_rs)),
         interestRate:scenarioKey==='self_funded'?'—':`${num(row.interest_pct).toFixed(showDecimals?2:1)}%`,

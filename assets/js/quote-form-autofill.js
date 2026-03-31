@@ -26,6 +26,8 @@
     const transportInput = field('transportation_rs');
     const discountInput = field('discount_rs');
     const primaryScenarioInput = field('primary_finance_scenario');
+    const up2ApplicableInput = field('loan_upto_2_lacs_applicable');
+    const above2ApplicableInput = field('loan_above_2_lacs_applicable');
 
     const priceSelfInput = field('scenario_price_self_funded');
     const priceUp2Input = field('scenario_price_loan_upto_2_lacs');
@@ -60,6 +62,9 @@
         const n = Number(value);
         return Number.isFinite(n) ? n : 0;
     };
+    const LOAN_UPTO_2_LACS_CAP_RS = 200000;
+    const LOAN_ABOVE_2_LACS_THRESHOLD_RATIO = 0.9;
+    const LOAN_ABOVE_2_LACS_THRESHOLD_RS = 200000;
     const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
     const isExistingQuote = () => !!(quoteIdInput && String(quoteIdInput.value || '').trim() !== '');
 
@@ -160,11 +165,12 @@
         totalInput.value = String(Math.max(0, Math.round(selectedPrimaryScenarioPrice() * 100) / 100));
     };
 
-    const applyScenarioFinanceDefaults = (prefix, priceInput, marginPctInput, loanPctInput, marginRsInput, loanRsInput, interestInput, tenureInput, modeInput, fallbackMaxLoan) => {
+    const applyScenarioFinanceDefaults = (prefix, priceInput, marginPctInput, loanPctInput, marginRsInput, loanRsInput, interestInput, tenureInput, modeInput, fallbackMaxLoan, enforceCap = false) => {
         const price = parseNum(priceInput?.value);
         const mode = String(modeInput?.value || 'ratio') === 'manual' ? 'manual' : 'ratio';
         const segLoan = currentSegmentSettings().loan_bestcase || {};
-        const maxLoan = parseNum(segLoan.max_loan_rs || fallbackMaxLoan);
+        const maxLoanRaw = parseNum(segLoan.max_loan_rs || fallbackMaxLoan);
+        const maxLoan = enforceCap ? (maxLoanRaw > 0 ? Math.min(maxLoanRaw, LOAN_UPTO_2_LACS_CAP_RS) : LOAN_UPTO_2_LACS_CAP_RS) : maxLoanRaw;
         const minMarginPct = parseNum(segLoan.min_margin_pct || 10);
         const defaultTenure = parseNum(segLoan.tenure_years || 10);
         const defaultInterest = parseNum(segLoan.interest_pct || 6);
@@ -193,9 +199,33 @@
 
     const applyAllScenarioFinanceDefaults = () => {
         syncSelectedPrimarySystemPrice();
-        applyScenarioFinanceDefaults('up2', priceUp2Input, up2MarginPctInput, up2LoanPctInput, up2MarginRsInput, up2LoanRsInput, up2InterestInput, up2TenureInput, up2ModeInput, 200000);
-        applyScenarioFinanceDefaults('above2', priceAbove2Input, above2MarginPctInput, above2LoanPctInput, above2MarginRsInput, above2LoanRsInput, above2InterestInput, above2TenureInput, above2ModeInput, 0);
+        applyScenarioFinanceDefaults('up2', priceUp2Input, up2MarginPctInput, up2LoanPctInput, up2MarginRsInput, up2LoanRsInput, up2InterestInput, up2TenureInput, up2ModeInput, LOAN_UPTO_2_LACS_CAP_RS, true);
+        applyScenarioFinanceDefaults('above2', priceAbove2Input, above2MarginPctInput, above2LoanPctInput, above2MarginRsInput, above2LoanRsInput, above2InterestInput, above2TenureInput, above2ModeInput, 0, false);
         syncLegacyLoanFields();
+    };
+
+    const syncScenarioApplicability = () => {
+        const above2Price = parseNum(priceAbove2Input?.value);
+        const isApplicable = (above2Price * LOAN_ABOVE_2_LACS_THRESHOLD_RATIO) > LOAN_ABOVE_2_LACS_THRESHOLD_RS;
+        if (above2ApplicableInput) {
+            above2ApplicableInput.disabled = !isApplicable;
+            if (!isApplicable) above2ApplicableInput.checked = false;
+        }
+        const shouldDisableAbove2Inputs = !isApplicable || (above2ApplicableInput && !above2ApplicableInput.checked);
+        [
+            above2ModeInput, above2MarginPctInput, above2LoanPctInput, above2MarginRsInput, above2LoanRsInput,
+            above2InterestInput, above2TenureInput
+        ].filter(Boolean).forEach((el) => {
+            el.disabled = shouldDisableAbove2Inputs;
+        });
+        if (!isApplicable && primaryScenarioInput && String(primaryScenarioInput.value || '').includes('loan_above_2_lacs')) {
+            primaryScenarioInput.value = 'loan_upto_2_lacs_subsidy_to_loan';
+            syncSelectedPrimarySystemPrice();
+            syncLegacyLoanFields();
+        }
+        if (up2ApplicableInput) {
+            up2ApplicableInput.checked = true;
+        }
     };
 
     const syncLegacyLoanFields = () => {
@@ -220,7 +250,7 @@
     bindRecalc(unitRateInput, () => applyMonthlySuggestion(false));
     bindRecalc(annualGenerationInput, () => applyMonthlySuggestion(false));
     bindRecalc(priceUp2Input, applyAllScenarioFinanceDefaults);
-    bindRecalc(priceAbove2Input, applyAllScenarioFinanceDefaults);
+    bindRecalc(priceAbove2Input, () => { applyAllScenarioFinanceDefaults(); syncScenarioApplicability(); });
     bindRecalc(priceSelfInput, syncLegacyLoanFields);
     bindRecalc(transportInput, applyAllScenarioFinanceDefaults);
     bindRecalc(discountInput, applyAllScenarioFinanceDefaults);
@@ -229,6 +259,7 @@
         el?.addEventListener('change', applyAllScenarioFinanceDefaults);
         el?.addEventListener('input', syncLegacyLoanFields);
     });
+    above2ApplicableInput?.addEventListener('change', syncScenarioApplicability);
 
     templateSet?.addEventListener('change', () => {
         applyMonthlySuggestion(false);
@@ -264,5 +295,6 @@
     applySubsidyDefault(false);
     syncSelectedPrimarySystemPrice();
     applyAllScenarioFinanceDefaults();
+    syncScenarioApplicability();
     syncLegacyLoanFields();
 })();
