@@ -6,84 +6,84 @@
     if (!quoteForm) return;
 
     const settingsBySegment = (config.settingsBySegment && typeof config.settingsBySegment === 'object') ? config.settingsBySegment : {};
-    const defaultEnergy = Number(config.defaultEnergy);
-    const safeDefaultEnergy = Number.isFinite(defaultEnergy) ? defaultEnergy : 1450;
+    const safeDefaultEnergy = Number.isFinite(Number(config.defaultEnergy)) ? Number(config.defaultEnergy) : 1450;
 
     const field = (name) => quoteForm.querySelector('[name="' + name + '"]');
-    const loanEnabled = field('loan_enabled');
+    const quoteIdInput = field('quote_id');
     const templateSet = field('template_set_id');
-    const totalInput = field('system_total_incl_gst_rs');
-    const transportInput = field('transportation_rs');
-    const subsidyInput = field('subsidy_expected_rs');
-    const discountInput = field('discount_rs');
     const capacityInput = quoteForm.querySelector('#computedCapacityKwp') || field('capacity_kwp');
     const schemeTypeInput = field('scheme_type');
     const customerTypeInput = field('customer_type');
     const pmSuryagharInput = field('is_pm_suryaghar');
-    const quoteIdInput = field('quote_id');
+
     const unitRateInput = field('unit_rate_rs_per_kwh');
     const annualGenerationInput = field('annual_generation_per_kw');
     const monthlyBillInput = field('monthly_bill_rs');
-    const loanAmountInput = field('loan_amount');
-    const loanInterestInput = field('loan_interest_pct');
-    const loanTenureInput = field('loan_tenure_years');
-    const loanMarginInput = field('loan_margin_pct');
-
-    const resetLoanBtn = config.resetLoanBtn || document.getElementById('resetLoanDefaults');
-    const resetMonthlyBtn = config.resetMonthlyBtn || document.getElementById('resetMonthlySuggestion');
-    const resetSubsidyBtn = config.resetSubsidyBtn || document.getElementById('resetSubsidyDefault');
-
+    const subsidyInput = field('subsidy_expected_rs');
     const monthlyBillTouchedFlag = field('monthly_bill_touched');
 
-    const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
-    const isExistingQuote = () => !!(quoteIdInput && String(quoteIdInput.value || '').trim() !== '');
-    const hasSavedMonthlyBill = () => !!(monthlyBillInput && !fieldEmpty(monthlyBillInput));
-    const hasSavedUnitRate = () => !!(unitRateInput && !fieldEmpty(unitRateInput));
-    const hasSavedAnnualGeneration = () => !!(annualGenerationInput && !fieldEmpty(annualGenerationInput));
+    const totalInput = field('system_total_incl_gst_rs');
+    const transportInput = field('transportation_rs');
+    const discountInput = field('discount_rs');
+    const primaryScenarioInput = field('primary_finance_scenario');
 
-    const managedFields = [monthlyBillInput, subsidyInput, loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput, unitRateInput, annualGenerationInput].filter(Boolean);
-    managedFields.forEach((input) => {
-        input.addEventListener('input', () => {
-            input.dataset.touched = '1';
-            if (input === monthlyBillInput && monthlyBillTouchedFlag) {
-                monthlyBillTouchedFlag.value = '1';
-            }
-        });
-    });
+    const priceSelfInput = field('scenario_price_self_funded');
+    const priceUp2Input = field('scenario_price_loan_upto_2_lacs');
+    const priceAbove2Input = field('scenario_price_loan_above_2_lacs');
+
+    const up2ModeInput = field('loan_upto_2_lacs_finance_mode');
+    const up2MarginPctInput = field('loan_upto_2_lacs_margin_ratio_pct');
+    const up2LoanPctInput = field('loan_upto_2_lacs_loan_ratio_pct');
+    const up2MarginRsInput = field('loan_upto_2_lacs_margin_money_rs');
+    const up2LoanRsInput = field('loan_upto_2_lacs_loan_amount_rs');
+    const up2InterestInput = field('loan_upto_2_lacs_interest_pct');
+    const up2TenureInput = field('loan_upto_2_lacs_tenure_years');
+
+    const above2ModeInput = field('loan_above_2_lacs_finance_mode');
+    const above2MarginPctInput = field('loan_above_2_lacs_margin_ratio_pct');
+    const above2LoanPctInput = field('loan_above_2_lacs_loan_ratio_pct');
+    const above2MarginRsInput = field('loan_above_2_lacs_margin_money_rs');
+    const above2LoanRsInput = field('loan_above_2_lacs_loan_amount_rs');
+    const above2InterestInput = field('loan_above_2_lacs_interest_pct');
+    const above2TenureInput = field('loan_above_2_lacs_tenure_years');
+
+    const legacyLoanEnabledInput = field('loan_enabled');
+    const legacyLoanAmountInput = field('loan_amount');
+    const legacyLoanInterestInput = field('loan_interest_pct');
+    const legacyLoanTenureInput = field('loan_tenure_years');
+    const legacyLoanMarginInput = field('loan_margin_pct');
+
+    const resetMonthlyBtn = config.resetMonthlyBtn || document.getElementById('resetMonthlySuggestion');
+    const resetSubsidyBtn = config.resetSubsidyBtn || document.getElementById('resetSubsidyDefault');
 
     const parseNum = (value) => {
         const n = Number(value);
         return Number.isFinite(n) ? n : 0;
     };
+    const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
+    const isExistingQuote = () => !!(quoteIdInput && String(quoteIdInput.value || '').trim() !== '');
 
-    if (isExistingQuote() && hasSavedMonthlyBill()) {
-        monthlyBillInput.dataset.touched = '1';
-        if (monthlyBillTouchedFlag) monthlyBillTouchedFlag.value = '1';
-    }
-    if (isExistingQuote() && hasSavedUnitRate() && unitRateInput) {
-        unitRateInput.dataset.touched = '1';
-    }
-    if (isExistingQuote() && hasSavedAnnualGeneration() && annualGenerationInput) {
-        annualGenerationInput.dataset.touched = '1';
-    }
-
-    const markLoanFieldsTouchedForEdit = () => {
-        if (!isExistingQuote()) return;
-        [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].forEach((input) => {
-            if (input && !fieldEmpty(input)) input.dataset.touched = '1';
+    const managedFields = [
+        monthlyBillInput, subsidyInput, unitRateInput, annualGenerationInput,
+        up2MarginPctInput, up2LoanPctInput, up2MarginRsInput, up2LoanRsInput, up2InterestInput, up2TenureInput,
+        above2MarginPctInput, above2LoanPctInput, above2MarginRsInput, above2LoanRsInput, above2InterestInput, above2TenureInput
+    ].filter(Boolean);
+    managedFields.forEach((input) => {
+        input.addEventListener('input', () => {
+            input.dataset.touched = '1';
+            if (input === monthlyBillInput && monthlyBillTouchedFlag) monthlyBillTouchedFlag.value = '1';
         });
-    };
+    });
+
     const setIfAllowed = (input, value, options) => {
+        if (!input) return;
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
-        if (!input) return;
-        if (!force && input === monthlyBillInput && monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1') return;
         if (!force && input.dataset.touched === '1' && !fieldEmpty(input)) return;
-        const val = noDecimals ? Math.round(value) : Math.round(value * 100) / 100;
-        input.value = String(val);
-        if (input === monthlyBillInput && monthlyBillTouchedFlag && force) {
-            monthlyBillTouchedFlag.value = '0';
-        }
+        if (!force && input === monthlyBillInput && monthlyBillTouchedFlag?.value === '1') return;
+        const rounded = noDecimals ? Math.round(value) : (Math.round(value * 100) / 100);
+        input.value = String(rounded);
+        if (force) input.dataset.touched = '';
     };
 
     const currentSegmentCode = () => {
@@ -117,113 +117,139 @@
         return 0;
     };
 
-    const applySubsidyDefault = (force) => {
-        const shouldForce = !!force;
-        if (!subsidyInput || !capacityInput) return;
-        const isNewQuote = !quoteIdInput || String(quoteIdInput.value || '').trim() === '';
-        const isEmpty = fieldEmpty(subsidyInput);
-        if (!shouldForce) {
-            if (!isPmSuryaGharContext()) return;
-            if (subsidyInput.dataset.touched === '1' && !isEmpty) return;
-            if (!isEmpty && !isNewQuote) return;
-        }
-        subsidyInput.value = String(subsidyByCapacity(parseNum(capacityInput.value)));
-    };
-
-    const computeGrossPayable = () => {
-        const grossBeforeDiscount = parseNum(totalInput?.value) + parseNum(transportInput?.value);
-        const discount = Math.max(0, parseNum(discountInput?.value));
-        return Math.max(0, grossBeforeDiscount - discount);
-    };
-
-    const applyLoanDefaults = (force) => {
-        const shouldForce = !!force;
-        if (!loanEnabled || !loanEnabled.checked) return;
-        const loanCfg = currentSegmentSettings().loan_bestcase || {};
-        const grossPayable = computeGrossPayable();
-        const maxLoan = parseNum(loanCfg.max_loan_rs || 200000);
-        const minMarginPct = parseNum(loanCfg.min_margin_pct || 10);
-        const desiredLoan = grossPayable - (grossPayable * (minMarginPct / 100));
-        const loanAmount = Math.max(0, Math.min(desiredLoan, maxLoan));
-        const marginAmount = Math.max(0, grossPayable - loanAmount);
-
-        setIfAllowed(loanAmountInput, loanAmount, { force: shouldForce });
-        setIfAllowed(loanMarginInput, marginAmount, { force: shouldForce });
-        setIfAllowed(loanInterestInput, parseNum(loanCfg.interest_pct || 6), { force: shouldForce });
-        setIfAllowed(loanTenureInput, parseNum(loanCfg.tenure_years || 10), { force: shouldForce, noDecimals: true });
-    };
-
     const applyMonthlySuggestion = (force) => {
         const shouldForce = !!force;
-        if (!shouldForce && isExistingQuote() && hasSavedMonthlyBill()) return;
+        if (!shouldForce && isExistingQuote() && !fieldEmpty(monthlyBillInput)) return;
 
         const segSettings = currentSegmentSettings();
-        const shouldPreserveSavedUnitRate = !shouldForce && isExistingQuote() && hasSavedUnitRate();
-        const shouldPreserveSavedAnnualGeneration = !shouldForce && isExistingQuote() && hasSavedAnnualGeneration();
-        if (!shouldPreserveSavedUnitRate && unitRateInput && fieldEmpty(unitRateInput) && (!unitRateInput.dataset.touched || shouldForce)) {
-            unitRateInput.value = String(parseNum(segSettings.unit_rate_rs_per_kwh || 0));
-        }
-        if (!shouldPreserveSavedAnnualGeneration && annualGenerationInput && fieldEmpty(annualGenerationInput) && (!annualGenerationInput.dataset.touched || shouldForce)) {
-            annualGenerationInput.value = String(parseNum(segSettings.annual_generation_per_kw || safeDefaultEnergy));
-        }
+        if (unitRateInput && fieldEmpty(unitRateInput)) setIfAllowed(unitRateInput, parseNum(segSettings.unit_rate_rs_per_kwh || 0), { force: shouldForce });
+        if (annualGenerationInput && fieldEmpty(annualGenerationInput)) setIfAllowed(annualGenerationInput, parseNum(segSettings.annual_generation_per_kw || safeDefaultEnergy), { force: shouldForce });
 
         const capacity = parseNum(capacityInput?.value);
         const annualGeneration = parseNum(annualGenerationInput?.value || segSettings.annual_generation_per_kw || safeDefaultEnergy);
         const unitRate = parseNum(unitRateInput?.value || segSettings.unit_rate_rs_per_kwh || 0);
-        const currentMonthlyBill = parseNum(monthlyBillInput?.value);
-        const monthlyBillTouched = monthlyBillTouchedFlag && monthlyBillTouchedFlag.value === '1';
-        if (!shouldForce && monthlyBillTouched) return;
-        if (!shouldForce && monthlyBillInput && !fieldEmpty(monthlyBillInput) && currentMonthlyBill > 0 && monthlyBillInput.dataset.touched === '1') return;
-        setIfAllowed(monthlyBillInput, (capacity * annualGeneration * unitRate) / 12, { force: shouldForce, noDecimals: true });
+        const monthlySuggestion = (capacity * annualGeneration * unitRate) / 12;
+        setIfAllowed(monthlyBillInput, monthlySuggestion, { force: shouldForce, noDecimals: true });
+    };
+
+    const applySubsidyDefault = (force) => {
+        const shouldForce = !!force;
+        if (!subsidyInput || !capacityInput) return;
+        if (!shouldForce && !isPmSuryaGharContext()) return;
+        if (!shouldForce && subsidyInput.dataset.touched === '1' && !fieldEmpty(subsidyInput)) return;
+        setIfAllowed(subsidyInput, subsidyByCapacity(parseNum(capacityInput.value)), { force: shouldForce });
+    };
+
+    const grossPayable = () => {
+        const gross = parseNum(totalInput?.value) + parseNum(transportInput?.value);
+        return Math.max(0, gross - Math.max(0, parseNum(discountInput?.value)));
+    };
+
+    const scenarioPrice = (key) => {
+        if (key === 'self_funded') return parseNum(priceSelfInput?.value);
+        if (key.includes('loan_above_2_lacs')) return parseNum(priceAbove2Input?.value);
+        return parseNum(priceUp2Input?.value);
+    };
+
+    const applyScenarioFinanceDefaults = (prefix, priceInput, marginPctInput, loanPctInput, marginRsInput, loanRsInput, interestInput, tenureInput, modeInput, fallbackMaxLoan) => {
+        const price = parseNum(priceInput?.value);
+        const mode = String(modeInput?.value || 'ratio') === 'manual' ? 'manual' : 'ratio';
+        const segLoan = currentSegmentSettings().loan_bestcase || {};
+        const maxLoan = parseNum(segLoan.max_loan_rs || fallbackMaxLoan);
+        const minMarginPct = parseNum(segLoan.min_margin_pct || 10);
+        const defaultTenure = parseNum(segLoan.tenure_years || 10);
+        const defaultInterest = parseNum(segLoan.interest_pct || 6);
+
+        if (mode === 'ratio') {
+            let marginPct = parseNum(marginPctInput?.value);
+            if (marginPct <= 0) marginPct = minMarginPct;
+            marginPct = Math.min(100, Math.max(0, marginPct));
+            let loanPct = parseNum(loanPctInput?.value);
+            if (loanPct <= 0) loanPct = Math.max(0, 100 - marginPct);
+            if (Math.abs((marginPct + loanPct) - 100) > 0.01) loanPct = Math.max(0, 100 - marginPct);
+
+            let desiredLoan = price * (loanPct / 100);
+            if (maxLoan > 0) desiredLoan = Math.min(desiredLoan, maxLoan);
+            const marginRs = Math.max(0, price - desiredLoan);
+
+            setIfAllowed(marginPctInput, marginPct, {});
+            setIfAllowed(loanPctInput, Math.max(0, 100 - marginPct), {});
+            setIfAllowed(loanRsInput, desiredLoan, {});
+            setIfAllowed(marginRsInput, marginRs, {});
+        }
+
+        setIfAllowed(interestInput, defaultInterest, {});
+        setIfAllowed(tenureInput, defaultTenure, { noDecimals: true });
+    };
+
+    const applyAllScenarioFinanceDefaults = () => {
+        applyScenarioFinanceDefaults('up2', priceUp2Input, up2MarginPctInput, up2LoanPctInput, up2MarginRsInput, up2LoanRsInput, up2InterestInput, up2TenureInput, up2ModeInput, 200000);
+        applyScenarioFinanceDefaults('above2', priceAbove2Input, above2MarginPctInput, above2LoanPctInput, above2MarginRsInput, above2LoanRsInput, above2InterestInput, above2TenureInput, above2ModeInput, 0);
+        syncLegacyLoanFields();
+    };
+
+    const syncLegacyLoanFields = () => {
+        const selected = String(primaryScenarioInput?.value || 'loan_upto_2_lacs_subsidy_to_loan');
+        const isLoan = selected !== 'self_funded';
+        const useAbove2 = selected.includes('loan_above_2_lacs');
+
+        const loanAmount = useAbove2 ? parseNum(above2LoanRsInput?.value) : parseNum(up2LoanRsInput?.value);
+        const interest = useAbove2 ? parseNum(above2InterestInput?.value) : parseNum(up2InterestInput?.value);
+        const tenure = useAbove2 ? parseNum(above2TenureInput?.value) : parseNum(up2TenureInput?.value);
+        const marginPct = useAbove2 ? parseNum(above2MarginPctInput?.value) : parseNum(up2MarginPctInput?.value);
+
+        if (legacyLoanEnabledInput) legacyLoanEnabledInput.value = isLoan ? '1' : '0';
+        if (legacyLoanAmountInput) legacyLoanAmountInput.value = String(isLoan ? loanAmount : 0);
+        if (legacyLoanInterestInput) legacyLoanInterestInput.value = String(isLoan ? interest : 0);
+        if (legacyLoanTenureInput) legacyLoanTenureInput.value = String(isLoan ? tenure : 0);
+        if (legacyLoanMarginInput) legacyLoanMarginInput.value = String(isLoan ? marginPct : 0);
     };
 
     const bindRecalc = (input, handler) => { if (input) input.addEventListener('input', handler); };
-    bindRecalc(totalInput, () => applyLoanDefaults(false));
-    bindRecalc(transportInput, () => applyLoanDefaults(false));
-    bindRecalc(discountInput, () => applyLoanDefaults(false));
-    bindRecalc(subsidyInput, () => applyLoanDefaults(false));
     bindRecalc(capacityInput, () => { applyMonthlySuggestion(false); applySubsidyDefault(false); });
     bindRecalc(unitRateInput, () => applyMonthlySuggestion(false));
     bindRecalc(annualGenerationInput, () => applyMonthlySuggestion(false));
+    bindRecalc(priceUp2Input, applyAllScenarioFinanceDefaults);
+    bindRecalc(priceAbove2Input, applyAllScenarioFinanceDefaults);
+    bindRecalc(priceSelfInput, syncLegacyLoanFields);
+    bindRecalc(totalInput, applyAllScenarioFinanceDefaults);
+    bindRecalc(transportInput, applyAllScenarioFinanceDefaults);
+    bindRecalc(discountInput, applyAllScenarioFinanceDefaults);
 
-    if (loanEnabled) {
-        loanEnabled.addEventListener('change', () => {
-            if (loanEnabled.checked) applyLoanDefaults(false);
-        });
-    }
-    if (templateSet) {
-        templateSet.addEventListener('change', () => {
-            applyLoanDefaults(false);
-            applyMonthlySuggestion(false);
-            applySubsidyDefault(false);
-        });
-    }
-    if (schemeTypeInput) schemeTypeInput.addEventListener('change', () => applySubsidyDefault(false));
-    if (customerTypeInput) customerTypeInput.addEventListener('change', () => applySubsidyDefault(false));
-    if (pmSuryagharInput) pmSuryagharInput.addEventListener('change', () => applySubsidyDefault(false));
-
-    resetLoanBtn?.addEventListener('click', (e) => {
-        e.preventDefault();
-        [loanAmountInput, loanInterestInput, loanTenureInput, loanMarginInput].forEach((input) => { if (input) input.dataset.touched = ''; });
-        applyLoanDefaults(true);
+    [up2ModeInput, above2ModeInput, up2MarginPctInput, above2MarginPctInput, up2LoanPctInput, above2LoanPctInput, up2InterestInput, above2InterestInput, up2TenureInput, above2TenureInput, up2LoanRsInput, above2LoanRsInput].forEach((el) => {
+        el?.addEventListener('change', applyAllScenarioFinanceDefaults);
+        el?.addEventListener('input', syncLegacyLoanFields);
     });
+
+    templateSet?.addEventListener('change', () => {
+        applyMonthlySuggestion(false);
+        applySubsidyDefault(false);
+        applyAllScenarioFinanceDefaults();
+    });
+    primaryScenarioInput?.addEventListener('change', syncLegacyLoanFields);
+
     resetMonthlyBtn?.addEventListener('click', (e) => {
         e.preventDefault();
-        if (monthlyBillInput) monthlyBillInput.dataset.touched = '';
         if (monthlyBillTouchedFlag) monthlyBillTouchedFlag.value = '0';
+        if (monthlyBillInput) monthlyBillInput.dataset.touched = '';
         if (unitRateInput) unitRateInput.dataset.touched = '';
         if (annualGenerationInput) annualGenerationInput.dataset.touched = '';
         applyMonthlySuggestion(true);
     });
+
     resetSubsidyBtn?.addEventListener('click', (e) => {
         e.preventDefault();
         if (subsidyInput) subsidyInput.dataset.touched = '';
         applySubsidyDefault(true);
-        applyLoanDefaults(false);
     });
 
-    markLoanFieldsTouchedForEdit();
-    applyLoanDefaults(false);
+    if (isExistingQuote() && monthlyBillInput && !fieldEmpty(monthlyBillInput)) {
+        monthlyBillInput.dataset.touched = '1';
+        if (monthlyBillTouchedFlag) monthlyBillTouchedFlag.value = '1';
+    }
+
     applyMonthlySuggestion(false);
     applySubsidyDefault(false);
+    applyAllScenarioFinanceDefaults();
+    syncLegacyLoanFields();
 })();

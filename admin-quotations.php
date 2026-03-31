@@ -686,11 +686,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['finance_inputs']['monthly_bill_rs'] = safe_text($_POST['monthly_bill_rs'] ?? '');
         $quote['finance_inputs']['unit_rate_rs_per_kwh'] = safe_text($_POST['unit_rate_rs_per_kwh'] ?? '');
         $quote['finance_inputs']['annual_generation_per_kw'] = safe_text($_POST['annual_generation_per_kw'] ?? '');
-        $quote['finance_inputs']['loan']['enabled'] = isset($_POST['loan_enabled']);
-        $quote['finance_inputs']['loan']['interest_pct'] = safe_text($_POST['loan_interest_pct'] ?? '');
-        $quote['finance_inputs']['loan']['tenure_years'] = safe_text($_POST['loan_tenure_years'] ?? '');
-        $quote['finance_inputs']['loan']['margin_pct'] = safe_text($_POST['loan_margin_pct'] ?? '');
-        $quote['finance_inputs']['loan']['loan_amount'] = safe_text($_POST['loan_amount'] ?? '');
         $postData = $_POST;
         $buildLoanScenario = static function (string $name, float $price, bool $applicable) use ($postData, $subsidyExpectedRs): array {
             $mode = safe_text((string) ($postData[$name . '_finance_mode'] ?? 'ratio')) === 'manual' ? 'manual' : 'ratio';
@@ -759,6 +754,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'loan_upto_2_lacs' => $loanUp2Base,
             'loan_above_2_lacs' => $loanAbove2Base,
         ];
+        $primaryScenarioMap = [
+            'loan_upto_2_lacs' => 'loan_upto_2_lacs_subsidy_to_loan',
+            'loan_above_2_lacs' => 'loan_above_2_lacs_subsidy_to_loan',
+        ];
+        $resolvedPrimaryScenario = $primaryScenarioMap[$primaryScenario] ?? $primaryScenario;
+        $primaryScenarioRow = is_array($quote['finance_scenarios'][$resolvedPrimaryScenario] ?? null)
+            ? $quote['finance_scenarios'][$resolvedPrimaryScenario]
+            : [];
+        $quote['finance_inputs']['loan']['enabled'] = str_contains($resolvedPrimaryScenario, 'loan_');
+        $quote['finance_inputs']['loan']['interest_pct'] = (string) (float) ($primaryScenarioRow['interest_pct'] ?? 0);
+        $quote['finance_inputs']['loan']['tenure_years'] = (string) (float) ($primaryScenarioRow['tenure_years'] ?? 0);
+        $quote['finance_inputs']['loan']['margin_pct'] = (string) (float) ($primaryScenarioRow['margin_ratio_pct'] ?? 0);
+        $quote['finance_inputs']['loan']['loan_amount'] = (string) (float) ($primaryScenarioRow['loan_amount_rs'] ?? 0);
         $quote = documents_quote_apply_customer_savings_inputs($quote, $_POST, $quoteDefaults);
         $monthlyBillTouched = safe_text((string) ($_POST['monthly_bill_touched'] ?? '0')) === '1';
         $savedMonthlyBill = (float) ($quote['customer_savings_inputs']['monthly_bill_before_rs'] ?? 0);
@@ -1218,8 +1226,7 @@ if ($savedAnnualGenerationForEdit === '') {
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
-<div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Add kits/components from Items Master. Name/description snapshots are captured automatically.</div><table id="structuredItemsTable"><thead><tr><th>Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Quotation-specific description / note</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?></div><?php $masterPreview = (string)($sItem['master_description_snapshot'] ?? ($sItem['description_snapshot'] ?? '')); if (trim($masterPreview) !== ''): ?><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars($masterPreview, ENT_QUOTES) ?></div><?php endif; ?><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"><?= htmlspecialchars((string)($sItem['custom_description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">Used for dynamic savings/EMI charts in proposal view.</div></div>
-<div style="grid-column:1/-1"><h3>Section 5 — Funding Scenarios</h3></div>
+<div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Add kits/components from Items Master. Name/description snapshots are captured automatically.</div><table id="structuredItemsTable"><thead><tr><th>Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Quotation-specific description / note</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?></div><?php $masterPreview = (string)($sItem['master_description_snapshot'] ?? ($sItem['description_snapshot'] ?? '')); if (trim($masterPreview) !== ''): ?><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars($masterPreview, ENT_QUOTES) ?></div><?php endif; ?><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"><?= htmlspecialchars((string)($sItem['custom_description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">These are the common inputs used to calculate savings, residual bill, monthly outflow, cumulative expense, and payback.</div></div>
 <div><label>Primary Finance Scenario</label><select name="primary_finance_scenario"><option value="self_funded" <?= (($editing['primary_finance_scenario'] ?? '')==='self_funded')?'selected':'' ?>>Self Funded</option><option value="loan_upto_2_lacs_subsidy_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_upto_2_lacs_subsidy_to_loan')?'selected':'' ?>>Loan up to ₹2 lacs (subsidy to loan)</option><option value="loan_upto_2_lacs_subsidy_not_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_upto_2_lacs_subsidy_not_to_loan')?'selected':'' ?>>Loan up to ₹2 lacs (subsidy self kept)</option><option value="loan_above_2_lacs_subsidy_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_above_2_lacs_subsidy_to_loan')?'selected':'' ?>>Loan above ₹2 lacs (subsidy to loan)</option><option value="loan_above_2_lacs_subsidy_not_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_above_2_lacs_subsidy_not_to_loan')?'selected':'' ?>>Loan above ₹2 lacs (subsidy self kept)</option></select></div>
 <div><label>Self Funded Price ₹</label><input type="number" step="0.01" name="scenario_price_self_funded" value="<?= htmlspecialchars((string)($editing['scenario_prices']['self_funded']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
 <div><label>Loan up to ₹2 lacs Price ₹</label><input type="number" step="0.01" name="scenario_price_loan_upto_2_lacs" value="<?= htmlspecialchars((string)($editing['scenario_prices']['loan_upto_2_lacs']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
@@ -1237,6 +1244,11 @@ if ($savedAnnualGenerationForEdit === '') {
 <div><label>Discount (₹)</label><input type="number" step="0.01" min="0" name="discount_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['discount_rs'] ?? ($editing['discount_rs'] ?? '0')), ENT_QUOTES) ?>"></div>
 <div><label>Discount note</label><input name="discount_note" value="<?= htmlspecialchars((string)($editing['finance_inputs']['discount_note'] ?? ($editing['discount_note'] ?? '')), ENT_QUOTES) ?>" placeholder="Optional (e.g. Festival Offer)"></div>
 <div><label>Subsidy ₹</label><input type="number" step="0.01" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['subsidy_expected_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted"><a href="#" id="resetSubsidyDefault">Reset to scheme default</a></div></div>
+<input type="hidden" name="loan_enabled" value="0">
+<input type="hidden" name="loan_amount" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['loan_amount'] ?? ''), ENT_QUOTES) ?>">
+<input type="hidden" name="loan_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['interest_pct'] ?? ''), ENT_QUOTES) ?>">
+<input type="hidden" name="loan_tenure_years" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['tenure_years'] ?? ''), ENT_QUOTES) ?>">
+<input type="hidden" name="loan_margin_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['margin_pct'] ?? ''), ENT_QUOTES) ?>">
 <div style="grid-column:1/-1"><h3>Loan up to ₹2 lacs</h3></div>
 <div><label>Finance mode</label><select name="loan_upto_2_lacs_finance_mode"><option value="ratio" <?= (($editing['finance_scenarios']['loan_upto_2_lacs']['finance_mode'] ?? 'ratio')==='ratio')?'selected':'' ?>>Ratio</option><option value="manual" <?= (($editing['finance_scenarios']['loan_upto_2_lacs']['finance_mode'] ?? '')==='manual')?'selected':'' ?>>Manual</option></select></div>
 <div><label>Margin %</label><input type="number" step="0.01" name="loan_upto_2_lacs_margin_ratio_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['margin_ratio_pct'] ?? 20), ENT_QUOTES) ?>"></div>
@@ -1253,11 +1265,6 @@ if ($savedAnnualGenerationForEdit === '') {
 <div><label>Loan ₹</label><input type="number" step="0.01" name="loan_above_2_lacs_loan_amount_rs" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['loan_amount_rs'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Interest %</label><input type="number" step="0.01" name="loan_above_2_lacs_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['interest_pct'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Tenure years</label><input type="number" step="0.01" name="loan_above_2_lacs_tenure_years" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Loan amount ₹</label><input type="number" step="0.01" name="loan_amount" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['loan_amount'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label><input type="checkbox" name="loan_enabled" <?= !empty($editing['finance_inputs']['loan']['enabled']) ? 'checked' : '' ?>> Loan enabled</label></div>
-<div><label>Loan interest %</label><input type="number" step="0.01" name="loan_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['interest_pct'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Loan tenure years</label><input type="number" step="1" name="loan_tenure_years" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Margin money ₹</label><input type="number" step="0.01" name="loan_margin_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['margin_pct'] ?? ''), ENT_QUOTES) ?>"><div class="muted"><a href="#" id="resetLoanDefaults">Reset to defaults</a></div></div>
 <div style="grid-column:1/-1"><h3>Typography & Watermark Overrides</h3></div>
 <div><label>Base font px</label><input type="number" step="1" name="style_base_font_px" value="<?= htmlspecialchars((string)($editing['style_overrides']['typography']['base_font_px'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Heading scale</label><input type="number" step="0.1" name="style_heading_scale" value="<?= htmlspecialchars((string)($editing['style_overrides']['typography']['heading_scale'] ?? ''), ENT_QUOTES) ?>"></div>
@@ -1356,15 +1363,17 @@ $quoteShareMobile = $quotationExtractMobile($q);
         {title:'Section 2 — System & Quotation Basics', names:['System Type','Capacity kWp','Quotation Date','Valid Until']},
         {title:'Section 3 — Customer & Site Details', names:['Billing Address','Site Address','District','City','State','PIN','Consumer Account No. (JBVNL)','Meter Number','Meter Serial Number','Application ID','Application Submitted Date','Sanction Load (kWp)','Installed PV Capacity (kWp)','Circle','Division','Sub Division']},
         {title:'Section 4 — Item Builder', containsHeadings:['Items Table','Item Builder (Structured)']},
-        {title:'Section 5 — Customer Savings Inputs', names:['Main Solar Size (kWp)','Complimentary Non-DCR Solar Size (kWp)','Total System Capacity (kWp)','Total system price (including GST) ₹','Tax Profile','Pricing Mode','Monthly electricity bill (₹)','Unit rate (₹/kWh)','Annual generation per kW','Transportation ₹','Discount (₹)','Discount note','Subsidy ₹','Loan enabled','Loan interest %','Loan tenure years','Margin money ₹','Loan amount ₹'], containsHeadings:['Customer Savings Inputs'], className:'savings'},
-        {title:'Section 6 — Typography / Watermark Overrides', containsHeadings:['Typography & Watermark Overrides']},
-        {title:'Section 7 — Annexure Overrides', names:['Cover Notes','System Inclusions','Payment Terms','Warranty','System Type Explainer','Transportation','Terms & Conditions','PM Subsidy Info','Completion Milestones','Next Steps'], containsHeadings:['Annexure Overrides']},
+        {title:'Section 5 — Solar & Savings Base Inputs', names:['Main Solar Size (kWp)','Complimentary Non-DCR Solar Size (kWp)','Total System Capacity (kWp)','Monthly electricity bill (₹)','Unit rate (₹/kWh)','Annual generation per kW','Transportation ₹','Discount (₹)','Discount note','Subsidy ₹'], containsHeadings:['Customer Savings Inputs'], className:'savings'},
+        {title:'Section 6 — Funding Scenario Prices', names:['Self Funded Price ₹','Loan up to ₹2 lacs Price ₹','Loan above ₹2 lacs Price ₹','Primary Finance Scenario'], className:'funding-prices'},
+        {title:'Section 7 — Funding Scenario Finance Inputs', names:['Finance mode','Margin %','Loan %','Margin ₹','Loan ₹','Interest %','Tenure years'], containsHeadings:['Loan up to ₹2 lacs','Loan above ₹2 lacs'], className:'funding-inputs'},
+        {title:'Section 8 — Hybrid Configuration', names:['Hybrid Inverter (kVA)','Hybrid Phase','Hybrid Battery Count'], className:'hybrid-config'},
+        {title:'Section 9 — Annexure Overrides', names:['Cover Notes','System Inclusions','Payment Terms','Warranty','System Type Explainer','Transportation','Terms & Conditions','PM Subsidy Info','Completion Milestones','Next Steps'], containsHeadings:['Annexure Overrides']},
       ];
 
       const controls=[...grid.children];
       const lookupForm=[...editorCard.querySelectorAll('form')][0];
       const sectionCards=sections.map((sec)=>{const card=document.createElement('div');card.className='section-card'+(sec.className?' '+sec.className:'');card.style.gridColumn='1/-1';const h=document.createElement('h3');h.textContent=sec.title;card.appendChild(h);const inner=document.createElement('div');inner.className='section-grid';card.appendChild(inner);return {cfg:sec,el:card,inner};});
-      const saveCard=document.createElement('div');saveCard.className='section-card';saveCard.style.gridColumn='1/-1';saveCard.innerHTML='<h3>Section 8 — Save Actions</h3><div class="muted">Use Save Quotation to store changes, or return to list.</div>';
+      const saveCard=document.createElement('div');saveCard.className='section-card';saveCard.style.gridColumn='1/-1';saveCard.innerHTML='<h3>Section 10 — Save Actions</h3><div class="muted">Use Save Quotation to store changes, or return to list.</div>';
       const backBtn=document.createElement('button');backBtn.type='button';backBtn.className='btn secondary';backBtn.textContent='Cancel / Back to list';backBtn.addEventListener('click',()=>setTab('list'));
       const saveInner=document.createElement('div');saveInner.className='section-grid';saveCard.appendChild(saveInner);
 
@@ -1389,27 +1398,25 @@ $quoteShareMobile = $quotationExtractMobile($q);
       });
 
       const savingsSection=sectionCards[4];
-      if(savingsSection && savingsSection.inner.children.length){
-        const groupA=new Set(['Main Solar Size (kWp)','Complimentary Non-DCR Solar Size (kWp)','Total System Capacity (kWp)','Total system price (including GST) ₹','Tax Profile','Pricing Mode']);
-        const groupB=new Set(['Monthly electricity bill (₹)','Unit rate (₹/kWh)','Annual generation per kW','Transportation ₹','Discount (₹)','Discount note','Subsidy ₹','Loan enabled','Loan interest %','Loan tenure years','Margin money ₹','Loan amount ₹']);
-        const groupANodes=[]; const groupBNodes=[]; const otherNodes=[];
-        [...savingsSection.inner.children].forEach((node)=>{
-          const label=getLabel(node);
-          if(node.id==='splitCapacityFields'){groupANodes.push(node);return;}
-          if(groupA.has(label)){groupANodes.push(node);return;}
-          if(groupB.has(label)){groupBNodes.push(node);return;}
-          otherNodes.push(node);
-        });
-        const makeGroupTitle=(title)=>{
-          const wrap=document.createElement('div');
-          wrap.className='full-span';
-          wrap.innerHTML='<div class="muted" style="font-weight:700;margin:2px 0 4px">'+title+'</div>';
-          return wrap;
-        };
-        savingsSection.inner.innerHTML = '';
-        if(groupANodes.length){savingsSection.inner.appendChild(makeGroupTitle('Group A — System & Pricing Inputs')); groupANodes.forEach((node)=>savingsSection.inner.appendChild(node));}
-        if(groupBNodes.length){savingsSection.inner.appendChild(makeGroupTitle('Group B — Savings & Finance Inputs')); groupBNodes.forEach((node)=>savingsSection.inner.appendChild(node));}
-        otherNodes.forEach((node)=>savingsSection.inner.appendChild(node));
+      if(savingsSection){
+        const note=document.createElement('div');
+        note.className='full-span muted';
+        note.textContent='These are the common inputs used to calculate savings, residual bill, monthly outflow, cumulative expense, and payback.';
+        savingsSection.inner.insertBefore(note,savingsSection.inner.firstChild);
+      }
+      const fundingPricesSection=sectionCards[5];
+      if(fundingPricesSection){
+        const note=document.createElement('div');
+        note.className='full-span muted';
+        note.textContent='These are the scenario-wise system prices used for quotation comparisons.';
+        fundingPricesSection.inner.insertBefore(note,fundingPricesSection.inner.firstChild);
+      }
+      const fundingInputsSection=sectionCards[6];
+      if(fundingInputsSection){
+        const note=document.createElement('div');
+        note.className='full-span muted';
+        note.textContent='These values control the funding breakdown for each loan scenario.';
+        fundingInputsSection.inner.insertBefore(note,fundingInputsSection.inner.firstChild);
       }
 
       grid.innerHTML='';
@@ -1711,6 +1718,8 @@ window.quoteFormAutofillConfig = {
     const selfPrice = document.querySelector('input[name="scenario_price_self_funded"]');
     const up2Price = document.querySelector('input[name="scenario_price_loan_upto_2_lacs"]');
     const above2Price = document.querySelector('input[name="scenario_price_loan_above_2_lacs"]');
+    const above2Applicable = document.querySelector('input[name="loan_above_2_lacs_applicable"]');
+    const primaryScenario = document.querySelector('select[name="primary_finance_scenario"]');
 
     const parseNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
     const pickRow = () => {
@@ -1735,6 +1744,34 @@ window.quoteFormAutofillConfig = {
     };
     [systemType, solarSize, inverter, phase, battery].forEach((el) => el?.addEventListener('change', fillScenarioPrices));
     fillScenarioPrices();
+
+    const toggleAbove2Applicability = () => {
+        const estimatedLoan = parseNum(above2Price?.value) * 0.8;
+        const isApplicable = estimatedLoan >= 200000;
+        const above2Fields = [
+            ...document.querySelectorAll('[name^="loan_above_2_lacs_"]'),
+            above2Applicable
+        ].filter(Boolean);
+        above2Fields.forEach((el) => {
+            if (el === above2Applicable) {
+                if (!isApplicable) {
+                    el.checked = false;
+                    el.disabled = true;
+                    el.closest('label')?.setAttribute('title', 'Loan above ₹2 lacs requires 80% finance >= ₹2,00,000');
+                } else {
+                    el.disabled = false;
+                }
+                return;
+            }
+            el.disabled = !isApplicable || (above2Applicable && !above2Applicable.checked);
+        });
+        if (!isApplicable && primaryScenario && String(primaryScenario.value || '').includes('loan_above_2_lacs')) {
+            primaryScenario.value = 'loan_upto_2_lacs_subsidy_to_loan';
+        }
+    };
+    above2Price?.addEventListener('input', toggleAbove2Applicability);
+    above2Applicable?.addEventListener('change', toggleAbove2Applicability);
+    toggleAbove2Applicability();
 
     const bindRatioSync = (prefix) => {
         const marginPct = document.querySelector(`[name="${prefix}_margin_ratio_pct"]`);
