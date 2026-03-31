@@ -414,6 +414,15 @@ function solar_finance_format_payback_from_months(int $months): string
     return $years . ' year' . ($years === 1 ? '' : 's') . ' ' . $remainingMonths . ' month' . ($remainingMonths === 1 ? '' : 's');
 }
 
+function solar_finance_compute_monthly_solar_units(float $capacityKw, float $annualGenerationPerKw): float
+{
+    if ($capacityKw <= 0 || $annualGenerationPerKw <= 0) {
+        return 0.0;
+    }
+
+    return max(0.0, ($capacityKw * $annualGenerationPerKw) / 12);
+}
+
 function solar_finance_build_normalized_scenario_snapshot(array $inputs, array $results = []): array
 {
     $scenarioLabels = solar_finance_supported_scenario_labels();
@@ -460,8 +469,9 @@ function solar_finance_build_normalized_scenario_snapshot(array $inputs, array $
     $monthlyBill = max(0, $num($inputs['monthly_bill'] ?? 0));
     $unitRate = max(0, $num($inputs['unit_rate'] ?? 0));
     $dailyGeneration = max(0, $num($inputs['daily_generation_per_kw'] ?? 0));
+    $annualGenerationPerKw = max(0, $num($inputs['annual_generation_per_kw'] ?? ($dailyGeneration > 0 ? ($dailyGeneration * 365) : 0)));
     $solarSize = max(0, $num($inputs['solar_size_kw'] ?? 0));
-    $monthlySolarUnits = max(0, $solarSize * $dailyGeneration * 30);
+    $monthlySolarUnits = solar_finance_compute_monthly_solar_units($solarSize, $annualGenerationPerKw);
     $residualBill = max(0, $monthlyBill - ($monthlySolarUnits * $unitRate));
     $subsidy = max(0, $num($inputs['subsidy'] ?? 0));
     $tenureYears = max(0, $num($inputs['loan_tenure_years'] ?? 10));
@@ -648,7 +658,7 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
     $capacity = max(0, $toFloat($quote['capacity_kwp'] ?? $quote['system_capacity_kwp'] ?? 0));
     $tariff = max(0.1, $toFloat($snapshot['unit_rate_rs_per_kwh'] ?? null, 1));
     $annualGeneration = max(0, $toFloat($snapshot['annual_generation_kwh_per_kw'] ?? null, 0));
-    $monthlyUnitsSolar = ($capacity * $annualGeneration) / 12;
+    $monthlyUnitsSolar = solar_finance_compute_monthly_solar_units($capacity, $annualGeneration);
     $noSolarMonthlyBill = max(0, $toFloat($snapshot['monthly_bill_before_rs'] ?? null, $toFloat($quote['finance_inputs']['monthly_bill_rs'] ?? 0)));
     $residualBill = max(0, $noSolarMonthlyBill - ($monthlyUnitsSolar * $tariff));
     $monthlyUnitsBefore = $noSolarMonthlyBill > 0 ? ($noSolarMonthlyBill / $tariff) : 0;
@@ -679,7 +689,7 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         $tenureYears = $tenureMonths / 12;
         $marginMoney = max(0, $toFloat($row['margin_money_rs'] ?? 0));
         $loanAmount = max(0, $toFloat($row['loan_amount_rs'] ?? 0));
-        $scenarioResidual = max(0, $toFloat($row['residual_bill_rs'] ?? $residualBill));
+        $scenarioResidual = $residualBill;
         $applicable = $isAbove2 ? (bool) ($row['applicable'] ?? ($legacyAbove2['applicable'] ?? false)) : (bool) ($row['applicable'] ?? true);
         $effectivePrincipal = 0.0;
         $initialInvestment = max(0, $price - $scenarioSubsidy);
@@ -809,7 +819,7 @@ function create_or_update_solar_finance_quote(array $payload): array
     $solarSize = max(0, (float) ($inputs['solar_size_kw'] ?? 0));
     $unitRate = max(0, (float) ($inputs['unit_rate'] ?? 0));
     $dailyGenerationPerKw = max(0, (float) ($inputs['daily_generation_per_kw'] ?? 0));
-    $annualGenerationPerKw = $dailyGenerationPerKw > 0 ? $dailyGenerationPerKw * 360 : 0.0;
+    $annualGenerationPerKw = $dailyGenerationPerKw > 0 ? $dailyGenerationPerKw * 365 : 0.0;
     $loanTenureYears = max(0, (float) ($inputs['loan_tenure_years'] ?? 0));
 
     $linkedQuoteId = safe_text((string) ($payload['linked_quote_id'] ?? ''));
