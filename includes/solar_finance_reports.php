@@ -837,6 +837,7 @@ function create_or_update_solar_finance_quote(array $payload): array
             'success' => true,
             'action' => 'skipped_manual_lock',
             'quote_id' => (string) ($existing['id'] ?? ''),
+            'quote_view_url' => solar_finance_quote_public_view_url($existing),
             'message' => 'Auto-sync is disabled for this quotation.',
         ];
     }
@@ -881,6 +882,12 @@ function create_or_update_solar_finance_quote(array $payload): array
     $quote['auto_sync_enabled'] = true;
     $quote['auto_source'] = 'solar_and_finance';
     $quote['auto_sync_updated_at'] = date('c');
+    if (safe_text((string) ($quote['public_share_token'] ?? '')) === '') {
+        $quote['public_share_token'] = documents_generate_quote_public_share_token();
+        $quote['public_share_created_at'] = date('c');
+    }
+    $quote['public_share_enabled'] = true;
+    $quote['public_share_revoked_at'] = null;
     $quote['auto_sync_scenario'] = $useAbove2Scenario ? 'loan_above_2_lacs_subsidy_to_loan' : 'loan_upto_2_lacs_subsidy_to_loan';
     $quote['primary_finance_scenario'] = $quote['auto_sync_scenario'];
     $quote['scenario_prices'] = [
@@ -990,5 +997,16 @@ function create_or_update_solar_finance_quote(array $payload): array
         'quote_id' => (string) ($quote['id'] ?? ''),
         'quote_no' => (string) ($quote['quote_no'] ?? ''),
         'scenario' => $quote['auto_sync_scenario'],
+        'quote_view_url' => solar_finance_quote_public_view_url($quote),
     ];
+}
+
+function solar_finance_quote_public_view_url(array $quote): string
+{
+    $token = safe_text((string) ($quote['public_share_token'] ?? ''));
+    if ($token === '') {
+        return '';
+    }
+
+    return '/quotation-public.php?t=' . urlencode($token);
 }
