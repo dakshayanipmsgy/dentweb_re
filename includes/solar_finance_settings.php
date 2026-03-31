@@ -17,7 +17,7 @@ function solar_finance_settings_default(): array
         'content' => [
             'page_title' => 'Solar and Finance',
             'hero_text' => 'Simple solar guidance, easy finance comparison, and instant WhatsApp quotation request.',
-            'cta_text' => 'Show Interest',
+            'cta_text' => 'Request a quotation',
             'faq' => [
                 ['q' => 'Is this estimate exact?', 'a' => 'This is an educational estimate. Final quote depends on site survey, sanction load, and roof conditions.'],
                 ['q' => 'Can I edit assumptions?', 'a' => 'Yes, all pro values are editable so advanced users can tune the estimate.'],
