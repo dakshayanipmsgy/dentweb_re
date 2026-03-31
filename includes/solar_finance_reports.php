@@ -650,6 +650,11 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
     if (!in_array($primaryScenario, $supportedPrimary, true)) {
         $primaryScenario = 'loan_upto_2_lacs_subsidy_to_loan';
     }
+    $legacyPrimaryMap = [
+        'loan_upto_2_lacs' => 'loan_upto_2_lacs_subsidy_to_loan',
+        'loan_above_2_lacs' => 'loan_above_2_lacs_subsidy_to_loan',
+    ];
+    $primaryScenario = $legacyPrimaryMap[$primaryScenario] ?? $primaryScenario;
 
     $scenarioPrices = is_array($quote['scenario_prices'] ?? null) ? $quote['scenario_prices'] : [];
     $financeScenariosRaw = is_array($quote['finance_scenarios'] ?? null) ? $quote['finance_scenarios'] : [];

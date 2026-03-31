@@ -620,7 +620,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($quote['tax_profile_id'] === '') {
             $quote['tax_profile_id'] = safe_text((string) ($quoteDefaults['defaults']['quotation_tax_profile_id'] ?? ''));
         }
-        $systemTotalInclGstRs = (float) ($_POST['system_total_incl_gst_rs'] ?? 0);
+        $legacySystemTotalInclGstRs = max(0, (float) ($_POST['system_total_incl_gst_rs'] ?? 0));
+        $systemTotalInclGstRs = $legacySystemTotalInclGstRs;
         $transportationRs = (float) ($_POST['transportation_rs'] ?? 0);
         $subsidyExpectedRs = (float) ($_POST['subsidy_expected_rs'] ?? 0);
         $discountRs = (float) ($_POST['discount_rs'] ?? 0);
@@ -664,13 +665,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'loan_above_2_lacs_price' => $priceLoanAbove2,
             'captured_at' => date('c'),
         ];
-        $priceForPrimary = $systemTotalInclGstRs;
-        if ($primaryScenario === 'self_funded' && $priceSelfFunded > 0) {
+        $priceForPrimary = 0.0;
+        if ($primaryScenario === 'self_funded') {
             $priceForPrimary = $priceSelfFunded;
-        } elseif (in_array($primaryScenario, ['loan_upto_2_lacs', 'loan_upto_2_lacs_subsidy_to_loan', 'loan_upto_2_lacs_subsidy_not_to_loan'], true) && $priceLoanUp2 > 0) {
+        } elseif (in_array($primaryScenario, ['loan_upto_2_lacs', 'loan_upto_2_lacs_subsidy_to_loan', 'loan_upto_2_lacs_subsidy_not_to_loan'], true)) {
             $priceForPrimary = $priceLoanUp2;
-        } elseif (in_array($primaryScenario, ['loan_above_2_lacs', 'loan_above_2_lacs_subsidy_to_loan', 'loan_above_2_lacs_subsidy_not_to_loan'], true) && $priceLoanAbove2 > 0) {
+        } elseif (in_array($primaryScenario, ['loan_above_2_lacs', 'loan_above_2_lacs_subsidy_to_loan', 'loan_above_2_lacs_subsidy_not_to_loan'], true)) {
             $priceForPrimary = $priceLoanAbove2;
+        }
+        if ($priceForPrimary <= 0) {
+            $priceForPrimary = $legacySystemTotalInclGstRs;
         }
         $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, $transportationRs, $subsidyExpectedRs, $priceForPrimary, $quoteDefaults);
         $quote['tax_breakdown'] = is_array($quote['calc']['tax_breakdown'] ?? null) ? (array) $quote['calc']['tax_breakdown'] : ['basic_total' => 0, 'gst_total' => 0, 'gross_incl_gst' => 0, 'slabs' => []];
@@ -1208,7 +1212,7 @@ if ($savedAnnualGenerationForEdit === '') {
 <input type="hidden" name="capacity_kwp" id="computedCapacityKwp" value="<?= htmlspecialchars((string)$editing['capacity_kwp'], ENT_QUOTES) ?>">
 <div><label>Quotation Date</label><input type="date" name="quotation_date" value="<?= htmlspecialchars((string)($editing['quotation_date'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Valid Until</label><input type="date" name="valid_until" value="<?= htmlspecialchars((string)$editing['valid_until'], ENT_QUOTES) ?>"></div>
-<div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div><div><label>Total system price (including GST) ₹</label><input type="number" step="0.01" required name="system_total_incl_gst_rs" value="<?= htmlspecialchars((string)($editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
+<div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div>
 <div><label>Tax Profile</label><select name="tax_profile_id"><option value="">-- none --</option><?php foreach ($inventoryTaxProfiles as $profile): ?><option value="<?= htmlspecialchars((string)($profile['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($editing['tax_profile_id'] ?? '')===(string)($profile['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($profile['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
 <div><label>Place of Supply State</label><input name="place_of_supply_state" value="<?= htmlspecialchars((string)$editing['place_of_supply_state'], ENT_QUOTES) ?>"></div>
 <div><label>District</label><input name="district" value="<?= htmlspecialchars((string)($editing['district'] !== '' ? $editing['district'] : ($quoteSnapshot['district'] ?? '')), ENT_QUOTES) ?>"></div>
@@ -1231,6 +1235,7 @@ if ($savedAnnualGenerationForEdit === '') {
 <div><label>Self Funded Price ₹</label><input type="number" step="0.01" name="scenario_price_self_funded" value="<?= htmlspecialchars((string)($editing['scenario_prices']['self_funded']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
 <div><label>Loan up to ₹2 lacs Price ₹</label><input type="number" step="0.01" name="scenario_price_loan_upto_2_lacs" value="<?= htmlspecialchars((string)($editing['scenario_prices']['loan_upto_2_lacs']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
 <div><label>Loan above ₹2 lacs Price ₹</label><input type="number" step="0.01" name="scenario_price_loan_above_2_lacs" value="<?= htmlspecialchars((string)($editing['scenario_prices']['loan_above_2_lacs']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
+<div><label>Selected Primary Scenario Price (including GST) ₹</label><input type="number" step="0.01" readonly required name="system_total_incl_gst_rs" value="<?= htmlspecialchars((string)($editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
 <div><label><input type="checkbox" name="loan_upto_2_lacs_applicable" <?= !empty($editing['finance_scenarios']['loan_upto_2_lacs']['applicable']) ? 'checked' : 'checked' ?>> Loan up to ₹2 lacs applicable</label></div>
 <div><label><input type="checkbox" name="loan_above_2_lacs_applicable" <?= !empty($editing['finance_scenarios']['loan_above_2_lacs']['applicable']) ? 'checked' : '' ?>> Loan above ₹2 lacs applicable</label></div>
 <div><label>Hybrid Inverter (kVA)</label><input type="number" step="0.1" name="hybrid_inverter_kva" value="<?= htmlspecialchars((string)($editing['rate_chart_snapshot']['hybrid_inverter_kva'] ?? ''), ENT_QUOTES) ?>"></div>
@@ -1738,9 +1743,18 @@ window.quoteFormAutofillConfig = {
     const fillScenarioPrices = () => {
         const row = pickRow();
         if (!row) return;
-        if (selfPrice && parseNum(selfPrice.value) <= 0) selfPrice.value = String(parseNum(row.self_funded_price));
-        if (up2Price && parseNum(up2Price.value) <= 0) up2Price.value = String(parseNum(row.loan_upto_2_lacs_price));
-        if (above2Price && parseNum(above2Price.value) <= 0) above2Price.value = String(parseNum(row.loan_above_2_lacs_price));
+        if (selfPrice && parseNum(selfPrice.value) <= 0) {
+            selfPrice.value = String(parseNum(row.self_funded_price));
+            selfPrice.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        if (up2Price && parseNum(up2Price.value) <= 0) {
+            up2Price.value = String(parseNum(row.loan_upto_2_lacs_price));
+            up2Price.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        if (above2Price && parseNum(above2Price.value) <= 0) {
+            above2Price.value = String(parseNum(row.loan_above_2_lacs_price));
+            above2Price.dispatchEvent(new Event('input', { bubbles: true }));
+        }
     };
     [systemType, solarSize, inverter, phase, battery].forEach((el) => el?.addEventListener('change', fillScenarioPrices));
     fillScenarioPrices();

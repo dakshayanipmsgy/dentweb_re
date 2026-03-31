@@ -213,6 +213,7 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
 
     $savingsSnapshot = documents_quote_resolve_customer_savings_inputs($quote, $quoteDefaults);
     $financialClarity = compute_financial_clarity($quote, $calc, $savingsSnapshot);
+    $pricingSummarySystemPrice = (float) ($financialClarity['gross'] ?? ($calc['system_total_incl_gst_rs'] ?? $quote['input_total_gst_inclusive'] ?? 0));
 
     $annualGeneration = (float) ($financialClarity['annual_generation_kwh_per_kw'] ?? 0);
     $unitRate = (float) ($financialClarity['unit_rate_rs_per_kwh'] ?? 0);
@@ -347,7 +348,7 @@ h1{font-size:var(--h1-size)}h2{font-size:var(--h2-size)}h3{font-size:var(--h3-si
 <section class="card"><div class="h sec">⚡ At a glance</div><div class="hero"><div class="metric">System Size<?php if ($hasMainSolarSplit): ?><b class="system-size-main"><?= htmlspecialchars(number_format($mainSolarKwp, 2, '.', ''), ENT_QUOTES) ?> kWp</b><?php if ($complimentarySolarKwp > 0): ?><small class="system-size-sub">Complimentary Non-DCR Solar Size: <?= htmlspecialchars(number_format($complimentarySolarKwp, 2, '.', ''), ENT_QUOTES) ?> kWp</small><?php endif; ?><?php else: ?><b><?= htmlspecialchars((string)($quote['capacity_kwp'] ?? '0'), ENT_QUOTES) ?> kWp</b><?php endif; ?></div><div class="metric">Monthly Bill (Without Solar)<b><?= htmlspecialchars($monthlyBillBeforeDisplay, ENT_QUOTES) ?></b></div><div class="metric">Subsidy<b id="heroSubsidy">-</b></div><div class="metric">Residual Bill<b id="heroResidual">-</b></div></div><div class="save-line">🟢 You save approx <span id="heroSaving">-</span> every month</div></section>
 <section class="card"><div class="h sec">📦 Item summary</div><table><thead><tr><th>Sr No</th><th>Item and Description</th><th>HSN</th><th class="center">Quantity</th><th class="center">Unit</th></tr></thead><tbody><?php if ($itemRows === []): ?><tr><td colspan="5" class="center muted">No line items added.</td></tr><?php else: foreach ($itemRows as $idx => $item): ?><tr><td><?= (int)$idx + 1 ?></td><td><div><?= htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES) ?></div><?php $itemDesc=(string)($item['description'] ?? ''); if (trim($itemDesc) !== ''): ?><div class="item-master-description"><?= nl2br(htmlspecialchars($itemDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?><?php $customDesc=(string)($item['custom_description'] ?? ''); if (trim($customDesc) !== ''): ?><div class="item-custom-description">📝 <?= nl2br(htmlspecialchars($customDesc, ENT_QUOTES, 'UTF-8')) ?></div><?php endif; ?></td><td><?= htmlspecialchars((string)($item['hsn'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['qty'] ?? ''), ENT_QUOTES) ?></td><td class="center"><?= htmlspecialchars((string)($item['unit'] ?? ''), ENT_QUOTES) ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
 <?php if($specialReq!==''): ?><section class="card"><div class="h sec">✍️ Special Requests From Consumer (Inclusive in the rate)</div><div><?= quotation_sanitize_html($specialReq) ?></div><div><i>In case of conflict between annexures and special requests, special requests will be prioritized.</i></div></section><?php endif; ?>
-<section class="card"><div class="h sec">💰 Pricing summary</div><table><thead><tr><th>#</th><th>Particular</th><th class="right">Amount</th></tr></thead><tbody><tr><td>1</td><td>Total system price incl GST</td><td class="right"><?= quotation_format_inr_indian((float)($calc['system_total_incl_gst_rs'] ?? $quote['input_total_gst_inclusive'] ?? 0), $showDecimals) ?></td></tr><tr><td>2</td><td>Transportation</td><td class="right"><?= quotation_format_inr_indian((float)($calc['transportation_rs'] ?? 0), $showDecimals) ?></td></tr><?php if ($discountApplicable): ?><tr><td>3</td><td>Discount<?php $discountNote=(string)($calc['discount_note'] ?? ''); if(trim($discountNote)!==''): ?><div class="muted" style="font-size:.85em;margin-top:2px"><?= htmlspecialchars($discountNote, ENT_QUOTES) ?></div><?php endif; ?></td><td class="right">- <?= quotation_format_inr_indian($discountRsDisplay, $showDecimals) ?></td></tr><?php endif; ?><tr class="pricing-gross-row"><td><?= $discountApplicable ? '4' : '3' ?></td><td><?= htmlspecialchars($grossPayableLabel, ENT_QUOTES) ?></td><td class="right" id="upfront"></td></tr><tr><td><?= $discountApplicable ? '5' : '4' ?></td><td>Subsidy expected</td><td class="right"><?= quotation_format_inr_indian((float)($calc['subsidy_expected_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td><?= $discountApplicable ? '6' : '5' ?></td><td><b>Net Investment/Cost After Subsidy Credit</b></td><td class="right"><b id="upfrontNet"></b></td></tr></tbody></table></section>
+<section class="card"><div class="h sec">💰 Pricing summary</div><table><thead><tr><th>#</th><th>Particular</th><th class="right">Amount</th></tr></thead><tbody><tr><td>1</td><td>Total system price incl GST</td><td class="right"><?= quotation_format_inr_indian($pricingSummarySystemPrice, $showDecimals) ?></td></tr><tr><td>2</td><td>Transportation</td><td class="right"><?= quotation_format_inr_indian((float)($calc['transportation_rs'] ?? 0), $showDecimals) ?></td></tr><?php if ($discountApplicable): ?><tr><td>3</td><td>Discount<?php $discountNote=(string)($calc['discount_note'] ?? ''); if(trim($discountNote)!==''): ?><div class="muted" style="font-size:.85em;margin-top:2px"><?= htmlspecialchars($discountNote, ENT_QUOTES) ?></div><?php endif; ?></td><td class="right">- <?= quotation_format_inr_indian($discountRsDisplay, $showDecimals) ?></td></tr><?php endif; ?><tr class="pricing-gross-row"><td><?= $discountApplicable ? '4' : '3' ?></td><td><?= htmlspecialchars($grossPayableLabel, ENT_QUOTES) ?></td><td class="right" id="upfront"></td></tr><tr><td><?= $discountApplicable ? '5' : '4' ?></td><td>Subsidy expected</td><td class="right"><?= quotation_format_inr_indian((float)($calc['subsidy_expected_rs'] ?? 0), $showDecimals) ?></td></tr><tr><td><?= $discountApplicable ? '6' : '5' ?></td><td><b>Net Investment/Cost After Subsidy Credit</b></td><td class="right"><b id="upfrontNet"></b></td></tr></tbody></table></section>
 <?php
 $scenarioOrder = [
     'self_funded' => 'Self Funded',
@@ -524,6 +525,8 @@ if(financeBoxes){
         marginMoneySubsidy:scenarioKey==='self_funded'?'—':(scenarioKey.includes('subsidy_not_to_loan')?r(num(row.initial_investment_after_subsidy_credit_rs||row.net_own_investment_after_subsidy)):'—'),
         loanAmount:scenarioKey==='self_funded'?'—':r(num(row.loan_amount_rs)),
         loanSubsidy:scenarioKey==='self_funded'?'—':r(num(row.effective_loan_principal_rs)),
+        interestRate:scenarioKey==='self_funded'?'—':`${num(row.interest_pct).toFixed(showDecimals?2:1)}%`,
+        tenure:scenarioKey==='self_funded'?'—':`${num(row.tenure_years).toFixed(1)} years`,
         emi:scenarioKey==='self_funded'?'—':r(num(row.emi_rs)),
         monthlyOutflow:r(num(row.monthly_outflow_rs)),
         payback:String(row.payback_display||'—')
@@ -541,15 +544,20 @@ if(financeBoxes){
     ['Margin Money - Subsidy','marginMoneySubsidy'],
     ['Loan Amount','loanAmount'],
     ['Loan - Subsidy','loanSubsidy'],
+    ['Interest Rate','interestRate'],
+    ['Tenure','tenure'],
     ['EMI','emi'],
     ['Monthly Outflow','monthlyOutflow'],
     ['Payback Time','payback']
   ];
   const financeSummaryLines=[
+    `<div class="sf-finance-line"><strong>System Price (Self Funded):</strong> ${r(num((scenarioColumns.find((scenario)=>scenario.label==='Self Funded')||anyScenario).price))}</div>`,
     `<div class="sf-finance-line"><strong>System Price (Loan up to ₹2 lacs):</strong> ${r(num((loanUpToScenario||anyScenario).price))}</div>`,
     loanAboveScenario?`<div class="sf-finance-line"><strong>System Price (Loan above ₹2 lacs):</strong> ${r(num(loanAboveScenario.price))}</div>`:'',
     `<div class="sf-finance-line"><strong>Subsidy:</strong> ${r(num(anyScenario.subsidy))}</div>`,
-    `<div class="sf-finance-line"><strong>Residual Bill (same across all scenarios):</strong> ${r(num(anyScenario.residual))}/month</div>`
+    `<div class="sf-finance-line"><strong>Residual Bill (same across all scenarios):</strong> ${r(num(anyScenario.residual))}/month</div>`,
+    `<div class="sf-finance-line"><strong>Unit Rate of Electricity:</strong> ₹${num(finance.unit_rate_rs_per_kwh).toFixed(showDecimals?2:1)}/kWh</div>`,
+    `<div class="sf-finance-line"><strong>Generation per kW of Solar:</strong> ${nUnits(num(finance.annual_generation_kwh_per_kw))} kWh/year</div>`
   ].filter(Boolean).join('');
   financeBoxes.innerHTML=`<div class="sf-finance-summary">${financeSummaryLines}</div><div class="sf-finance-table-wrap"><table class="sf-finance-table"><thead><tr><th>Metric</th>${scenarioColumns.map((scenario)=>`<th>${scenario.label}</th>`).join('')}</tr></thead><tbody>${financeRows.map(([rowLabel,rowKey])=>`<tr><th scope="row">${rowLabel}</th>${scenarioColumns.map((scenario)=>`<td><b>${scenario.metrics[rowKey]??'—'}</b></td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }

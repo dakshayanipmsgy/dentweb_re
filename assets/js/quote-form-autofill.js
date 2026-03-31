@@ -140,15 +140,24 @@
         setIfAllowed(subsidyInput, subsidyByCapacity(parseNum(capacityInput.value)), { force: shouldForce });
     };
 
-    const grossPayable = () => {
-        const gross = parseNum(totalInput?.value) + parseNum(transportInput?.value);
-        return Math.max(0, gross - Math.max(0, parseNum(discountInput?.value)));
-    };
-
     const scenarioPrice = (key) => {
         if (key === 'self_funded') return parseNum(priceSelfInput?.value);
         if (key.includes('loan_above_2_lacs')) return parseNum(priceAbove2Input?.value);
         return parseNum(priceUp2Input?.value);
+    };
+
+    const selectedPrimaryScenarioPrice = () => {
+        const selected = String(primaryScenarioInput?.value || 'loan_upto_2_lacs_subsidy_to_loan');
+        const scenarioBasedPrice = scenarioPrice(selected);
+        if (scenarioBasedPrice > 0) {
+            return scenarioBasedPrice;
+        }
+        return parseNum(totalInput?.value);
+    };
+
+    const syncSelectedPrimarySystemPrice = () => {
+        if (!totalInput) return;
+        totalInput.value = String(Math.max(0, Math.round(selectedPrimaryScenarioPrice() * 100) / 100));
     };
 
     const applyScenarioFinanceDefaults = (prefix, priceInput, marginPctInput, loanPctInput, marginRsInput, loanRsInput, interestInput, tenureInput, modeInput, fallbackMaxLoan) => {
@@ -183,6 +192,7 @@
     };
 
     const applyAllScenarioFinanceDefaults = () => {
+        syncSelectedPrimarySystemPrice();
         applyScenarioFinanceDefaults('up2', priceUp2Input, up2MarginPctInput, up2LoanPctInput, up2MarginRsInput, up2LoanRsInput, up2InterestInput, up2TenureInput, up2ModeInput, 200000);
         applyScenarioFinanceDefaults('above2', priceAbove2Input, above2MarginPctInput, above2LoanPctInput, above2MarginRsInput, above2LoanRsInput, above2InterestInput, above2TenureInput, above2ModeInput, 0);
         syncLegacyLoanFields();
@@ -212,7 +222,6 @@
     bindRecalc(priceUp2Input, applyAllScenarioFinanceDefaults);
     bindRecalc(priceAbove2Input, applyAllScenarioFinanceDefaults);
     bindRecalc(priceSelfInput, syncLegacyLoanFields);
-    bindRecalc(totalInput, applyAllScenarioFinanceDefaults);
     bindRecalc(transportInput, applyAllScenarioFinanceDefaults);
     bindRecalc(discountInput, applyAllScenarioFinanceDefaults);
 
@@ -226,7 +235,10 @@
         applySubsidyDefault(false);
         applyAllScenarioFinanceDefaults();
     });
-    primaryScenarioInput?.addEventListener('change', syncLegacyLoanFields);
+    primaryScenarioInput?.addEventListener('change', () => {
+        syncSelectedPrimarySystemPrice();
+        syncLegacyLoanFields();
+    });
 
     resetMonthlyBtn?.addEventListener('click', (e) => {
         e.preventDefault();
@@ -250,6 +262,7 @@
 
     applyMonthlySuggestion(false);
     applySubsidyDefault(false);
+    syncSelectedPrimarySystemPrice();
     applyAllScenarioFinanceDefaults();
     syncLegacyLoanFields();
 })();
