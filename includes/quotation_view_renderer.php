@@ -522,7 +522,7 @@ if(financeBoxes){
       label:scenarioLabels[scenarioKey],
       metrics:{
         marginMoney:scenarioKey==='self_funded'?'—':r(num(row.margin_money_rs)),
-        marginMoneySubsidy:scenarioKey==='self_funded'?'—':r(num(row.initial_investment_after_subsidy_credit_rs||row.net_own_investment_after_subsidy)),
+        marginMoneySubsidy:scenarioKey==='self_funded'?r(num(row.net_investment_after_subsidy)):r(num(row.initial_investment_after_subsidy_credit_rs||row.net_own_investment_after_subsidy)),
         loanAmount:scenarioKey==='self_funded'?'—':r(num(row.loan_amount_rs)),
         loanSubsidy:scenarioKey==='self_funded'?'—':r(num(row.effective_loan_principal_rs)),
         interestRate:scenarioKey==='self_funded'?'—':`${num(row.interest_pct).toFixed(showDecimals?2:1)}%`,
@@ -539,9 +539,10 @@ if(financeBoxes){
   const loanUpToScenario=scenarioColumns.find((scenario)=>scenario.label==='Loan up to ₹2 lacs (subsidy to loan)')||scenarioColumns.find((scenario)=>scenario.label.startsWith('Loan up to ₹2 lacs'));
   const loanAboveScenario=scenarioColumns.find((scenario)=>scenario.label.startsWith('Loan above ₹2 lacs'));
   const anyScenario=scenarioColumns[0]||{price:0,subsidy:0,residual:0};
+  const showMarginMoneySubsidy=num(anyScenario.subsidy)>0;
   const financeRows=[
     ['Margin Money','marginMoney'],
-    ['Margin Money - Subsidy','marginMoneySubsidy'],
+    ...(showMarginMoneySubsidy?[['Margin Money - Subsidy','marginMoneySubsidy']]:[]),
     ['Loan Amount','loanAmount'],
     ['Loan - Subsidy','loanSubsidy'],
     ['Interest Rate','interestRate'],

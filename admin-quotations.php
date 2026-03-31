@@ -725,7 +725,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
         };
         $loanUp2Base = $buildLoanScenario('loan_upto_2_lacs', $priceLoanUp2, isset($_POST['loan_upto_2_lacs_applicable']));
-        $loanAbove2Base = $buildLoanScenario('loan_above_2_lacs', $priceLoanAbove2, $loanAboveApplicable && isset($_POST['loan_above_2_lacs_applicable']));
+        $loanAbove2Base = $buildLoanScenario('loan_above_2_lacs', $priceLoanAbove2, $loanAboveApplicable);
         $deriveLoanScenario = static function (array $base, bool $subsidyToLoan, float $subsidyExpectedRs): array {
             $marginMoney = max(0, (float) ($base['margin_money_rs'] ?? 0));
             $loanAmount = max(0, (float) ($base['loan_amount_rs'] ?? 0));
