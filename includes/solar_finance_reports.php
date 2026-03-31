@@ -494,7 +494,7 @@ function solar_finance_build_normalized_scenario_snapshot(array $inputs, array $
     $monthlyBill = max(0, $num($inputs['monthly_bill'] ?? 0));
     $unitRate = max(0, $num($inputs['unit_rate'] ?? 0));
     $dailyGeneration = max(0, $num($inputs['daily_generation_per_kw'] ?? 0));
-    $annualGenerationPerKw = max(0, $num($inputs['annual_generation_per_kw'] ?? ($dailyGeneration > 0 ? ($dailyGeneration * 365) : 0)));
+    $annualGenerationPerKw = max(0, $num($inputs['annual_generation_per_kw'] ?? ($dailyGeneration > 0 ? ($dailyGeneration * 360) : 0)));
     $solarSize = max(0, $num($inputs['solar_size_kw'] ?? 0));
     $monthlySolarUnits = solar_finance_compute_monthly_solar_units($solarSize, $annualGenerationPerKw);
     $residualBill = max(0, $monthlyBill - ($monthlySolarUnits * $unitRate));
@@ -503,13 +503,12 @@ function solar_finance_build_normalized_scenario_snapshot(array $inputs, array $
     $tenureMonths = max(1, (int) round($tenureYears * 12));
     $interestUp2 = max(0, $num($inputs['interest_rate_up2'] ?? 0));
     $interestAbove2 = max(0, $num($inputs['interest_rate_above2'] ?? 0));
-    $higherLoanApplicable = (bool) ($inputs['higher_loan_applicable'] ?? false);
 
     $priceSelf = max(0, $num($inputs['system_cost_self'] ?? ($inputs['system_cost_self_funded'] ?? 0)));
     $priceUp2 = max(0, $num($inputs['system_cost_up2'] ?? 0));
     $priceAbove2 = max(0, $num($inputs['system_cost_above2'] ?? 0));
     $priceSelf = $priceSelf > 0 ? $priceSelf : $priceUp2;
-    $isAbove2Applicable = $higherLoanApplicable && $priceAbove2 > 0 && solar_finance_is_above_2_lacs_applicable($priceAbove2);
+    $isAbove2Applicable = $priceAbove2 > 0 && solar_finance_is_above_2_lacs_applicable($priceAbove2);
 
     $marginUp2 = max(0, $num($inputs['margin_money_up2'] ?? 0));
     $loanUp2 = max(0, $num($inputs['loan_amount_up2'] ?? 0));
@@ -522,10 +521,10 @@ function solar_finance_build_normalized_scenario_snapshot(array $inputs, array $
     $marginAbove2 = max(0, $num($inputs['margin_money_above2'] ?? 0));
     $loanAbove2 = max(0, $num($inputs['loan_amount_above2'] ?? 0));
     if ($isAbove2Applicable && $loanAbove2 <= 0) {
-        $loanAbove2 = round($priceAbove2 * 0.8);
+        $loanAbove2 = round($priceAbove2 * solar_finance_loan_above_2_lacs_threshold_ratio());
     }
     if ($isAbove2Applicable && $marginAbove2 <= 0) {
-        $marginAbove2 = max($priceAbove2 - $loanAbove2, round($priceAbove2 * 0.2));
+        $marginAbove2 = max($priceAbove2 - $loanAbove2, round($priceAbove2 * (1 - solar_finance_loan_above_2_lacs_threshold_ratio())));
     }
 
     $scenarioInputs = [
@@ -730,7 +729,7 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         $loanAmount = max(0, $toFloat($row['loan_amount_rs'] ?? 0));
         $scenarioResidual = $residualBill;
         $applicable = $isAbove2
-            ? ((bool) ($row['applicable'] ?? ($legacyAbove2['applicable'] ?? false)) && solar_finance_is_above_2_lacs_applicable($price))
+            ? solar_finance_is_above_2_lacs_applicable($price)
             : (bool) ($row['applicable'] ?? true);
         $effectivePrincipal = 0.0;
         $initialInvestment = max(0, $price - $scenarioSubsidy);
@@ -839,11 +838,11 @@ function create_or_update_solar_finance_quote(array $payload): array
         return ['success' => false, 'action' => 'skipped', 'message' => 'Required kit not found in Items Master.'];
     }
 
-    $higherLoanApplicable = (bool) ($inputs['higher_loan_applicable'] ?? false);
     $systemCostSelf = max(0, (float) ($inputs['system_cost_self'] ?? ($inputs['system_cost_self_funded'] ?? 0)));
     $systemCostUp2 = max(0, (float) ($inputs['system_cost_up2'] ?? 0));
     $systemCostAbove2 = max(0, (float) ($inputs['system_cost_above2'] ?? 0));
-    $useAbove2Scenario = $higherLoanApplicable && $systemCostAbove2 > 0;
+    $higherLoanApplicable = $systemCostAbove2 > 0 && solar_finance_is_above_2_lacs_applicable($systemCostAbove2);
+    $useAbove2Scenario = $higherLoanApplicable;
     $selectedSystemPrice = $useAbove2Scenario ? $systemCostAbove2 : $systemCostUp2;
 
     $loanInterest = $useAbove2Scenario
@@ -871,7 +870,7 @@ function create_or_update_solar_finance_quote(array $payload): array
     $solarSize = max(0, (float) ($inputs['solar_size_kw'] ?? 0));
     $unitRate = max(0, (float) ($inputs['unit_rate'] ?? 0));
     $dailyGenerationPerKw = max(0, (float) ($inputs['daily_generation_per_kw'] ?? 0));
-    $annualGenerationPerKw = $dailyGenerationPerKw > 0 ? $dailyGenerationPerKw * 365 : 0.0;
+    $annualGenerationPerKw = $dailyGenerationPerKw > 0 ? $dailyGenerationPerKw * 360 : 0.0;
     $loanTenureYears = max(0, (float) ($inputs['loan_tenure_years'] ?? 0));
 
     $linkedQuoteId = safe_text((string) ($payload['linked_quote_id'] ?? ''));
@@ -954,14 +953,23 @@ function create_or_update_solar_finance_quote(array $payload): array
     $quote['auto_sync_updated_at'] = date('c');
     $quote['auto_sync_scenario'] = $useAbove2Scenario ? 'loan_above_2_lacs_subsidy_to_loan' : 'loan_upto_2_lacs_subsidy_to_loan';
     $quote['primary_finance_scenario'] = $quote['auto_sync_scenario'];
+    if ($loanAbove2 <= 0 && $systemCostAbove2 > 0) {
+        $loanAbove2 = round($systemCostAbove2 * solar_finance_loan_above_2_lacs_threshold_ratio());
+    }
+    if ($marginAbove2 <= 0 && $systemCostAbove2 > 0) {
+        $marginAbove2 = max(0, $systemCostAbove2 - $loanAbove2);
+    }
+    $loanAmount = $useAbove2Scenario ? $loanAbove2 : $loanUp2;
+    $marginMoney = $useAbove2Scenario ? $marginAbove2 : $marginUp2;
+
     $quote['scenario_prices'] = [
         'self_funded' => ['price' => $systemCostSelf > 0 ? $systemCostSelf : $systemCostUp2],
         'loan_upto_2_lacs_subsidy_to_loan' => ['price' => $systemCostUp2],
         'loan_upto_2_lacs_subsidy_not_to_loan' => ['price' => $systemCostUp2],
-        'loan_above_2_lacs_subsidy_to_loan' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && solar_finance_is_above_2_lacs_applicable($systemCostAbove2)],
-        'loan_above_2_lacs_subsidy_not_to_loan' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && solar_finance_is_above_2_lacs_applicable($systemCostAbove2)],
+        'loan_above_2_lacs_subsidy_to_loan' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable],
+        'loan_above_2_lacs_subsidy_not_to_loan' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable],
         'loan_upto_2_lacs' => ['price' => $systemCostUp2],
-        'loan_above_2_lacs' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable && solar_finance_is_above_2_lacs_applicable($systemCostAbove2)],
+        'loan_above_2_lacs' => ['price' => $systemCostAbove2, 'applicable' => $higherLoanApplicable],
     ];
     $quote['rate_chart_snapshot'] = [
         'source' => 'solar_and_finance',

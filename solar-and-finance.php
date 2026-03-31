@@ -208,7 +208,7 @@ $defaults = $settings['defaults'] ?? [];
       const aboveRaw=Math.max(num(row.loan_above_2_lacs),0);
       return {up2,self:selfRaw||up2,above2:aboveRaw||up2};
     };
-    const isHigherLoanApplicableForCost=cost=>Math.round(cost*0.8) >= 200000;
+    const isHigherLoanApplicableForCost=cost=>(cost*0.9) > 200000;
 
 
     const normalizeIndianMobile=(value)=>{
@@ -370,10 +370,10 @@ $defaults = $settings['defaults'] ?? [];
       const higherLoanApplicable=isHigherLoanApplicableForCost(above2Cost);
       if(el.loanAboveGroupWrap){el.loanAboveGroupWrap.style.display=higherLoanApplicable?'block':'none';}
       if(higherLoanApplicable){
-        const autoLoanAbove2=Math.round(above2Cost*0.8);
+        const autoLoanAbove2=Math.round(above2Cost*0.9);
         if(above2Cost>0&&shouldAutofill('loanAmountAbove2')) setField('loanAmountAbove2', String(autoLoanAbove2));
         const currentLoanAbove2=Math.max(num(el.loanAmountAbove2.value,autoLoanAbove2),0);
-        const autoMarginAbove2=Math.max(above2Cost-currentLoanAbove2, Math.round(above2Cost*0.2));
+        const autoMarginAbove2=Math.max(above2Cost-currentLoanAbove2, Math.round(above2Cost*0.1));
         if(above2Cost>0&&shouldAutofill('marginMoneyAbove2')) setField('marginMoneyAbove2', String(autoMarginAbove2));
       }
       render();
@@ -387,8 +387,8 @@ $defaults = $settings['defaults'] ?? [];
       const loanUp=Math.max(num(el.loanAmountUp2.value),0)||Math.min(200000,Math.round(costUp2*0.9));
       const marginUp=Math.max(num(el.marginMoneyUp2.value),0)||Math.max(costUp2-loanUp,Math.round(costUp2*0.1));
       const higherLoanApplicable=isHigherLoanApplicableForCost(costAbove2);
-      const loanHigh=higherLoanApplicable?(Math.max(num(el.loanAmountAbove2.value),0)||Math.round(costAbove2*0.8)):0;
-      const marginHigh=higherLoanApplicable?(Math.max(num(el.marginMoneyAbove2.value),0)||Math.max(costAbove2-loanHigh,Math.round(costAbove2*0.2))):0;
+      const loanHigh=higherLoanApplicable?(Math.max(num(el.loanAmountAbove2.value),0)||Math.round(costAbove2*0.9)):0;
+      const marginHigh=higherLoanApplicable?(Math.max(num(el.marginMoneyAbove2.value),0)||Math.max(costAbove2-loanHigh,Math.round(costAbove2*0.1))):0;
       const effUpToLoan=Math.max(loanUp-subsidy,0), effHighToLoan=higherLoanApplicable?Math.max(loanHigh-subsidy,0):0;
       const remainingSubsidyUpNotToLoan=Math.max(subsidy-marginUp,0);
       const remainingSubsidyHighNotToLoan=higherLoanApplicable?Math.max(subsidy-marginHigh,0):0;
@@ -536,9 +536,10 @@ $defaults = $settings['defaults'] ?? [];
         scenarioColumns.push({label:'Loan above ₹2 lacs (subsidy to loan)',metrics:{systemPrice:INR(costAbove2),subsidy:INR(subsidy),marginMoney:INR(marginHigh),marginMoneySubsidy:'—',loanAmount:INR(loanHigh),loanSubsidy:INR(effHighToLoan),emi:INR(emiHighToLoan),monthlyOutflow:INR(monthlyOutflowLoanHighToLoan),payback:formatLoanPayback(findLoanPaybackMonth(marginHigh,monthlyOutflowLoanHighToLoan,monthlyBill))}});
         scenarioColumns.push({label:'Loan above ₹2 lacs (subsidy self kept)',metrics:{systemPrice:INR(costAbove2),subsidy:INR(subsidy),marginMoney:INR(marginHigh),marginMoneySubsidy:INR(initialInvestmentHighNotToLoan),loanAmount:INR(loanHigh),loanSubsidy:INR(effHighNotToLoan),emi:INR(emiHighNotToLoan),monthlyOutflow:INR(monthlyOutflowLoanHighNotToLoan),payback:formatLoanPayback(findLoanPaybackMonth(initialInvestmentHighNotToLoan,monthlyOutflowLoanHighNotToLoan,monthlyBill))}});
       }
+      const showMarginMoneySubsidy=subsidy>0;
       const financeRows=[
         ['Margin Money','marginMoney'],
-        ['Margin Money - Subsidy','marginMoneySubsidy'],
+        ...(showMarginMoneySubsidy?[['Margin Money - Subsidy','marginMoneySubsidy']]:[]),
         ['Loan Amount','loanAmount'],
         ['Loan - Subsidy','loanSubsidy'],
         ['EMI','emi'],
