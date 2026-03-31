@@ -258,6 +258,15 @@ function solar_finance_quote_mobile_key_from_quote(array $quote): string
     return '';
 }
 
+function solar_finance_quote_public_view_url(array $quote): string
+{
+    $token = safe_text((string) ($quote['public_share_token'] ?? ''));
+    if ($token === '') {
+        return '';
+    }
+    return '/quotation-public.php?t=' . rawurlencode($token);
+}
+
 function solar_finance_default_residential_template_name(): string
 {
     return 'pm surya ghar - residential (subsidy) (res)';
@@ -978,11 +987,21 @@ function create_or_update_solar_finance_quote(array $payload): array
         return ['success' => false, 'action' => 'failed', 'message' => 'No active quotation template available.'];
     }
     $quote = solar_finance_apply_template_snapshot_to_quote($quote, $isCreate);
+    if (safe_text((string) ($quote['public_share_token'] ?? '')) === '') {
+        $quote['public_share_token'] = documents_generate_quote_public_share_token();
+    }
+    $quote['public_share_enabled'] = true;
+    $quote['public_share_revoked_at'] = '';
+    if (safe_text((string) ($quote['public_share_created_at'] ?? '')) === '') {
+        $quote['public_share_created_at'] = date('c');
+    }
 
     $saved = documents_save_quote($quote);
     if (!($saved['ok'] ?? false)) {
         return ['success' => false, 'action' => 'failed', 'message' => (string) ($saved['error'] ?? 'Unable to save quotation.')];
     }
+
+    $quoteViewUrl = solar_finance_quote_public_view_url($quote);
 
     return [
         'success' => true,
@@ -990,5 +1009,7 @@ function create_or_update_solar_finance_quote(array $payload): array
         'quote_id' => (string) ($quote['id'] ?? ''),
         'quote_no' => (string) ($quote['quote_no'] ?? ''),
         'scenario' => $quote['auto_sync_scenario'],
+        'quote_view_url' => $quoteViewUrl,
+        'quote_print_html_url' => $quoteViewUrl,
     ];
 }
