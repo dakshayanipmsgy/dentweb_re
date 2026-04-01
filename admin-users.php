@@ -40,6 +40,7 @@ $assigneeOptions = complaint_assignee_options();
 $customerErrors = [];
 $customerSuccess = '';
 $customers = [];
+$customerView = 'active';
 $editingCustomer = null;
 $customerComplaints = [];
 $customerImportSummary = null;
@@ -70,9 +71,46 @@ if ($activeTab === 'customers' && isset($_GET['download']) && $_GET['download'] 
 }
 
 if ($activeTab === 'customers') {
+    $customerView = strtolower((string) ($_GET['customer_view'] ?? 'active'));
+    if (!in_array($customerView, ['active', 'archived'], true)) {
+        $customerView = 'active';
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string) ($_POST['customer_action'] ?? '');
-        if ($action === 'create_complaint') {
+        if ($action === 'archive_customer') {
+            $mobile = trim((string) ($_POST['mobile'] ?? ''));
+            $reason = trim((string) ($_POST['archive_reason'] ?? ''));
+            if ($mobile === '' || !$customerStore->archiveCustomer($mobile, $reason)) {
+                $customerErrors[] = 'Could not archive customer.';
+            } else {
+                $customerSuccess = 'Customer archived successfully.';
+            }
+        } elseif ($action === 'restore_customer') {
+            $mobile = trim((string) ($_POST['mobile'] ?? ''));
+            if ($mobile === '' || !$customerStore->restoreCustomer($mobile)) {
+                $customerErrors[] = 'Could not restore customer.';
+            } else {
+                $customerSuccess = 'Customer restored successfully.';
+            }
+        } elseif ($action === 'bulk_archive_customers') {
+            $mobiles = isset($_POST['selected_customers']) && is_array($_POST['selected_customers']) ? $_POST['selected_customers'] : [];
+            $reason = trim((string) ($_POST['bulk_archive_reason'] ?? ''));
+            $updated = $customerStore->bulkArchiveCustomers(array_map('strval', $mobiles), $reason);
+            if ($updated > 0) {
+                $customerSuccess = sprintf('%d customer(s) archived.', $updated);
+            } else {
+                $customerErrors[] = 'No customers were archived. Select at least one active customer.';
+            }
+        } elseif ($action === 'bulk_restore_customers') {
+            $mobiles = isset($_POST['selected_customers']) && is_array($_POST['selected_customers']) ? $_POST['selected_customers'] : [];
+            $updated = $customerStore->bulkRestoreCustomers(array_map('strval', $mobiles));
+            if ($updated > 0) {
+                $customerSuccess = sprintf('%d customer(s) restored.', $updated);
+            } else {
+                $customerErrors[] = 'No customers were restored. Select at least one archived customer.';
+            }
+        } elseif ($action === 'create_complaint') {
             $viewMobile = (string) ($_POST['view_mobile'] ?? '');
             $title = trim((string) ($_POST['title'] ?? ''));
             $description = trim((string) ($_POST['description'] ?? ''));
@@ -349,7 +387,10 @@ if ($activeTab === 'customers') {
         }
     }
 
-    $customers = $customerStore->listCustomers();
+    $customers = $customerView === 'archived'
+        ? $customerStore->listArchivedCustomers()
+        : $customerStore->listActiveCustomers();
+    $allCustomers = $customerStore->listCustomers();
     $viewMobile = (string) ($_GET['view'] ?? '');
     if ($viewMobile !== '') {
         $editingCustomer = $customerStore->findByMobile($viewMobile);
@@ -372,7 +413,13 @@ if ($activeTab === 'customers') {
     $handoverTemplates = load_handover_templates();
 
     $customerTypeCounts = ['pm' => 0, 'non_pm' => 0, 'other' => 0];
-    foreach ($customers as $customerRow) {
+    $summaryCounts = [
+        'active' => 0,
+        'archived' => 0,
+        'complaints' => 0,
+        'welcome_not_sent' => 0,
+    ];
+    foreach ($allCustomers as $customerRow) {
         $typeValue = strtolower(trim((string) ($customerRow['customer_type'] ?? '')));
         if ($typeValue === 'pm surya ghar') {
             $customerTypeCounts['pm']++;
@@ -380,6 +427,22 @@ if ($activeTab === 'customers') {
             $customerTypeCounts['non_pm']++;
         } else {
             $customerTypeCounts['other']++;
+        }
+
+        if ((bool) ($customerRow['archived'] ?? false)) {
+            $summaryCounts['archived']++;
+        } else {
+            $summaryCounts['active']++;
+        }
+
+        $complaintValue = strtolower(trim((string) ($customerRow['complaints_raised'] ?? 'no')));
+        if (in_array($complaintValue, ['yes', 'y', '1'], true)) {
+            $summaryCounts['complaints']++;
+        }
+
+        $welcomeSentVia = strtolower(trim((string) ($customerRow['welcome_sent_via'] ?? 'none')));
+        if ($welcomeSentVia === '' || $welcomeSentVia === 'none') {
+            $summaryCounts['welcome_not_sent']++;
         }
     }
 }
@@ -1041,6 +1104,56 @@ function admin_users_build_welcome_subject(array $customer): string
       background: #eef2f7;
       color: #475569;
     }
+
+    .users-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .users-summary-card {
+      background: #fff;
+      border: 1px solid #e6e9ef;
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+    }
+
+    .users-summary-card strong {
+      display: block;
+      font-size: 1.3rem;
+      color: #0f172a;
+    }
+
+    .users-pill {
+      display: inline-flex;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: #f1f5f9;
+      color: #334155;
+    }
+
+    .users-pill--pm { background: #e0f7f7; color: #0f766e; }
+    .users-pill--non-pm { background: #e5e9ff; color: #3730a3; }
+    .users-pill--other { background: #f1f5f9; color: #334155; }
+
+    .users-table td {
+      vertical-align: middle;
+    }
+
+    .users-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    details.users-collapsible summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body class="admin-records admin-shell" data-theme="light">
@@ -1092,67 +1205,34 @@ function admin_users_build_welcome_subject(array $customer): string
           </div>
         </header>
 
+        <div class="users-summary-grid" aria-label="Customer summary">
+          <div class="users-summary-card"><span class="admin-muted">Active customers</span><strong><?= (int) ($summaryCounts['active'] ?? 0) ?></strong></div>
+          <div class="users-summary-card"><span class="admin-muted">Archived customers</span><strong><?= (int) ($summaryCounts['archived'] ?? 0) ?></strong></div>
+          <div class="users-summary-card"><span class="admin-muted">PM Surya Ghar</span><strong><?= (int) ($customerTypeCounts['pm'] ?? 0) ?></strong></div>
+          <div class="users-summary-card"><span class="admin-muted">Non PM Surya Ghar</span><strong><?= (int) ($customerTypeCounts['non_pm'] ?? 0) ?></strong></div>
+          <div class="users-summary-card"><span class="admin-muted">Complaints raised</span><strong><?= (int) ($summaryCounts['complaints'] ?? 0) ?></strong></div>
+          <div class="users-summary-card"><span class="admin-muted">Welcome not sent</span><strong><?= (int) ($summaryCounts['welcome_not_sent'] ?? 0) ?></strong></div>
+        </div>
+
+        <div class="users-tabs" role="tablist" aria-label="Customer archive views">
+          <a class="users-tab__link<?= $customerView === 'active' ? ' is-active' : '' ?>" href="admin-users.php?tab=customers&customer_view=active">Active Customers</a>
+          <a class="users-tab__link<?= $customerView === 'archived' ? ' is-active' : '' ?>" href="admin-users.php?tab=customers&customer_view=archived">Archived Customers</a>
+        </div>
+
         <div class="users-toolbar">
+          <div><input id="customer-search" class="users-input" type="search" placeholder="Search by name/mobile" /></div>
           <div>
-            <label class="sr-only" for="customer-search">Search customers</label>
-            <input id="customer-search" class="users-input" type="search" placeholder="Search customers" />
-          </div>
-          <div>
-            <label class="sr-only" for="customer-type">Customer type</label>
             <select id="customer-type" class="users-select">
               <option value="all">All customer types</option>
-              <option value="pm">PM Surya Ghar (<?= (int) ($customerTypeCounts['pm'] ?? 0) ?>)</option>
-              <option value="non_pm">Non PM Surya Ghar (<?= (int) ($customerTypeCounts['non_pm'] ?? 0) ?>)</option>
+              <option value="pm">PM Surya Ghar</option>
+              <option value="non_pm">Non PM Surya Ghar</option>
+              <option value="other">Other / Blank</option>
             </select>
           </div>
           <div class="users-toolbar__actions">
             <a class="btn btn-secondary" href="#add-customer-form">Add Customer</a>
-            <a class="btn btn-primary" href="#customer-bulk-upload">Bulk Upload (CSV)</a>
+            <a class="btn btn-secondary" href="#customer-bulk-upload">Bulk Upload</a>
           </div>
-        </div>
-
-        <div id="customer-bulk-upload" class="users-card users-card--bulk" aria-labelledby="bulk-upload-heading">
-          <div class="users-card__header">
-            <div>
-              <h3 id="bulk-upload-heading">Bulk Upload (CSV)</h3>
-              <p class="admin-muted">
-                Upload a CSV file that matches the required header row. Mobile numbers must be unique; existing mobiles will be updated.
-              </p>
-            </div>
-            <a class="btn btn-link" href="admin-users.php?tab=customers&download=customer_csv_template">Download sample CSV</a>
-          </div>
-          <?php if ($customerImportError !== ''): ?>
-          <div class="admin-alert admin-alert--error" role="alert"><?php echo admin_users_safe($customerImportError); ?></div>
-          <?php endif; ?>
-          <?php if ($customerImportSummary !== null): ?>
-          <div class="admin-alert admin-alert--success" role="status">
-            <strong>Import completed.</strong>
-            <div>New customers created: <?php echo (int) $customerImportSummary['created']; ?></div>
-            <div>Existing customers updated: <?php echo (int) $customerImportSummary['updated']; ?></div>
-            <div>Rows skipped due to errors: <?php echo (int) $customerImportSummary['skipped']; ?></div>
-          </div>
-          <?php if (!empty($customerImportSummary['errors'])): ?>
-          <div class="admin-alert admin-alert--warning" role="status">
-            <strong>Issues found:</strong>
-            <ul>
-              <?php foreach ($customerImportSummary['errors'] as $importError): ?>
-              <li>Row <?php echo (int) $importError['line']; ?>: <?php echo admin_users_safe($importError['message']); ?></li>
-              <?php endforeach; ?>
-            </ul>
-          </div>
-          <?php endif; ?>
-          <?php endif; ?>
-          <form method="post" enctype="multipart/form-data" class="users-form-grid">
-            <input type="hidden" name="customer_action" value="import_customers" />
-            <div>
-              <label for="customer_csv">Upload CSV file</label>
-              <input id="customer_csv" class="users-input" type="file" name="csv_file" accept=".csv,text/csv" required />
-              <p class="admin-muted" style="margin-top: 0.35rem;">Required headers: mobile, name, customer_type, address, city, district, pin_code, state, meter_number, meter_serial_number, jbvnl_account_number, application_id, complaints_raised, status, application_submitted_date, sanction_load_kwp, installed_pv_module_capacity_kwp, circle_name, division_name, sub_division_name, loan_taken, loan_application_date, solar_plant_installation_date, subsidy_amount_rs, subsidy_disbursed_date, password. Optional headers: serial_number, welcome_sent_via.</p>
-            </div>
-            <div class="users-form-actions">
-              <button class="btn btn-primary" type="submit">Upload and import</button>
-            </div>
-          </form>
         </div>
 
         <?php if ($customerSuccess !== ''): ?>
@@ -1169,7 +1249,9 @@ function admin_users_build_welcome_subject(array $customer): string
         </div>
         <?php endif; ?>
 
-        <div id="add-customer-form" class="users-card" aria-labelledby="add-customer-heading">
+        <details id="add-customer-form" class="users-collapsible users-card">
+          <summary>Add Customer</summary>
+          <div aria-labelledby="add-customer-heading">
           <div class="users-card__header">
             <div>
               <h3 id="add-customer-heading">Add Customer</h3>
@@ -1353,7 +1435,40 @@ function admin_users_build_welcome_subject(array $customer): string
               <button class="btn btn-primary" type="submit">Add customer</button>
             </div>
           </form>
-        </div>
+          </div>
+        </details>
+
+        <details id="customer-bulk-upload" class="users-collapsible users-card">
+          <summary>Bulk Upload (CSV)</summary>
+          <div class="users-card__header">
+            <div>
+              <h3 id="bulk-upload-heading">Bulk Upload (CSV)</h3>
+              <p class="admin-muted">Upload CSV matching required headers. Existing mobiles are updated.</p>
+            </div>
+            <a class="btn btn-link" href="admin-users.php?tab=customers&download=customer_csv_template">Download sample CSV</a>
+          </div>
+          <?php if ($customerImportError !== ''): ?>
+          <div class="admin-alert admin-alert--error" role="alert"><?php echo admin_users_safe($customerImportError); ?></div>
+          <?php endif; ?>
+          <?php if ($customerImportSummary !== null): ?>
+          <div class="admin-alert admin-alert--success" role="status">
+            <strong>Import completed.</strong>
+            <div>New customers created: <?php echo (int) $customerImportSummary['created']; ?></div>
+            <div>Existing customers updated: <?php echo (int) $customerImportSummary['updated']; ?></div>
+            <div>Rows skipped due to errors: <?php echo (int) $customerImportSummary['skipped']; ?></div>
+          </div>
+          <?php endif; ?>
+          <form method="post" enctype="multipart/form-data" class="users-form-grid">
+            <input type="hidden" name="customer_action" value="import_customers" />
+            <div>
+              <label for="customer_csv">Upload CSV file</label>
+              <input id="customer_csv" class="users-input" type="file" name="csv_file" accept=".csv,text/csv" required />
+            </div>
+            <div class="users-form-actions">
+              <button class="btn btn-primary" type="submit">Upload and import</button>
+            </div>
+          </form>
+        </details>
 
         <?php if ($editingCustomer !== null): ?>
         <div class="users-card" aria-labelledby="edit-customer-heading">
@@ -1793,16 +1908,19 @@ function admin_users_build_welcome_subject(array $customer): string
         </div>
         <?php endif; ?>
 
-        <div class="admin-table-wrapper">
-              <table class="users-table" aria-label="Customer list">
+        <form method="post" class="admin-table-wrapper">
+          <input type="hidden" name="customer_action" id="bulk-customer-action" value="" />
+          <table class="users-table" aria-label="Customer list">
             <thead>
               <tr>
+                <th scope="col"><input type="checkbox" id="customers-select-all" /></th>
                 <th scope="col">Serial</th>
                 <th scope="col">Mobile number</th>
                 <th scope="col">Name</th>
                 <th scope="col">Customer type</th>
                 <th scope="col">City</th>
                 <th scope="col">Status</th>
+                <th scope="col">Archive</th>
                 <th scope="col">Welcome Sent</th>
                 <th scope="col">Complaint flag</th>
                 <th scope="col" class="text-right">Actions</th>
@@ -1810,15 +1928,20 @@ function admin_users_build_welcome_subject(array $customer): string
             </thead>
             <tbody>
               <?php if ($customers === []): ?>
-              <tr data-customer-row="1" data-name="<?= admin_users_safe(strtolower((string) ($customer['name'] ?? ''))) ?>" data-mobile="<?= admin_users_safe((string) ($customer['mobile'] ?? '')) ?>" data-type="<?= admin_users_safe($typeKey === 'pm surya ghar' ? 'pm' : ($typeKey === 'non pm surya ghar' ? 'non_pm' : 'other')) ?>">
-                <td colspan="9" class="text-center admin-muted">No customers found.</td>
+              <tr>
+                <td colspan="11" class="text-center admin-muted">
+                  <?= $customerView === 'archived' ? 'No archived customers found.' : 'No active customers found.' ?>
+                </td>
               </tr>
               <?php else: ?>
               <?php foreach ($customers as $customer): ?>
               <?php
                 $customerType = trim((string) ($customer['customer_type'] ?? ''));
                 $typeKey = strtolower($customerType);
-                $typeClass = 'badge-customer-type ' . ($typeKey === 'pm surya ghar' ? 'badge-pm-surya-ghar' : 'badge-non-pm-surya-ghar');
+                $typeToken = $typeKey === 'pm surya ghar' ? 'pm' : ($typeKey === 'non pm surya ghar' ? 'non_pm' : 'other');
+                $typeClass = $typeToken === 'pm'
+                  ? 'users-pill users-pill--pm'
+                  : ($typeToken === 'non_pm' ? 'users-pill users-pill--non-pm' : 'users-pill users-pill--other');
 
                 $statusRaw = trim((string) ($customer['status'] ?? ''));
                 $statusKey = strtolower(str_replace(' ', '-', $statusRaw));
@@ -1855,22 +1978,50 @@ function admin_users_build_welcome_subject(array $customer): string
                 $hasComplaint = in_array($complaintValue, ['yes', 'y', '1'], true);
                 $complaintClass = $hasComplaint ? 'cell-yes' : 'cell-no';
               ?>
-              <tr>
+              <tr
+                data-customer-row="1"
+                data-name="<?= admin_users_safe(strtolower((string) ($customer['name'] ?? ''))) ?>"
+                data-mobile="<?= admin_users_safe(strtolower((string) ($customer['mobile'] ?? ''))) ?>"
+                data-type="<?= admin_users_safe($typeToken) ?>"
+                data-status="<?= admin_users_safe(strtolower((string) $statusRaw)) ?>"
+                data-archived="<?= !empty($customer['archived']) ? '1' : '0' ?>"
+              >
+                <td><input type="checkbox" name="selected_customers[]" value="<?= admin_users_safe((string) ($customer['mobile'] ?? '')) ?>" /></td>
                 <td><?= admin_users_safe((string) ($customer['serial_number'] ?? '')) ?></td>
                 <td><?= admin_users_safe($customer['mobile'] ?? '') ?></td>
                 <td><?= admin_users_safe($customer['name'] ?? '') ?></td>
-                <td><span class="<?= admin_users_safe($typeClass) ?>"><?= admin_users_safe($customerType) ?></span></td>
+                <td><span class="<?= admin_users_safe($typeClass) ?>"><?= admin_users_safe($customerType === '' ? 'Other / Blank' : $customerType) ?></span></td>
                 <td><?= admin_users_safe($customer['city'] ?? '') ?></td>
                 <td><span class="<?= admin_users_safe($statusClass) ?>"><?= admin_users_safe($statusRaw) ?></span></td>
+                <td>
+                  <span class="users-status <?= !empty($customer['archived']) ? 'users-status--warn' : 'users-status--ok' ?>">
+                    <?= !empty($customer['archived']) ? 'Archived' : 'Active' ?>
+                  </span>
+                </td>
                 <td><span class="users-status <?= $welcomeSent ? 'users-status--ok' : 'users-status--muted' ?>"><?= admin_users_safe(admin_users_display_welcome_status($customer['welcome_sent_via'] ?? '')) ?></span></td>
                 <td><span class="users-status <?= $hasComplaint ? 'users-status--warn' : 'users-status--ok' ?>"><?= $hasComplaint ? 'Raised' : 'None' ?></span></td>
-                <td class="users-actions text-right"><a href="admin-users.php?tab=customers&amp;view=<?= urlencode((string) ($customer['mobile'] ?? '')) ?>">View / Edit</a></td>
+                <td class="users-actions text-right">
+                  <a href="admin-users.php?tab=customers&amp;customer_view=<?= admin_users_safe($customerView) ?>&amp;view=<?= urlencode((string) ($customer['mobile'] ?? '')) ?>">View / Edit</a>
+                  <?php if (!empty($customer['archived'])): ?>
+                  <button class="btn btn-link js-single-customer-action" type="submit" data-action="restore_customer" name="mobile" value="<?= admin_users_safe((string) ($customer['mobile'] ?? '')) ?>">Restore</button>
+                  <?php else: ?>
+                  <button class="btn btn-link js-single-customer-action" type="submit" data-action="archive_customer" name="mobile" value="<?= admin_users_safe((string) ($customer['mobile'] ?? '')) ?>">Archive</button>
+                  <?php endif; ?>
+                </td>
               </tr>
               <?php endforeach; ?>
               <?php endif; ?>
             </tbody>
           </table>
-        </div>
+          <div class="users-toolbar" style="margin-top: 0.75rem;">
+            <div><input class="users-input" type="text" name="bulk_archive_reason" placeholder="Bulk archive reason (optional)" /></div>
+            <div></div>
+            <div class="users-toolbar__actions">
+              <button class="btn btn-secondary" type="submit" onclick="document.getElementById('bulk-customer-action').value='bulk_archive_customers'">Archive selected</button>
+              <button class="btn btn-secondary" type="submit" onclick="document.getElementById('bulk-customer-action').value='bulk_restore_customers'">Restore selected</button>
+            </div>
+          </div>
+        </form>
       </section>
       <?php else: ?>
       <section class="users-section" aria-labelledby="employees-heading">
@@ -2021,12 +2172,17 @@ function admin_users_build_welcome_subject(array $customer): string
             </thead>
             <tbody>
               <?php if ($employees === []): ?>
-              <tr data-employee-row="1" data-name="<?= admin_users_safe(strtolower((string) ($employee['name'] ?? ''))) ?>" data-login="<?= admin_users_safe(strtolower((string) ($employee['login_id'] ?? ''))) ?>" data-designation="<?= admin_users_safe(strtolower((string) ($employee['designation'] ?? ''))) ?>">
+              <tr>
                 <td colspan="5" class="text-center admin-muted">No employees found.</td>
               </tr>
               <?php else: ?>
               <?php foreach ($employees as $employee): ?>
-              <tr>
+              <tr
+                data-employee-row="1"
+                data-name="<?= admin_users_safe(strtolower((string) ($employee['name'] ?? ''))) ?>"
+                data-login="<?= admin_users_safe(strtolower((string) ($employee['login_id'] ?? ''))) ?>"
+                data-designation="<?= admin_users_safe(strtolower((string) ($employee['designation'] ?? ''))) ?>"
+              >
                 <td><?= admin_users_safe($employee['name'] ?? '') ?></td>
                 <td><?= admin_users_safe($employee['login_id'] ?? '') ?></td>
                 <td><?= admin_users_safe($employee['designation'] ?? '') ?></td>
@@ -2047,6 +2203,9 @@ function admin_users_build_welcome_subject(array $customer): string
       const customerSearch = document.getElementById('customer-search');
       const customerType = document.getElementById('customer-type');
       const customerRows = Array.from(document.querySelectorAll('[data-customer-row="1"]'));
+      const customerSelectAll = document.getElementById('customers-select-all');
+      const bulkActionInput = document.getElementById('bulk-customer-action');
+      const singleActionButtons = Array.from(document.querySelectorAll('.js-single-customer-action'));
       const applyCustomerFilter = () => {
         const query = (customerSearch?.value || '').trim().toLowerCase();
         const type = customerType?.value || 'all';
@@ -2059,6 +2218,19 @@ function admin_users_build_welcome_subject(array $customer): string
       };
       customerSearch?.addEventListener('input', applyCustomerFilter);
       customerType?.addEventListener('change', applyCustomerFilter);
+      customerSelectAll?.addEventListener('change', () => {
+        const checked = customerSelectAll.checked;
+        document.querySelectorAll('input[name="selected_customers[]"]').forEach((checkbox) => {
+          checkbox.checked = checked;
+        });
+      });
+      singleActionButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          if (bulkActionInput) {
+            bulkActionInput.value = button.dataset.action || '';
+          }
+        });
+      });
 
       const employeeSearch = document.getElementById('employee-search');
       const employeeRole = document.getElementById('employee-role');
