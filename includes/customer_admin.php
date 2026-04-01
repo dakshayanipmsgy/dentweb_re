@@ -50,6 +50,28 @@ final class CustomerFsStore
         return $customers;
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listActiveCustomers(): array
+    {
+        return array_values(array_filter(
+            $this->listCustomers(),
+            static fn (array $customer): bool => !((bool) ($customer['archived'] ?? false))
+        ));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listArchivedCustomers(): array
+    {
+        return array_values(array_filter(
+            $this->listCustomers(),
+            static fn (array $customer): bool => (bool) ($customer['archived'] ?? false)
+        ));
+    }
+
     public function findByMobile(string $mobile): ?array
     {
         $mobileKey = $this->normaliseMobile($mobile);
@@ -127,6 +149,90 @@ final class CustomerFsStore
         }, ['success' => false, 'errors' => ['Could not update customer.'], 'customer' => null]);
     }
 
+    public function archiveCustomer(string $mobile, string $reason = ''): bool
+    {
+        $mobileKey = $this->normaliseMobile($mobile);
+        if ($mobileKey === '') {
+            return false;
+        }
+
+        return $this->writeThrough(function (array $data) use ($mobileKey, $reason): array {
+            foreach ($data['customers'] as $index => $customer) {
+                if (($customer['mobile_key'] ?? '') !== $mobileKey) {
+                    continue;
+                }
+
+                $hydrated = $this->hydrateCustomer($customer);
+                $hydrated['archived'] = true;
+                $hydrated['archived_at'] = $this->now();
+                $hydrated['archive_reason'] = trim($reason);
+                $hydrated['updated_at'] = $this->now();
+                $data['customers'][$index] = $hydrated;
+
+                return [$data, true];
+            }
+
+            return [$data, false];
+        }, false);
+    }
+
+    public function restoreCustomer(string $mobile): bool
+    {
+        $mobileKey = $this->normaliseMobile($mobile);
+        if ($mobileKey === '') {
+            return false;
+        }
+
+        return $this->writeThrough(function (array $data) use ($mobileKey): array {
+            foreach ($data['customers'] as $index => $customer) {
+                if (($customer['mobile_key'] ?? '') !== $mobileKey) {
+                    continue;
+                }
+
+                $hydrated = $this->hydrateCustomer($customer);
+                $hydrated['archived'] = false;
+                $hydrated['archived_at'] = '';
+                $hydrated['archive_reason'] = '';
+                $hydrated['updated_at'] = $this->now();
+                $data['customers'][$index] = $hydrated;
+
+                return [$data, true];
+            }
+
+            return [$data, false];
+        }, false);
+    }
+
+    /**
+     * @param array<int, string> $mobiles
+     */
+    public function bulkArchiveCustomers(array $mobiles, string $reason = ''): int
+    {
+        $count = 0;
+        foreach ($mobiles as $mobile) {
+            if ($this->archiveCustomer((string) $mobile, $reason)) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * @param array<int, string> $mobiles
+     */
+    public function bulkRestoreCustomers(array $mobiles): int
+    {
+        $count = 0;
+        foreach ($mobiles as $mobile) {
+            if ($this->restoreCustomer((string) $mobile)) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
     private function normaliseInput(array $input, ?array $existing = null): array
     {
         $mobile = trim((string) ($input['mobile'] ?? ($existing['mobile'] ?? '')));
@@ -177,6 +283,9 @@ final class CustomerFsStore
                 : ($existing['password_hash'] ?? null),
             'created_from_quote_id' => trim((string) ($input['created_from_quote_id'] ?? ($existing['created_from_quote_id'] ?? ''))),
             'created_from_quote_no' => trim((string) ($input['created_from_quote_no'] ?? ($existing['created_from_quote_no'] ?? ''))),
+            'archived' => $this->normaliseArchivedValue($input['archived'] ?? ($existing['archived'] ?? false)),
+            'archived_at' => trim((string) ($input['archived_at'] ?? ($existing['archived_at'] ?? ''))),
+            'archive_reason' => trim((string) ($input['archive_reason'] ?? ($existing['archive_reason'] ?? ''))),
             'created_at' => $existing['created_at'] ?? null,
             'updated_at' => $existing['updated_at'] ?? null,
         ];
@@ -421,6 +530,9 @@ final class CustomerFsStore
             'password_hash' => $customer['password_hash'] ?? null,
             'created_from_quote_id' => trim((string) ($customer['created_from_quote_id'] ?? '')),
             'created_from_quote_no' => trim((string) ($customer['created_from_quote_no'] ?? '')),
+            'archived' => $this->normaliseArchivedValue($customer['archived'] ?? false),
+            'archived_at' => trim((string) ($customer['archived_at'] ?? '')),
+            'archive_reason' => trim((string) ($customer['archive_reason'] ?? '')),
             'created_at' => $customer['created_at'] ?? null,
             'updated_at' => $customer['updated_at'] ?? null,
         ];
@@ -473,5 +585,18 @@ final class CustomerFsStore
         }
 
         return $defaults;
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function normaliseArchivedValue($value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $text = strtolower(trim((string) $value));
+        return in_array($text, ['1', 'true', 'yes', 'y'], true);
     }
 }
