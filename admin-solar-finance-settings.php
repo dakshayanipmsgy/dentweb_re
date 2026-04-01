@@ -2,10 +2,15 @@
 declare(strict_types=1);
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/bootstrap.php';
+require_once __DIR__ . '/admin/includes/documents_helpers.php';
 require_admin();
 start_session();
 $_SESSION['csrf_token'] = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(16));
 $settings = solar_finance_settings();
+$templateSetsRaw = json_load(documents_templates_dir() . '/template_sets.json', []);
+$templateSets = array_values(array_filter(is_array($templateSetsRaw) ? $templateSetsRaw : [], static function ($row): bool {
+  return is_array($row) && empty($row['archived_flag']);
+}));
 $msg=''; $tone='info';
 if ($_SERVER['REQUEST_METHOD']==='POST') {
   if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {$msg='Session expired.';$tone='error';}
@@ -29,7 +34,17 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
       ];
       $onGrid=json_decode((string)($_POST['on_grid_prices']??'[]'), true); $hybrid=json_decode((string)($_POST['hybrid_prices']??'[]'), true);
       if (!is_array($onGrid) || !is_array($hybrid)) {throw new RuntimeException('Price tables must be valid JSON arrays.');}
-      solar_finance_settings_save(['content'=>$content,'defaults'=>$defaults,'on_grid_prices'=>$onGrid,'hybrid_prices'=>$hybrid]);
+      $templateSetMap = [
+        'ongrid' => safe_text((string)($_POST['template_set_map_ongrid'] ?? '')),
+        'hybrid' => safe_text((string)($_POST['template_set_map_hybrid'] ?? '')),
+      ];
+      solar_finance_settings_save([
+        'content'=>$content,
+        'defaults'=>$defaults,
+        'on_grid_prices'=>$onGrid,
+        'hybrid_prices'=>$hybrid,
+        'template_set_map' => $templateSetMap,
+      ]);
       $settings=solar_finance_settings(); $msg='Solar & Finance settings saved.'; $tone='success';
     } catch (Throwable $e) {$msg='Error: '.$e->getMessage();$tone='error';}
   }
@@ -91,6 +106,32 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
       <h2 style="margin-top:0;">Advanced JSON · Hybrid prices</h2>
       <p class="helper">Price table rows for hybrid calculator options.</p>
       <textarea name="hybrid_prices"><?= htmlspecialchars((string)json_encode($settings['hybrid_prices'], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)) ?></textarea>
+    </section>
+    <section class="admin-panel">
+      <h2 style="margin-top:0;">Solar Type → Quotation Template Set Mapping</h2>
+      <p class="helper">Used when Solar and Finance auto-creates quotations. If left blank, existing default template selection applies.</p>
+      <div class="admin-grid">
+        <label class="field">On-Grid template set
+          <select name="template_set_map_ongrid">
+            <option value="">-- Use default template logic --</option>
+            <?php foreach ($templateSets as $tpl): ?>
+              <option value="<?= htmlspecialchars((string)($tpl['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string)($settings['template_set_map']['ongrid'] ?? '') === (string)($tpl['id'] ?? '')) ? 'selected' : '' ?>>
+                <?= htmlspecialchars((string)($tpl['name'] ?? ''), ENT_QUOTES) ?> (<?= htmlspecialchars((string)($tpl['segment'] ?? ''), ENT_QUOTES) ?>)
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <label class="field">Hybrid template set
+          <select name="template_set_map_hybrid">
+            <option value="">-- Use default template logic --</option>
+            <?php foreach ($templateSets as $tpl): ?>
+              <option value="<?= htmlspecialchars((string)($tpl['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string)($settings['template_set_map']['hybrid'] ?? '') === (string)($tpl['id'] ?? '')) ? 'selected' : '' ?>>
+                <?= htmlspecialchars((string)($tpl['name'] ?? ''), ENT_QUOTES) ?> (<?= htmlspecialchars((string)($tpl['segment'] ?? ''), ENT_QUOTES) ?>)
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+      </div>
     </section>
     <div><button class="btn btn-primary" type="submit">Save settings</button></div>
   </form>

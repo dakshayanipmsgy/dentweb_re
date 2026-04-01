@@ -255,6 +255,7 @@ $defaults = $settings['defaults'] ?? [];
 
     async function syncAutoQuotation(reason='',opts={}){
       const force=Boolean(opts?.force);
+      const createNewQuote=Boolean(opts?.createNewQuote);
       if(autoQuoteState.inFlight) return;
       if(!latestSnapshot || document.getElementById('results').hidden) return;
       const name=(el.customerName.value||'').trim();
@@ -264,7 +265,8 @@ $defaults = $settings['defaults'] ?? [];
       const snapshot={...latestSnapshot,customer:{name,location,mobile_normalized:normalizedMobile,mobile_raw:(el.customerMobile.value||'').trim()}};
       const payload={
         ...snapshot,
-        linked_quote_id:autoQuoteState.quoteId||'',
+        linked_quote_id:createNewQuote?'':(autoQuoteState.quoteId||''),
+        create_new_quote:createNewQuote,
         sync_reason:reason||'input'
       };
       const nextMobileKey=mobileKey(normalizedMobile);
@@ -650,15 +652,14 @@ $defaults = $settings['defaults'] ?? [];
         alert(msg);
         return;
       }
-      const existingUrl=getQuoteViewUrl(autoQuoteState.quoteId, autoQuoteState.quoteViewUrl);
-      if(autoQuoteState.quoteId && existingUrl){
-        window.open(existingUrl,'_blank','noopener');
-        return;
-      }
       const customerDetails=validateCustomerDetails('quotation');
       if(!customerDetails){
         alert(el.customerError.textContent||'Please enter customer details.');
         return;
+      }
+      if(autoQuoteState.quoteId){
+        autoQuoteState.quoteId='';
+        autoQuoteState.quoteViewUrl='';
       }
       const popup=window.open('about:blank','_blank','noopener');
       if(!latestSnapshot) return;
@@ -669,7 +670,7 @@ $defaults = $settings['defaults'] ?? [];
         mobile_raw:(el.customerMobile.value||'').trim()
       };
       try{
-        const data=await syncAutoQuotation('manual_generate_quotation',{force:true});
+        const data=await syncAutoQuotation('manual_generate_quotation',{force:true,createNewQuote:true});
         const quoteId=String(data?.quote_id||autoQuoteState.quoteId||'');
         const viewUrl=getQuoteViewUrl(quoteId, String(data?.quote_view_url||autoQuoteState.quoteViewUrl||''));
         if(!viewUrl){

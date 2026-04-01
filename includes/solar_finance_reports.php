@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/leads.php';
+require_once __DIR__ . '/solar_finance_settings.php';
 require_once __DIR__ . '/../admin/includes/documents_helpers.php';
 
 function solar_finance_reports_storage_path(): string
@@ -258,6 +259,71 @@ function solar_finance_quote_mobile_key_from_quote(array $quote): string
     return '';
 }
 
+function solar_finance_normalize_phase_label(string $phase): string
+{
+    $value = strtolower(trim($phase));
+    if ($value === '') {
+        return '';
+    }
+    if ($value === '1' || $value === '1 phase') {
+        return '1 Phase';
+    }
+    if ($value === '3' || $value === '3 phase') {
+        return '3 Phase';
+    }
+    return ucwords($phase);
+}
+
+function solar_finance_build_hybrid_configuration_summary(array $snapshot): string
+{
+    $inverterKva = max(0, (float) ($snapshot['hybrid_inverter_kva'] ?? $snapshot['inverter_kva'] ?? 0));
+    $phase = solar_finance_normalize_phase_label((string) ($snapshot['hybrid_phase'] ?? $snapshot['phase'] ?? ''));
+    $batteryCount = max(0, (int) ($snapshot['hybrid_battery_count'] ?? $snapshot['battery_count'] ?? 0));
+    if ($inverterKva <= 0 && $phase === '' && $batteryCount <= 0) {
+        return '';
+    }
+    $parts = [];
+    if ($inverterKva > 0) {
+        $parts[] = rtrim(rtrim(number_format($inverterKva, 1, '.', ''), '0'), '.') . ' kVA inverter';
+    }
+    if ($phase !== '') {
+        $parts[] = $phase;
+    }
+    if ($batteryCount > 0) {
+        $parts[] = $batteryCount . ' Batterie' . ($batteryCount === 1 ? 'y' : 's');
+    }
+    if ($parts === []) {
+        return '';
+    }
+    return 'Hybrid configuration: ' . implode(', ', $parts);
+}
+
+function solar_finance_sync_hybrid_summary_into_quote_items(array $quote): array
+{
+    $systemType = strtolower(trim((string) ($quote['system_type'] ?? '')));
+    if ($systemType !== 'hybrid') {
+        return $quote;
+    }
+    $summary = solar_finance_build_hybrid_configuration_summary(is_array($quote['rate_chart_snapshot'] ?? null) ? $quote['rate_chart_snapshot'] : []);
+    if ($summary === '') {
+        return $quote;
+    }
+    $items = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
+    foreach ($items as &$item) {
+        if (!is_array($item) || (string) ($item['type'] ?? '') !== 'kit') {
+            continue;
+        }
+        $existing = trim((string) ($item['custom_description'] ?? ''));
+        $existing = preg_replace('/(^|\R)Hybrid configuration:[^\R]*/i', '', $existing) ?? '';
+        $existing = trim(preg_replace('/\R{2,}/', "\n", $existing) ?? '');
+        $item['custom_description'] = $existing === '' ? $summary : ($existing . "\n" . $summary);
+        break;
+    }
+    unset($item);
+    $quote['quote_items'] = documents_normalize_quote_structured_items($items);
+    return $quote;
+}
+
 function solar_finance_quote_public_view_url(array $quote): string
 {
     $token = safe_text((string) ($quote['public_share_token'] ?? ''));
@@ -324,6 +390,18 @@ function solar_finance_resolve_template_context(string $currentTemplateSetId): a
         'template' => is_array($templateById[$resolvedTemplateSetId] ?? null) ? $templateById[$resolvedTemplateSetId] : null,
         'template_blocks' => $templateBlocks,
     ];
+}
+
+function solar_finance_resolve_template_set_id_for_system_type(string $systemType, string $fallbackTemplateSetId = ''): string
+{
+    $settings = solar_finance_settings();
+    $mapping = is_array($settings['template_set_map'] ?? null) ? $settings['template_set_map'] : [];
+    $systemKey = strtolower(trim($systemType)) === 'hybrid' ? 'hybrid' : 'ongrid';
+    $mappedId = safe_text((string) ($mapping[$systemKey] ?? ''));
+    if ($mappedId !== '') {
+        return $mappedId;
+    }
+    return safe_text($fallbackTemplateSetId);
 }
 
 function solar_finance_quote_has_attachment_snapshot(array $attachments): bool
@@ -802,9 +880,16 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         ];
     }
 
+    $transportation = max(0, $toFloat($calc['transportation_rs'] ?? ($quote['finance_inputs']['transportation_rs'] ?? 0)));
+    $discount = max(0, $toFloat($calc['discount_rs'] ?? ($quote['discount_rs'] ?? ($quote['finance_inputs']['discount_rs'] ?? 0))));
+    $primaryScenarioPrice = (float) ($resolvedScenarios[$primaryScenario]['price'] ?? $grossFallback);
+    $primaryGrossBeforeDiscount = max(0, $primaryScenarioPrice + $transportation);
+    $primaryGrossAfterDiscount = max(0, $primaryGrossBeforeDiscount - min($discount, $primaryGrossBeforeDiscount));
+    $grossFromCalc = $toFloat($calc['gross_payable'] ?? 0);
+
     return [
         'primary_finance_scenario' => $primaryScenario,
-        'gross' => (float) ($resolvedScenarios[$primaryScenario]['price'] ?? $grossFallback),
+        'gross' => $grossFromCalc > 0 ? $grossFromCalc : $primaryGrossAfterDiscount,
         'subsidy' => $subsidy,
         'monthly_bill_before_rs' => $noSolarMonthlyBill,
         'no_solar_monthly_bill_rs' => $noSolarMonthlyBill,
@@ -886,22 +971,6 @@ function create_or_update_solar_finance_quote(array $payload): array
         }
     }
 
-    if (!is_array($existing)) {
-        foreach (documents_list_quotes() as $quote) {
-            $sourceType = strtolower(trim((string) ($quote['source']['type'] ?? '')));
-            $status = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
-            if ($sourceType !== 'solar_and_finance' || $status !== 'draft') {
-                continue;
-            }
-            $quoteMobileKey = solar_finance_quote_mobile_key_from_quote($quote);
-            if ($quoteMobileKey === '' || $quoteMobileKey !== $mobileKey) {
-                continue;
-            }
-            $existing = $quote;
-            break;
-        }
-    }
-
     if (is_array($existing) && !($existing['auto_sync_enabled'] ?? true)) {
         return [
             'success' => true,
@@ -974,6 +1043,11 @@ function create_or_update_solar_finance_quote(array $payload): array
     $quote['rate_chart_snapshot'] = [
         'source' => 'solar_and_finance',
         'captured_at' => date('c'),
+        'system_type' => $systemType,
+        'solar_size_kwp' => $solarSize,
+        'hybrid_inverter_kva' => (float) ($inputs['inverter_kva'] ?? 0),
+        'hybrid_phase' => solar_finance_normalize_phase_label((string) ($inputs['phase'] ?? '')),
+        'hybrid_battery_count' => (int) ($inputs['battery_count'] ?? 0),
         'self_funded_price' => (float) ($quote['scenario_prices']['self_funded']['price'] ?? 0),
         'loan_upto_2_lacs_price' => $systemCostUp2,
         'loan_above_2_lacs_price' => $systemCostAbove2,
@@ -1037,7 +1111,12 @@ function create_or_update_solar_finance_quote(array $payload): array
     $quote['finance_scenarios'] = solar_finance_build_normalized_scenario_snapshot($inputs, is_array($payload['results'] ?? null) ? $payload['results'] : []);
     $quote['finance_scenarios']['loan_upto_2_lacs'] = $quote['finance_scenarios']['loan_upto_2_lacs_subsidy_to_loan'] ?? [];
     $quote['finance_scenarios']['loan_above_2_lacs'] = $quote['finance_scenarios']['loan_above_2_lacs_subsidy_to_loan'] ?? [];
-    $normalizedFinance = solar_finance_normalize_for_quote_render($quote, ['gross_payable' => $selectedSystemPrice, 'subsidy_expected_rs' => $subsidy], [
+    $quoteDefaults = documents_get_quote_defaults_settings();
+    $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, 0.0, $subsidy, $selectedSystemPrice, $quoteDefaults);
+    $quote['tax_breakdown'] = is_array($quote['calc']['tax_breakdown'] ?? null)
+        ? (array) $quote['calc']['tax_breakdown']
+        : ['basic_total' => 0, 'gst_total' => 0, 'gross_incl_gst' => 0, 'slabs' => []];
+    $normalizedFinance = solar_finance_normalize_for_quote_render($quote, $quote['calc'], [
         'monthly_bill_before_rs' => $monthlyBill,
         'unit_rate_rs_per_kwh' => $unitRate,
         'annual_generation_kwh_per_kw' => $annualGenerationPerKw,
@@ -1046,12 +1125,7 @@ function create_or_update_solar_finance_quote(array $payload): array
         ? $normalizedFinance['finance_scenarios']
         : $quote['finance_scenarios'];
 
-    $quoteDefaults = documents_get_quote_defaults_settings();
-    $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, 0.0, $subsidy, $selectedSystemPrice, $quoteDefaults);
-    $quote['tax_breakdown'] = is_array($quote['calc']['tax_breakdown'] ?? null)
-        ? (array) $quote['calc']['tax_breakdown']
-        : ['basic_total' => 0, 'gst_total' => 0, 'gross_incl_gst' => 0, 'slabs' => []];
-
+    $quote['template_set_id'] = solar_finance_resolve_template_set_id_for_system_type($systemType, (string) ($quote['template_set_id'] ?? ''));
     $templateContext = solar_finance_resolve_template_context((string) ($quote['template_set_id'] ?? ''));
     if (safe_text((string) ($templateContext['template_set_id'] ?? '')) === '') {
         return ['success' => false, 'action' => 'failed', 'message' => 'No active quotation template available.'];
@@ -1065,6 +1139,7 @@ function create_or_update_solar_finance_quote(array $payload): array
     if (safe_text((string) ($quote['public_share_created_at'] ?? '')) === '') {
         $quote['public_share_created_at'] = date('c');
     }
+    $quote = solar_finance_sync_hybrid_summary_into_quote_items($quote);
 
     $saved = documents_save_quote($quote);
     if (!($saved['ok'] ?? false)) {
