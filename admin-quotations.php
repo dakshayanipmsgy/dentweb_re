@@ -1376,10 +1376,10 @@ $quoteShareMobile = $quotationExtractMobile($q);
         {title:'Section 3 — Customer & Site Details', names:['Billing Address','Site Address','District','City','State','PIN','Consumer Account No. (JBVNL)','Meter Number','Meter Serial Number','Application ID','Application Submitted Date','Sanction Load (kWp)','Installed PV Capacity (kWp)','Circle','Division','Sub Division']},
         {title:'Section 4 — Item Builder', containsHeadings:['Items Table','Item Builder (Structured)']},
         {title:'Section 5 — Solar & Savings Base Inputs', names:['Main Solar Size (kWp)','Complimentary Non-DCR Solar Size (kWp)','Total System Capacity (kWp)','Monthly electricity bill (₹)','Unit rate (₹/kWh)','Annual generation per kW','Transportation ₹','Discount (₹)','Discount note','Subsidy ₹'], containsHeadings:['Customer Savings Inputs'], className:'savings'},
-        {title:'Section 6 — Scenario Prices', names:['Self Funded Price ₹','Loan up to ₹2 lacs Price ₹','Loan above ₹2 lacs Price ₹','Primary Finance Scenario'], containsHeadings:['Section 6 — Scenario Prices'], className:'funding-prices'},
-        {title:'Section 7 — Funding Scenario Financial Inputs', names:['Finance mode','Margin %','Loan %','Margin ₹','Loan ₹','Interest %','Tenure years'], containsHeadings:['Section 7 — Funding Scenario Financial Inputs','Loan up to ₹2 lacs','Loan above ₹2 lacs'], className:'funding-inputs'},
-        {title:'Section 8 — Hybrid Configuration', names:['Hybrid Inverter (kVA)','Hybrid Phase','Hybrid Battery Count'], containsHeadings:['Section 8 — Hybrid Configuration'], className:'hybrid-config'},
-        {title:'Section 9 — Annexure Overrides', names:['Cover Notes','System Inclusions','Payment Terms','Warranty','System Type Explainer','Transportation','Terms & Conditions','PM Subsidy Info','Completion Milestones','Next Steps'], containsHeadings:['Section 9 — Annexure Overrides','Annexure Overrides']},
+        {title:'Section 6 — Funding Scenario Prices', names:['Self Funded Price ₹','Loan up to ₹2 lacs Price ₹','Loan above ₹2 lacs Price ₹','Primary Finance Scenario'], className:'funding-prices'},
+        {title:'Section 7 — Funding Scenario Finance Inputs', names:['Finance mode','Margin %','Loan %','Margin ₹','Loan ₹','Interest %','Tenure years'], containsHeadings:['Loan up to ₹2 lacs','Loan above ₹2 lacs'], className:'funding-inputs'},
+        {title:'Section 8 — Hybrid Configuration', names:['Hybrid Inverter (kVA)','Hybrid Phase','Hybrid Battery Count'], className:'hybrid-config'},
+        {title:'Section 9 — Annexure Overrides', names:['Cover Notes','System Inclusions','Payment Terms','Warranty','System Type Explainer','Transportation','Terms & Conditions','PM Subsidy Info','Completion Milestones','Next Steps'], containsHeadings:['Annexure Overrides']},
       ];
 
       const controls=[...grid.children];
@@ -1391,43 +1391,19 @@ $quoteShareMobile = $quotationExtractMobile($q);
 
       const getLabel=(node)=>{const label=node.querySelector(':scope > label');return (label?.textContent||'').trim();};
       const isHeadingBlock=(node,texts)=>{const h=node.querySelector('h3');if(!h)return false;const t=(h.textContent||'').trim();return texts.some(x=>t.includes(x));};
-      const parseSectionHeading=(node)=>{
-        const h=node.querySelector(':scope > h3');
-        if(!h)return null;
-        const t=(h.textContent||'').trim();
-        const m=t.match(/^Section\s+(\d+)\s*[—-]\s*(.+)$/i);
-        if(!m)return null;
-        const sectionNo=parseInt(m[1],10);
-        return Number.isFinite(sectionNo) ? { sectionNo, title:t } : null;
-      };
-      const sectionByNumber=new Map(sectionCards.map((sec,idx)=>[idx+1,sec]));
 
       controls.forEach((node)=>{
         if(node.tagName==='INPUT' && node.type==='hidden')return;
         const label=getLabel(node);
-        const sectionHeading=parseSectionHeading(node);
         let target=sectionCards[2];
         if(node.id==='splitCapacityFields'){
           target=sectionCards[4];
-        }
-        if(sectionHeading && sectionByNumber.has(sectionHeading.sectionNo)){
-          target=sectionByNumber.get(sectionHeading.sectionNo);
         }
         for(const sec of sectionCards){
           if((sec.cfg.names||[]).includes(label)){target=sec;break;}
           if((sec.cfg.containsHeadings||[]).length && isHeadingBlock(node,sec.cfg.containsHeadings)){target=sec;break;}
         }
         if(label==='Project Summary' || label==='Special Requests From Consumer (Inclusive in the rate)' || label==='Place of Supply State'){ target=sectionCards[2]; }
-        if(sectionHeading){
-          const desc=node.querySelector(':scope > .muted');
-          if(desc && target && target.inner){
-            const note=document.createElement('div');
-            note.className='full-span muted';
-            note.textContent=(desc.textContent||'').trim();
-            if(note.textContent){target.inner.appendChild(note);}
-          }
-          return;
-        }
         if((label.includes('Address') || label.includes('Summary') || label.includes('Special Requests')) && node.style.gridColumn!=='1/-1'){node.classList.add('full-span');}
         if(node.querySelector('table') || isHeadingBlock(node,['Item Builder (Structured)','Annexure Overrides']) || node.querySelector('textarea')){ if((sectionCards[3].inner===target.inner || sectionCards[6].inner===target.inner)){node.classList.add('full-span');} }
         target.inner.appendChild(node);
