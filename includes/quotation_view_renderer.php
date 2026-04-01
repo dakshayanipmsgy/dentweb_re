@@ -213,7 +213,7 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
 
     $savingsSnapshot = documents_quote_resolve_customer_savings_inputs($quote, $quoteDefaults);
     $financialClarity = compute_financial_clarity($quote, $calc, $savingsSnapshot);
-    $pricingSummarySystemPrice = (float) ($financialClarity['gross'] ?? ($calc['system_total_incl_gst_rs'] ?? $quote['input_total_gst_inclusive'] ?? 0));
+    $pricingSummarySystemPrice = (float) ($calc['grand_total'] ?? ($calc['final_price_incl_gst'] ?? ($calc['tax_breakdown']['gross_incl_gst'] ?? ($quote['input_total_gst_inclusive'] ?? 0))));
 
     $annualGeneration = (float) ($financialClarity['annual_generation_kwh_per_kw'] ?? 0);
     $unitRate = (float) ($financialClarity['unit_rate_rs_per_kwh'] ?? 0);
@@ -284,14 +284,8 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
     $monthlyBillBeforeDisplay = $monthlyBillBefore > 0
         ? quotation_format_inr_indian($monthlyBillBefore, $showDecimals)
         : '—';
-    $rawDiscountFromQuote = $quote['discount_rs'] ?? null;
-    $discountApplicable = false;
-    if (is_numeric($rawDiscountFromQuote)) {
-        $discountApplicable = (float) $rawDiscountFromQuote > 0;
-    } elseif (is_string($rawDiscountFromQuote) && trim($rawDiscountFromQuote) !== '' && is_numeric(trim($rawDiscountFromQuote))) {
-        $discountApplicable = (float) trim($rawDiscountFromQuote) > 0;
-    }
-    $discountRsDisplay = $discountApplicable ? (float) $rawDiscountFromQuote : 0.0;
+    $discountRsDisplay = max(0, (float) ($calc['discount_rs'] ?? $quote['discount_rs'] ?? 0));
+    $discountApplicable = $discountRsDisplay > 0;
     $grossPayableLabel = $discountApplicable ? 'Gross payable (after discount)' : 'Gross payable';
 
     $fieldValue = static function ($value): string {

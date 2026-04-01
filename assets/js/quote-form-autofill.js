@@ -91,6 +91,13 @@
         if (force) input.dataset.touched = '';
     };
 
+    const markExistingValueAsTouched = (input) => {
+        if (!input) return;
+        if (String(input.value || '').trim() !== '') {
+            input.dataset.touched = '1';
+        }
+    };
+
     const currentSegmentCode = () => {
         const selected = templateSet?.selectedOptions?.[0];
         const code = String(selected?.dataset?.segment || 'RES').toUpperCase();
@@ -193,8 +200,13 @@
             setIfAllowed(marginRsInput, marginRs, {});
         }
 
-        setIfAllowed(interestInput, defaultInterest, {});
-        setIfAllowed(tenureInput, defaultTenure, { noDecimals: true });
+        if (mode === 'ratio') {
+            setIfAllowed(interestInput, defaultInterest, {});
+            setIfAllowed(tenureInput, defaultTenure, { noDecimals: true });
+        } else {
+            if (fieldEmpty(interestInput)) setIfAllowed(interestInput, defaultInterest, {});
+            if (fieldEmpty(tenureInput)) setIfAllowed(tenureInput, defaultTenure, { noDecimals: true });
+        }
     };
 
     const applyAllScenarioFinanceDefaults = () => {
@@ -289,6 +301,14 @@
     if (isExistingQuote() && monthlyBillInput && !fieldEmpty(monthlyBillInput)) {
         monthlyBillInput.dataset.touched = '1';
         if (monthlyBillTouchedFlag) monthlyBillTouchedFlag.value = '1';
+    }
+    if (isExistingQuote()) {
+        [
+            unitRateInput, annualGenerationInput, subsidyInput,
+            priceSelfInput, priceUp2Input, priceAbove2Input, primaryScenarioInput,
+            up2ModeInput, up2MarginPctInput, up2LoanPctInput, up2MarginRsInput, up2LoanRsInput, up2InterestInput, up2TenureInput,
+            above2ModeInput, above2MarginPctInput, above2LoanPctInput, above2MarginRsInput, above2LoanRsInput, above2InterestInput, above2TenureInput
+        ].forEach(markExistingValueAsTouched);
     }
 
     applyMonthlySuggestion(false);

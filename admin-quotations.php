@@ -658,13 +658,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'system_type' => safe_text((string) ($_POST['system_type'] ?? '')),
             'solar_size_kwp' => (float) ($_POST['main_solar_kwp'] ?? $_POST['capacity_kwp'] ?? 0),
             'hybrid_inverter_kva' => (float) ($_POST['hybrid_inverter_kva'] ?? 0),
-            'hybrid_phase' => safe_text((string) ($_POST['hybrid_phase'] ?? '')),
+            'hybrid_phase' => solar_finance_normalize_phase_label((string) ($_POST['hybrid_phase'] ?? '')),
             'hybrid_battery_count' => (int) ($_POST['hybrid_battery_count'] ?? 0),
             'self_funded_price' => $priceSelfFunded,
             'loan_upto_2_lacs_price' => $priceLoanUp2,
             'loan_above_2_lacs_price' => $priceLoanAbove2,
             'captured_at' => date('c'),
         ];
+        $quote = solar_finance_sync_hybrid_summary_into_quote_items($quote);
         $priceForPrimary = 0.0;
         if ($primaryScenario === 'self_funded') {
             $priceForPrimary = $priceSelfFunded;
@@ -1802,6 +1803,32 @@ window.quoteFormAutofillConfig = {
     };
     bindRatioSync('loan_upto_2_lacs');
     bindRatioSync('loan_above_2_lacs');
+
+    const updateHybridItemDescriptionPreview = () => {
+        if (String(systemType?.value || '').toLowerCase() !== 'hybrid') return;
+        const inverterText = parseNum(inverter?.value) > 0 ? `${parseNum(inverter.value).toFixed(1).replace(/\.0$/, '')} kVA inverter` : '';
+        const phaseRaw = String(phase?.value || '').trim();
+        const phaseText = phaseRaw === '' ? '' : (phaseRaw.includes('Phase') ? phaseRaw : `${phaseRaw} Phase`);
+        const batteryCount = Math.max(0, Math.round(parseNum(battery?.value)));
+        const batteryText = batteryCount > 0 ? `${batteryCount} Batterie${batteryCount === 1 ? 'y' : 's'}` : '';
+        const parts = [inverterText, phaseText, batteryText].filter((part) => part !== '');
+        if (!parts.length) return;
+        const summary = `Hybrid configuration: ${parts.join(', ')}`;
+        const rows = Array.from(document.querySelectorAll('#structuredItemsTable tbody tr'));
+        const kitRows = rows.filter((row) => String(row.querySelector('select[name="quote_item_type[]"]')?.value || '') === 'kit');
+        if (kitRows.length !== 1) return;
+        const textarea = kitRows[0].querySelector('textarea[name="quote_item_custom_description[]"]');
+        if (!textarea) return;
+        const lines = String(textarea.value || '').split(/\r?\n/).filter((line) => !/^Hybrid configuration:/i.test(line.trim()));
+        lines.push(summary);
+        textarea.value = lines.filter((line, index) => line.trim() !== '' || index < lines.length - 1).join('\n').trim();
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    [systemType, inverter, phase, battery].forEach((el) => {
+        el?.addEventListener('input', updateHybridItemDescriptionPreview);
+        el?.addEventListener('change', updateHybridItemDescriptionPreview);
+    });
+    updateHybridItemDescriptionPreview();
 })();
 
 </script><script src="assets/js/quote-form-autofill.js"></script></main></body></html>

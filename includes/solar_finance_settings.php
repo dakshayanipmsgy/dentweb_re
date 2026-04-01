@@ -81,6 +81,10 @@ function solar_finance_settings_default(): array
             ['size_kw'=>10,'inverter_kva'=>10.0,'phase'=>'3 Phase','battery_count'=>10,'loan_upto_2_lacs'=>836900,'loan_above_2_lacs'=>906900],
             ['size_kw'=>10,'inverter_kva'=>15.0,'phase'=>'3 Phase','battery_count'=>15,'loan_upto_2_lacs'=>956900,'loan_above_2_lacs'=>1026900],
         ],
+        'template_set_map' => [
+            'ongrid' => '',
+            'hybrid' => '',
+        ],
     ];
 }
 
