@@ -172,137 +172,47 @@
         totalInput.value = String(Math.max(0, Math.round(selectedPrimaryScenarioPrice() * 100) / 100));
     };
 
-    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-    const round2 = (value) => Math.round(parseNum(value) * 100) / 100;
-    const pctFor = (amount, total) => (total > 0 ? (amount / total) * 100 : 0);
-
-    const getScenarioDefaults = (scenarioType) => {
+    const applyScenarioFinanceDefaults = (prefix, priceInput, marginPctInput, loanPctInput, marginRsInput, loanRsInput, interestInput, tenureInput, modeInput, fallbackMaxLoan, enforceCap = false) => {
+        const price = parseNum(priceInput?.value);
+        const mode = String(modeInput?.value || 'ratio') === 'manual' ? 'manual' : 'ratio';
         const segLoan = currentSegmentSettings().loan_bestcase || {};
+        const maxLoanRaw = parseNum(segLoan.max_loan_rs || fallbackMaxLoan);
+        const maxLoan = enforceCap ? (maxLoanRaw > 0 ? Math.min(maxLoanRaw, LOAN_UPTO_2_LACS_CAP_RS) : LOAN_UPTO_2_LACS_CAP_RS) : maxLoanRaw;
+        const minMarginPct = parseNum(segLoan.min_margin_pct || 10);
         const defaultTenure = parseNum(segLoan.tenure_years || 10);
-        if (scenarioType === 'up2') {
-            return { marginPct: 10, loanPct: 90, interest: 5.75, tenure: defaultTenure, capLoan: true };
+        const defaultInterest = parseNum(segLoan.interest_pct || 6);
+
+        if (mode === 'ratio') {
+            let marginPct = parseNum(marginPctInput?.value);
+            if (marginPct <= 0) marginPct = minMarginPct;
+            marginPct = Math.min(100, Math.max(0, marginPct));
+            let loanPct = parseNum(loanPctInput?.value);
+            if (loanPct <= 0) loanPct = Math.max(0, 100 - marginPct);
+            if (Math.abs((marginPct + loanPct) - 100) > 0.01) loanPct = Math.max(0, 100 - marginPct);
+
+            let desiredLoan = price * (loanPct / 100);
+            if (maxLoan > 0) desiredLoan = Math.min(desiredLoan, maxLoan);
+            const marginRs = Math.max(0, price - desiredLoan);
+
+            setIfAllowed(marginPctInput, marginPct, {});
+            setIfAllowed(loanPctInput, Math.max(0, 100 - marginPct), {});
+            setIfAllowed(loanRsInput, desiredLoan, {});
+            setIfAllowed(marginRsInput, marginRs, {});
         }
-        return { marginPct: 20, loanPct: 80, interest: 8.15, tenure: defaultTenure, capLoan: false };
-    };
 
-    const enforceLoanRules = (loanAmount, price, applyCap) => {
-        let finalLoan = clamp(round2(loanAmount), 0, Math.max(0, round2(price)));
-        if (applyCap) finalLoan = Math.min(finalLoan, LOAN_UPTO_2_LACS_CAP_RS);
-        const finalMargin = Math.max(0, round2(price) - finalLoan);
-        return { loan: round2(finalLoan), margin: round2(finalMargin) };
-    };
-
-    const syncScenarioByPercent = (ctx, changedField) => {
-        const price = parseNum(ctx.priceInput?.value);
-        const defaults = getScenarioDefaults(ctx.type);
-        let marginPct = parseNum(ctx.marginPctInput?.value);
-        let loanPct = parseNum(ctx.loanPctInput?.value);
-
-        if (fieldEmpty(ctx.marginPctInput)) marginPct = defaults.marginPct;
-        if (fieldEmpty(ctx.loanPctInput)) loanPct = defaults.loanPct;
-        if (changedField === 'margin_pct') loanPct = 100 - marginPct;
-        if (changedField === 'loan_pct') marginPct = 100 - loanPct;
-        if (!Number.isFinite(marginPct)) marginPct = defaults.marginPct;
-        marginPct = clamp(marginPct, 0, 100);
-        loanPct = clamp(100 - marginPct, 0, 100);
-
-        const computedLoan = price * (loanPct / 100);
-        const amounts = enforceLoanRules(computedLoan, price, defaults.capLoan);
-        const finalMarginPct = clamp(pctFor(amounts.margin, price), 0, 100);
-        const finalLoanPct = clamp(100 - finalMarginPct, 0, 100);
-
-        setIfAllowed(ctx.marginPctInput, round2(finalMarginPct), { force: true });
-        setIfAllowed(ctx.loanPctInput, round2(finalLoanPct), { force: true });
-        setIfAllowed(ctx.loanRsInput, amounts.loan, { force: true });
-        setIfAllowed(ctx.marginRsInput, amounts.margin, { force: true });
-    };
-
-    const syncScenarioByAmount = (ctx, changedField) => {
-        const price = parseNum(ctx.priceInput?.value);
-        const defaults = getScenarioDefaults(ctx.type);
-        let marginRs = parseNum(ctx.marginRsInput?.value);
-        let loanRs = parseNum(ctx.loanRsInput?.value);
-
-        if (changedField === 'margin_rs') {
-            loanRs = price - marginRs;
-        } else if (changedField === 'loan_rs') {
-            loanRs = parseNum(ctx.loanRsInput?.value);
+        if (mode === 'ratio') {
+            setIfAllowed(interestInput, defaultInterest, {});
+            setIfAllowed(tenureInput, defaultTenure, { noDecimals: true });
         } else {
-            loanRs = fieldEmpty(ctx.loanRsInput) ? price * (defaults.loanPct / 100) : loanRs;
+            if (fieldEmpty(interestInput)) setIfAllowed(interestInput, defaultInterest, {});
+            if (fieldEmpty(tenureInput)) setIfAllowed(tenureInput, defaultTenure, { noDecimals: true });
         }
-
-        const amounts = enforceLoanRules(loanRs, price, defaults.capLoan);
-        marginRs = amounts.margin;
-        loanRs = amounts.loan;
-
-        const finalMarginPct = clamp(pctFor(marginRs, price), 0, 100);
-        const finalLoanPct = clamp(100 - finalMarginPct, 0, 100);
-
-        setIfAllowed(ctx.marginRsInput, marginRs, { force: true });
-        setIfAllowed(ctx.loanRsInput, loanRs, { force: true });
-        setIfAllowed(ctx.marginPctInput, round2(finalMarginPct), { force: true });
-        setIfAllowed(ctx.loanPctInput, round2(finalLoanPct), { force: true });
     };
 
-    const applyScenarioFinanceDefaults = (ctx, changedField) => {
-        const defaults = getScenarioDefaults(ctx.type);
-        const mode = String(ctx.modeInput?.value || 'ratio') === 'manual' ? 'manual' : 'ratio';
-        const isManualAmountChange = changedField === 'margin_rs' || changedField === 'loan_rs';
-
-        if (!isExistingQuote()) {
-            if (fieldEmpty(ctx.marginPctInput)) setIfAllowed(ctx.marginPctInput, defaults.marginPct, {});
-            if (fieldEmpty(ctx.loanPctInput)) setIfAllowed(ctx.loanPctInput, defaults.loanPct, {});
-            if (fieldEmpty(ctx.interestInput)) setIfAllowed(ctx.interestInput, defaults.interest, {});
-            if (fieldEmpty(ctx.tenureInput)) setIfAllowed(ctx.tenureInput, defaults.tenure, { noDecimals: true });
-        } else {
-            if (fieldEmpty(ctx.interestInput)) setIfAllowed(ctx.interestInput, defaults.interest, {});
-            if (fieldEmpty(ctx.tenureInput)) setIfAllowed(ctx.tenureInput, defaults.tenure, { noDecimals: true });
-            if (changedField === 'init') return;
-        }
-
-        if (isManualAmountChange) {
-            if (ctx.modeInput) ctx.modeInput.value = 'manual';
-            syncScenarioByAmount(ctx, changedField);
-            return;
-        }
-        if (changedField === 'margin_pct' || changedField === 'loan_pct') {
-            syncScenarioByPercent(ctx, changedField);
-            return;
-        }
-        if (mode === 'manual') {
-            syncScenarioByAmount(ctx, changedField);
-            return;
-        }
-        syncScenarioByPercent(ctx, changedField);
-    };
-
-    const up2ScenarioCtx = {
-        type: 'up2',
-        priceInput: priceUp2Input,
-        marginPctInput: up2MarginPctInput,
-        loanPctInput: up2LoanPctInput,
-        marginRsInput: up2MarginRsInput,
-        loanRsInput: up2LoanRsInput,
-        interestInput: up2InterestInput,
-        tenureInput: up2TenureInput,
-        modeInput: up2ModeInput
-    };
-    const above2ScenarioCtx = {
-        type: 'above2',
-        priceInput: priceAbove2Input,
-        marginPctInput: above2MarginPctInput,
-        loanPctInput: above2LoanPctInput,
-        marginRsInput: above2MarginRsInput,
-        loanRsInput: above2LoanRsInput,
-        interestInput: above2InterestInput,
-        tenureInput: above2TenureInput,
-        modeInput: above2ModeInput
-    };
-
-    const applyAllScenarioFinanceDefaults = (changedField) => {
+    const applyAllScenarioFinanceDefaults = () => {
         syncSelectedPrimarySystemPrice();
-        applyScenarioFinanceDefaults(up2ScenarioCtx, changedField);
-        applyScenarioFinanceDefaults(above2ScenarioCtx, changedField);
+        applyScenarioFinanceDefaults('up2', priceUp2Input, up2MarginPctInput, up2LoanPctInput, up2MarginRsInput, up2LoanRsInput, up2InterestInput, up2TenureInput, up2ModeInput, LOAN_UPTO_2_LACS_CAP_RS, true);
+        applyScenarioFinanceDefaults('above2', priceAbove2Input, above2MarginPctInput, above2LoanPctInput, above2MarginRsInput, above2LoanRsInput, above2InterestInput, above2TenureInput, above2ModeInput, 0, false);
         syncLegacyLoanFields();
     };
 
@@ -351,30 +261,22 @@
     bindRecalc(capacityInput, () => { applyMonthlySuggestion(false); applySubsidyDefault(false); });
     bindRecalc(unitRateInput, () => applyMonthlySuggestion(false));
     bindRecalc(annualGenerationInput, () => applyMonthlySuggestion(false));
-    bindRecalc(priceUp2Input, () => applyAllScenarioFinanceDefaults('price'));
-    bindRecalc(priceAbove2Input, () => { applyAllScenarioFinanceDefaults('price'); syncScenarioApplicability(); });
+    bindRecalc(priceUp2Input, applyAllScenarioFinanceDefaults);
+    bindRecalc(priceAbove2Input, () => { applyAllScenarioFinanceDefaults(); syncScenarioApplicability(); });
     bindRecalc(priceSelfInput, syncLegacyLoanFields);
-    bindRecalc(transportInput, () => applyAllScenarioFinanceDefaults('price'));
-    bindRecalc(discountInput, () => applyAllScenarioFinanceDefaults('price'));
+    bindRecalc(transportInput, applyAllScenarioFinanceDefaults);
+    bindRecalc(discountInput, applyAllScenarioFinanceDefaults);
 
-    [up2ModeInput, above2ModeInput, up2InterestInput, above2InterestInput, up2TenureInput, above2TenureInput].forEach((el) => {
-        el?.addEventListener('change', () => applyAllScenarioFinanceDefaults('mode'));
+    [up2ModeInput, above2ModeInput, up2MarginPctInput, above2MarginPctInput, up2LoanPctInput, above2LoanPctInput, up2InterestInput, above2InterestInput, up2TenureInput, above2TenureInput, up2LoanRsInput, above2LoanRsInput].forEach((el) => {
+        el?.addEventListener('change', applyAllScenarioFinanceDefaults);
         el?.addEventListener('input', syncLegacyLoanFields);
     });
-    up2MarginPctInput?.addEventListener('input', () => { applyScenarioFinanceDefaults(up2ScenarioCtx, 'margin_pct'); syncLegacyLoanFields(); });
-    up2LoanPctInput?.addEventListener('input', () => { applyScenarioFinanceDefaults(up2ScenarioCtx, 'loan_pct'); syncLegacyLoanFields(); });
-    up2MarginRsInput?.addEventListener('input', () => { applyScenarioFinanceDefaults(up2ScenarioCtx, 'margin_rs'); syncLegacyLoanFields(); });
-    up2LoanRsInput?.addEventListener('input', () => { applyScenarioFinanceDefaults(up2ScenarioCtx, 'loan_rs'); syncLegacyLoanFields(); });
-    above2MarginPctInput?.addEventListener('input', () => { applyScenarioFinanceDefaults(above2ScenarioCtx, 'margin_pct'); syncLegacyLoanFields(); });
-    above2LoanPctInput?.addEventListener('input', () => { applyScenarioFinanceDefaults(above2ScenarioCtx, 'loan_pct'); syncLegacyLoanFields(); });
-    above2MarginRsInput?.addEventListener('input', () => { applyScenarioFinanceDefaults(above2ScenarioCtx, 'margin_rs'); syncLegacyLoanFields(); });
-    above2LoanRsInput?.addEventListener('input', () => { applyScenarioFinanceDefaults(above2ScenarioCtx, 'loan_rs'); syncLegacyLoanFields(); });
     above2ApplicableInput?.addEventListener('change', syncScenarioApplicability);
 
     templateSet?.addEventListener('change', () => {
         applyMonthlySuggestion(false);
         applySubsidyDefault(false);
-        applyAllScenarioFinanceDefaults('template');
+        applyAllScenarioFinanceDefaults();
     });
     primaryScenarioInput?.addEventListener('change', () => {
         syncSelectedPrimarySystemPrice();
@@ -412,7 +314,7 @@
     applyMonthlySuggestion(false);
     applySubsidyDefault(false);
     syncSelectedPrimarySystemPrice();
-    applyAllScenarioFinanceDefaults('init');
+    applyAllScenarioFinanceDefaults();
     syncScenarioApplicability();
     syncLegacyLoanFields();
 })();

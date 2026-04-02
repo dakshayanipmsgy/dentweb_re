@@ -694,8 +694,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $postData = $_POST;
         $buildLoanScenario = static function (string $name, float $price, bool $applicable) use ($postData, $subsidyExpectedRs): array {
             $mode = safe_text((string) ($postData[$name . '_finance_mode'] ?? 'ratio')) === 'manual' ? 'manual' : 'ratio';
-            $defaultMarginRatio = $name === 'loan_upto_2_lacs' ? 10.0 : 20.0;
-            $marginRatio = max(0, min(100, (float) ($postData[$name . '_margin_ratio_pct'] ?? $defaultMarginRatio)));
+            $marginRatio = max(0, min(100, (float) ($postData[$name . '_margin_ratio_pct'] ?? 20)));
             $loanRatio = max(0, min(100, (float) ($postData[$name . '_loan_ratio_pct'] ?? (100 - $marginRatio))));
             if (abs(($marginRatio + $loanRatio) - 100.0) > 0.001) {
                 $loanRatio = max(0, 100 - $marginRatio);
@@ -1264,11 +1263,11 @@ if ($savedAnnualGenerationForEdit === '') {
 <input type="hidden" name="loan_margin_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['margin_pct'] ?? ''), ENT_QUOTES) ?>">
 <div style="grid-column:1/-1"><h3>Loan up to ₹2 lacs</h3></div>
 <div><label>Finance mode</label><select name="loan_upto_2_lacs_finance_mode"><option value="ratio" <?= (($editing['finance_scenarios']['loan_upto_2_lacs']['finance_mode'] ?? 'ratio')==='ratio')?'selected':'' ?>>Ratio</option><option value="manual" <?= (($editing['finance_scenarios']['loan_upto_2_lacs']['finance_mode'] ?? '')==='manual')?'selected':'' ?>>Manual</option></select></div>
-<div><label>Margin %</label><input type="number" step="0.01" name="loan_upto_2_lacs_margin_ratio_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['margin_ratio_pct'] ?? 10), ENT_QUOTES) ?>"></div>
-<div><label>Loan %</label><input type="number" step="0.01" name="loan_upto_2_lacs_loan_ratio_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['loan_ratio_pct'] ?? 90), ENT_QUOTES) ?>"></div>
+<div><label>Margin %</label><input type="number" step="0.01" name="loan_upto_2_lacs_margin_ratio_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['margin_ratio_pct'] ?? 20), ENT_QUOTES) ?>"></div>
+<div><label>Loan %</label><input type="number" step="0.01" name="loan_upto_2_lacs_loan_ratio_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['loan_ratio_pct'] ?? 80), ENT_QUOTES) ?>"></div>
 <div><label>Margin ₹</label><input type="number" step="0.01" name="loan_upto_2_lacs_margin_money_rs" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['margin_money_rs'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Loan ₹</label><input type="number" step="0.01" name="loan_upto_2_lacs_loan_amount_rs" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['loan_amount_rs'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Interest %</label><input type="number" step="0.01" name="loan_upto_2_lacs_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['interest_pct'] ?? ($editing['finance_inputs']['loan']['interest_pct'] ?? 5.75)), ENT_QUOTES) ?>"></div>
+<div><label>Interest %</label><input type="number" step="0.01" name="loan_upto_2_lacs_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['interest_pct'] ?? ($editing['finance_inputs']['loan']['interest_pct'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Tenure years</label><input type="number" step="0.01" name="loan_upto_2_lacs_tenure_years" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_upto_2_lacs']['tenure_years'] ?? ($editing['finance_inputs']['loan']['tenure_years'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><h3>Loan above ₹2 lacs</h3></div>
 <div><label>Finance mode</label><select name="loan_above_2_lacs_finance_mode"><option value="ratio" <?= (($editing['finance_scenarios']['loan_above_2_lacs']['finance_mode'] ?? 'ratio')==='ratio')?'selected':'' ?>>Ratio</option><option value="manual" <?= (($editing['finance_scenarios']['loan_above_2_lacs']['finance_mode'] ?? '')==='manual')?'selected':'' ?>>Manual</option></select></div>
@@ -1276,7 +1275,7 @@ if ($savedAnnualGenerationForEdit === '') {
 <div><label>Loan %</label><input type="number" step="0.01" name="loan_above_2_lacs_loan_ratio_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['loan_ratio_pct'] ?? 80), ENT_QUOTES) ?>"></div>
 <div><label>Margin ₹</label><input type="number" step="0.01" name="loan_above_2_lacs_margin_money_rs" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['margin_money_rs'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Loan ₹</label><input type="number" step="0.01" name="loan_above_2_lacs_loan_amount_rs" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['loan_amount_rs'] ?? ''), ENT_QUOTES) ?>"></div>
-<div><label>Interest %</label><input type="number" step="0.01" name="loan_above_2_lacs_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['interest_pct'] ?? 8.15), ENT_QUOTES) ?>"></div>
+<div><label>Interest %</label><input type="number" step="0.01" name="loan_above_2_lacs_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['interest_pct'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Tenure years</label><input type="number" step="0.01" name="loan_above_2_lacs_tenure_years" value="<?= htmlspecialchars((string)($editing['finance_scenarios']['loan_above_2_lacs']['tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><h3>Typography & Watermark Overrides</h3></div>
 <div><label>Base font px</label><input type="number" step="1" name="style_base_font_px" value="<?= htmlspecialchars((string)($editing['style_overrides']['typography']['base_font_px'] ?? ''), ENT_QUOTES) ?>"></div>
