@@ -178,7 +178,7 @@ $defaults = $settings['defaults'] ?? [];
     const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
     const glancePanel=document.getElementById('glancePanel'),paybackMeters=document.getElementById('paybackMeters'),financeBoxes=document.getElementById('financeBoxes'),waQuote=document.getElementById('waQuote');
     let latestSnapshot=null, latestReportUrl='';
-    let autoQuoteState={quoteId:'',quoteViewUrl:'',mobileKey:'',lastSyncHash:'',timer:null,inFlight:false};
+    let autoQuoteState={quoteId:'',quoteViewUrl:'',mobileKey:'',lastSyncHash:'',timer:null,inFlight:false,inFlightPromise:null,inFlightReason:''};
 
     const num=(v,fallback=0)=>{const n=Number(v); return Number.isFinite(n)?n:fallback;};
     const floorRecommendedSize=v=>{
@@ -256,17 +256,28 @@ $defaults = $settings['defaults'] ?? [];
     async function syncAutoQuotation(reason='',opts={}){
       const force=Boolean(opts?.force);
       const createNewQuote=Boolean(opts?.createNewQuote);
-      if(autoQuoteState.inFlight) return;
+      const allowCreate=Boolean(opts?.allowCreate);
+      const wantsManualCreate=createNewQuote||allowCreate;
+      if(autoQuoteState.inFlight){
+        if(wantsManualCreate && autoQuoteState.inFlightPromise){
+          try{ await autoQuoteState.inFlightPromise; }catch(_e){}
+        }else{
+          return autoQuoteState.inFlightPromise;
+        }
+      }
       if(!latestSnapshot || document.getElementById('results').hidden) return;
       const name=(el.customerName.value||'').trim();
       const location=(el.customerLocation.value||'').trim();
       const normalizedMobile=normalizeIndianMobile(el.customerMobile.value||'');
       if(!name||!location||!normalizedMobile) return;
+      const linkedQuoteId=createNewQuote?'':(autoQuoteState.quoteId||'');
+      if(!allowCreate && !linkedQuoteId) return {success:true,action:'skipped_no_linked_quote'};
       const snapshot={...latestSnapshot,customer:{name,location,mobile_normalized:normalizedMobile,mobile_raw:(el.customerMobile.value||'').trim()}};
       const payload={
         ...snapshot,
-        linked_quote_id:createNewQuote?'':(autoQuoteState.quoteId||''),
+        linked_quote_id:linkedQuoteId,
         create_new_quote:createNewQuote,
+        allow_create:allowCreate,
         sync_reason:reason||'input'
       };
       const nextMobileKey=mobileKey(normalizedMobile);
@@ -290,21 +301,30 @@ $defaults = $settings['defaults'] ?? [];
       ]);
       if(!force && autoQuoteState.lastSyncHash===syncHash && autoQuoteState.mobileKey===nextMobileKey) return;
       autoQuoteState.inFlight=true;
-      try{
+      autoQuoteState.inFlightReason=reason||'';
+      const requestPromise=(async()=>{
         const res=await fetch('/solar-and-finance-auto-quotation.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
         const data=await res.json();
         if(res.ok && data?.success){
-          autoQuoteState.quoteId=String(data.quote_id||autoQuoteState.quoteId||'');
-          autoQuoteState.quoteViewUrl=String(data.quote_view_url||autoQuoteState.quoteViewUrl||'');
-          autoQuoteState.mobileKey=nextMobileKey;
-          autoQuoteState.lastSyncHash=syncHash;
+          if(String(data.action||'')!=='skipped_no_linked_quote'){
+            autoQuoteState.quoteId=String(data.quote_id||autoQuoteState.quoteId||'');
+            autoQuoteState.quoteViewUrl=String(data.quote_view_url||autoQuoteState.quoteViewUrl||'');
+            autoQuoteState.mobileKey=nextMobileKey;
+            autoQuoteState.lastSyncHash=syncHash;
+          }
           return data;
         }
         return data;
+      })();
+      autoQuoteState.inFlightPromise=requestPromise;
+      try{
+        return await requestPromise;
       }catch(_err){
         return null;
       }finally{
         autoQuoteState.inFlight=false;
+        autoQuoteState.inFlightPromise=null;
+        autoQuoteState.inFlightReason='';
       }
     }
     function scheduleAutoQuotationSync(reason=''){
@@ -657,11 +677,11 @@ $defaults = $settings['defaults'] ?? [];
         alert(el.customerError.textContent||'Please enter customer details.');
         return;
       }
-      if(autoQuoteState.quoteId){
-        autoQuoteState.quoteId='';
-        autoQuoteState.quoteViewUrl='';
-      }
       const popup=window.open('about:blank','_blank','noopener');
+      if(popup){
+        popup.document.title='Preparing Quotation';
+        popup.document.body.innerHTML='<div style="font-family:Arial,sans-serif;padding:24px;color:#0f172a;">Preparing your quotation…</div>';
+      }
       if(!latestSnapshot) return;
       latestSnapshot.customer={
         name:customerDetails.name,
@@ -670,7 +690,7 @@ $defaults = $settings['defaults'] ?? [];
         mobile_raw:(el.customerMobile.value||'').trim()
       };
       try{
-        const data=await syncAutoQuotation('manual_generate_quotation',{force:true,createNewQuote:true});
+        const data=await syncAutoQuotation('manual_generate_quotation',{force:true,createNewQuote:true,allowCreate:true});
         const quoteId=String(data?.quote_id||autoQuoteState.quoteId||'');
         const viewUrl=getQuoteViewUrl(quoteId, String(data?.quote_view_url||autoQuoteState.quoteViewUrl||''));
         if(!viewUrl){
@@ -691,7 +711,7 @@ $defaults = $settings['defaults'] ?? [];
       debouncedIds.forEach(clearUserEdited);
       [el.inverterKva,el.phase,el.batteryCount].forEach(node=>{node.innerHTML='';});
       setField('customerName',''); setField('customerLocation',''); setField('customerMobile','');
-      autoQuoteState={quoteId:'',quoteViewUrl:'',mobileKey:'',lastSyncHash:'',timer:null,inFlight:false};
+      autoQuoteState={quoteId:'',quoteViewUrl:'',mobileKey:'',lastSyncHash:'',timer:null,inFlight:false,inFlightPromise:null,inFlightReason:''};
       latestSnapshot=null; latestReportUrl=''; setCustomerError('');
       clearResults();
       recalculateSolarFinance({changedField:'reset'});
