@@ -722,6 +722,19 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         }
         return (int) round((float) $value);
     };
+    $hasScalarValue = static function (array $row, string $key): bool {
+        if (!array_key_exists($key, $row)) {
+            return false;
+        }
+        $value = $row[$key];
+        if ($value === null) {
+            return false;
+        }
+        if (is_string($value) && trim($value) === '') {
+            return false;
+        }
+        return true;
+    };
     $formatPaybackMonths = static function (int $months): string {
         if ($months <= 0) {
             return '—';
@@ -793,6 +806,9 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         $isSelfFunded = $scenarioKey === 'self_funded';
         $isSubsidyNotToLoan = str_contains($scenarioKey, 'subsidy_not_to_loan');
         $isAbove2 = str_contains($scenarioKey, 'loan_above_2_lacs');
+        $defaultMarginRatio = $isSelfFunded ? 0.0 : ($isAbove2 ? 20.0 : 10.0);
+        $defaultLoanRatio = $isSelfFunded ? 0.0 : ($isAbove2 ? 80.0 : 90.0);
+        $defaultInterestPct = $isSelfFunded ? 0.0 : ($isAbove2 ? 8.15 : 5.75);
         $priceFallback = $scenarioPrices[$scenarioKey]['price']
             ?? ($isAbove2 ? ($scenarioPrices['loan_above_2_lacs']['price'] ?? 0) : ($scenarioPrices['loan_upto_2_lacs']['price'] ?? 0));
         if ($isSelfFunded) {
@@ -800,11 +816,17 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         }
         $price = max(0, $toFloat($row['price'] ?? $priceFallback ?? $grossFallback));
         $scenarioSubsidy = max(0, $toFloat($row['subsidy'] ?? $subsidy));
-        $interestPct = max(0, $toFloat($row['interest_pct'] ?? $snapshot['loan_interest_rate_percent'] ?? 0));
+        $interestPct = max(0, $toFloat($hasScalarValue($row, 'interest_pct') ? $row['interest_pct'] : $defaultInterestPct));
         $tenureMonths = max(1, $toInt($row['tenure_months'] ?? null, (int) round(max(0, $toFloat($row['tenure_years'] ?? null, 10)) * 12)));
         $tenureYears = $tenureMonths / 12;
         $marginMoney = max(0, $toFloat($row['margin_money_rs'] ?? 0));
         $loanAmount = max(0, $toFloat($row['loan_amount_rs'] ?? 0));
+        $loanRatioPct = max(0, min(100, $toFloat($hasScalarValue($row, 'loan_ratio_pct') ? $row['loan_ratio_pct'] : $defaultLoanRatio)));
+        $marginRatioPct = max(0, min(100, $toFloat($hasScalarValue($row, 'margin_ratio_pct') ? $row['margin_ratio_pct'] : (100 - $loanRatioPct))));
+        if (abs(($loanRatioPct + $marginRatioPct) - 100.0) > 0.001) {
+            $loanRatioPct = max(0, min(100, 100 - $marginRatioPct));
+        }
+        $financeMode = (string) ($row['finance_mode'] ?? 'ratio') === 'manual' ? 'manual' : 'ratio';
         $scenarioResidual = $residualBill;
         $applicable = $isAbove2
             ? solar_finance_is_above_2_lacs_applicable($price)
@@ -814,7 +836,7 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         $emi = 0.0;
         if (!$isSelfFunded) {
             if ($marginMoney <= 0 && $loanAmount <= 0) {
-                $loanAmount = max(0, $price * solar_finance_loan_above_2_lacs_threshold_ratio());
+                $loanAmount = max(0, $price * ($loanRatioPct / 100));
                 $marginMoney = max(0, $price - $loanAmount);
             }
             if (!$isAbove2) {
@@ -822,6 +844,8 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
                 $loanAmount = (float) $capped['loan_amount_rs'];
                 $marginMoney = (float) $capped['margin_money_rs'];
             }
+            $marginRatioPct = $price > 0 ? max(0, min(100, ($marginMoney / $price) * 100)) : $defaultMarginRatio;
+            $loanRatioPct = max(0, min(100, 100 - $marginRatioPct));
             if ($isSubsidyNotToLoan) {
                 $remainingSubsidy = max(0, $scenarioSubsidy - $marginMoney);
                 $effectivePrincipal = max(0, $loanAmount - $remainingSubsidy);
@@ -877,6 +901,9 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
             'is_primary' => $primaryScenario === $scenarioKey,
             'net_investment_after_subsidy' => $isSelfFunded ? max(0, $price - $scenarioSubsidy) : max(0, $price - $scenarioSubsidy),
             'net_own_investment_after_subsidy' => $isSelfFunded ? max(0, $price - $scenarioSubsidy) : $initialInvestment,
+            'finance_mode' => $financeMode,
+            'margin_ratio_pct' => $marginRatioPct,
+            'loan_ratio_pct' => $loanRatioPct,
         ];
     }
 
