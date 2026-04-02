@@ -986,8 +986,6 @@ function create_or_update_solar_finance_quote(array $payload): array
     $loanTenureYears = max(0, (float) ($inputs['loan_tenure_years'] ?? 0));
 
     $linkedQuoteId = safe_text((string) ($payload['linked_quote_id'] ?? ''));
-    $createNewQuote = (bool) ($payload['create_new_quote'] ?? false);
-    $allowCreate = (bool) ($payload['allow_create'] ?? false);
     $existing = null;
     if ($linkedQuoteId !== '') {
         $linked = documents_get_quote($linkedQuoteId);
@@ -998,14 +996,6 @@ function create_or_update_solar_finance_quote(array $payload): array
                 $existing = $linked;
             }
         }
-    }
-
-    if (!is_array($existing) && !$createNewQuote && !$allowCreate) {
-        return [
-            'success' => true,
-            'action' => 'skipped_no_linked_quote',
-            'message' => 'No linked quotation available for auto-sync update.',
-        ];
     }
 
     if (is_array($existing) && !($existing['auto_sync_enabled'] ?? true)) {
