@@ -109,7 +109,7 @@
         return settingsBySegment[code] || settingsBySegment.RES || {
             unit_rate_rs_per_kwh: 0,
             annual_generation_per_kw: safeDefaultEnergy,
-            loan_bestcase: { max_loan_rs: 200000, interest_pct: 6, tenure_years: 10, min_margin_pct: 10 }
+            loan_bestcase: { tenure_years: 10, min_margin_pct: 10 }
         };
     };
 
