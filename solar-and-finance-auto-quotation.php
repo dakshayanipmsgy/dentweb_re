@@ -17,7 +17,7 @@ try {
         http_response_code(422);
         echo json_encode([
             'success' => false,
-            'message' => (string) ($result['message'] ?? 'Unable to auto-create quotation.'),
+            'message' => (string) ($result['message'] ?? 'Unable to process quotation sync.'),
         ]);
         exit;
     }
@@ -36,6 +36,6 @@ try {
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'message' => 'Unable to auto-create quotation.',
+        'message' => 'Unable to process quotation sync.',
     ]);
 }
