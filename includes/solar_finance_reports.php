@@ -800,11 +800,7 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         }
         $price = max(0, $toFloat($row['price'] ?? $priceFallback ?? $grossFallback));
         $scenarioSubsidy = max(0, $toFloat($row['subsidy'] ?? $subsidy));
-        $defaultScenarioInterest = $isSelfFunded ? 0.0 : ($isAbove2 ? 8.15 : 5.75);
-        $interestRaw = $row['interest_pct'] ?? null;
-        $interestPct = ($interestRaw === null || (is_string($interestRaw) && trim($interestRaw) === ''))
-            ? $defaultScenarioInterest
-            : max(0, $toFloat($interestRaw, $defaultScenarioInterest));
+        $interestPct = max(0, $toFloat($row['interest_pct'] ?? $snapshot['loan_interest_rate_percent'] ?? 0));
         $tenureMonths = max(1, $toInt($row['tenure_months'] ?? null, (int) round(max(0, $toFloat($row['tenure_years'] ?? null, 10)) * 12)));
         $tenureYears = $tenureMonths / 12;
         $marginMoney = max(0, $toFloat($row['margin_money_rs'] ?? 0));
