@@ -1372,14 +1372,14 @@ $quoteShareMobile = $quotationExtractMobile($q);
     if(grid){
       const sections=[
         {title:'Section 1 — Basic Details', names:['Template Set','Party Type','Mobile','Name']},
-        {title:'Section 2 — System & Quotation Basics', names:['System Type','Capacity kWp','Quotation Date','Valid Until']},
+        {title:'Section 2 — System & Quotation Basics', names:['System Type','Capacity kWp','Quotation Date','Valid Until','Pricing Mode','Tax Profile']},
         {title:'Section 3 — Customer & Site Details', names:['Billing Address','Site Address','District','City','State','PIN','Consumer Account No. (JBVNL)','Meter Number','Meter Serial Number','Application ID','Application Submitted Date','Sanction Load (kWp)','Installed PV Capacity (kWp)','Circle','Division','Sub Division']},
         {title:'Section 4 — Item Builder', containsHeadings:['Items Table','Item Builder (Structured)']},
         {title:'Section 5 — Solar & Savings Base Inputs', names:['Main Solar Size (kWp)','Complimentary Non-DCR Solar Size (kWp)','Total System Capacity (kWp)','Monthly electricity bill (₹)','Unit rate (₹/kWh)','Annual generation per kW','Transportation ₹','Discount (₹)','Discount note','Subsidy ₹'], containsHeadings:['Customer Savings Inputs'], className:'savings'},
-        {title:'Section 6 — Funding Scenario Prices', names:['Self Funded Price ₹','Loan up to ₹2 lacs Price ₹','Loan above ₹2 lacs Price ₹','Primary Finance Scenario'], className:'funding-prices'},
-        {title:'Section 7 — Funding Scenario Finance Inputs', names:['Finance mode','Margin %','Loan %','Margin ₹','Loan ₹','Interest %','Tenure years'], containsHeadings:['Loan up to ₹2 lacs','Loan above ₹2 lacs'], className:'funding-inputs'},
+        {title:'Section 6 — Scenario Prices', names:['Self Funded Price ₹','Loan up to ₹2 lacs Price ₹','Loan above ₹2 lacs Price ₹','Primary Finance Scenario'], containsHeadings:['Section 6 — Scenario Prices'], className:'funding-prices'},
+        {title:'Section 7 — Funding Scenario Financial Inputs', names:['Selected Primary Scenario Price (including GST) ₹','Finance mode','Margin %','Loan %','Margin ₹','Loan ₹','Interest %','Tenure years'], containsHeadings:['Section 7 — Funding Scenario Financial Inputs','Loan up to ₹2 lacs','Loan above ₹2 lacs'], className:'funding-inputs'},
         {title:'Section 8 — Hybrid Configuration', names:['Hybrid Inverter (kVA)','Hybrid Phase','Hybrid Battery Count'], className:'hybrid-config'},
-        {title:'Section 9 — Annexure Overrides', names:['Cover Notes','System Inclusions','Payment Terms','Warranty','System Type Explainer','Transportation','Terms & Conditions','PM Subsidy Info','Completion Milestones','Next Steps'], containsHeadings:['Annexure Overrides']},
+        {title:'Section 9 — Annexure Overrides', names:['Cover Notes','System Inclusions','Payment Terms','Warranty','System Type Explainer','Transportation','Terms & Conditions','PM Subsidy Info','Completion Milestones','Next Steps','Base font px','Heading scale','Density','Watermark image path'], containsHeadings:['Annexure Overrides','Typography & Watermark Overrides']},
       ];
 
       const controls=[...grid.children];
@@ -1391,39 +1391,74 @@ $quoteShareMobile = $quotationExtractMobile($q);
 
       const getLabel=(node)=>{const label=node.querySelector(':scope > label');return (label?.textContent||'').trim();};
       const isHeadingBlock=(node,texts)=>{const h=node.querySelector('h3');if(!h)return false;const t=(h.textContent||'').trim();return texts.some(x=>t.includes(x));};
+      const getFieldNames=(node)=>[...node.querySelectorAll('input[name],select[name],textarea[name]')].map((el)=>(el.getAttribute('name')||'').trim()).filter(Boolean);
+      const hasFieldName=(node,name)=>getFieldNames(node).includes(name);
+      const hasFieldPrefix=(node,prefix)=>getFieldNames(node).some((field)=>field.startsWith(prefix));
+      const SECTION_CUSTOMER=2;
+      const SECTION_ITEMS=3;
+      const SECTION_SAVINGS=4;
+      const SECTION_SCENARIO_PRICES=5;
+      const SECTION_FUNDING_INPUTS=6;
+      const SECTION_HYBRID=7;
+      const SECTION_ANNEXURE=8;
 
       controls.forEach((node)=>{
         if(node.tagName==='INPUT' && node.type==='hidden')return;
+        if(isHeadingBlock(node,['Section 6 — Scenario Prices','Section 7 — Funding Scenario Financial Inputs']))return;
         const label=getLabel(node);
-        let target=sectionCards[2];
+        let target=sectionCards[SECTION_CUSTOMER];
+
+        if(
+          hasFieldName(node,'primary_finance_scenario') ||
+          hasFieldName(node,'scenario_price_self_funded') ||
+          hasFieldName(node,'scenario_price_loan_upto_2_lacs') ||
+          hasFieldName(node,'scenario_price_loan_above_2_lacs')
+        ){
+          target=sectionCards[SECTION_SCENARIO_PRICES];
+        }else if(
+          hasFieldName(node,'system_total_incl_gst_rs') ||
+          hasFieldName(node,'loan_upto_2_lacs_applicable') ||
+          hasFieldName(node,'loan_above_2_lacs_applicable') ||
+          hasFieldPrefix(node,'loan_upto_2_lacs_') ||
+          hasFieldPrefix(node,'loan_above_2_lacs_')
+        ){
+          target=sectionCards[SECTION_FUNDING_INPUTS];
+        }else if(
+          hasFieldName(node,'hybrid_inverter_kva') ||
+          hasFieldName(node,'hybrid_phase') ||
+          hasFieldName(node,'hybrid_battery_count')
+        ){
+          target=sectionCards[SECTION_HYBRID];
+        }
+
         if(node.id==='splitCapacityFields'){
-          target=sectionCards[4];
+          target=sectionCards[SECTION_SAVINGS];
         }
         for(const sec of sectionCards){
           if((sec.cfg.names||[]).includes(label)){target=sec;break;}
           if((sec.cfg.containsHeadings||[]).length && isHeadingBlock(node,sec.cfg.containsHeadings)){target=sec;break;}
         }
-        if(label==='Project Summary' || label==='Special Requests From Consumer (Inclusive in the rate)' || label==='Place of Supply State'){ target=sectionCards[2]; }
+        if(label==='Project Summary' || label==='Special Requests From Consumer (Inclusive in the rate)' || label==='Place of Supply State'){ target=sectionCards[SECTION_CUSTOMER]; }
         if((label.includes('Address') || label.includes('Summary') || label.includes('Special Requests')) && node.style.gridColumn!=='1/-1'){node.classList.add('full-span');}
-        if(node.querySelector('table') || isHeadingBlock(node,['Item Builder (Structured)','Annexure Overrides']) || node.querySelector('textarea')){ if((sectionCards[3].inner===target.inner || sectionCards[6].inner===target.inner)){node.classList.add('full-span');} }
+        if(node.querySelector('table') || isHeadingBlock(node,['Item Builder (Structured)','Annexure Overrides']) || node.querySelector('textarea')){ if((sectionCards[SECTION_ITEMS].inner===target.inner || sectionCards[SECTION_FUNDING_INPUTS].inner===target.inner)){node.classList.add('full-span');} }
         target.inner.appendChild(node);
       });
 
-      const savingsSection=sectionCards[4];
+      const savingsSection=sectionCards[SECTION_SAVINGS];
       if(savingsSection){
         const note=document.createElement('div');
         note.className='full-span muted';
         note.textContent='These are the common inputs used to calculate savings, residual bill, monthly outflow, cumulative expense, and payback.';
         savingsSection.inner.insertBefore(note,savingsSection.inner.firstChild);
       }
-      const fundingPricesSection=sectionCards[5];
+      const fundingPricesSection=sectionCards[SECTION_SCENARIO_PRICES];
       if(fundingPricesSection){
         const note=document.createElement('div');
         note.className='full-span muted';
         note.textContent='These are the scenario-wise system prices used for quotation comparisons.';
         fundingPricesSection.inner.insertBefore(note,fundingPricesSection.inner.firstChild);
       }
-      const fundingInputsSection=sectionCards[6];
+      const fundingInputsSection=sectionCards[SECTION_FUNDING_INPUTS];
       if(fundingInputsSection){
         const note=document.createElement('div');
         note.className='full-span muted';
