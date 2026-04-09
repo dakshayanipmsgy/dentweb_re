@@ -2111,6 +2111,8 @@ function documents_calc_quote_pricing_with_tax_profile(array $quote, float $tran
     $grossPayable = $grossPayableBeforeDiscount - $discountRs;
     $discountNote = safe_text((string) ($quote['discount_note'] ?? $quote['finance_inputs']['discount_note'] ?? ''));
     $subsidyExpectedRs = max(0, $subsidyExpectedRs);
+    $itemTaxBreakup = documents_calc_quote_item_tax_breakup($quote, $profile, $breakdown);
+
     $calc = [
         'basic_total' => documents_money_round((float) ($breakdown['basic_total'] ?? 0)),
         'bucket_5_basic' => documents_money_round($bucket5Basic),
@@ -2126,6 +2128,8 @@ function documents_calc_quote_pricing_with_tax_profile(array $quote, float $tran
             'gst_total' => documents_money_round((float) ($breakdown['gst_total'] ?? 0)),
             'gross_incl_gst' => documents_money_round((float) ($breakdown['gross_incl_gst'] ?? 0)),
             'gst_by_rate' => array_values($gstByRate),
+            'items' => array_values((array) ($itemTaxBreakup['items'] ?? [])),
+            'item_allocation_basis' => (string) ($itemTaxBreakup['allocation_basis'] ?? 'none'),
         ],
         'gst_split' => [
             'cgst_5' => 0.0,
@@ -2157,6 +2161,197 @@ function documents_calc_quote_pricing_with_tax_profile(array $quote, float $tran
     }
 
     return $calc;
+}
+
+function documents_calc_quote_item_tax_breakup(array $quote, array $taxProfile, array $taxBreakdown): array
+{
+    $basicTotal = max(0, (float) ($taxBreakdown['basic_total'] ?? 0));
+    if ($basicTotal <= 0) {
+        return ['items' => [], 'allocation_basis' => 'none'];
+    }
+
+    $legacyItems = documents_normalize_quote_items(
+        is_array($quote['items'] ?? null) ? $quote['items'] : [],
+        (string) ($quote['system_type'] ?? 'Ongrid'),
+        (float) ($quote['capacity_kwp'] ?? 0),
+        '8541'
+    );
+    $structuredItems = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
+
+    $sourceRows = [];
+    $allocationBasis = 'none';
+
+    foreach ($legacyItems as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $name = safe_text((string) ($row['name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+        $sourceRows[] = [
+            'name' => $name,
+            'hsn' => safe_text((string) ($row['hsn'] ?? '')),
+            'qty' => max(0, (float) ($row['qty'] ?? 0)),
+            'weight' => max(0, (float) ($row['basic_amount'] ?? 0)),
+            'gst_slab' => safe_text((string) ($row['gst_slab'] ?? '')),
+            'explicit_slabs' => is_array($row['slabs'] ?? null) ? $row['slabs'] : [],
+        ];
+    }
+
+    $weightTotal = 0.0;
+    foreach ($sourceRows as $row) {
+        $weightTotal += (float) ($row['weight'] ?? 0);
+    }
+    if ($weightTotal > 0) {
+        $allocationBasis = 'basic_amount';
+    } else {
+        $sourceRows = [];
+    }
+
+    if ($sourceRows === []) {
+        foreach ($structuredItems as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $name = safe_text((string) ($row['name_snapshot'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $sourceRows[] = [
+                'name' => $name,
+                'hsn' => safe_text((string) ($row['hsn_snapshot'] ?? '')),
+                'qty' => max(0, (float) ($row['qty'] ?? 0)),
+                'weight' => max(0, (float) ($row['qty'] ?? 0)),
+                'gst_slab' => '',
+                'explicit_slabs' => [],
+            ];
+        }
+        $allocationBasis = 'quantity';
+        $weightTotal = 0.0;
+        foreach ($sourceRows as $row) {
+            $weightTotal += (float) ($row['weight'] ?? 0);
+        }
+    }
+
+    if ($sourceRows === [] || $weightTotal <= 0) {
+        return ['items' => [], 'allocation_basis' => 'none'];
+    }
+
+    $profileSlabs = [];
+    foreach ((array) ($taxProfile['slabs'] ?? []) as $slab) {
+        if (!is_array($slab)) {
+            continue;
+        }
+        $sharePct = max(0, (float) ($slab['share_pct'] ?? 0));
+        $ratePct = max(0, (float) ($slab['rate_pct'] ?? 0));
+        if ($sharePct <= 0) {
+            continue;
+        }
+        $profileSlabs[] = ['share_pct' => $sharePct, 'rate_pct' => $ratePct];
+    }
+    if ($profileSlabs === []) {
+        $profileSlabs[] = ['share_pct' => 100.0, 'rate_pct' => 0.0];
+    }
+
+    $items = [];
+    $itemCount = count($sourceRows);
+    $allocatedBasic = 0.0;
+    $allocatedGst = 0.0;
+    $grandGstTotal = max(0, (float) ($taxBreakdown['gst_total'] ?? 0));
+    foreach ($sourceRows as $idx => $source) {
+        $isLastItem = $idx === ($itemCount - 1);
+        $itemBasic = $isLastItem
+            ? documents_money_round($basicTotal - $allocatedBasic)
+            : documents_money_round($basicTotal * (((float) ($source['weight'] ?? 0)) / $weightTotal));
+        $allocatedBasic += $itemBasic;
+
+        $itemSlabs = [];
+        $explicitSlabs = [];
+        foreach ((array) ($source['explicit_slabs'] ?? []) as $explicit) {
+            if (!is_array($explicit)) {
+                continue;
+            }
+            $share = max(0, (float) ($explicit['share_pct'] ?? 0));
+            $rate = max(0, (float) ($explicit['rate_pct'] ?? 0));
+            if ($share <= 0) {
+                continue;
+            }
+            $explicitSlabs[] = ['share_pct' => $share, 'rate_pct' => $rate];
+        }
+
+        if ($explicitSlabs !== []) {
+            $itemSlabs = $explicitSlabs;
+        } else {
+            $slabRate = safe_text((string) ($source['gst_slab'] ?? ''));
+            if ($slabRate !== '' && strtoupper($slabRate) !== 'NA') {
+                $itemSlabs[] = ['share_pct' => 100.0, 'rate_pct' => max(0, (float) $slabRate)];
+            } else {
+                $itemSlabs = $profileSlabs;
+            }
+        }
+
+        $slabShareTotal = 0.0;
+        foreach ($itemSlabs as $slab) {
+            $slabShareTotal += (float) ($slab['share_pct'] ?? 0);
+        }
+        if ($slabShareTotal <= 0) {
+            $itemSlabs = [['share_pct' => 100.0, 'rate_pct' => 0.0]];
+            $slabShareTotal = 100.0;
+        }
+
+        $computedSlabs = [];
+        $itemGst = 0.0;
+        $itemBasicDistributed = 0.0;
+        $itemSlabCount = count($itemSlabs);
+        foreach ($itemSlabs as $slabIdx => $slab) {
+            $isLastSlab = $slabIdx === ($itemSlabCount - 1);
+            $sharePct = max(0, (float) ($slab['share_pct'] ?? 0));
+            $shareFraction = $slabShareTotal > 0 ? ($sharePct / $slabShareTotal) : 0;
+            $slabBasic = $isLastSlab
+                ? documents_money_round($itemBasic - $itemBasicDistributed)
+                : documents_money_round($itemBasic * $shareFraction);
+            $itemBasicDistributed += $slabBasic;
+            $slabRatePct = max(0, (float) ($slab['rate_pct'] ?? 0));
+            $slabGst = documents_money_round($slabBasic * ($slabRatePct / 100));
+            $itemGst += $slabGst;
+            $computedSlabs[] = [
+                'share_pct' => $sharePct,
+                'rate_pct' => $slabRatePct,
+                'taxable_value' => $slabBasic,
+                'gst_amount' => $slabGst,
+            ];
+        }
+
+        $itemGst = documents_money_round($itemGst);
+        if ($isLastItem) {
+            $itemGst = documents_money_round($grandGstTotal - $allocatedGst);
+        }
+        $allocatedGst += $itemGst;
+
+        if ($computedSlabs !== []) {
+            $slabGstTotal = 0.0;
+            foreach ($computedSlabs as $entry) {
+                $slabGstTotal += (float) ($entry['gst_amount'] ?? 0);
+            }
+            $slabGstDiff = documents_money_round($itemGst - $slabGstTotal);
+            if (abs($slabGstDiff) >= 0.01) {
+                $last = count($computedSlabs) - 1;
+                $computedSlabs[$last]['gst_amount'] = documents_money_round((float) ($computedSlabs[$last]['gst_amount'] ?? 0) + $slabGstDiff);
+            }
+        }
+
+        $items[] = [
+            'name' => (string) ($source['name'] ?? ''),
+            'hsn' => (string) ($source['hsn'] ?? ''),
+            'taxable_value' => documents_money_round($itemBasic),
+            'gst_amount' => documents_money_round($itemGst),
+            'gross_incl_gst' => documents_money_round($itemBasic + $itemGst),
+            'slabs' => $computedSlabs,
+        ];
+    }
+
+    return ['items' => $items, 'allocation_basis' => $allocationBasis];
 }
 
 function documents_calc_pricing(float $grandTotal, string $pricingMode, string $taxType): array
