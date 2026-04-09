@@ -768,6 +768,24 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         }
         return $horizon + 1;
     };
+    $readFloat = static function ($value): ?float {
+        if ($value === null) {
+            return null;
+        }
+        if (is_string($value) && trim($value) === '') {
+            return null;
+        }
+        return (float) $value;
+    };
+    $resolvePreferredFloat = static function (array $candidates, ?float $default = null) use ($readFloat): ?float {
+        foreach ($candidates as $candidate) {
+            $value = $readFloat($candidate);
+            if ($value !== null) {
+                return $value;
+            }
+        }
+        return $default;
+    };
 
     $supportedPrimary = array_merge(array_keys(solar_finance_supported_scenario_labels()), ['loan_upto_2_lacs', 'loan_above_2_lacs']);
     $primaryScenario = (string) ($quote['primary_finance_scenario'] ?? 'loan_upto_2_lacs_subsidy_to_loan');
@@ -782,17 +800,71 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
 
     $scenarioPrices = is_array($quote['scenario_prices'] ?? null) ? $quote['scenario_prices'] : [];
     $financeScenariosRaw = is_array($quote['finance_scenarios'] ?? null) ? $quote['finance_scenarios'] : [];
+    $customerSavingsInputs = is_array($quote['customer_savings_inputs'] ?? null) ? $quote['customer_savings_inputs'] : [];
+    $financeInputs = is_array($quote['finance_inputs'] ?? null) ? $quote['finance_inputs'] : [];
+    $quoteDefaults = documents_get_quote_defaults_settings();
+    $segments = is_array($quoteDefaults['segments'] ?? null) ? $quoteDefaults['segments'] : [];
+    $segmentCode = strtoupper(trim((string) ($quote['segment'] ?? 'RES')));
+    $segmentDefaults = is_array($segments[$segmentCode] ?? null) ? $segments[$segmentCode] : [];
+    $fallbackResDefaults = is_array($segments['RES'] ?? null) ? $segments['RES'] : [];
     $grossFallback = max(0, $toFloat($calc['gross_payable'] ?? ($calc['gross_payable_before_discount'] ?? 0)));
     $subsidy = max(0, $toFloat($calc['subsidy_expected_rs'] ?? 0));
-    $capacity = max(0, $toFloat($quote['capacity_kwp'] ?? $quote['system_capacity_kwp'] ?? 0));
-    $tariff = max(0.1, $toFloat($snapshot['unit_rate_rs_per_kwh'] ?? null, 1));
-    $annualGeneration = max(0, $toFloat($snapshot['annual_generation_kwh_per_kw'] ?? null, 0));
+    $capacityPrimary = $resolvePreferredFloat([
+        $quote['system_capacity_kwp'] ?? null,
+        $quote['capacity_kwp'] ?? null,
+    ], 0.0) ?? 0.0;
+    $mainSolarKwp = max(0, $toFloat($quote['main_solar_kwp'] ?? null, 0));
+    $complimentarySolarKwp = max(0, $toFloat($quote['complimentary_non_dcr_kwp'] ?? null, 0));
+    $capacityFromSplit = $mainSolarKwp + $complimentarySolarKwp;
+    $capacity = max(0, $capacityPrimary > 0 ? $capacityPrimary : $capacityFromSplit);
+
+    $resolvedMonthlyBillBefore = $resolvePreferredFloat([
+        $snapshot['monthly_bill_before_rs'] ?? null,
+        $customerSavingsInputs['monthly_bill_before_rs'] ?? null,
+        $financeInputs['monthly_bill_rs'] ?? null,
+    ], 0.0) ?? 0.0;
+    $resolvedUnitRate = $resolvePreferredFloat([
+        $snapshot['unit_rate_rs_per_kwh'] ?? null,
+        $customerSavingsInputs['unit_rate_rs_per_kwh'] ?? null,
+        $financeInputs['unit_rate_rs_per_kwh'] ?? null,
+        $segmentDefaults['unit_rate_rs_per_kwh'] ?? null,
+        $fallbackResDefaults['unit_rate_rs_per_kwh'] ?? null,
+    ], 1.0) ?? 1.0;
+    $resolvedAnnualGeneration = $resolvePreferredFloat([
+        $snapshot['annual_generation_kwh_per_kw'] ?? null,
+        $customerSavingsInputs['annual_generation_kwh_per_kw'] ?? null,
+        $financeInputs['annual_generation_per_kw'] ?? null,
+        $segmentDefaults['annual_generation_per_kw'] ?? null,
+        $quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? null,
+    ], 1450.0) ?? 1450.0;
+
+    $tariff = max(0.1, $resolvedUnitRate);
+    $annualGeneration = max(0, $resolvedAnnualGeneration);
     $monthlyUnitsSolar = solar_finance_compute_monthly_solar_units($capacity, $annualGeneration);
-    $noSolarMonthlyBill = max(0, $toFloat($snapshot['monthly_bill_before_rs'] ?? null, $toFloat($quote['finance_inputs']['monthly_bill_rs'] ?? 0)));
-    $residualBill = max(0, $noSolarMonthlyBill - ($monthlyUnitsSolar * $tariff));
+    $noSolarMonthlyBill = max(0, $resolvedMonthlyBillBefore);
+    $computedResidualBill = max(0, $noSolarMonthlyBill - ($monthlyUnitsSolar * $tariff));
+    $residualBill = $computedResidualBill;
     $monthlyUnitsBefore = $noSolarMonthlyBill > 0 ? ($noSolarMonthlyBill / $tariff) : 0;
     $legacyUp2 = is_array($financeScenariosRaw['loan_upto_2_lacs'] ?? null) ? $financeScenariosRaw['loan_upto_2_lacs'] : [];
     $legacyAbove2 = is_array($financeScenariosRaw['loan_above_2_lacs'] ?? null) ? $financeScenariosRaw['loan_above_2_lacs'] : [];
+    $savedResidualBill = null;
+    foreach (array_keys(solar_finance_supported_scenario_labels()) as $scenarioKey) {
+        $candidate = null;
+        if (is_array($financeScenariosRaw[$scenarioKey] ?? null)) {
+            $candidate = $readFloat($financeScenariosRaw[$scenarioKey]['residual_bill_rs'] ?? null);
+        } elseif (str_contains($scenarioKey, 'loan_upto_2_lacs')) {
+            $candidate = $readFloat($legacyUp2['residual_bill_rs'] ?? null);
+        } elseif (str_contains($scenarioKey, 'loan_above_2_lacs')) {
+            $candidate = $readFloat($legacyAbove2['residual_bill_rs'] ?? null);
+        }
+        if ($candidate !== null && $candidate > 0) {
+            $savedResidualBill = $candidate;
+            break;
+        }
+    }
+    if ($savedResidualBill !== null) {
+        $residualBill = max(0, $savedResidualBill);
+    }
 
     $resolvedScenarios = [];
     foreach (solar_finance_supported_scenario_labels() as $scenarioKey => $scenarioLabel) {
