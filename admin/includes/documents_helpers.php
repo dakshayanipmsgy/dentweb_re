@@ -1030,6 +1030,7 @@ function documents_quote_defaults(): array
         'quotation_date' => '',
         'valid_until' => '',
         'pricing_mode' => 'solar_split_70_30',
+        'show_tax_breakup' => true,
         'tax_profile_id' => '',
         'gst_mode_snapshot' => 'single',
         'gst_slabs_snapshot' => [],
@@ -3551,6 +3552,9 @@ function documents_quote_prepare(array $quote): array
     $quote['system_capacity_kwp'] = max(0, (float) ($quote['system_capacity_kwp'] ?? $quote['capacity_kwp'] ?? 0));
     $quote['quote_items'] = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
     $quote['tax_profile_id'] = safe_text((string) ($quote['tax_profile_id'] ?? ''));
+    $quote['show_tax_breakup'] = !array_key_exists('show_tax_breakup', $original)
+        ? true
+        : (bool) ($quote['show_tax_breakup'] ?? false);
     $quote['gst_mode_snapshot'] = safe_text((string) ($quote['gst_mode_snapshot'] ?? ''));
     $quote['gst_slabs_snapshot'] = is_array($quote['gst_slabs_snapshot'] ?? null) ? $quote['gst_slabs_snapshot'] : [];
     $quote['tax_breakdown'] = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : [];

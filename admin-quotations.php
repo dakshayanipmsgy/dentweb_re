@@ -454,6 +454,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['quotation_date'] = safe_text($_POST['quotation_date'] ?? '');
         $quote['valid_until'] = safe_text($_POST['valid_until'] ?? '');
         $quote['pricing_mode'] = $pricingMode;
+        $quote['show_tax_breakup'] = isset($_POST['show_tax_breakup']);
         $quote['place_of_supply_state'] = $placeOfSupply;
         $quote['tax_type'] = $taxType;
         $quote['tax_profile_id'] = safe_text((string) ($_POST['tax_profile_id'] ?? ''));
@@ -1223,6 +1224,7 @@ if ($savedAnnualGenerationForEdit === '') {
 <div><label>Valid Until</label><input type="date" name="valid_until" value="<?= htmlspecialchars((string)$editing['valid_until'], ENT_QUOTES) ?>"></div>
 <div><label>Pricing Mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?= $editing['pricing_mode']==='solar_split_70_30'?'selected':'' ?>>solar_split_70_30</option><option value="flat_5" <?= $editing['pricing_mode']==='flat_5'?'selected':'' ?>>flat_5</option></select></div>
 <div><label>Tax Profile</label><select name="tax_profile_id"><option value="">-- none --</option><?php foreach ($inventoryTaxProfiles as $profile): ?><option value="<?= htmlspecialchars((string)($profile['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($editing['tax_profile_id'] ?? '')===(string)($profile['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($profile['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
+<div><label><input type="checkbox" name="show_tax_breakup" <?= !empty($editing['show_tax_breakup']) ? 'checked' : '' ?>> Show GST Tax Breakup in customer quotation</label></div>
 <div><label>Place of Supply State</label><input name="place_of_supply_state" value="<?= htmlspecialchars((string)$editing['place_of_supply_state'], ENT_QUOTES) ?>"></div>
 <div><label>District</label><input name="district" value="<?= htmlspecialchars((string)($editing['district'] !== '' ? $editing['district'] : ($quoteSnapshot['district'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>City</label><input name="city" value="<?= htmlspecialchars((string)($editing['city'] !== '' ? $editing['city'] : ($quoteSnapshot['city'] ?? '')), ENT_QUOTES) ?>"></div>
