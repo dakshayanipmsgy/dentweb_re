@@ -3175,7 +3175,18 @@ usort($archivedRows, static function (array $a, array $b): int {
   <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <style>
     body { margin: 0; font-family: Arial, sans-serif; }
-    .page { width: 100%; box-sizing: border-box; }
+    .admin-documents.admin-shell,
+    .admin-documents.admin-shell .page {
+      width: 100%;
+      max-width: none !important;
+    }
+    .admin-documents .page {
+      width: 100%;
+      max-width: none !important;
+      box-sizing: border-box;
+      padding: 1rem 20px 1.5rem;
+      margin: 0;
+    }
     .top { display:flex; flex-wrap:wrap; gap:0.75rem; justify-content:space-between; align-items:center; margin-bottom:1rem; }
     .top h1 { margin:0; font-size:1.45rem; }
     .btn { display:inline-block; background:#1d4ed8; color:#fff; text-decoration:none; padding:0.55rem 0.8rem; border-radius:8px; border:none; cursor:pointer; font-size:0.92rem; }
@@ -3202,6 +3213,11 @@ usort($archivedRows, static function (array $a, array $b): int {
     .pill.warn { background:#fef3c7; color:#92400e; }
     .row-actions { display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center; }
     .inline-form { display:inline-block; margin:0; }
+    @media (max-width: 768px) {
+      .admin-documents .page {
+        padding: 0.75rem 12px 1rem;
+      }
+    }
   </style>
 </head>
 <body class="admin-shell admin-documents">
