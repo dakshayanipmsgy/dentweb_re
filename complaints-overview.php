@@ -309,13 +309,16 @@ function complaints_overview_render_table(array $filtered, array $customerByMobi
     <?php else: ?>
       <div class="complaints-table-wrap">
       <table class="complaints-table admin-table">
-        <thead><tr><th>ID</th><th>Customer Name</th><th>Customer mobile</th><th>Title</th><th>Category</th><th>Assignee</th><th>Status</th><th>Forwarded</th><th>Created</th><th>Action</th></tr></thead>
+        <thead><tr><th>ID</th><th>Customer Name</th><th>Customer mobile</th><th>Division</th><th>Sub Division</th><th>Title</th><th>Category</th><th>Assignee</th><th>Status</th><th>Forwarded</th><th>Created</th><th>Action</th></tr></thead>
         <tbody>
         <?php foreach ($filtered as $complaint):
             $created = complaints_overview_safe((string) ($complaint['created_at'] ?? ''));
             $title = trim((string) ($complaint['title'] ?? 'Complaint'));
             $mobile = (string) ($complaint['customer_mobile'] ?? '');
-            $customerName = isset($customerByMobile[$mobile]) ? (string) ($customerByMobile[$mobile]['name'] ?? '') : '';
+            $customer = $customerByMobile[$mobile] ?? [];
+            $customerName = (string) ($customer['name'] ?? '');
+            $divisionName = complaints_overview_value_or_dash((string) ($customer['division_name'] ?? ''));
+            $subDivisionName = complaints_overview_value_or_dash((string) ($customer['sub_division_name'] ?? ''));
             $forwardedVia = complaint_normalize_forwarded_via($complaint['forwarded_via'] ?? 'none');
             $forwardedLabel = match ($forwardedVia) {
                 'whatsapp' => 'WhatsApp',
@@ -345,6 +348,8 @@ function complaints_overview_render_table(array $filtered, array $customerByMobi
             <td><?= complaints_overview_safe((string) ($complaint['id'] ?? '—')) ?></td>
             <td><?= complaints_overview_safe($customerName) ?></td>
             <td><?= complaints_overview_safe((string) ($complaint['customer_mobile'] ?? 'Unknown')) ?></td>
+            <td><?= complaints_overview_safe($divisionName) ?></td>
+            <td><?= complaints_overview_safe($subDivisionName) ?></td>
             <td><?= complaints_overview_safe($title !== '' ? $title : 'Complaint') ?></td>
             <td><?= complaints_overview_safe((string) ($complaint['problem_category'] ?? '')) ?></td>
             <td><?= complaints_overview_safe(complaint_display_assignee($complaint['assignee'] ?? '')) ?></td>
@@ -516,7 +521,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <style>
-    .complaints-shell { width:100%; max-width:none; margin:1.5rem 0; padding:0 1.25rem; box-sizing:border-box; }
+    .complaints-page .admin-page.complaints-shell {
+      width:100%;
+      max-width:none !important;
+      margin:1.5rem auto;
+      padding:0 1.5rem 1.25rem;
+      box-sizing:border-box;
+    }
     .complaints-header { display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
     .complaints-title { margin:0; font-size:2rem; color:#111827; }
     .complaints-subtitle { margin:.35rem 0 0; color:#4b5563; }
@@ -528,10 +539,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
     .summary-card h3 { margin:0; font-size:.95rem; color:#4b5563; font-weight:600; }
     .summary-card p { margin:.35rem 0 0; font-size:1.4rem; font-weight:700; color:#111827; }
     .complaints-table-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:auto; max-height:65vh; }
-    .complaints-table { width:100%; border-collapse:collapse; background:#fff; }
+    .complaints-table { width:100%; border-collapse:collapse; background:#fff; table-layout:auto; }
     .complaints-table th,.complaints-table td { border:1px solid #e5e7eb; padding:.75rem .8rem; text-align:left; font-size:.95rem; }
     .complaints-table th { background:#f9fafb; font-weight:700; color:#111827; position:sticky; top:0; z-index:2; }
     .complaints-table td a { color:#1f4b99; text-decoration:none; font-weight:700; }
+    .complaints-table th:nth-child(2),.complaints-table td:nth-child(2) { min-width:180px; }
+    .complaints-table th:nth-child(4),.complaints-table td:nth-child(4) { min-width:150px; }
+    .complaints-table th:nth-child(5),.complaints-table td:nth-child(5) { min-width:170px; }
+    .complaints-table th:nth-child(6),.complaints-table td:nth-child(6) { min-width:240px; }
+    .complaints-table th:nth-child(3),
+    .complaints-table th:nth-child(9),
+    .complaints-table th:nth-child(10),
+    .complaints-table th:nth-child(11),
+    .complaints-table th:nth-child(12),
+    .complaints-table td:nth-child(3),
+    .complaints-table td:nth-child(9),
+    .complaints-table td:nth-child(10),
+    .complaints-table td:nth-child(11),
+    .complaints-table td:nth-child(12) { white-space:nowrap; }
     .empty-state { margin:1rem 0 0; padding:1rem 1.25rem; border-radius:12px; border:1px dashed #cbd5e1; background:#f8fafc; color:#475569; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     .complaint-age-0-1 { background-color:#f0fff4; } .complaint-age-2-3 { background-color:#fffbea; } .complaint-age-4-7 { background-color:#fff4e6; } .complaint-age-8-14 { background-color:#ffe5e5; } .complaint-age-15plus { background-color:#ffd6d6; }
@@ -551,6 +576,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
     .complaints-export button { max-width:220px; background:#1f4b99; color:#fff; border-color:#1f4b99; font-weight:700; cursor:pointer; margin-top:.75rem; }
     .complaints-export-note { margin:.35rem 0 0; font-size:.88rem; color:#475569; }
     .complaints-export-error { margin:.65rem 0 0; color:#991b1b; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:.6rem .8rem; }
+    @media (max-width: 980px) {
+      .complaints-page .admin-page.complaints-shell { padding:0 .95rem 1rem; }
+    }
+    @media (max-width: 720px) {
+      .complaints-page .admin-page.complaints-shell { padding:0 .75rem 1rem; margin:1rem auto; }
+    }
   </style>
 </head>
 <body class="admin-shell complaints-page">
