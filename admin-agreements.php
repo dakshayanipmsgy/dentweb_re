@@ -240,7 +240,7 @@ $message = safe_text($_GET['message'] ?? '');
   <title>Agreements</title>
   <style>
     body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}
-    .wrap{max-width:1200px;margin:0 auto;padding:16px}
+    .wrap{width:100%;max-width:none;margin:0;padding:16px 20px;box-sizing:border-box}
     .card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
     .btn{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}
@@ -251,6 +251,9 @@ $message = safe_text($_GET['message'] ?? '');
     input,select,textarea{width:100%;padding:7px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box}
     .banner{padding:9px;border-radius:8px;margin-bottom:10px}.success{background:#ecfdf5;color:#065f46}.error{background:#fef2f2;color:#991b1b}
     .muted{color:#64748b;font-size:12px}
+    @media (max-width: 768px){
+      .wrap{padding:12px}
+    }
   </style>
 </head>
 <body>

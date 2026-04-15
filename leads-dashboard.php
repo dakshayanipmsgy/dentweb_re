@@ -1430,13 +1430,20 @@ ksort($duplicateGroups);
   <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <style>
     body { background: #f7f8fb; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-    .fullwidth-wrapper {
+    .leads-page .fullwidth-wrapper,
+    .leads-page .fullwidth-wrapper.admin-page {
       width: 100% !important;
       max-width: 100% !important;
       padding: 1.5rem 20px;
       box-sizing: border-box;
       margin-left: 0;
       margin-right: 0;
+    }
+    .leads-page.admin-shell,
+    .leads-page.admin-shell .admin-page,
+    .leads-page.admin-shell .fullwidth-wrapper.admin-page {
+      max-width: none !important;
+      width: 100% !important;
     }
     .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 1.5rem; box-shadow: 0 12px 40px rgba(0,0,0,0.06); margin-bottom: 1rem; }
     h1 { margin: 0 0 0.5rem; }
@@ -1542,6 +1549,12 @@ ksort($duplicateGroups);
     .sort-link { color: inherit; text-decoration: none; white-space: nowrap; }
     .sort-link:hover { text-decoration: underline; }
     textarea { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d1d5db; border-radius: 10px; font: inherit; }
+    @media (max-width: 768px) {
+      .leads-page .fullwidth-wrapper,
+      .leads-page .fullwidth-wrapper.admin-page {
+        padding: 1rem 12px;
+      }
+    }
   </style>
 </head>
 <body class="admin-shell leads-page">
