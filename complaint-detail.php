@@ -70,6 +70,28 @@ function complaint_detail_format_message(array $complaint, array $customer): str
     return implode("\n", $lines);
 }
 
+function complaint_detail_customer_notification_link(array $complaint, array $customer, string $channel): string
+{
+    $message = complaint_customer_resolution_message($complaint, $customer);
+    $mobile = preg_replace('/\D+/', '', (string) ($complaint['customer_mobile'] ?? ($customer['mobile'] ?? '')));
+    $mobile = is_string($mobile) ? $mobile : '';
+
+    if ($channel === 'whatsapp') {
+        $phone = $mobile === '' ? '' : ('91' . substr($mobile, -10));
+        if ($phone === '') {
+            return 'https://wa.me/?text=' . rawurlencode($message);
+        }
+
+        return 'https://wa.me/' . rawurlencode($phone) . '?text=' . rawurlencode($message);
+    }
+
+    if ($mobile === '') {
+        return 'sms:?&body=' . rawurlencode($message);
+    }
+
+    return 'sms:' . rawurlencode(substr($mobile, -10)) . '?&body=' . rawurlencode($message);
+}
+
 function complaint_detail_email_subject(array $complaint, array $customer): string
 {
     $customerName = trim((string) ($customer['name'] ?? ''));
@@ -79,46 +101,78 @@ function complaint_detail_email_subject(array $complaint, array $customer): stri
 }
 
 $action = (string) ($_GET['action'] ?? '');
-if ($action === 'whatsapp' || $action === 'email') {
+if (in_array($action, ['whatsapp', 'email', 'notify_whatsapp', 'notify_sms', 'close'], true)) {
     if ($complaint === null) {
         $errorMessage = 'Complaint not found.';
     } else {
         $customerData = $customer ?? [];
-        $message = complaint_detail_format_message($complaint, $customerData);
-
-        $currentForwarded = complaint_normalize_forwarded_via($complaint['forwarded_via'] ?? 'none');
-        $nextForwarded = $currentForwarded;
-        if ($action === 'whatsapp') {
-            if ($currentForwarded === 'none') {
-                $nextForwarded = 'whatsapp';
-            } elseif ($currentForwarded === 'email') {
-                $nextForwarded = 'both';
+        if ($action === 'close') {
+            $updated = update_complaint([
+                'id' => (string) ($complaint['id'] ?? ''),
+                'status' => 'closed',
+            ]);
+            if ($updated !== null) {
+                $complaint = $updated;
+                if (!empty($updated['customer_mobile'])) {
+                    complaint_sync_customer_flag($customerStore, (string) $updated['customer_mobile']);
+                }
+                $successMessage = 'Complaint marked closed.';
             }
+        } elseif ($action === 'notify_whatsapp' || $action === 'notify_sms') {
+            $channel = $action === 'notify_whatsapp' ? 'whatsapp' : 'sms';
+            $nextNotified = complaint_add_customer_notification_channel($complaint['customer_notified_via'] ?? 'none', $channel);
+            $notificationCount = max(0, (int) ($complaint['customer_notification_count'] ?? 0)) + 1;
+
+            $updated = update_complaint([
+                'id' => (string) ($complaint['id'] ?? ''),
+                'customer_notified_via' => $nextNotified,
+                'customer_notified_at' => complaint_now(),
+                'customer_notification_count' => $notificationCount,
+            ]);
+
+            if ($updated !== null) {
+                $complaint = $updated;
+            }
+
+            header('Location: ' . complaint_detail_customer_notification_link($complaint, $customerData, $channel));
+            exit;
         } else {
-            if ($currentForwarded === 'none') {
-                $nextForwarded = 'email';
-            } elseif ($currentForwarded === 'whatsapp') {
-                $nextForwarded = 'both';
+            $message = complaint_detail_format_message($complaint, $customerData);
+
+            $currentForwarded = complaint_normalize_forwarded_via($complaint['forwarded_via'] ?? 'none');
+            $nextForwarded = $currentForwarded;
+            if ($action === 'whatsapp') {
+                if ($currentForwarded === 'none') {
+                    $nextForwarded = 'whatsapp';
+                } elseif ($currentForwarded === 'email') {
+                    $nextForwarded = 'both';
+                }
+            } else {
+                if ($currentForwarded === 'none') {
+                    $nextForwarded = 'email';
+                } elseif ($currentForwarded === 'whatsapp') {
+                    $nextForwarded = 'both';
+                }
             }
-        }
 
-        $updated = update_complaint([
-            'id' => (string) ($complaint['id'] ?? ''),
-            'forwarded_via' => $nextForwarded,
-        ]);
+            $updated = update_complaint([
+                'id' => (string) ($complaint['id'] ?? ''),
+                'forwarded_via' => $nextForwarded,
+            ]);
 
-        if ($updated !== null) {
-            $complaint = $updated;
-        }
+            if ($updated !== null) {
+                $complaint = $updated;
+            }
 
-        if ($action === 'whatsapp') {
-            header('Location: https://wa.me/?text=' . rawurlencode($message));
+            if ($action === 'whatsapp') {
+                header('Location: https://wa.me/?text=' . rawurlencode($message));
+                exit;
+            }
+
+            $subject = complaint_detail_email_subject($complaint, $customerData);
+            header('Location: mailto:?subject=' . rawurlencode($subject) . '&body=' . rawurlencode($message));
             exit;
         }
-
-        $subject = complaint_detail_email_subject($complaint, $customerData);
-        header('Location: mailto:?subject=' . rawurlencode($subject) . '&body=' . rawurlencode($message));
-        exit;
     }
 }
 
@@ -243,6 +297,11 @@ function complaint_detail_safe(string $value): string
       <div class="detail-card">
         <h2 style="margin-top:0;">Complaint #<?= complaint_detail_safe((string) ($complaint['id'] ?? '—')) ?></h2>
         <div class="detail-actions">
+          <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=notify_whatsapp">Send WhatsApp</a>
+          <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=notify_sms">Send SMS</a>
+          <?php if (strtolower((string) ($complaint['status'] ?? 'open')) !== 'closed'): ?>
+            <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=close" onclick="return confirm('Mark this complaint as closed?');">Mark Closed</a>
+          <?php endif; ?>
           <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=whatsapp">Create WhatsApp Message</a>
           <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=email">Create Email Message</a>
         </div>
@@ -270,6 +329,14 @@ function complaint_detail_safe(string $value): string
           <div>
             <small>Forwarding Status</small>
             <p><?= complaint_detail_safe(complaint_forwarded_label($complaint['forwarded_via'] ?? 'none')) ?></p>
+          </div>
+          <div>
+            <small>Customer Notified</small>
+            <p><?= complaint_detail_safe(complaint_customer_notified_label($complaint['customer_notified_via'] ?? 'none')) ?></p>
+          </div>
+          <div>
+            <small>Customer notification time</small>
+            <p><?= complaint_detail_safe((string) ($complaint['customer_notified_at'] ?? '—')) ?></p>
           </div>
           <div>
             <small>Created at</small>

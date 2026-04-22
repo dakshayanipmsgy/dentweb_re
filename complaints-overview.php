@@ -28,10 +28,10 @@ if (($admin['role_name'] ?? '') === 'admin') {
 }
 
 $statusFilterRaw = $_GET['status'] ?? null;
-$statusFilter = strtolower(trim((string) ($statusFilterRaw ?? 'all')));
+$statusFilter = strtolower(trim((string) ($statusFilterRaw ?? 'active')));
 $assigneeFilter = trim((string) ($_GET['assignee'] ?? 'all'));
 $categoryFilter = trim((string) ($_GET['category'] ?? 'all'));
-$statusOptions = ['all' => 'All statuses', 'open' => 'Open', 'intake' => 'Intake', 'triage' => 'Admin triage', 'work' => 'In progress', 'resolved' => 'Resolved', 'closed' => 'Closed'];
+$statusOptions = ['active' => 'Active (except closed)', 'all' => 'All statuses', 'open' => 'Open', 'intake' => 'Intake', 'triage' => 'Admin triage', 'work' => 'In progress', 'resolved' => 'Resolved', 'closed' => 'Closed'];
 
 $complaints = load_all_complaints();
 $customers = $customerStore->listCustomers();
@@ -69,20 +69,20 @@ $subDivisionOptions = array_keys($subDivisionOptions);
 sort($divisionOptions, SORT_NATURAL | SORT_FLAG_CASE);
 sort($subDivisionOptions, SORT_NATURAL | SORT_FLAG_CASE);
 
-$noStatusFilterApplied = $statusFilterRaw === null || $statusFilterRaw === '';
+$validStatusFilters = array_fill_keys(array_keys($statusOptions), true);
+if (!isset($validStatusFilters[$statusFilter])) {
+    $statusFilter = 'active';
+}
 
-$filtered = array_filter($complaints, static function (array $complaint) use ($statusFilter, $assigneeFilter, $categoryFilter, $noStatusFilterApplied): bool {
+$filtered = array_filter($complaints, static function (array $complaint) use ($statusFilter, $assigneeFilter, $categoryFilter): bool {
     $statusRaw = (string) ($complaint['status'] ?? 'open');
-    $status = strtolower($statusRaw);
+    $status = strtolower(trim($statusRaw));
     $assignee = complaint_display_assignee($complaint['assignee'] ?? '');
     $category = (string) ($complaint['problem_category'] ?? '');
-    $isClosed = strtolower(trim($statusRaw)) === 'closed';
 
-    if ($noStatusFilterApplied && $isClosed) {
-        return false;
-    }
-
-    $statusMatches = $statusFilter === 'all' || $status === $statusFilter;
+    $statusMatches = $statusFilter === 'all'
+        || ($statusFilter === 'active' && $status !== 'closed')
+        || $status === $statusFilter;
     $assigneeMatches = $assigneeFilter === 'all' || strcasecmp($assignee, $assigneeFilter) === 0;
     $categoryMatches = $categoryFilter === 'all' || strcasecmp($category, $categoryFilter) === 0;
 
@@ -309,7 +309,7 @@ function complaints_overview_render_table(array $filtered, array $customerByMobi
     <?php else: ?>
       <div class="complaints-table-wrap">
       <table class="complaints-table admin-table">
-        <thead><tr><th>ID</th><th>Customer Name</th><th>Customer mobile</th><th>Division</th><th>Sub Division</th><th>Title</th><th>Category</th><th>Assignee</th><th>Status</th><th>Forwarded</th><th>Created</th><th>Action</th></tr></thead>
+        <thead><tr><th>ID</th><th>Customer Name</th><th>Customer mobile</th><th>Division</th><th>Sub Division</th><th>Title</th><th>Category</th><th>Assignee</th><th>Status</th><th>Forwarded</th><th>Customer Notified</th><th>Created</th><th>Action</th></tr></thead>
         <tbody>
         <?php foreach ($filtered as $complaint):
             $created = complaints_overview_safe((string) ($complaint['created_at'] ?? ''));
@@ -326,6 +326,8 @@ function complaints_overview_render_table(array $filtered, array $customerByMobi
                 'both' => 'Both',
                 default => 'No',
             };
+            $customerNotified = complaint_normalize_customer_notified_via($complaint['customer_notified_via'] ?? 'none');
+            $customerNotifiedLabel = complaint_customer_notified_label($customerNotified);
             $statusRaw = (string) ($complaint['status'] ?? 'open');
             $status = strtolower(trim($statusRaw));
             $statusLabel = ucfirst($statusRaw);
@@ -360,8 +362,18 @@ function complaints_overview_render_table(array $filtered, array $customerByMobi
                 <span class="urgency-pill admin-chip"><?= complaints_overview_safe($ageLabel) ?></span>
               <?php endif; ?>
             </td>
+            <td><span class="admin-chip <?= $customerNotified === 'none' ? 'admin-chip--muted' : '' ?>"><?= complaints_overview_safe($customerNotifiedLabel) ?></span></td>
             <td><?= $created ?></td>
-            <td><a href="complaint-detail.php?id=<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" class="js-complaint-open" data-complaint-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>">View / Edit</a></td>
+            <td>
+              <div style="display:flex; flex-wrap:wrap; gap:.35rem; align-items:center;">
+                <a href="complaint-detail.php?id=<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" class="js-complaint-open" data-complaint-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>">View / Edit</a>
+                <a href="#" class="js-complaint-notify" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" data-channel="whatsapp">Send WhatsApp</a>
+                <a href="#" class="js-complaint-notify" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" data-channel="sms">Send SMS</a>
+                <?php if ($status !== 'closed'): ?>
+                  <a href="#" class="js-complaint-close" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>">Close</a>
+                <?php endif; ?>
+              </div>
+            </td>
           </tr>
         <?php endforeach; ?>
         </tbody>
@@ -379,6 +391,67 @@ if (($_GET['ajax'] ?? '') === '1') {
         'summary_html' => complaints_overview_render_summary($counts),
         'table_html' => complaints_overview_render_table($filtered, $customerByMobile),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'quick_action') {
+    header('Content-Type: application/json; charset=UTF-8');
+
+    $quickType = strtolower(trim((string) ($_POST['quick_type'] ?? '')));
+    $id = trim((string) ($_POST['id'] ?? ''));
+
+    if ($id === '') {
+        echo json_encode(['ok' => false, 'error' => 'Complaint id is required.']);
+        exit;
+    }
+
+    $complaint = find_complaint_by_id($id);
+    if ($complaint === null) {
+        echo json_encode(['ok' => false, 'error' => 'Complaint not found.']);
+        exit;
+    }
+
+    $customer = $customerByMobile[(string) ($complaint['customer_mobile'] ?? '')] ?? [];
+
+    if ($quickType === 'close') {
+        $updated = update_complaint(['id' => $id, 'status' => 'closed']);
+        if ($updated !== null && !empty($updated['customer_mobile'])) {
+            complaint_sync_customer_flag($customerStore, (string) $updated['customer_mobile']);
+        }
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
+    if ($quickType === 'notify_whatsapp' || $quickType === 'notify_sms') {
+        $channel = $quickType === 'notify_whatsapp' ? 'whatsapp' : 'sms';
+        $nextNotified = complaint_add_customer_notification_channel($complaint['customer_notified_via'] ?? 'none', $channel);
+        $notificationCount = max(0, (int) ($complaint['customer_notification_count'] ?? 0)) + 1;
+
+        update_complaint([
+            'id' => $id,
+            'customer_notified_via' => $nextNotified,
+            'customer_notified_at' => complaint_now(),
+            'customer_notification_count' => $notificationCount,
+        ]);
+
+        $message = complaint_customer_resolution_message($complaint, $customer);
+        $mobile = preg_replace('/\D+/', '', (string) ($complaint['customer_mobile'] ?? ($customer['mobile'] ?? '')));
+        $mobile = is_string($mobile) ? $mobile : '';
+        if ($channel === 'whatsapp') {
+            $phone = $mobile === '' ? '' : ('91' . substr($mobile, -10));
+            $url = $phone === ''
+                ? ('https://wa.me/?text=' . rawurlencode($message))
+                : ('https://wa.me/' . rawurlencode($phone) . '?text=' . rawurlencode($message));
+        } else {
+            $url = $mobile === ''
+                ? ('sms:?&body=' . rawurlencode($message))
+                : ('sms:' . rawurlencode(substr($mobile, -10)) . '?&body=' . rawurlencode($message));
+        }
+        echo json_encode(['ok' => true, 'open_url' => $url]);
+        exit;
+    }
+
+    echo json_encode(['ok' => false, 'error' => 'Unsupported action.']);
     exit;
 }
 
@@ -403,7 +476,7 @@ if (!isset($highlightColorOptions[$exportHighlightColor])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'export_excel') {
     $validAssigneeMap = array_fill_keys($assigneeOptions, true);
     $validCategoryMap = array_fill_keys(complaint_problem_categories(), true);
-    $validStatusMap = array_fill_keys(array_keys(array_diff_key($statusOptions, ['all' => 'All statuses'])), true);
+    $validStatusMap = array_fill_keys(['open', 'intake', 'triage', 'work', 'resolved', 'closed'], true);
     $validDivisionMap = array_fill_keys($divisionOptions, true);
     $validSubDivisionMap = array_fill_keys($subDivisionOptions, true);
 
@@ -552,11 +625,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
     .complaints-table th:nth-child(10),
     .complaints-table th:nth-child(11),
     .complaints-table th:nth-child(12),
+    .complaints-table th:nth-child(13),
     .complaints-table td:nth-child(3),
     .complaints-table td:nth-child(9),
     .complaints-table td:nth-child(10),
     .complaints-table td:nth-child(11),
-    .complaints-table td:nth-child(12) { white-space:nowrap; }
+    .complaints-table td:nth-child(12),
+    .complaints-table td:nth-child(13) { white-space:nowrap; }
     .empty-state { margin:1rem 0 0; padding:1rem 1.25rem; border-radius:12px; border:1px dashed #cbd5e1; background:#f8fafc; color:#475569; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     .complaint-age-0-1 { background-color:#f0fff4; } .complaint-age-2-3 { background-color:#fffbea; } .complaint-age-4-7 { background-color:#fff4e6; } .complaint-age-8-14 { background-color:#ffe5e5; } .complaint-age-15plus { background-color:#ffd6d6; }
@@ -638,7 +713,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
           <div>
             <label for="export_statuses">Status</label>
             <select id="export_statuses" name="export_statuses[]" multiple>
-              <?php foreach ($statusOptions as $value => $label): if ($value === 'all') { continue; } ?>
+              <?php foreach ($statusOptions as $value => $label): if ($value === 'all' || $value === 'active') { continue; } ?>
                 <option value="<?= complaints_overview_safe($value) ?>" <?= in_array($value, $exportStatuses, true) ? 'selected' : '' ?>><?= complaints_overview_safe($label) ?></option>
               <?php endforeach; ?>
             </select>
@@ -755,6 +830,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
         if (!link) return;
         event.preventDefault();
         openDrawer(link.getAttribute('href'));
+      });
+
+      document.addEventListener('click', async function (event) {
+        const notifyLink = event.target.closest('.js-complaint-notify');
+        if (notifyLink) {
+          event.preventDefault();
+          const id = notifyLink.getAttribute('data-id');
+          const channel = notifyLink.getAttribute('data-channel');
+          if (!id || !channel) return;
+
+          const payload = new URLSearchParams();
+          payload.set('action', 'quick_action');
+          payload.set('quick_type', channel === 'whatsapp' ? 'notify_whatsapp' : 'notify_sms');
+          payload.set('id', id);
+
+          const response = await fetch('complaints-overview.php?' + getState().toString(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
+            body: payload.toString()
+          });
+          const result = await response.json();
+          if (result && result.ok) {
+            if (result.open_url) {
+              window.open(result.open_url, '_blank', 'noopener');
+            }
+            refreshData();
+          }
+          return;
+        }
+
+        const closeLink = event.target.closest('.js-complaint-close');
+        if (!closeLink) return;
+        event.preventDefault();
+        const id = closeLink.getAttribute('data-id');
+        if (!id) return;
+        if (!window.confirm('Close this complaint?')) return;
+
+        const payload = new URLSearchParams();
+        payload.set('action', 'quick_action');
+        payload.set('quick_type', 'close');
+        payload.set('id', id);
+
+        const response = await fetch('complaints-overview.php?' + getState().toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
+          body: payload.toString()
+        });
+        const result = await response.json();
+        if (result && result.ok) {
+          refreshData();
+        }
       });
 
       closeBtn.addEventListener('click', closeDrawer);

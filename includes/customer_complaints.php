@@ -93,6 +93,82 @@ function complaint_normalize_forwarded_via(?string $value): string
     return 'none';
 }
 
+function complaint_normalize_customer_notified_via(?string $value): string
+{
+    $normalized = strtolower(trim((string) $value));
+    if ($normalized === '' || $normalized === 'none') {
+        return 'none';
+    }
+
+    if (in_array($normalized, ['whatsapp', 'sms', 'both'], true)) {
+        return $normalized;
+    }
+
+    return 'none';
+}
+
+function complaint_customer_notified_label(?string $value): string
+{
+    return match (complaint_normalize_customer_notified_via($value)) {
+        'whatsapp' => 'WhatsApp sent',
+        'sms' => 'SMS sent',
+        'both' => 'WhatsApp + SMS sent',
+        default => 'Not sent',
+    };
+}
+
+function complaint_add_customer_notification_channel(?string $currentValue, string $channel): string
+{
+    $current = complaint_normalize_customer_notified_via($currentValue);
+    $nextChannel = complaint_normalize_customer_notified_via($channel);
+
+    if (!in_array($nextChannel, ['whatsapp', 'sms'], true)) {
+        return $current;
+    }
+    if ($current === 'none') {
+        return $nextChannel;
+    }
+    if ($current === $nextChannel || $current === 'both') {
+        return $current;
+    }
+
+    return 'both';
+}
+
+function complaint_customer_resolution_message(array $complaint, array $customer): string
+{
+    $customerName = trim((string) ($customer['name'] ?? 'Customer'));
+    $complaintId = trim((string) ($complaint['id'] ?? ''));
+    $category = trim((string) ($complaint['problem_category'] ?? 'Complaint'));
+    $title = trim((string) ($complaint['title'] ?? 'Complaint update'));
+    $description = trim((string) ($complaint['description'] ?? ''));
+    $assignee = complaint_display_assignee((string) ($complaint['assignee'] ?? ''));
+    $status = ucfirst(strtolower(trim((string) ($complaint['status'] ?? 'open'))));
+
+    $shortDescription = $description;
+    if ($shortDescription !== '' && function_exists('mb_strlen') && mb_strlen($shortDescription, 'UTF-8') > 180) {
+        $shortDescription = rtrim((string) mb_substr($shortDescription, 0, 177, 'UTF-8')) . '...';
+    } elseif ($shortDescription !== '' && strlen($shortDescription) > 180) {
+        $shortDescription = rtrim(substr($shortDescription, 0, 177)) . '...';
+    }
+
+    $lines = [
+        'Namaste ' . $customerName . ',',
+        'Regarding your complaint ID ' . $complaintId . ' for ' . $category . ' / ' . $title . ',',
+    ];
+
+    if ($shortDescription !== '') {
+        $lines[] = 'Issue details: ' . $shortDescription;
+    }
+
+    $lines[] = 'Current update: Status ' . $status . ', handled by ' . $assignee . '.';
+    $lines[] = 'Our team has taken action. Please confirm whether your issue is now resolved.';
+    $lines[] = 'If not, kindly reply with the remaining problem.';
+    $lines[] = 'Thank you.';
+
+    return implode("\n", $lines);
+}
+
 function complaint_summary_counts(?array $complaints = null): array
 {
     if ($complaints === null) {
@@ -239,6 +315,9 @@ function complaint_normalize_record(array $record): array
     $record['problem_category'] = complaint_normalize_category((string) ($record['problem_category'] ?? ''));
     $record['assignee'] = complaint_normalize_assignee((string) ($record['assignee'] ?? ''));
     $record['forwarded_via'] = complaint_normalize_forwarded_via($record['forwarded_via'] ?? 'none');
+    $record['customer_notified_via'] = complaint_normalize_customer_notified_via($record['customer_notified_via'] ?? 'none');
+    $record['customer_notified_at'] = trim((string) ($record['customer_notified_at'] ?? ''));
+    $record['customer_notification_count'] = max(0, (int) ($record['customer_notification_count'] ?? 0));
     $record['created_at'] = $record['created_at'] ?? complaint_now();
     $record['updated_at'] = $record['updated_at'] ?? $record['created_at'];
     $record['id'] = isset($record['id']) ? (string) $record['id'] : (string) ($record['reference'] ?? complaint_random_id());
@@ -337,6 +416,9 @@ function add_complaint(array $data, bool $assigneeRequired = false): array
             'problem_category' => $problemCategory === '' ? complaint_default_category() : $problemCategory,
             'assignee' => $assignee,
             'forwarded_via' => 'none',
+            'customer_notified_via' => 'none',
+            'customer_notified_at' => '',
+            'customer_notification_count' => 0,
             'created_at' => $now,
             'updated_at' => $now,
         ];
@@ -402,13 +484,25 @@ function update_complaint(array $updates, bool $assigneeRequired = false): ?arra
         ? complaint_normalize_forwarded_via((string) $updates['forwarded_via'])
         : null;
 
+    $customerNotifiedVia = array_key_exists('customer_notified_via', $updates)
+        ? complaint_normalize_customer_notified_via((string) $updates['customer_notified_via'])
+        : null;
+
+    $customerNotifiedAt = array_key_exists('customer_notified_at', $updates)
+        ? trim((string) $updates['customer_notified_at'])
+        : null;
+
+    $customerNotificationCount = array_key_exists('customer_notification_count', $updates)
+        ? max(0, (int) $updates['customer_notification_count'])
+        : null;
+
     if ($assigneeRequired && $assignee === '') {
         throw new RuntimeException('Select an assignee.');
     }
 
     $previousRecord = null;
 
-    $updatedRecord = complaint_with_store(static function (array &$store) use ($id, $status, $problemCategory, $assignee, $forwardedVia, &$previousRecord): ?array {
+    $updatedRecord = complaint_with_store(static function (array &$store) use ($id, $status, $problemCategory, $assignee, $forwardedVia, $customerNotifiedVia, $customerNotifiedAt, $customerNotificationCount, &$previousRecord): ?array {
         foreach ($store['records'] as $index => $record) {
             if ((string) ($record['id'] ?? '') !== $id) {
                 continue;
@@ -428,6 +522,15 @@ function update_complaint(array $updates, bool $assigneeRequired = false): ?arra
 
             if ($forwardedVia !== null) {
                 $record['forwarded_via'] = $forwardedVia;
+            }
+            if ($customerNotifiedVia !== null) {
+                $record['customer_notified_via'] = $customerNotifiedVia;
+            }
+            if ($customerNotifiedAt !== null) {
+                $record['customer_notified_at'] = $customerNotifiedAt;
+            }
+            if ($customerNotificationCount !== null) {
+                $record['customer_notification_count'] = $customerNotificationCount;
             }
 
             $record['updated_at'] = complaint_now();
