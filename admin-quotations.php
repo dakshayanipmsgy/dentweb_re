@@ -183,6 +183,68 @@ $quotationPublicShareUrl = static function (array $quote): string {
     return $scheme . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/quotation-public.php?t=' . urlencode($token);
 };
 
+$quotationDefaultWhatsappTemplate = 'Namaste {{name}}, your quotation for {{system_size}} kW {{system_type}} solar system for {{city}} is ready. Total price considered is ₹{{price}}. Please review it here: {{quotation_link}}';
+
+$quotationResolveWhatsappTemplate = static function (array $defaults) use ($quotationDefaultWhatsappTemplate): string {
+    $configured = trim((string) ($defaults['global']['quotation_ui']['whatsapp_message_template'] ?? ''));
+    return $configured !== '' ? $configured : $quotationDefaultWhatsappTemplate;
+};
+
+$quotationResolveCustomerFacingPrice = static function (array $quote): float {
+    $amount = (float) ($quote['input_total_gst_inclusive'] ?? 0);
+    if ($amount > 0) {
+        return $amount;
+    }
+
+    $primaryScenario = safe_text((string) ($quote['primary_finance_scenario'] ?? ''));
+    $scenarioPrices = is_array($quote['scenario_prices'] ?? null) ? $quote['scenario_prices'] : [];
+    $scenarioMap = [
+        'self_funded' => 'self_funded',
+        'loan_upto_2_lacs_subsidy_to_loan' => 'loan_upto_2_lacs',
+        'loan_upto_2_lacs_subsidy_not_to_loan' => 'loan_upto_2_lacs',
+        'loan_above_2_lacs_subsidy_to_loan' => 'loan_above_2_lacs',
+        'loan_above_2_lacs_subsidy_not_to_loan' => 'loan_above_2_lacs',
+        'loan_upto_2_lacs' => 'loan_upto_2_lacs',
+        'loan_above_2_lacs' => 'loan_above_2_lacs',
+    ];
+    $scenarioKey = $scenarioMap[$primaryScenario] ?? '';
+    if ($scenarioKey !== '') {
+        $scenarioAmount = (float) ($scenarioPrices[$scenarioKey]['price'] ?? 0);
+        if ($scenarioAmount > 0) {
+            return $scenarioAmount;
+        }
+    }
+
+    $calc = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
+    $finalInclGst = (float) ($calc['final_price_incl_gst'] ?? 0);
+    if ($finalInclGst > 0) {
+        return $finalInclGst;
+    }
+    return (float) ($calc['grand_total'] ?? 0);
+};
+
+$quotationResolveWhatsappMessage = static function (array $quote, string $template, string $shareUrl = '') use ($quotationResolveCustomerFacingPrice): string {
+    $snapshot = is_array($quote['customer_snapshot'] ?? null) ? $quote['customer_snapshot'] : [];
+    $capacity = trim((string) ($quote['capacity_kwp'] ?? ''));
+    if ($capacity === '') {
+        $systemCapacity = (float) ($quote['system_capacity_kwp'] ?? 0);
+        $capacity = $systemCapacity > 0 ? rtrim(rtrim(number_format($systemCapacity, 2, '.', ''), '0'), '.') : '';
+    }
+
+    $amount = $quotationResolveCustomerFacingPrice($quote);
+    $replacements = [
+        '{{name}}' => safe_text((string) ($quote['customer_name'] ?? $snapshot['name'] ?? '')),
+        '{{city}}' => safe_text((string) ($quote['city'] ?? $snapshot['city'] ?? '')),
+        '{{system_size}}' => safe_text($capacity),
+        '{{system_type}}' => safe_text((string) ($quote['system_type'] ?? '')),
+        '{{price}}' => $amount > 0 ? number_format($amount, 2, '.', '') : '',
+        '{{quotation_link}}' => trim($shareUrl),
+    ];
+
+    $resolved = strtr($template, $replacements);
+    return trim(preg_replace('/[ 	]+/', ' ', $resolved) ?? $resolved);
+};
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
         $redirectWith('error', 'Security validation failed.');
@@ -222,6 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $d['global']['quotation_ui']['show_decimals'] = isset($_POST['show_decimals']);
         $d['global']['quotation_ui']['qr_target'] = safe_text($_POST['qr_target'] ?? 'quotation') === 'website' ? 'website' : 'quotation';
         $d['global']['quotation_ui']['footer_disclaimer'] = trim((string)($_POST['footer_disclaimer'] ?? ($d['global']['quotation_ui']['footer_disclaimer'] ?? '')));
+        $d['global']['quotation_ui']['whatsapp_message_template'] = trim((string) ($_POST['whatsapp_message_template'] ?? ($d['global']['quotation_ui']['whatsapp_message_template'] ?? $quotationDefaultWhatsappTemplate)));
         $whyRaw = trim((string)($_POST['why_dakshayani_points'] ?? ''));
         $whyPoints = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $whyRaw) ?: []), static fn($v): bool => $v !== ''));
         if ($whyPoints !== []) {
@@ -914,28 +977,131 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        if (safe_text((string) ($quote['public_share_token'] ?? '')) === '') {
-            $quote['public_share_token'] = documents_generate_quote_public_share_token();
-            $quote['public_share_created_at'] = date('c');
-        }
-        $quote['public_share_enabled'] = true;
-        $quote['public_share_revoked_at'] = null;
-        $quote['updated_at'] = date('c');
-        $saved = documents_save_quote($quote);
-        if (!($saved['ok'] ?? false)) {
-            echo json_encode(['ok' => false, 'message' => 'Unable to prepare quotation share link.']);
-            exit;
+        $template = $quotationResolveWhatsappTemplate($quoteDefaults);
+        $needsQuotationLink = strpos($template, '{{quotation_link}}') !== false;
+        if ($needsQuotationLink) {
+            if (safe_text((string) ($quote['public_share_token'] ?? '')) === '') {
+                $quote['public_share_token'] = documents_generate_quote_public_share_token();
+                $quote['public_share_created_at'] = date('c');
+            }
+            $quote['public_share_enabled'] = true;
+            $quote['public_share_revoked_at'] = null;
+            $quote['updated_at'] = date('c');
+            $saved = documents_save_quote($quote);
+            if (!($saved['ok'] ?? false)) {
+                echo json_encode(['ok' => false, 'message' => 'Unable to prepare quotation share link.']);
+                exit;
+            }
         }
 
         $shareUrl = $quotationPublicShareUrl($quote);
-        $customerName = safe_text((string) ($quote['customer_name'] ?? ''));
-        $greeting = $customerName !== '' ? 'Hello ' . $customerName . ', please find your quotation here: ' : 'Hello, please find your quotation here: ';
+        $message = $quotationResolveWhatsappMessage($quote, $template, $shareUrl);
+        if ($message === '') {
+            $fallbackMessage = 'Please review your quotation.';
+            if ($shareUrl !== '') {
+                $fallbackMessage .= ' ' . $shareUrl;
+            }
+            $message = $fallbackMessage;
+        }
+
         echo json_encode([
             'ok' => true,
             'mobile' => $mobile,
             'share_url' => $shareUrl,
-            'message' => $greeting . $shareUrl,
+            'message' => $message,
         ]);
+        exit;
+    }
+
+    if ($action === 'archive_quote') {
+        $quoteId = safe_text($_POST['quote_id'] ?? '');
+        $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
+        if ($quote === null) {
+            $redirectWith('error', 'Quotation not found.');
+        }
+
+        if (documents_is_archived($quote)) {
+            $redirectWith('success', 'Quotation is already archived.');
+        }
+
+        $user = current_user();
+        $quote = documents_set_archived($quote, [
+            'type' => (string) ($user['role_name'] ?? 'admin'),
+            'id' => (string) ($user['id'] ?? ''),
+            'name' => (string) ($user['full_name'] ?? 'Admin'),
+        ]);
+        $quote['updated_at'] = date('c');
+        $saved = documents_save_quote($quote);
+        if (!($saved['ok'] ?? false)) {
+            $redirectWith('error', 'Unable to archive quotation.');
+        }
+
+        $redirectWith('success', 'Quotation archived successfully.');
+    }
+
+    if ($action === 'clone_quote') {
+        $quoteId = safe_text($_POST['quote_id'] ?? '');
+        $original = $quoteId !== '' ? documents_get_quote($quoteId) : null;
+        if ($original === null) {
+            $redirectWith('error', 'Quotation not found for cloning.');
+        }
+
+        $original = documents_quote_prepare($original);
+        $number = documents_generate_quote_number((string) ($original['segment'] ?? 'RES'));
+        if (!($number['ok'] ?? false)) {
+            $redirectWith('error', (string) ($number['error'] ?? 'Unable to generate quotation number for clone.'));
+        }
+
+        $user = current_user();
+        $newId = 'qtn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+        $cloned = $original;
+        $cloned['id'] = $newId;
+        $cloned['quote_no'] = (string) ($number['quote_no'] ?? '');
+        $cloned['status'] = 'Draft';
+        $cloned['quotation_date'] = date('Y-m-d');
+        $cloned['created_at'] = date('c');
+        $cloned['updated_at'] = date('c');
+        $cloned['created_by_type'] = (string) ($user['role_name'] ?? 'admin');
+        $cloned['created_by_id'] = (string) ($user['id'] ?? '');
+        $cloned['created_by_name'] = (string) ($user['full_name'] ?? 'Admin');
+        $cloned['public_share_token'] = documents_generate_quote_public_share_token();
+        $cloned['public_share_enabled'] = false;
+        $cloned['public_share_created_at'] = date('c');
+        $cloned['public_share_revoked_at'] = null;
+        $cloned['public_share_expires_at'] = null;
+        $cloned['accepted_at'] = '';
+        $cloned['accepted_by'] = ['type' => '', 'id' => '', 'name' => ''];
+        $cloned['acceptance'] = [
+            'accepted_by_admin_id' => '',
+            'accepted_by_admin_name' => '',
+            'accepted_at' => '',
+            'accepted_note' => '',
+        ];
+        $cloned['approval'] = [
+            'approved_by_id' => '',
+            'approved_by_name' => '',
+            'approved_at' => '',
+        ];
+        $cloned['locked_flag'] = false;
+        $cloned['locked_at'] = null;
+        $cloned['archived_flag'] = false;
+        $cloned['archived_at'] = '';
+        $cloned['archived_by'] = ['type' => '', 'id' => '', 'name' => ''];
+        $cloned['workflow'] = documents_quote_workflow_defaults();
+        $cloned['links'] = ['customer_mobile' => '', 'agreement_id' => '', 'proforma_id' => '', 'invoice_id' => ''];
+        $cloned['quote_series_id'] = $newId;
+        $cloned['version_no'] = 1;
+        $cloned['is_current_version'] = true;
+        $cloned['revised_from_quote_id'] = null;
+        $cloned['revision_reason'] = null;
+        $cloned['revision_child_ids'] = [];
+
+        $saved = documents_save_quote($cloned);
+        if (!($saved['ok'] ?? false)) {
+            $redirectWith('error', 'Unable to clone quotation.');
+        }
+
+        header('Location: admin-quotations.php?edit=' . urlencode($newId) . '&status=success&message=' . urlencode('Quotation cloned successfully. You can now edit the draft copy.'));
         exit;
     }
 
@@ -1311,7 +1477,20 @@ $publicShareEnabled = !empty($q['public_share_enabled']) && $publicShareToken !=
 $publicShareUrl = $quotationPublicShareUrl($q);
 $quoteShareMobile = $quotationExtractMobile($q);
 ?>
-<button class="btn secondary js-wa-share" type="button" data-quote-id="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars($quoteShareMobile, ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($q['customer_name'] ?? ''), ENT_QUOTES) ?>">Share</button>
+<?php $canWhatsappShare = $quoteShareMobile !== ''; ?>
+<button class="btn secondary js-wa-share" type="button" data-quote-id="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars($quoteShareMobile, ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($q['customer_name'] ?? ''), ENT_QUOTES) ?>" <?= $canWhatsappShare ? '' : 'disabled title="Missing valid mobile"' ?>>WhatsApp</button>
+<form method="post" style="margin:0">
+    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
+    <input type="hidden" name="action" value="archive_quote">
+    <input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>">
+    <button class="btn secondary" type="submit" onclick="return confirm('Archive this quotation?');">Archive</button>
+</form>
+<form method="post" style="margin:0">
+    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
+    <input type="hidden" name="action" value="clone_quote">
+    <input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>">
+    <button class="btn secondary" type="submit" onclick="return confirm('Clone this quotation into a new draft?');">Clone</button>
+</form>
 <details class="share-actions"><summary class="muted" style="cursor:pointer">🔗 Public Link</summary>
     <form method="post" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
@@ -1332,7 +1511,7 @@ $quoteShareMobile = $quotationExtractMobile($q);
 </td>
 </tr><?php endforeach; if ($allQuotes===[]): ?><tr><td colspan="7">No quotations yet.</td></tr><?php endif; ?></tbody></table>
 </div>
-<?php if ($tab === "settings"): $d = $quoteDefaults; ?><div class="card"><h2>Quotation Settings</h2><form method="post" class="grid"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ""), ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_settings"><div><label>Primary color</label><div style="display:flex;gap:6px"><input type="color" name="ui_primary" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="ui_primary_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Accent color</label><div style="display:flex;gap:6px"><input type="color" name="ui_accent" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="ui_accent_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"><input name="ui_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"></div></div><div><label>Muted text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_muted_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"><input name="ui_muted_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"></div></div><div><label>Page background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_page_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"><input name="ui_page_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"></div></div><div><label>Card background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_card_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="ui_card_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Border color</label><div style="display:flex;gap:6px"><input type="color" name="ui_border" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"><input name="ui_border_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient A</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="header_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient B</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="header_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient A</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="footer_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient B</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="footer_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Header font color</label><div style="display:flex;gap:6px"><input type="color" name="header_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="header_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Footer font color</label><div style="display:flex;gap:6px"><input type="color" name="footer_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="footer_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient direction</label><select name="header_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="header_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['header']['enabled'])?'checked':'' ?>> Enable header gradient</label></div><div><label>Footer gradient direction</label><select name="footer_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="footer_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['footer']['enabled'])?'checked':'' ?>> Enable footer gradient</label></div><div><label>Default interest rate (%)</label><input type="number" step="0.01" name="res_interest_pct" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['interest_pct'] ?? 6), ENT_QUOTES) ?>"></div><div><label>Default loan tenure (years)</label><input type="number" name="res_tenure_years" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['tenure_years'] ?? 10), ENT_QUOTES) ?>"></div><div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450), ENT_QUOTES) ?>"></div><div><label>Emission factor (kg CO2/kWh)</label><input type="number" step="0.01" name="emission_factor_kg_per_kwh" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['emission_factor_kg_per_kwh'] ?? 0.82), ENT_QUOTES) ?>"></div><div><label>CO2 absorbed per tree per year (kg)</label><input type="number" step="0.01" name="tree_absorption_kg_per_tree_per_year" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'] ?? 20), ENT_QUOTES) ?>"></div><div><label><input type="checkbox" name="show_decimals" <?= !empty($d['global']['quotation_ui']['show_decimals'])?'checked':'' ?>> Show INR decimals in quotation</label></div><div><label>QR target</label><select name="qr_target"><option value="quotation" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="quotation")?'selected':'' ?>>This quotation link</option><option value="website" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="website")?'selected':'' ?>>Company website</option></select></div><div style="grid-column:1/-1"><label>Why Dakshayani points (one per line)</label><textarea name="why_dakshayani_points"><?= htmlspecialchars(implode("\n", (array)($d['global']['quotation_ui']['why_dakshayani_points'] ?? [])), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Footer disclaimer</label><textarea name="footer_disclaimer"><?= htmlspecialchars((string)($d['global']['quotation_ui']['footer_disclaimer'] ?? ''), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Rate chart — On-Grid (JSON)</label><textarea name="rate_chart_on_grid_json"><?= htmlspecialchars(json_encode((array)($d['rate_chart']['on_grid'] ?? []), JSON_PRETTY_PRINT), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Rate chart — Hybrid (JSON)</label><textarea name="rate_chart_hybrid_json"><?= htmlspecialchars(json_encode((array)($d['rate_chart']['hybrid'] ?? []), JSON_PRETTY_PRINT), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><button class="btn" type="submit">Save Settings</button></div></form></div><?php endif; ?>
+<?php if ($tab === "settings"): $d = $quoteDefaults; ?><div class="card"><h2>Quotation Settings</h2><form method="post" class="grid"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ""), ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_settings"><div><label>Primary color</label><div style="display:flex;gap:6px"><input type="color" name="ui_primary" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="ui_primary_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Accent color</label><div style="display:flex;gap:6px"><input type="color" name="ui_accent" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="ui_accent_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"><input name="ui_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"></div></div><div><label>Muted text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_muted_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"><input name="ui_muted_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"></div></div><div><label>Page background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_page_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"><input name="ui_page_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"></div></div><div><label>Card background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_card_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="ui_card_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Border color</label><div style="display:flex;gap:6px"><input type="color" name="ui_border" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"><input name="ui_border_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient A</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="header_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient B</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="header_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient A</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="footer_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient B</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="footer_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Header font color</label><div style="display:flex;gap:6px"><input type="color" name="header_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="header_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Footer font color</label><div style="display:flex;gap:6px"><input type="color" name="footer_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="footer_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient direction</label><select name="header_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="header_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['header']['enabled'])?'checked':'' ?>> Enable header gradient</label></div><div><label>Footer gradient direction</label><select name="footer_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="footer_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['footer']['enabled'])?'checked':'' ?>> Enable footer gradient</label></div><div><label>Default interest rate (%)</label><input type="number" step="0.01" name="res_interest_pct" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['interest_pct'] ?? 6), ENT_QUOTES) ?>"></div><div><label>Default loan tenure (years)</label><input type="number" name="res_tenure_years" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['tenure_years'] ?? 10), ENT_QUOTES) ?>"></div><div><label>Annual generation per kW</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450), ENT_QUOTES) ?>"></div><div><label>Emission factor (kg CO2/kWh)</label><input type="number" step="0.01" name="emission_factor_kg_per_kwh" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['emission_factor_kg_per_kwh'] ?? 0.82), ENT_QUOTES) ?>"></div><div><label>CO2 absorbed per tree per year (kg)</label><input type="number" step="0.01" name="tree_absorption_kg_per_tree_per_year" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'] ?? 20), ENT_QUOTES) ?>"></div><div><label><input type="checkbox" name="show_decimals" <?= !empty($d['global']['quotation_ui']['show_decimals'])?'checked':'' ?>> Show INR decimals in quotation</label></div><div><label>QR target</label><select name="qr_target"><option value="quotation" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="quotation")?'selected':'' ?>>This quotation link</option><option value="website" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="website")?'selected':'' ?>>Company website</option></select></div><div style="grid-column:1/-1"><label>Why Dakshayani points (one per line)</label><textarea name="why_dakshayani_points"><?= htmlspecialchars(implode("\n", (array)($d['global']['quotation_ui']['why_dakshayani_points'] ?? [])), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Footer disclaimer</label><textarea name="footer_disclaimer"><?= htmlspecialchars((string)($d['global']['quotation_ui']['footer_disclaimer'] ?? ''), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>WhatsApp quotation message template</label><textarea name="whatsapp_message_template" placeholder="Use placeholders like {{name}}, {{city}}, {{system_size}}, {{system_type}}, {{price}}, {{quotation_link}}"><?= htmlspecialchars((string)($d['global']['quotation_ui']['whatsapp_message_template'] ?? $quotationDefaultWhatsappTemplate), ENT_QUOTES) ?></textarea><div class="muted">Supported placeholders: {{name}}, {{city}}, {{system_size}}, {{system_type}}, {{price}}, {{quotation_link}}</div></div><div style="grid-column:1/-1"><label>Rate chart — On-Grid (JSON)</label><textarea name="rate_chart_on_grid_json"><?= htmlspecialchars(json_encode((array)($d['rate_chart']['on_grid'] ?? []), JSON_PRETTY_PRINT), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Rate chart — Hybrid (JSON)</label><textarea name="rate_chart_hybrid_json"><?= htmlspecialchars(json_encode((array)($d['rate_chart']['hybrid'] ?? []), JSON_PRETTY_PRINT), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><button class="btn" type="submit">Save Settings</button></div></form></div><?php endif; ?>
 <div class="card"><h2>Bulk Modify Quotations</h2>
 <form method="post">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">

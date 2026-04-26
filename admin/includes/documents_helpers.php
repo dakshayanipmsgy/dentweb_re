@@ -422,6 +422,7 @@ function documents_quote_defaults_settings(): array
                     'In-house design, installation, and commissioning',
                     'Strong post-installation service support',
                 ],
+                'whatsapp_message_template' => 'Namaste {{name}}, your quotation for {{system_size}} kW {{system_type}} solar system for {{city}} is ready. Total price considered is ₹{{price}}. Please review it here: {{quotation_link}}',
             ],
         ],
         'defaults' => [
