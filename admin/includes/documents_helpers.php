@@ -424,7 +424,6 @@ function documents_quote_defaults_settings(): array
                 ],
                 'whatsapp_message_template' => 'Namaste {{name}}, your quotation for {{system_size}} kW {{system_type}} solar system for {{city}} is ready. Total price considered is ₹{{price}}. Please review it here: {{quotation_link}}',
             ],
-            'quotation_sections' => documents_detailed_proposal_default_sections(),
         ],
         'defaults' => [
             'hsn_solar' => '8541',
@@ -485,45 +484,6 @@ function documents_quote_defaults_settings(): array
                 ['solar_size_kwp' => 0, 'inverter_kva' => 15.0, 'phase' => '3', 'battery_count' => 15, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
             ],
         ],
-    ];
-}
-
-
-function documents_detailed_proposal_default_sections(): array
-{
-    return [
-        'display_style' => 'compact',
-        'cover' => ['show' => true, 'title' => 'Detailed Techno-Commercial Proposal', 'subtitle' => 'Rooftop Solar PV System by Dakshayani Enterprises', 'intro' => 'A customer-friendly techno-commercial offer covering system design, commercial clarity, execution scope, assumptions, warranty and next steps.', 'prepared_by' => 'Dakshayani Enterprises Solar Team', 'validity_wording' => 'This proposal is valid until the date mentioned, subject to site feasibility, inventory availability, taxes and policy changes.'],
-        'project_snapshot' => ['show' => true, 'title' => 'Project Snapshot', 'intro' => 'Key proposal inputs at one place for quick review.'],
-        'system_configuration' => ['show' => true, 'title' => 'System Configuration', 'intro' => 'Indicative system architecture and major components proposed for this project.', 'on_grid_points' => "Solar modules as per selected capacity\nGrid-tied inverter with standard protections\nHot-dip galvanized / aluminium mounting structure\nACDB / DCDB as per system requirement\nEarthing and lightning protection as applicable\nSolar DC cables, AC cables and MC4 connectors\nGeneration monitoring / RMS where available\nNet metering application support", 'hybrid_points' => "Solar modules as per selected capacity\nHybrid inverter as per selected configuration\nBattery bank as per selected backup design\nMounting structure suitable for rooftop installation\nACDB / DCDB and protection devices\nEarthing and lightning protection as applicable\nSolar DC cables, AC cables and MC4 connectors\nHybrid monitoring / RMS where available\nNet metering / backup integration support"],
-        'system_working' => ['show' => true, 'on_grid_title' => 'How the On-Grid Solar System Works', 'on_grid_html' => "<ul><li>Solar panels generate DC electricity during daytime.</li><li>The inverter converts DC power to usable AC power for your home or premises.</li><li>Your connected load consumes solar power first, reducing grid import.</li><li>Excess generation can be exported through net metering where approved by DISCOM.</li><li>For safety, a standard on-grid system shuts down during grid failure unless a backup architecture is included.</li></ul>", 'hybrid_title' => 'How the Hybrid Solar System Works', 'hybrid_html' => "<ul><li>Solar power supports connected loads during the day.</li><li>The battery can store energy for backup use based on the selected design.</li><li>The hybrid inverter intelligently manages solar, grid and battery power.</li><li>Backup duration depends on inverter capacity, battery size and connected load.</li></ul>", 'diagram_url' => ''],
-        'scope_matrix' => ['show' => true, 'title' => 'EPC Scope Matrix', 'intro' => 'Transparent responsibility split between Dakshayani Enterprises and the customer.', 'rows' => [
-            ['scope_item'=>'Solar Modules','dakshayani_scope'=>true,'customer_scope'=>false,'description'=>'Supply as per finalized design and accepted quotation.','system_types'=>['all']],
-            ['scope_item'=>'Module Mounting Structure','dakshayani_scope'=>true,'customer_scope'=>false,'description'=>'Standard rooftop MMS suitable for normal site conditions.','system_types'=>['all']],
-            ['scope_item'=>'Solar Inverter','dakshayani_scope'=>true,'customer_scope'=>false,'description'=>'On-grid / hybrid inverter as per selected configuration.','system_types'=>['all']],
-            ['scope_item'=>'Hybrid Battery','dakshayani_scope'=>true,'customer_scope'=>false,'description'=>'Included only for hybrid proposals with selected battery count.','system_types'=>['hybrid']],
-            ['scope_item'=>'Plant Monitoring','dakshayani_scope'=>true,'customer_scope'=>true,'description'=>'Dakshayani enables monitoring where supported; customer provides stable internet if required.','system_types'=>['all']],
-            ['scope_item'=>'DC / AC Cables','dakshayani_scope'=>true,'customer_scope'=>false,'description'=>'Standard cable lengths as per quotation and site design.','system_types'=>['all']],
-            ['scope_item'=>'Earthing & Lightning Arrestor','dakshayani_scope'=>true,'customer_scope'=>false,'description'=>'Provided as applicable to system design and site requirement.','system_types'=>['all']],
-            ['scope_item'=>'ACDB / DCDB','dakshayani_scope'=>true,'customer_scope'=>false,'description'=>'Protection boxes as per system capacity and design.','system_types'=>['all']],
-            ['scope_item'=>'Installation, Testing & Commissioning','dakshayani_scope'=>true,'customer_scope'=>false,'description'=>'Installation and commissioning by Dakshayani execution team.','system_types'=>['all']],
-            ['scope_item'=>'Net Metering / Utility Coordination','dakshayani_scope'=>true,'customer_scope'=>true,'description'=>'Dakshayani supports documentation; statutory timelines and charges depend on DISCOM.','system_types'=>['all']],
-            ['scope_item'=>'Subsidy Documentation','dakshayani_scope'=>true,'customer_scope'=>true,'description'=>'Customer must provide accurate KYC, bank and portal documents.','system_types'=>['all']],
-            ['scope_item'=>'Transportation','dakshayani_scope'=>true,'customer_scope'=>false,'description'=>'As mentioned in the commercial offer.','system_types'=>['all']],
-            ['scope_item'=>'Water / Electricity During Installation','dakshayani_scope'=>false,'customer_scope'=>true,'description'=>'Customer to provide normal site support during work.','system_types'=>['all']],
-            ['scope_item'=>'Rooftop Access & Extra Civil Work','dakshayani_scope'=>false,'customer_scope'=>true,'description'=>'Safe access, major civil work, waterproofing or strengthening unless specifically included.','system_types'=>['all']],
-        ]],
-        'technical_assumptions' => ['show'=>true,'title'=>'Technical Assumptions & Site Readiness','intro'=>'Final execution depends on practical site conditions and applicable approvals.','points'=>"System design depends on shadow-free roof area.\nFinal layout may change after detailed site survey.\nCustomer must provide safe roof access.\nCustomer must provide electricity/water during installation.\nInternet may be required for monitoring.\nSpare feeder/panel space may be customer responsibility.\nExtra cable/civil/material beyond standard scope may be chargeable.\nUtility approvals depend on DISCOM/government timelines."],
-        'exclusions' => ['show'=>true,'title'=>'Exclusions / Not Included Unless Mentioned','intro'=>'The following are excluded unless specifically included in the accepted quotation.','points'=>"Major civil work\nWaterproofing\nRoof strengthening\nSpecial fabrication\nHigh-rise structure NOC/cost\nInternet/router\nExtra cable beyond included length\nMeter/security/statutory charges unless included\nLoad enhancement charges\nTree/shadow removal\nCustomer-side electrical panel modification unless included"],
-        'safety_compliance' => ['show'=>true,'title'=>'Safety & Compliance','intro'=>'The system is planned with standard electrical safety practices and applicable solar requirements.','rows'=>[
-            ['item'=>'Anti-islanding protection','description'=>'Grid-tied inverter safety function to disconnect during grid failure.'],['item'=>'Grid monitoring','description'=>'Continuous grid parameter monitoring through inverter protections.'],['item'=>'Surge, short-circuit and over-voltage protection','description'=>'AC/DC protection devices as per system design.'],['item'=>'Earthing and lightning protection','description'=>'Earthing and lightning protection as applicable for rooftop solar installation.'],['item'=>'Solar cable safety','description'=>'Fire-retardant / UV-resistant cables and suitable connectors where applicable.'],['item'=>'MNRE / DISCOM compliance','description'=>'Execution support aligned with applicable DISCOM, MNRE and PM Surya Ghar processes.']]],
-        'commercial_offer' => ['show'=>true,'title'=>'Commercial Offer','notes'=>'Commercial values are based on the selected primary finance scenario and current quotation inputs. GST treatment, subsidy and DISCOM charges are subject to applicable rules.'],
-        'payment_terms' => ['show'=>true,'title'=>'Payment Terms','fallback_html'=>'<ul><li>Payment terms will follow the selected quotation template / annexure.</li><li>Material dispatch, installation and commissioning milestones may be linked to agreed payment stages.</li></ul>'],
-        'warranty_om' => ['show'=>true,'title'=>'Warranty, O&M & Service Support','intro'=>'Warranty support is as per OEM terms and Dakshayani workmanship/service commitments.','points'=>"Module manufacturer warranty as per selected module make.\nInverter manufacturer warranty as per selected inverter make.\nBattery warranty if hybrid battery is included.\nWorkmanship/service support for installation-related concerns.\nO&M support if included in the accepted quotation.\nWarranty excludes misuse, force majeure, unauthorized modification and exclusions stated by OEM."],
-        'project_timeline' => ['show'=>true,'title'=>'Project Execution Timeline','intro'=>'Indicative milestones after quotation approval and document readiness.','milestones'=>"Document collection\nSite survey / design confirmation\nApplication / approval support\nMaterial preparation\nDelivery\nInstallation\nTesting and commissioning\nNet meter / subsidy process support"],
-        'next_steps' => ['show'=>true,'title'=>'Next Steps','points'=>"Approve quotation.\nShare latest electricity bill.\nShare cancelled cheque/passbook for subsidy/bank details where required.\nShare Aadhaar / PAN as per loan or portal requirement.\nComplete site survey / documentation.\nMake payment as per agreed schedule.\nProceed with installation and commissioning."],
-        'bank_details' => ['show'=>true,'title'=>'Bank / Payment Details','intro'=>'Use the official payment details below and share transaction confirmation with Dakshayani.','qr_image_url'=>''],
-        'acceptance' => ['show'=>true,'title'=>'Acceptance / Signature','wording'=>'I/We accept this quotation and authorize Dakshayani Enterprises to proceed as per agreed scope, commercial terms and site readiness.'],
     ];
 }
 
@@ -1072,12 +1032,6 @@ function documents_quote_defaults(): array
         'valid_until' => '',
         'pricing_mode' => 'solar_split_70_30',
         'show_tax_breakup' => true,
-        'proposal_display_style' => '',
-        'proposal_show_technical_sections' => true,
-        'proposal_show_scope_matrix' => true,
-        'proposal_show_safety_section' => true,
-        'proposal_show_bank_details' => true,
-        'proposal_show_acceptance' => true,
         'tax_profile_id' => '',
         'gst_mode_snapshot' => 'single',
         'gst_slabs_snapshot' => [],
@@ -3602,11 +3556,6 @@ function documents_quote_prepare(array $quote): array
     $quote['show_tax_breakup'] = !array_key_exists('show_tax_breakup', $original)
         ? true
         : (bool) ($quote['show_tax_breakup'] ?? false);
-    $style = safe_text((string) ($quote['proposal_display_style'] ?? ''));
-    $quote['proposal_display_style'] = in_array($style, ['compact', 'detailed'], true) ? $style : '';
-    foreach (['proposal_show_technical_sections','proposal_show_scope_matrix','proposal_show_safety_section','proposal_show_bank_details','proposal_show_acceptance'] as $proposalToggle) {
-        $quote[$proposalToggle] = !array_key_exists($proposalToggle, $original) ? true : (bool) ($quote[$proposalToggle] ?? false);
-    }
     $quote['gst_mode_snapshot'] = safe_text((string) ($quote['gst_mode_snapshot'] ?? ''));
     $quote['gst_slabs_snapshot'] = is_array($quote['gst_slabs_snapshot'] ?? null) ? $quote['gst_slabs_snapshot'] : [];
     $quote['tax_breakdown'] = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : [];
