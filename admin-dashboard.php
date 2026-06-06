@@ -513,6 +513,16 @@ $cardConfigs[] = [
               <a href="<?= htmlspecialchars($pathFor('admin-documents.php'), ENT_QUOTES) ?>">Documents</a>
             </div>
           </div>
+          <div class="dashboard-action-group dashboard-action-group--commercial">
+            <h3>Documents &amp; billing</h3>
+            <div class="dashboard-action-links">
+              <a href="<?= htmlspecialchars($pathFor('admin-documents.php?tab=accepted_customers'), ENT_QUOTES) ?>">Document packs &amp; receipts</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-quotations.php'), ENT_QUOTES) ?>">Quotations</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-agreements.php'), ENT_QUOTES) ?>">Agreements</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-challans.php'), ENT_QUOTES) ?>">Challans</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-invoices.php'), ENT_QUOTES) ?>">Invoices</a>
+            </div>
+          </div>
           <div class="dashboard-action-group">
             <h3>AI &amp; growth studio</h3>
             <div class="dashboard-action-links">

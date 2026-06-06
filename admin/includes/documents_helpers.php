@@ -510,12 +510,15 @@ function load_company_profile(): array
     $profile = json_load(documents_company_profile_path(), []);
     $merged = array_merge(documents_company_profile_defaults(), is_array($profile) ? $profile : []);
     $merged['logo_path'] = documents_normalize_public_asset_path($merged['logo_path'] ?? '');
+    $merged['upi_qr_path'] = documents_normalize_upi_qr_path($merged['upi_qr_path'] ?? '');
     return $merged;
 }
 
 function save_company_profile(array $profile): array
 {
     $merged = array_merge(documents_company_profile_defaults(), $profile);
+    $merged['logo_path'] = documents_normalize_public_asset_path($merged['logo_path'] ?? '');
+    $merged['upi_qr_path'] = documents_normalize_upi_qr_path($merged['upi_qr_path'] ?? '');
     $merged['updated_at'] = date('c');
     return json_save(documents_company_profile_path(), $merged);
 }
@@ -548,6 +551,22 @@ function documents_normalize_public_asset_path($rawPath): string
     return '/images/documents/branding/' . ltrim($path, '/');
 }
 
+function documents_normalize_upi_qr_path($rawPath): string
+{
+    $path = documents_normalize_public_asset_path($rawPath);
+    if ($path === '' || !preg_match('#^/images/documents/branding/upi_qr_[A-Za-z0-9._-]+$#', $path)) {
+        return '';
+    }
+
+    return $path;
+}
+
+function documents_upi_qr_asset_exists($rawPath): bool
+{
+    $path = documents_normalize_upi_qr_path($rawPath);
+    return $path !== '' && is_file(dirname(__DIR__, 2) . $path);
+}
+
 function documents_get_company_profile_for_quotes(): array
 {
     $profile = array_merge(
@@ -567,6 +586,7 @@ function documents_get_company_profile_for_quotes(): array
     }
 
     $profile['logo_path'] = documents_normalize_public_asset_path($profile['logo_path'] ?? '');
+    $profile['upi_qr_path'] = documents_normalize_upi_qr_path($profile['upi_qr_path'] ?? '');
 
     return $profile;
 }
@@ -804,6 +824,7 @@ function documents_company_profile_defaults(): array
         'bank_ifsc' => '',
         'bank_branch' => '',
         'upi_id' => '',
+        'upi_qr_path' => '',
         'default_cta_line' => '',
         'logo_path' => '',
         'updated_at' => '',
