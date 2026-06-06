@@ -228,7 +228,6 @@ $quotes = array_values(array_filter($allQuotes, static function (array $q) use (
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Admin Challans</title>
-  <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <style>
     body { margin:0; font-family:Arial,sans-serif; background:#f4f6fa; }
     .wrap { padding:16px; }
@@ -242,10 +241,13 @@ $quotes = array_values(array_filter($allQuotes, static function (array $q) use (
     .btn.secondary { background:#fff; color:#1f2937; border:1px solid #cbd5e1; }
   </style>
 </head>
-<body class="admin-shell commercial-admin">
+<body>
 <main class="wrap">
-  <header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Delivery Challans</h1><p>Prepare and track dispatch without losing the linked customer quotation context.</p></div><nav class="commercial-quick-links" aria-label="Commercial pages"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php?tab=accepted_customers">Document Packs</a><a class="btn secondary" href="admin-quotations.php">Quotations</a><a class="btn secondary" href="admin-invoices.php">Invoices</a></nav></header>
-  <nav class="commercial-flow-strip" aria-label="Commercial lifecycle"><a href="admin-quotations.php">Quotation</a><span>→</span><a href="admin-agreements.php">Agreement</a><span>→</span><a class="active" href="admin-challans.php">Challan</a><span>→</span><a href="admin-invoices.php">Invoice</a><span>→</span><a href="admin-documents.php?tab=accepted_customers">Receipt</a></nav>
+  <div class="card">
+    <h1 style="margin-top:0">Delivery Challans (Admin)</h1>
+    <a class="btn secondary" href="admin-documents.php">Back to Documents</a>
+    <a class="btn secondary" href="admin-dashboard.php">Admin Dashboard</a>
+  </div>
 
   <?php if (isset($_GET['message'])): ?><div class="card" style="background:<?= safe_text($_GET['status'] ?? '') === 'error' ? '#fef2f2' : '#ecfdf5' ?>"><?= htmlspecialchars((string) ($_GET['message'] ?? ''), ENT_QUOTES) ?></div><?php endif; ?>
 
