@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/includes/public_document_security.php';
+protect_customer_document_response();
+
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/employee_portal.php';
 require_once __DIR__ . '/includes/employee_admin.php';
@@ -102,7 +105,8 @@ $renderRows = static function (array $rows): void {
 };
 ?>
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delivery Challan <?= htmlspecialchars((string) ($challan['dc_number'] ?: $challan['challan_no']), ENT_QUOTES) ?></title>
+<html lang="en"><head><meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delivery Challan <?= htmlspecialchars((string) ($challan['dc_number'] ?: $challan['challan_no']), ENT_QUOTES) ?></title>
 <style>
 @page { size: A4; margin: 10mm; }
 html,body{margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:12px;color:#111}.doc{width:100%}.header{display:flex;justify-content:space-between;gap:14px;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:10px}.title{text-align:center;font-size:22px;font-weight:700;margin:8px 0}.meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}.box{border:1px solid #444;padding:8px;min-height:52px}table{width:100%;border-collapse:collapse;margin-bottom:14px}th,td{border:1px solid #444;padding:6px;vertical-align:top}th{background:#f8fafc}.muted{color:#5b6472;font-size:11px}.section-title{font-size:14px;font-weight:700;margin:12px 0 6px}.footer{margin-top:16px;border-top:1px solid #444;padding-top:8px}.sign{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:26px}

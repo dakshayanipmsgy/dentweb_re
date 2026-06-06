@@ -374,7 +374,8 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
     $validUntilDisplay = quotation_format_display_date(safe_text((string) ($quote['valid_until'] ?? '')));
 ?>
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quotation</title>
+<html><head><meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quotation</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 :root{--teal-950:#073b3a;--teal-900:#0b4f4c;--teal-800:#0f6661;--teal-700:#0f766e;--teal-100:#ccfbf1;--teal-50:#f0fdfa;--gold:#e7ad20;--gold-soft:#fff8df;--ink:#102a2a;--muted:#5b6f70;--surface:#fff;--page:#f5f8f7;--line:#dce7e5;--success:#147a55;--success-soft:#edf9f2;--warning:#a35b08;--warning-soft:#fff7df;--shadow:0 14px 36px rgba(7,59,58,.08);--radius:18px;--base-font-size:<?= (int)($typo['base_px'] ?? 14) ?>px;--footer-bg:<?= htmlspecialchars($footerBg, ENT_QUOTES) ?>;--footer-text-color:<?= htmlspecialchars($footerText, ENT_QUOTES) ?>}

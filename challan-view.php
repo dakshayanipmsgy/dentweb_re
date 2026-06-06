@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/includes/public_document_security.php';
+protect_customer_document_response();
+
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/employee_portal.php';
 require_once __DIR__ . '/includes/employee_admin.php';
@@ -1195,7 +1198,8 @@ $messageParam = safe_text($_GET['message'] ?? '');
 $editable = (string) ($challan['status'] ?? 'draft') === 'draft';
 ?>
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Delivery Challan Builder</title>
+<html lang="en"><head><meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Delivery Challan Builder</title>
 <style>
 body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{max-width:1300px;margin:20px auto;padding:0 14px}.card{background:#fff;border:1px solid #d9e1ec;border-radius:12px;padding:14px;margin-bottom:12px}.btn{display:inline-block;background:#0b57d0;color:#fff;border:1px solid #0b57d0;padding:7px 10px;border-radius:8px;text-decoration:none;cursor:pointer}.btn.secondary{background:#fff;color:#0b57d0}.btn.warn{background:#b91c1c;border-color:#b91c1c}.muted{color:#666}.row-actions{display:flex;gap:6px;align-items:center}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}input,select,textarea{width:100%;padding:7px;border:1px solid #cbd5e1;border-radius:8px}.tree-item{border:1px solid #e2e8f0;border-radius:10px;padding:8px;margin:6px 0}.tree-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.small{font-size:12px}.pill{padding:2px 8px;border-radius:999px;font-size:11px}.ok{background:#dcfce7;color:#166534}.bad{background:#fee2e2;color:#991b1b}.done{background:#e2e8f0;color:#334155}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe3ee;padding:8px;vertical-align:top}thead th{background:#f1f5f9}.mono{font-family:ui-monospace,monospace}
 </style></head>

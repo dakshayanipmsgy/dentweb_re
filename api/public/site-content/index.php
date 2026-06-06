@@ -26,7 +26,7 @@ try {
             'cta_text' => $offer['cta_text'] ?? '',
             'cta_link' => $offer['cta_link'] ?? '',
         ];
-    }, $settings['seasonal_offers'] ?? []));
+    }, website_settings_public_seasonal_offers($settings['seasonal_offers'] ?? [])));
 
     $testimonials = array_values(array_map(static function (array $testimonial): array {
         return [

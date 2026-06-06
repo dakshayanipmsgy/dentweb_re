@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/includes/public_document_security.php';
+protect_customer_document_response();
+
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/employee_portal.php';
 require_once __DIR__ . '/includes/employee_admin.php';
@@ -133,7 +136,8 @@ if ($mode === 'edit') {
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
+<meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Agreement <?= htmlspecialchars((string) $agreement['agreement_no'], ENT_QUOTES) ?></title>
   <style>
@@ -241,7 +245,8 @@ $previewHtml = quotation_sanitize_html(documents_render_agreement_body_html($agr
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
+<meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Agreement <?= htmlspecialchars((string) $agreement['agreement_no'], ENT_QUOTES) ?></title>
   <style>

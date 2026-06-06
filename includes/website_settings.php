@@ -162,6 +162,32 @@ function website_settings_normalize(array $data): array
     return $normalized;
 }
 
+/** Return only offers safe to render publicly. Admin settings remain unchanged. */
+function website_settings_public_seasonal_offers(array $offers, ?DateTimeImmutable $today = null): array
+{
+    $timezone = new DateTimeZone('Asia/Kolkata');
+    $today = ($today ?? new DateTimeImmutable('today', $timezone))->setTimezone($timezone)->setTime(0, 0);
+
+    return array_values(array_filter($offers, static function ($offer) use ($today, $timezone): bool {
+        if (!is_array($offer)) {
+            return false;
+        }
+
+        $validTill = trim((string) ($offer['valid_till'] ?? ''));
+        if ($validTill === '') {
+            return true;
+        }
+
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $validTill, $timezone);
+        $errors = DateTimeImmutable::getLastErrors();
+        if (!$date instanceof DateTimeImmutable || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0)) || $date->format('Y-m-d') !== $validTill) {
+            return false;
+        }
+
+        return $date >= $today;
+    }));
+}
+
 function website_settings(): array
 {
     if (array_key_exists('website_settings_cache', $GLOBALS) && is_array($GLOBALS['website_settings_cache'])) {
