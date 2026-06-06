@@ -223,107 +223,21 @@ $quotes = array_values(array_filter($allQuotes, static function (array $q) use (
 }));
 ?>
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin Challans</title>
-  <link rel="stylesheet" href="assets/css/admin-unified.css" />
-  <style>
-    body { margin:0; font-family:Arial,sans-serif; background:#f4f6fa; }
-    .wrap { padding:16px; }
-    .card { background:#fff; border:1px solid #dbe1ea; border-radius:12px; padding:14px; margin-bottom:14px; }
-    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; }
-    input,select,textarea { width:100%; padding:7px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; }
-    textarea { min-height:80px; }
-    table { width:100%; border-collapse:collapse; }
-    th,td { border:1px solid #dbe1ea; padding:8px; text-align:left; vertical-align:top; font-size:13px; }
-    .btn { display:inline-block; border:none; border-radius:8px; background:#1d4ed8; color:#fff; text-decoration:none; padding:8px 12px; cursor:pointer; }
-    .btn.secondary { background:#fff; color:#1f2937; border:1px solid #cbd5e1; }
-  </style>
-</head>
-<body class="admin-shell commercial-admin">
-<main class="wrap">
-  <header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Delivery Challans</h1><p>Prepare and track dispatch without losing the linked customer quotation context.</p></div><nav class="commercial-quick-links" aria-label="Commercial pages"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php?tab=accepted_customers">Document Packs</a><a class="btn secondary" href="admin-quotations.php">Quotations</a><a class="btn secondary" href="admin-invoices.php">Invoices</a></nav></header>
-  <nav class="commercial-flow-strip" aria-label="Commercial lifecycle"><a href="admin-quotations.php">Quotation</a><span>→</span><a href="admin-agreements.php">Agreement</a><span>→</span><a class="active" href="admin-challans.php">Challan</a><span>→</span><a href="admin-invoices.php">Invoice</a><span>→</span><a href="admin-documents.php?tab=accepted_customers">Receipt</a></nav>
-
-  <?php if (isset($_GET['message'])): ?><div class="card" style="background:<?= safe_text($_GET['status'] ?? '') === 'error' ? '#fef2f2' : '#ecfdf5' ?>"><?= htmlspecialchars((string) ($_GET['message'] ?? ''), ENT_QUOTES) ?></div><?php endif; ?>
-
-  <form method="post" class="card">
-    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>">
-    <input type="hidden" name="challan_id" value="">
-    <h2 style="margin-top:0">Create Challan</h2>
-
-    <div class="grid">
-      <div><label>Link Quotation (optional)</label><select name="linked_quote_id"><option value="">-- Not linked --</option><?php foreach ($quotes as $q): ?><option value="<?= htmlspecialchars((string) $q['id'], ENT_QUOTES) ?>"><?= htmlspecialchars((string) $q['quote_no'] . ' | ' . $q['customer_name'] . ' (' . $q['customer_mobile'] . ')', ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-      <div><label>Quote Search (GET filter)</label><input name="quote_q" form="filterForm" value="<?= htmlspecialchars((string) ($filters['quote'] ?? ''), ENT_QUOTES) ?>"></div>
-      <div><label>Party Type</label><select name="party_type"><option value="customer">customer</option><option value="lead">lead</option></select></div>
-      <div><label>Template Set</label><select name="template_set_id"><option value="">-- Optional --</option><?php foreach ($templates as $tpl): ?><option value="<?= htmlspecialchars((string) ($tpl['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($tpl['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-      <div><label>Segment</label><select name="segment"><?php foreach ($segments as $seg): ?><option value="<?= htmlspecialchars($seg, ENT_QUOTES) ?>"><?= htmlspecialchars($seg, ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
-      <div><label>Delivery Date</label><input type="date" name="delivery_date" value="<?= date('Y-m-d') ?>"></div>
-      <div><label>Customer Mobile</label><input name="customer_mobile"></div>
-      <div><label>Customer Name</label><input name="customer_name"></div>
-      <div><label>Consumer Account No (JBVNL)</label><input name="consumer_account_no"></div>
-      <div><label>City</label><input name="city"></div>
-      <div><label>District</label><input name="district"></div>
-      <div><label>PIN</label><input name="pin_code"></div>
-      <div><label>State</label><input name="state" value="Jharkhand"></div>
-      <div><label>Vehicle No</label><input name="vehicle_no"></div>
-      <div><label>Driver Name</label><input name="driver_name"></div>
-      <div><label>Background image path (optional)</label><input name="background_image"></div>
-      <div><label>Background opacity</label><input type="number" min="0.1" max="1" step="0.05" name="background_opacity" value="1"></div>
-      <div style="grid-column:1/-1"><label>Customer Address</label><textarea name="customer_address"></textarea></div>
-      <div style="grid-column:1/-1"><label>Site Address</label><textarea name="site_address"></textarea></div>
-      <div style="grid-column:1/-1"><label>Delivery Address</label><textarea name="delivery_address"></textarea></div>
-      <div style="grid-column:1/-1"><label>Delivery Notes</label><textarea name="delivery_notes"></textarea></div>
-    </div>
-
-    <h3>Items (minimum one valid item required to issue)</h3>
-    <table>
-      <thead><tr><th>Name</th><th>Description</th><th>Unit</th><th>Qty</th><th>Remarks</th></tr></thead>
-      <tbody>
-        <?php for ($i=0; $i<5; $i++): ?>
-        <tr>
-          <td><input name="item_name[]"></td>
-          <td><input name="item_description[]"></td>
-          <td><select name="item_unit[]"><?php foreach ($units as $u): ?><option value="<?= htmlspecialchars($u, ENT_QUOTES) ?>"><?= htmlspecialchars($u, ENT_QUOTES) ?></option><?php endforeach; ?></select></td>
-          <td><input type="number" step="0.01" min="0" name="item_qty[]"></td>
-          <td><input name="item_remarks[]"></td>
-        </tr>
-        <?php endfor; ?>
-      </tbody>
-    </table>
-
-    <button class="btn secondary" type="submit" name="action" value="add_suggested_items">Add Suggested Items (from linked quote)</button>
-    <button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button>
-    <button class="btn" type="submit" name="action" value="issue">Save & Issue</button>
-  </form>
-
-  <form id="filterForm" method="get" class="card">
-    <h2 style="margin-top:0">Challan List</h2>
-    <div class="grid">
-      <div><label>Status</label><select name="status_filter"><option value="">All</option><?php foreach (['Draft','Issued','Archived'] as $st): ?><option value="<?= $st ?>" <?= $filters['status']===$st?'selected':'' ?>><?= $st ?></option><?php endforeach; ?></select></div>
-      <div><label>Search (challan/customer/mobile)</label><input name="q" value="<?= htmlspecialchars((string) $filters['query'], ENT_QUOTES) ?>"></div>
-      <div><label>Quote Search</label><input name="quote_q" value="<?= htmlspecialchars((string) $filters['quote'], ENT_QUOTES) ?>"></div>
-      <div><button class="btn" type="submit">Filter</button></div>
-    </div>
-    <table>
-      <thead><tr><th>Challan No</th><th>Status</th><th>Customer</th><th>Mobile</th><th>Date</th><th>Created By</th><th>Action</th></tr></thead>
-      <tbody>
-      <?php foreach ($rows as $r): ?>
-      <tr>
-        <td><?= htmlspecialchars((string) $r['challan_no'], ENT_QUOTES) ?></td>
-        <td><?= htmlspecialchars((string) $r['status'], ENT_QUOTES) ?></td>
-        <td><?= htmlspecialchars((string) ($r['customer_snapshot']['name'] ?? ''), ENT_QUOTES) ?></td>
-        <td><?= htmlspecialchars((string) ($r['customer_snapshot']['mobile'] ?? ''), ENT_QUOTES) ?></td>
-        <td><?= htmlspecialchars((string) $r['delivery_date'], ENT_QUOTES) ?></td>
-        <td><?= htmlspecialchars((string) $r['created_by_name'], ENT_QUOTES) ?></td>
-        <td><a class="btn secondary" href="challan-view.php?id=<?= urlencode((string) $r['id']) ?>">View</a></td>
-      </tr>
-      <?php endforeach; if ($rows === []): ?><tr><td colspan="7">No challans found.</td></tr><?php endif; ?>
-      </tbody>
-    </table>
-  </form>
-</main>
-</body>
-</html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Challans</title><link rel="stylesheet" href="assets/css/admin-unified.css"></head>
+<body class="admin-shell commercial-admin"><main class="commercial-shell">
+<header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Delivery Challans</h1><p>Prepare and track dispatch while retaining the linked quotation and customer context.</p></div><nav class="commercial-header__actions" aria-label="Page actions"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php">Document Center</a><a class="btn commercial-header__primary" href="#create-challan">+ New Challan</a></nav></header>
+<nav class="commercial-flow-strip" aria-label="Commercial lifecycle"><a href="admin-quotations.php">Quotation</a><span>→</span><a href="admin-agreements.php">Agreement</a><span>→</span><a class="active" href="admin-challans.php">Challan</a><span>→</span><a href="admin-invoices.php">Invoice</a><span>→</span><a href="admin-documents.php?tab=accepted_customers">Receipt</a></nav>
+<?php if (isset($_GET['message'])): ?><div class="card" style="background:<?= safe_text($_GET['status'] ?? '') === 'error' ? '#fef2f2' : '#ecfdf5' ?>"><?= htmlspecialchars((string) ($_GET['message'] ?? ''), ENT_QUOTES) ?></div><?php endif; ?>
+<form method="post" id="create-challan">
+<input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="challan_id" value="">
+<section class="form-section-card"><h2>Create Challan</h2><p class="muted-helper">Start with the quotation, customer, delivery date, address, and items. Optional dispatch and appearance fields are tucked away.</p></section>
+<section class="form-section-card"><h3>1. Link quotation / customer lookup</h3><p class="muted-helper">Linking a quotation keeps the commercial hand-off traceable.</p><div class="form-grid form-grid--two"><div><label>Link Quotation (optional)</label><select name="linked_quote_id"><option value="">-- Not linked --</option><?php foreach ($quotes as $q): ?><option value="<?= htmlspecialchars((string) $q['id'], ENT_QUOTES) ?>"><?= htmlspecialchars((string) $q['quote_no'] . ' | ' . $q['customer_name'] . ' (' . $q['customer_mobile'] . ')', ENT_QUOTES) ?></option><?php endforeach; ?></select></div><div><label>Quote Search</label><input name="quote_q" form="filterForm" value="<?= htmlspecialchars((string) ($filters['quote'] ?? ''), ENT_QUOTES) ?>"><span class="muted-helper">Filters the quotation selector after submitting the list filters.</span></div></div></section>
+<section class="form-section-card"><h3>2. Customer details</h3><div class="form-grid"><div><label>Customer Mobile</label><input name="customer_mobile"></div><div><label>Customer Name</label><input name="customer_name"></div><div><label>Consumer Account No (JBVNL)</label><input name="consumer_account_no"></div><div><label>Party Type</label><select name="party_type"><option value="customer">Customer</option><option value="lead">Lead</option></select></div><div><label>Segment</label><select name="segment"><?php foreach ($segments as $seg): ?><option value="<?= htmlspecialchars($seg, ENT_QUOTES) ?>"><?= htmlspecialchars($seg, ENT_QUOTES) ?></option><?php endforeach; ?></select></div></div></section>
+<section class="form-section-card"><h3>3. Delivery details</h3><div class="form-grid"><div><label>Delivery Date</label><input type="date" name="delivery_date" value="<?= date('Y-m-d') ?>"></div><div><label>City</label><input name="city"></div><div><label>District</label><input name="district"></div><div><label>PIN</label><input name="pin_code"></div><div><label>State</label><input name="state" value="Jharkhand"></div></div><details class="advanced-fields"><summary>Optional delivery notes and appearance</summary><div class="form-grid"><div><label>Template Set</label><select name="template_set_id"><option value="">-- Optional --</option><?php foreach ($templates as $tpl): ?><option value="<?= htmlspecialchars((string) ($tpl['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($tpl['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div><div><label>Background image path</label><input name="background_image"></div><div><label>Background opacity</label><input type="number" min="0.1" max="1" step="0.05" name="background_opacity" value="1"></div><div class="full-span"><label>Delivery Notes</label><textarea name="delivery_notes"></textarea></div></div></details></section>
+<section class="form-section-card"><h3>4. Vehicle / driver details</h3><p class="muted-helper">Optional dispatch information.</p><div class="form-grid form-grid--two"><div><label>Vehicle No</label><input name="vehicle_no"></div><div><label>Driver Name</label><input name="driver_name"></div></div></section>
+<section class="form-section-card"><h3>5. Addresses</h3><div class="form-grid"><div><label>Customer Address</label><textarea name="customer_address"></textarea></div><div><label>Site Address</label><textarea name="site_address"></textarea></div><div><label>Delivery Address</label><textarea name="delivery_address"></textarea></div></div></section>
+<section class="form-section-card"><h3>6. Items</h3><p class="muted-helper">At least one valid item is required before issue.</p><div class="responsive-table"><table><thead><tr><th>Name</th><th>Description</th><th>Unit</th><th>Qty</th><th>Remarks</th></tr></thead><tbody><?php for ($i=0; $i<5; $i++): ?><tr><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><select name="item_unit[]"><?php foreach ($units as $u): ?><option value="<?= htmlspecialchars($u, ENT_QUOTES) ?>"><?= htmlspecialchars($u, ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="item_qty[]"></td><td><input name="item_remarks[]"></td></tr><?php endfor; ?></tbody></table></div></section>
+<footer class="sticky-action-footer"><span class="muted-helper">Save a draft anytime; issue only when items are ready.</span><button class="btn secondary" type="submit" name="action" value="add_suggested_items">Add Suggested Items</button><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="issue">Save &amp; Issue</button></footer>
+</form>
+<section class="card"><div class="commercial-toolbar"><div><h2>Challan List</h2><p class="muted-helper">Scan current dispatch records and open secondary output actions only when needed.</p></div></div><form id="filterForm" method="get" class="filter-grid"><div><label>Status</label><select name="status_filter"><option value="">All</option><?php foreach (['Draft','Issued','Archived'] as $st): ?><option value="<?= $st ?>" <?= $filters['status']===$st?'selected':'' ?>><?= $st ?></option><?php endforeach; ?></select></div><div><label>Search challan / customer / mobile</label><input name="q" value="<?= htmlspecialchars((string) $filters['query'], ENT_QUOTES) ?>"></div><div><label>Quote Search</label><input name="quote_q" value="<?= htmlspecialchars((string) $filters['quote'], ENT_QUOTES) ?>"></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form><div class="responsive-table"><table><thead><tr><th>Challan</th><th>Status</th><th>Customer</th><th>Delivery Date</th><th>Created By</th><th>Actions</th></tr></thead><tbody><?php foreach ($rows as $r): ?><tr><td><strong><?= htmlspecialchars((string) $r['challan_no'], ENT_QUOTES) ?></strong></td><td><span class="status-badge status-badge--<?= strtolower(htmlspecialchars((string) $r['status'], ENT_QUOTES)) ?>"><?= htmlspecialchars((string) $r['status'], ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string) ($r['customer_snapshot']['name'] ?? ''), ENT_QUOTES) ?><br><span class="muted-helper"><?= htmlspecialchars((string) ($r['customer_snapshot']['mobile'] ?? ''), ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string) $r['delivery_date'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) $r['created_by_name'], ENT_QUOTES) ?></td><td><div class="row-action-group"><a class="btn" href="challan-view.php?id=<?= urlencode((string) $r['id']) ?>">View</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="challan-print.php?id=<?= urlencode((string) $r['id']) ?>" target="_blank" rel="noopener">Print</a></div></details></div></td></tr><?php endforeach; if ($rows === []): ?><tr><td colspan="6" class="empty-state">No challans found.</td></tr><?php endif; ?></tbody></table></div></section>
+</main></body></html>
