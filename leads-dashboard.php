@@ -768,6 +768,7 @@ if ($downloadSampleCsv) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_valid_csrf();
     $leadAction = isset($_POST['lead_action']) ? (string) $_POST['lead_action'] : '';
     $leadId = isset($_POST['lead_id']) ? (string) $_POST['lead_id'] : '';
 
@@ -1601,6 +1602,7 @@ ksort($duplicateGroups);
     <div class="card admin-panel leads-panel leads-panel--quick-add">
       <h2 style="margin-top:0;">Quick Add Lead</h2>
       <form method="post" class="grid grid-3">
+        <?= csrf_field() ?>
         <input type="hidden" name="intent" value="quick_add" />
         <input type="hidden" name="current_section" value="quick-add" />
         <div>
@@ -1675,6 +1677,7 @@ ksort($duplicateGroups);
         <a class="btn-secondary" href="/leads-dashboard.php?download=lead_sample_csv">Download Sample CSV</a>
       </p>
       <form method="post" enctype="multipart/form-data" class="grid" style="grid-template-columns: 1fr auto; align-items:end;">
+        <?= csrf_field() ?>
         <input type="hidden" name="intent" value="import_csv" />
         <input type="hidden" name="current_section" value="import" />
         <div>
@@ -1720,6 +1723,7 @@ ksort($duplicateGroups);
                   <td><?php echo count($group); ?></td>
                   <td>
                     <form method="post" style="margin:0;">
+        <?= csrf_field() ?>
                       <input type="hidden" name="intent" value="merge_duplicates" />
                       <input type="hidden" name="current_section" value="leads" />
                       <input type="hidden" name="mobile_key" value="<?php echo leads_safe((string) $mobileKey); ?>" />
@@ -1744,6 +1748,7 @@ ksort($duplicateGroups);
           <h3 style="margin-top:0;">Messaging Templates</h3>
           <p style="margin-top:0;color:#4b5563;">Use placeholders: <code>{{name}}</code>, <code>{{mobile}}</code>, <code>{{email}}</code>, <code>{{city}}</code>, <code>{{assigned_to}}</code>, <code>{{details_page_url}}</code>, <code>{{company_name}}</code>, <code>{{company_phone}}</code>.</p>
           <form method="post" class="grid" style="gap:0.5rem;">
+        <?= csrf_field() ?>
             <input type="hidden" name="intent" value="save_message_settings" />
             <input type="hidden" name="current_section" value="settings" />
             <h4 style="margin:0.25rem 0;">Stage 1 — Attention Capture</h4>
@@ -1783,6 +1788,7 @@ ksort($duplicateGroups);
           <h3 style="margin-top:0;">Lead Explainer Content</h3>
           <p style="margin-top:0;color:#4b5563;">This content appears on <a href="/solar-details.php" target="_blank" rel="noopener">/solar-details.php</a>. Use Media Library URLs for image slots if available.</p>
           <form method="post" class="grid" style="gap:0.5rem;">
+        <?= csrf_field() ?>
           <input type="hidden" name="intent" value="save_explainer_content" />
           <input type="hidden" name="current_section" value="settings" />
           <label for="page_title">Page Title</label>
@@ -1885,6 +1891,7 @@ ksort($duplicateGroups);
       </form>
 
       <form method="post" id="bulk-actions-form" class="lead-filters" style="margin-top:0.75rem;">
+        <?= csrf_field() ?>
         <input type="hidden" name="intent" value="bulk_action" />
         <input type="hidden" name="current_section" value="leads" />
         <label style="display:flex;align-items:center;gap:0.5rem;">

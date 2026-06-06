@@ -15,6 +15,7 @@ $entries = audit_read_recent(200);
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Audit Log | Dakshayani Enterprises</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <style>
     body { background: #f5f7fb; font-family: 'Poppins', 'Segoe UI', sans-serif; }
     .audit-shell { max-width: 1100px; margin: 2rem auto; padding: 1rem; }

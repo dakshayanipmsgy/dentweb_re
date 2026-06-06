@@ -23,6 +23,7 @@ function employee_portal_logout(): void
 function employee_portal_require_login(): void
 {
     employee_portal_session();
+    send_private_workspace_headers();
     if (empty($_SESSION['employee_logged_in']) || !isset($_SESSION['employee_id'])) {
         header('Location: login.php?login_type=employee');
         exit;

@@ -109,6 +109,7 @@ function session_user(): ?array
 function require_login_any_role(array $roles = []): void
 {
     start_session();
+    send_private_workspace_headers();
     enforce_offline_session_validity();
 
     $user = session_user();
@@ -143,6 +144,7 @@ function require_role(string $role): void
 function require_admin(): void
 {
     start_session();
+    send_private_workspace_headers();
     enforce_offline_session_validity();
 
     $user = $_SESSION['user'] ?? null;
@@ -235,6 +237,42 @@ function verify_csrf_token(?string $token): bool
 {
     start_session();
     return is_string($token) && hash_equals($_SESSION['csrf_token'] ?? '', $token);
+}
+
+function csrf_token(): string
+{
+    start_session();
+    return (string) ($_SESSION['csrf_token'] ?? '');
+}
+
+function csrf_field(): string
+{
+    return '<input type="hidden" name="csrf_token" value="'
+        . htmlspecialchars(csrf_token(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+        . '">';
+}
+
+function require_valid_csrf(?string $token = null): void
+{
+    $candidate = $token ?? (is_string($_POST['csrf_token'] ?? null) ? $_POST['csrf_token'] : null);
+    if (verify_csrf_token($candidate)) {
+        return;
+    }
+
+    http_response_code(419);
+    echo 'Your session security token expired. Go back, refresh the page, and try again.';
+    exit;
+}
+
+function send_private_workspace_headers(): void
+{
+    if (headers_sent()) {
+        return;
+    }
+
+    header('Cache-Control: no-store, no-cache, must-revalidate, private, max-age=0');
+    header('Pragma: no-cache');
+    header('X-Robots-Tag: noindex, nofollow, noarchive', true);
 }
 
 function normalize_customer_mobile(string $value): string

@@ -301,6 +301,7 @@ $cardConfigs[] = [
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" />
   <title>Admin Overview | Dakshayani Enterprises</title>
   <meta name="description" content="At-a-glance admin overview with live counts and recent activity across Dentweb operations." />
   <link rel="icon" href="<?= htmlspecialchars($pathFor('images/favicon.ico'), ENT_QUOTES) ?>" />

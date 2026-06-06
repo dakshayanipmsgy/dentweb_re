@@ -49,6 +49,7 @@ function format_admin_datetime(?string $value): string
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" />
     <title>Customers | Admin</title>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
@@ -116,6 +117,7 @@ function format_admin_datetime(?string $value): string
         <div class="admin-form">
             <a href="customer-records-template.php?type=leads" class="btn btn-secondary">Download Sample CSV</a>
             <form id="csv-upload-form" method="post" enctype="multipart/form-data">
+                <?= csrf_field() ?>
                 <label for="csv-file">Upload CSV:</label>
                 <input type="file" id="csv-file" name="csv_file" accept=".csv" />
                 <label>

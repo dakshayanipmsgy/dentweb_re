@@ -77,6 +77,7 @@ if ($activeTab === 'customers') {
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        require_valid_csrf();
         $action = (string) ($_POST['customer_action'] ?? '');
         if ($action === 'archive_customer') {
             $mobile = trim((string) ($_POST['mobile'] ?? ''));
@@ -449,6 +450,7 @@ if ($activeTab === 'customers') {
 
 if ($activeTab === 'employees') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        require_valid_csrf();
         $action = (string) ($_POST['employee_action'] ?? '');
         $input = [
             'name' => $_POST['name'] ?? '',
@@ -1259,6 +1261,7 @@ function admin_users_build_welcome_subject(array $customer): string
             </div>
           </div>
           <form method="post" class="users-form">
+        <?= csrf_field() ?>
             <input type="hidden" name="customer_action" value="create_customer" />
             <input type="hidden" name="welcome_sent_via" value="none" />
 
@@ -1459,6 +1462,7 @@ function admin_users_build_welcome_subject(array $customer): string
           </div>
           <?php endif; ?>
           <form method="post" enctype="multipart/form-data" class="users-form-grid">
+        <?= csrf_field() ?>
             <input type="hidden" name="customer_action" value="import_customers" />
             <div>
               <label for="customer_csv">Upload CSV file</label>
@@ -1479,6 +1483,7 @@ function admin_users_build_welcome_subject(array $customer): string
             </div>
           </div>
           <form method="post" class="users-form" id="customer-edit-form">
+        <?= csrf_field() ?>
             <div class="users-subtabs" role="tablist" aria-label="Customer edit sections">
               <button type="button" class="users-subtab is-active" data-target="profile">Profile</button>
               <button type="button" class="users-subtab" data-target="project">Project / PM Surya Ghar</button>
@@ -1806,6 +1811,7 @@ function admin_users_build_welcome_subject(array $customer): string
             </div>
           </div>
           <form method="post" class="users-form-grid" style="margin-bottom: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+        <?= csrf_field() ?>
             <input type="hidden" name="customer_action" value="create_complaint" />
             <input type="hidden" name="view_mobile" value="<?= admin_users_safe($editingCustomer['mobile'] ?? '') ?>" />
             <div>
@@ -1875,6 +1881,7 @@ function admin_users_build_welcome_subject(array $customer): string
                     <td><?= admin_users_safe($complaint['updated_at'] ?? '') ?></td>
                     <td class="text-right">
                       <form method="post" class="admin-inline-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.35rem; align-items: center;">
+        <?= csrf_field() ?>
                         <input type="hidden" name="customer_action" value="update_complaint" />
                         <input type="hidden" name="view_mobile" value="<?= admin_users_safe($editingCustomer['mobile'] ?? '') ?>" />
                         <input type="hidden" name="complaint_id" value="<?= admin_users_safe((string) ($complaint['id'] ?? '')) ?>" />
@@ -1909,6 +1916,7 @@ function admin_users_build_welcome_subject(array $customer): string
         <?php endif; ?>
 
         <form method="post" class="admin-table-wrapper">
+        <?= csrf_field() ?>
           <input type="hidden" name="customer_action" id="bulk-customer-action" value="" />
           <table class="users-table" aria-label="Customer list">
             <thead>
@@ -2070,6 +2078,7 @@ function admin_users_build_welcome_subject(array $customer): string
             </div>
           </div>
           <form method="post" class="users-form-grid">
+        <?= csrf_field() ?>
             <input type="hidden" name="employee_action" value="create_employee" />
             <div>
               <label for="employee-name">Name *</label>
@@ -2118,6 +2127,7 @@ function admin_users_build_welcome_subject(array $customer): string
             </div>
           </div>
           <form method="post" class="users-form-grid">
+        <?= csrf_field() ?>
             <input type="hidden" name="employee_action" value="update_employee" />
             <input type="hidden" name="employee_id" value="<?= admin_users_safe($editingEmployee['id'] ?? '') ?>" />
             <div>

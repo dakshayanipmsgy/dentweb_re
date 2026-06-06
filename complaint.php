@@ -1,13 +1,17 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/customer_complaints.php';
+
+start_session();
 
 $success = '';
 $error = '';
 $problemCategories = complaint_problem_categories();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_valid_csrf();
     try {
         $record = customer_complaint_submit($_POST);
         $reference = htmlspecialchars((string) ($record['id'] ?? ''), ENT_QUOTES);
@@ -39,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php endif; ?>
 
     <form method="post" class="admin-form">
+      <?= csrf_field() ?>
       <label>Mobile number
         <input type="tel" name="mobile" required />
       </label>

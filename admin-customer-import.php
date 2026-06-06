@@ -10,6 +10,7 @@ $result = null;
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
+    require_valid_csrf();
     $mode = isset($_POST['update_mode']) && $_POST['update_mode'] === 'update' ? 'update' : 'skip';
     $file = $_FILES['csv_file'];
     if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
@@ -57,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
     <?php endif; ?>
 
     <form method="post" enctype="multipart/form-data" class="admin-form">
+        <?= csrf_field() ?>
       <label>CSV file
         <input type="file" name="csv_file" accept=".csv" required />
       </label>

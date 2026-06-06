@@ -19,6 +19,7 @@ function tasks_safe(string $value): string
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_valid_csrf();
     $action = (string) ($_POST['task_action'] ?? '');
     $tasks = load_tasks();
 
@@ -300,6 +301,7 @@ usort($filteredTasks, static function (array $left, array $right): int {
       <article class="admin-panel-card admin-panel-card--create">
         <h2>Assign Task</h2>
         <form method="post" class="users-form-grid">
+        <?= csrf_field() ?>
           <input type="hidden" name="task_action" value="admin_assign" />
           <div>
             <label for="assign_to_id">Employee</label>
@@ -397,6 +399,7 @@ usort($filteredTasks, static function (array $left, array $right): int {
                     <button type="button" class="btn btn-primary btn-xs js-open-complete" data-task-id="<?= tasks_safe((string) ($task['id'] ?? '')) ?>">Complete</button>
                   <?php endif; ?>
                   <form method="post" class="admin-inline-form">
+        <?= csrf_field() ?>
                     <input type="hidden" name="task_action" value="<?= empty($task['archived_flag']) ? 'admin_archive' : 'admin_unarchive' ?>" />
                     <input type="hidden" name="task_id" value="<?= tasks_safe((string) ($task['id'] ?? '')) ?>" />
                     <button type="submit" class="btn btn-ghost btn-xs"><?= empty($task['archived_flag']) ? 'Archive' : 'Unarchive' ?></button>
@@ -419,6 +422,7 @@ usort($filteredTasks, static function (array $left, array $right): int {
     <dialog id="complete-dialog" class="admin-dialog">
       <form method="dialog" class="admin-dialog__frame"><header class="admin-dialog__header"><h2>Mark task complete</h2><button class="btn btn-secondary btn-xs" value="cancel">Close</button></header></form>
       <form method="post" class="admin-dialog__body">
+        <?= csrf_field() ?>
         <input type="hidden" name="task_action" value="admin_complete" />
         <input type="hidden" name="task_id" id="complete-task-id" value="" />
         <label for="complete-note">Completion note (optional)</label>
