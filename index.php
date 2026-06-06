@@ -6,7 +6,7 @@ $global = $ws['global'] ?? [];
 $hero = $ws['hero'] ?? [];
 $sections = $ws['sections'] ?? [];
 $testimonials = $ws['testimonials'] ?? [];
-$offers = $ws['seasonal_offers'] ?? [];
+$offers = website_settings_public_seasonal_offers($ws['seasonal_offers'] ?? []);
 $theme = $ws['theme'] ?? [];
 $primaryColor = $theme['primary_color'] ?? '#333333';
 $secondaryColor = $theme['secondary_color'] ?? '#00374a';
@@ -157,7 +157,7 @@ $schemaGraph = [
                 'name' => 'How quickly can Dakshayani file PM Surya Ghar subsidies?',
                 'acceptedAnswer' => [
                     '@type' => 'Answer',
-                    'text' => 'All documentation is pre-verified and filed within 21 days with MNRE/JREDA and the local DISCOM.',
+                    'text' => 'Our team supports document verification and filing with the relevant PM Surya Ghar/JREDA and DISCOM processes.',
                 ],
             ],
             [
@@ -169,24 +169,6 @@ $schemaGraph = [
                 ],
             ],
         ],
-    ],
-    [
-        '@type' => 'Review',
-        'itemReviewed' => [
-            '@type' => 'LocalBusiness',
-            'name' => 'Dakshayani Enterprises',
-        ],
-        'reviewRating' => [
-            '@type' => 'Rating',
-            'ratingValue' => '5',
-            'bestRating' => '5',
-        ],
-        'author' => [
-            '@type' => 'Person',
-            'name' => 'Asha Verma',
-        ],
-        'reviewBody' => 'Seamless 8 kW rooftop installation with real-time monitoring and transparent subsidy support.',
-        'datePublished' => '2024-10-02',
     ],
 ];
 
@@ -256,10 +238,6 @@ $schemaContext = [
     };
   </script>
   <script id="site-settings-json" type="application/json"><?= $embeddedContentJson ?></script>
-  <script>
-    window.DAKSHAYANI_RECAPTCHA_SITE_KEY = window.DAKSHAYANI_RECAPTCHA_SITE_KEY || 'replace-with-site-key';
-    window.DAKSHAYANI_GOOGLE_CLIENT_ID = window.DAKSHAYANI_GOOGLE_CLIENT_ID || 'replace-with-google-client-id.apps.googleusercontent.com';
-  </script>
   <script type="application/ld+json">
     <?= json_encode($schemaContext, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>
   </script>
@@ -317,7 +295,7 @@ $schemaContext = [
 
           <div class="hero-assurance">
             <div class="assurance-item">
-              <span class="assurance-value">500+</span>
+              <span class="assurance-value">Growing</span>
               <span class="assurance-label">Homes &amp; MSMEs energised</span>
             </div>
             <div class="assurance-item">
@@ -325,8 +303,8 @@ $schemaContext = [
               <span class="assurance-label">PM Surya Ghar subsidy managed</span>
             </div>
             <div class="assurance-item">
-              <span class="assurance-value">98%</span>
-              <span class="assurance-label">Net-metering success rate</span>
+              <span class="assurance-value">Dedicated</span>
+              <span class="assurance-label">Net-metering support</span>
             </div>
           </div>
         </div>
@@ -340,7 +318,7 @@ $schemaContext = [
         </div>
       </div>
       <div class="hero-trust">
-        <span><i class="fa-solid fa-shield-heart"></i>MNRE empanelled EPC partner</span>
+        <span><i class="fa-solid fa-shield-heart"></i>PM Surya Ghar process support</span>
         <img src="images/logo/New dakshayani logo centered small.png" alt="Dakshayani Enterprises" loading="lazy" />
         <span><i class="fa-solid fa-solar-panel"></i>Tier-1 modules &amp; hybrid inverters</span>
       </div>
@@ -409,11 +387,11 @@ $schemaContext = [
         <div class="trust-grid">
           <figure class="trust-card">
             <img src="images/pmsgy.jpg" alt="PM Surya Ghar programme" loading="lazy" />
-            <figcaption>Govt. empanelled for PM Surya Ghar</figcaption>
+            <figcaption>PM Surya Ghar process support</figcaption>
           </figure>
           <figure class="trust-card">
             <img src="images/large solar small.jpg" alt="Large-scale solar commissioning by Dakshayani" loading="lazy" />
-            <figcaption>10+ MW installed across Jharkhand</figcaption>
+            <figcaption>MW-scale solar experience across Jharkhand</figcaption>
           </figure>
           <figure class="trust-card">
             <img src="images/dedicatedgrounops.jpg" alt="Operations team at Dakshayani office" loading="lazy" />
@@ -583,18 +561,18 @@ $schemaContext = [
         <div class="impact-stats">
           <div class="card text-center">
             <div class="icon-large"><i class="fa-solid fa-house-chimney-crack"></i></div>
-            <p class="stat-value">500+</p>
+            <p class="stat-value">Growing</p>
             <p class="stat-subtitle">Successful Residential Projects</p>
           </div>
           <div class="card text-center">
             <div class="icon-large"><i class="fa-solid fa-warehouse"></i></div>
-            <p class="stat-value">10+ MW</p>
+            <p class="stat-value">MW-scale</p>
             <p class="stat-subtitle">Total Installed Capacity</p>
           </div>
           <div class="card text-center">
             <div class="icon-large"><i class="fa-solid fa-indian-rupee-sign"></i></div>
-            <p class="stat-value">98%</p>
-            <p class="stat-subtitle">Guaranteed Power Output &amp; ROI</p>
+            <p class="stat-value">Dedicated</p>
+            <p class="stat-subtitle">Performance and savings support</p>
           </div>
           <div class="card text-center">
             <div class="icon-large"><i class="fa-solid fa-solar-panel"></i></div>
@@ -645,7 +623,7 @@ $schemaContext = [
           <details open>
             <summary>How does the PM Surya Ghar subsidy process work with Dakshayani?</summary>
             <div class="faq-body">
-              <p>Our subsidy cell raises your application on the PM Surya Ghar portal within 24 hours of signing. We coordinate site photographs, DISCOM feasibility, and documentation uploads. Once inspection is complete, the subsidy is credited directly to your bank account while we reconcile the balance with transparent invoices.</p>
+              <p>Our subsidy cell helps raise your application on the PM Surya Ghar portal after signing. We coordinate site photographs, DISCOM feasibility, and documentation uploads. Once inspection is complete, the subsidy is credited directly to your bank account while we reconcile the balance with transparent invoices.</p>
               <ul>
                 <li>Dedicated case manager for every household or MSME</li>
                 <li>Weekly status updates via WhatsApp and email</li>
@@ -656,7 +634,7 @@ $schemaContext = [
           <details>
             <summary>What is the typical timeline for net-metering approvals in Jharkhand?</summary>
             <div class="faq-body">
-              <p>For LT rooftop systems, approvals arrive within 21 working days on average. HT and commercial connections may take 30–45 days depending on load sanction. Our engineering desk submits drawings, follows up with the DISCOM office, and schedules meter installation so you can start exporting power without delays.</p>
+              <p>Approval timelines vary by connection type, load sanction, and DISCOM review. Our engineering desk submits drawings, follows up with the DISCOM office, and schedules meter installation so you can start exporting power without delays.</p>
               <ul>
                 <li>Pre-filled DISCOM forms and load details submitted by our team</li>
                 <li>Joint inspection with DISCOM engineers for faster closure</li>

@@ -3639,7 +3639,7 @@ function smart_marketing_generate_landing_page(string $campaignId, array $landin
     $cta = trim((string) ($landingOptions['cta'] ?? 'Book a free site visit'));
     $whatsapp = trim((string) ($landingOptions['whatsapp'] ?? ($settings['businessProfile']['whatsappNumber'] ?? '')));
     $call = trim((string) ($landingOptions['call'] ?? ($settings['businessProfile']['primaryContact'] ?? '')));
-    $bodyCopy = trim((string) ($landingOptions['body'] ?? 'MNRE empanelled engineers design, install, and maintain subsidy-backed rooftop systems across Jharkhand. Claim financing assistance, AMC support, and performance monitoring.'));
+    $bodyCopy = trim((string) ($landingOptions['body'] ?? 'Our engineers design, install, and maintain subsidy-backed rooftop systems across Jharkhand. Claim financing assistance, AMC support, and performance monitoring.'));
     $regions = implode(', ', $run['inputs']['regions'] ?? ($settings['businessProfile']['serviceRegions'] ?? ['Jharkhand']));
     $whatsappHref = 'https://wa.me/';
     if ($whatsapp !== '') {

@@ -47,7 +47,7 @@
         .tts-button:hover { background: var(--primary-main); color: var(--surface); }
 
         /* Message Box Styling */
-        .message-box, #rate-update-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); z-index: 1000; max-width: 90%; width: 600px; text-align: center; border: 2px solid var(--primary-main); display: none; }
+        .message-box { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); z-index: 1000; max-width: 90%; width: 600px; text-align: center; border: 2px solid var(--primary-main); display: none; }
         .message-box button { margin-top: 15px; width: 100%; }
         .rate-table-container { max-height: 60vh; overflow-y: auto; }
         .rate-table { width: 100%; text-align: left; margin-top: 1rem; border-collapse: collapse; }
@@ -71,20 +71,6 @@
     <div id="message-modal" class="message-box">
         <p id="message-text" style="color: var(--base-900); font-weight: 600;"></p>
         <button class="btn btn-primary" onclick="document.getElementById('message-modal').style.display = 'none';">OK</button>
-    </div>
-
-    <div id="rate-update-modal">
-        <h3 class="title">Update System Costs (₹)</h3>
-        <div class="rate-table-container">
-            <h4 class="font-semibold text-lg" style="margin-top: 1rem;">PM Surya Ghar Yojana (Residential)</h4>
-            <table id="pm-rates-table" class="rate-table"></table>
-            <h4 class="font-semibold text-lg" style="margin-top: 1rem;">Non-PM Surya Ghar (Commercial)</h4>
-            <table id="non-pm-rates-table" class="rate-table"></table>
-        </div>
-        <div class="flex gap-4" style="margin-top: 1.5rem;">
-            <button class="btn btn-secondary" style="flex-grow: 1;" onclick="closeRateModal()">Cancel</button>
-            <button class="btn btn-primary" style="flex-grow: 1;" onclick="saveRates()">Save Changes</button>
-        </div>
     </div>
 
     <header class="site-header"></header>
@@ -124,7 +110,6 @@
                 <div class="calculator-panel">
                     <div class="flex justify-between items-start">
                          <h2 style="margin-top: 0; font-size: 1.8rem;">1. Choose Your Input Method</h2>
-                         <button class="btn btn-secondary !py-2 !px-3 text-sm" style="padding: 0.5rem 1rem;" onclick="openRateModal()"><i class="fa-solid fa-gear"></i> Update Costs</button>
                     </div>
                    
                     <div class="tab-selector flex gap-2" style="margin-bottom: 1.5rem;">
@@ -931,45 +916,6 @@
         function updateLoadCalculation() {
              calculateLoadWhPerDay();
         }
-
-        function openRateModal() {
-            populateRateTable('pm-rates-table', pmSuryaGharRates);
-            populateRateTable('non-pm-rates-table', nonPmSuryaGharRates);
-            document.getElementById('rate-update-modal').style.display = 'block';
-        }
-
-        function closeRateModal() {
-            document.getElementById('rate-update-modal').style.display = 'none';
-        }
-
-        function populateRateTable(tableId, rates) {
-            const table = document.getElementById(tableId);
-            table.innerHTML = `<thead><tr><th>System Size (kWp)</th><th>Price (₹)</th></tr></thead><tbody>`;
-            for (const size in rates) {
-                const row = `<tr>
-                    <td>${size} kWp</td>
-                    <td><input type="number" id="rate-${tableId}-${size}" value="${rates[size]}"></td>
-                </tr>`;
-                table.innerHTML += row;
-            }
-            table.innerHTML += `</tbody>`;
-        }
-
-        function saveRates() {
-            const pmTable = document.getElementById('pm-rates-table');
-            const nonPmTable = document.getElementById('non-pm-rates-table');
-
-            for (const size in pmSuryaGharRates) {
-                pmSuryaGharRates[size] = parseInt(document.getElementById(`rate-pm-rates-table-${size}`).value) || 0;
-            }
-            for (const size in nonPmSuryaGharRates) {
-                nonPmSuryaGharRates[size] = parseInt(document.getElementById(`rate-non-pm-rates-table-${size}`).value) || 0;
-            }
-            
-            showMessage('Rates updated successfully for this session.');
-            closeRateModal();
-        }
-
 
         document.addEventListener('DOMContentLoaded', () => {
             populateLoadTable('residential');

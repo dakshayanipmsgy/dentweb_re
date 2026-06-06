@@ -1,3 +1,7 @@
 RewriteEngine On
 RewriteRule ^service-workflow\.html$ users/admin/service-workflow.php [L]
 RewriteRule ^crm-portal\.html$ users/admin/crm-portal.php [L]
+
+# Keep legacy public URLs canonical.
+RewriteRule ^home\.html$ /index.php [R=301,L]
+RewriteRule ^contact\.html$ /contact.php [R=301,L]

@@ -12,6 +12,7 @@ const PARTIALS = {
   footer: 'partials/footer.html',
 };
 
+// Keep these network-failure fallbacks in sync with partials/header.php and partials/footer.html.
 const INLINE_PARTIALS = {
   header: `
     <header class="global-header" data-component="global-header">
@@ -102,6 +103,7 @@ const INLINE_PARTIALS = {
         </div>
         <div class="nav-mobile-divider" role="presentation"></div>
         <div class="nav-mobile-section" aria-label="Quick actions">
+          <a href="/login.php" class="btn btn-secondary" data-close-mobile>Login Portal</a>
           <p class="nav-mobile-theme" data-site-theme-label hidden></p>
         </div>
       </nav>
@@ -344,7 +346,7 @@ const FESTIVAL_THEMES = {
   },
 };
 
-const LEAD_FORM_ENDPOINT = '/api/leads/whatsapp';
+const LEAD_FORM_ENDPOINT = '/api/public/leads/';
 const DEFAULT_HERO_IMAGE = 'images/hero/hero.png';
 const DEFAULT_THEME = {
   primary_color: '#0f766e',
@@ -1634,18 +1636,36 @@ function setupLeadForm() {
     ];
     const whatsappUrl = `https://wa.me/917070278178?text=${encodeURIComponent(messageLines.join('\n'))}`;
 
-    const popup = window.open(whatsappUrl, '_blank');
-    if (!popup) {
-      window.location.href = whatsappUrl;
-    }
+    fetch(LEAD_FORM_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'We could not save your request. Please try again.');
+        }
 
-    setAlert('Opening WhatsApp… please send us your message there!', 'success');
-    form.reset();
-
-    if (submitButton) {
-      submitButton.disabled = false;
-      submitButton.removeAttribute('aria-busy');
-    }
+        const popup = window.open(whatsappUrl, '_blank', 'noopener');
+        setAlert('Thanks, your request has been saved. Opening WhatsApp for faster response…', 'success');
+        if (!popup && alertEl) {
+          const link = document.createElement('a');
+          link.href = whatsappUrl;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = ' Open WhatsApp';
+          alertEl.appendChild(link);
+        }
+        form.reset();
+      })
+      .catch((error) => setAlert(error.message || 'We could not save your request. Your details are still in the form.', 'error'))
+      .finally(() => {
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.removeAttribute('aria-busy');
+        }
+      });
   });
 }
 

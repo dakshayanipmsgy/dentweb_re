@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/includes/public_document_security.php';
+protect_customer_document_response();
+
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 require_once __DIR__ . '/includes/quotation_view_renderer.php';
 
@@ -26,7 +29,8 @@ if (!$isValid) {
     http_response_code(404);
     ?>
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Quotation link not available</title>
+<html lang="en"><head><meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Quotation link not available</title>
 <style>body{font-family:Arial,sans-serif;background:#f8fafc;color:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}.card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:24px;max-width:460px;text-align:center;box-shadow:0 8px 24px rgba(2,6,23,.08)}h1{margin:0 0 10px;font-size:1.2rem}p{margin:0;color:#475569}</style></head>
 <body><div class="card"><h1>Quotation link not available</h1><p>This quotation cannot be viewed right now. Please request a fresh link.</p></div></body></html>
 <?php

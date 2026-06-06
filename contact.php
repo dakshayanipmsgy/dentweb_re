@@ -111,7 +111,7 @@ $global = $ws['global'] ?? [];
 $hero = $ws['hero'] ?? [];
 $sections = $ws['sections'] ?? [];
 $testimonials = $ws['testimonials'] ?? [];
-$offers = $ws['seasonal_offers'] ?? [];
+$offers = website_settings_public_seasonal_offers($ws['seasonal_offers'] ?? []);
 $theme = $ws['theme'] ?? [];
 $primaryColor = $theme['primary_color'] ?? '#333333';
 $secondaryColor = $theme['secondary_color'] ?? '#00374a';
@@ -262,7 +262,7 @@ $schemaGraph = [
                 'name' => 'How quickly can Dakshayani file PM Surya Ghar subsidies?',
                 'acceptedAnswer' => [
                     '@type' => 'Answer',
-                    'text' => 'All documentation is pre-verified and filed within 21 days with MNRE/JREDA and the local DISCOM.',
+                    'text' => 'Our team supports document verification and filing with the relevant PM Surya Ghar/JREDA and DISCOM processes.',
                 ],
             ],
             [
@@ -274,24 +274,6 @@ $schemaGraph = [
                 ],
             ],
         ],
-    ],
-    [
-        '@type' => 'Review',
-        'itemReviewed' => [
-            '@type' => 'LocalBusiness',
-            'name' => 'Dakshayani Enterprises',
-        ],
-        'reviewRating' => [
-            '@type' => 'Rating',
-            'ratingValue' => '5',
-            'bestRating' => '5',
-        ],
-        'author' => [
-            '@type' => 'Person',
-            'name' => 'Asha Verma',
-        ],
-        'reviewBody' => 'Seamless 8 kW rooftop installation with real-time monitoring and transparent subsidy support.',
-        'datePublished' => '2024-10-02',
     ],
 ];
 
@@ -472,10 +454,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $problemCategories = complaint_problem_categories();
 $customerName = $customerData === null ? '' : (string) ($customerData['full_name'] ?? $customerData['name'] ?? 'Customer');
-$customerAddress = $customerData === null ? '' : trim((string) ($customerData['address_line'] ?? $customerData['address'] ?? ''));
+$customerDisplayName = public_mask_name($customerName);
+$customerDisplayMobile = public_mask_mobile($mobileInput);
 $customerCity = $customerData === null ? '' : (string) ($customerData['district'] ?? $customerData['city'] ?? '');
-$customerState = $customerData === null ? '' : (string) ($customerData['state'] ?? '');
 $customerMeter = $customerData === null ? '' : (string) ($customerData['meter_number'] ?? $customerData['jbvnl_account_number'] ?? '');
+$customerDisplayMeter = public_mask_identifier($customerMeter);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -491,10 +474,6 @@ $customerMeter = $customerData === null ? '' : (string) ($customerData['meter_nu
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script id="site-settings-json" type="application/json"><?= $embeddedContentJson ?></script>
-  <script>
-    window.DAKSHAYANI_RECAPTCHA_SITE_KEY = window.DAKSHAYANI_RECAPTCHA_SITE_KEY || 'replace-with-site-key';
-    window.DAKSHAYANI_GOOGLE_CLIENT_ID = window.DAKSHAYANI_GOOGLE_CLIENT_ID || 'replace-with-google-client-id.apps.googleusercontent.com';
-  </script>
   <script type="application/ld+json">
     <?= json_encode($schemaContext, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>
   </script>
@@ -706,14 +685,14 @@ $customerMeter = $customerData === null ? '' : (string) ($customerData['meter_nu
         <h1>Get help, register a service complaint, or connect directly.</h1>
         <p>New to solar or already installed with us? Request a free consultation, log a service complaint as a registered customer, or speak directly with our founder for urgent needs.</p>
         <div class="contact-actions">
-          <a class="btn btn-primary" href="tel:7070278178"><i class="fa-solid fa-phone"></i>Call now</a>
-          <a class="btn btn-secondary" href="https://wa.me/7070278178?text=Hi%2C%20I%20want%20to%20discuss%20about%20solar." target="_blank" rel="noreferrer noopener"><i class="fa-brands fa-whatsapp"></i>WhatsApp owner</a>
+          <a class="btn btn-primary" href="tel:+917070278178"><i class="fa-solid fa-phone"></i>Call now</a>
+          <a class="btn btn-secondary" href="https://wa.me/917070278178?text=Hi%2C%20I%20want%20to%20discuss%20about%20solar." target="_blank" rel="noreferrer noopener"><i class="fa-brands fa-whatsapp"></i>WhatsApp owner</a>
         </div>
       </div>
       <div class="card" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);backdrop-filter:blur(6px);">
         <p class="mb-2" style="color:rgba(255,255,255,0.8);">Quick links</p>
         <ul class="list-check" style="color:#ffffff;">
-          <li><i class="fa-solid fa-check"></i>Free solar consultation within 1 business day</li>
+          <li><i class="fa-solid fa-check"></i>Free solar consultation with our team</li>
           <li><i class="fa-solid fa-check"></i>Complaint registration for existing customers</li>
           <li><i class="fa-solid fa-check"></i>WhatsApp / email escalation to service desk</li>
         </ul>
@@ -754,8 +733,8 @@ $customerMeter = $customerData === null ? '' : (string) ($customerData['meter_nu
         </label>
         <div class="contact-actions">
           <button type="submit" class="btn btn-primary" style="flex:2;"><i class="fa-solid fa-paper-plane"></i>Request callback</button>
-          <a class="btn btn-secondary" href="tel:7070278178"><i class="fa-solid fa-phone"></i>Call now</a>
-          <a class="btn btn-secondary" data-consult-whatsapp href="https://wa.me/7070278178?text=Hi%2C%20I%20want%20a%20free%20solar%20consultation.%20My%20name%20is..." target="_blank" rel="noreferrer noopener"><i class="fa-brands fa-whatsapp"></i>WhatsApp now</a>
+          <a class="btn btn-secondary" href="tel:+917070278178"><i class="fa-solid fa-phone"></i>Call now</a>
+          <a class="btn btn-secondary" data-consult-whatsapp href="https://wa.me/917070278178?text=Hi%2C%20I%20want%20a%20free%20solar%20consultation.%20My%20name%20is..." target="_blank" rel="noreferrer noopener"><i class="fa-brands fa-whatsapp"></i>WhatsApp now</a>
         </div>
       </form>
       <p class="secondary-note">Prefer a quick chat? Tap the call or WhatsApp buttons for immediate response.</p>
@@ -787,20 +766,16 @@ $customerMeter = $customerData === null ? '' : (string) ($customerData['meter_nu
 
       <?php if ($customerData !== null): ?>
         <div class="card" style="background:var(--surface);border:1px solid rgba(79,70,229,0.15);">
-          <p class="secondary-note" style="margin-bottom:0.5rem;">Verified customer</p>
+          <p class="secondary-note" style="margin-bottom:0.5rem;">Registered customer match</p>
           <div class="info-grid" id="customer-profile"
-            data-name="<?php echo htmlspecialchars($customerName, ENT_QUOTES); ?>"
-            data-address="<?php echo htmlspecialchars($customerAddress, ENT_QUOTES); ?>"
+            data-name="<?php echo htmlspecialchars($customerDisplayName, ENT_QUOTES); ?>"
             data-city="<?php echo htmlspecialchars($customerCity, ENT_QUOTES); ?>"
-            data-state="<?php echo htmlspecialchars($customerState, ENT_QUOTES); ?>"
-            data-meter="<?php echo htmlspecialchars($customerMeter, ENT_QUOTES); ?>"
-            data-mobile="<?php echo htmlspecialchars($mobileInput, ENT_QUOTES); ?>">
-            <div class="info-pill"><span>Customer</span><span><?php echo htmlspecialchars($customerName, ENT_QUOTES); ?></span></div>
-            <div class="info-pill"><span>Mobile</span><span><?php echo htmlspecialchars($mobileInput, ENT_QUOTES); ?></span></div>
-            <div class="info-pill"><span>Address</span><span><?php echo htmlspecialchars($customerAddress !== '' ? $customerAddress : 'On file', ENT_QUOTES); ?></span></div>
+            data-meter="<?php echo htmlspecialchars($customerDisplayMeter, ENT_QUOTES); ?>"
+            data-mobile="<?php echo htmlspecialchars($customerDisplayMobile, ENT_QUOTES); ?>">
+            <div class="info-pill"><span>Customer</span><span><?php echo htmlspecialchars($customerDisplayName, ENT_QUOTES); ?></span></div>
+            <div class="info-pill"><span>Mobile</span><span><?php echo htmlspecialchars($customerDisplayMobile, ENT_QUOTES); ?></span></div>
             <div class="info-pill"><span>City / District</span><span><?php echo htmlspecialchars($customerCity !== '' ? $customerCity : 'N/A', ENT_QUOTES); ?></span></div>
-            <div class="info-pill"><span>State</span><span><?php echo htmlspecialchars($customerState !== '' ? $customerState : 'N/A', ENT_QUOTES); ?></span></div>
-            <div class="info-pill"><span>Meter / Account</span><span><?php echo htmlspecialchars($customerMeter !== '' ? $customerMeter : 'N/A', ENT_QUOTES); ?></span></div>
+            <div class="info-pill"><span>Meter / Account</span><span><?php echo htmlspecialchars($customerDisplayMeter !== '' ? $customerDisplayMeter : 'N/A', ENT_QUOTES); ?></span></div>
           </div>
         </div>
 
@@ -836,8 +811,8 @@ $customerMeter = $customerData === null ? '' : (string) ($customerData['meter_nu
         <p>Want to talk directly? Call or WhatsApp our founder for urgent or special requests.</p>
       </div>
       <div class="contact-actions">
-        <a class="btn btn-primary" href="tel:7070278178"><i class="fa-solid fa-phone"></i>Call Owner</a>
-        <a class="btn btn-secondary" href="https://wa.me/7070278178?text=Hi%2C%20I%20want%20to%20discuss%20about%20solar." target="_blank" rel="noreferrer noopener"><i class="fa-brands fa-whatsapp"></i>WhatsApp Owner</a>
+        <a class="btn btn-primary" href="tel:+917070278178"><i class="fa-solid fa-phone"></i>Call Owner</a>
+        <a class="btn btn-secondary" href="https://wa.me/917070278178?text=Hi%2C%20I%20want%20to%20discuss%20about%20solar." target="_blank" rel="noreferrer noopener"><i class="fa-brands fa-whatsapp"></i>WhatsApp Owner</a>
       </div>
       <p class="secondary-note">Available for escalations, partnership opportunities, or sensitive project requests.</p>
     </section>
@@ -873,7 +848,7 @@ $customerMeter = $customerData === null ? '' : (string) ($customerData['meter_nu
           message !== '' ? 'Requirements: ' + message : '',
         ].filter(Boolean);
 
-        return 'https://wa.me/7070278178?text=' + encodeURIComponent(parts.join(' '));
+        return 'https://wa.me/917070278178?text=' + encodeURIComponent(parts.join(' '));
       }
 
       whatsappLink.addEventListener('click', function () {

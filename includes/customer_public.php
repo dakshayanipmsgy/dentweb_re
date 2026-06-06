@@ -103,3 +103,29 @@ function public_customer_status(string $mobile): ?array
 
     return $record;
 }
+
+function public_mask_name(string $name): string
+{
+    $parts = preg_split('/\s+/u', trim($name)) ?: [];
+    return implode(' ', array_map(static function (string $part): string {
+        $length = mb_strlen($part);
+        return $length === 0 ? '' : mb_substr($part, 0, 1) . str_repeat('*', max(1, $length - 1));
+    }, $parts));
+}
+
+function public_mask_identifier(string $value, int $visibleSuffix = 4): string
+{
+    $value = trim($value);
+    $length = mb_strlen($value);
+    if ($length === 0) {
+        return '';
+    }
+    $suffixLength = min($visibleSuffix, $length);
+    return str_repeat('*', max(4, $length - $suffixLength)) . mb_substr($value, -$suffixLength);
+}
+
+function public_mask_mobile(string $mobile): string
+{
+    $mobile = public_normalize_mobile($mobile);
+    return $mobile === '' ? '' : substr($mobile, 0, 2) . '******' . substr($mobile, -2);
+}
