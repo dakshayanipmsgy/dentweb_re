@@ -1347,6 +1347,8 @@ if ($savedAnnualGenerationForEdit === '') {
 <link rel="stylesheet" href="assets/css/admin-unified.css">
 <style>
 body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px}.card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}label{font-size:12px;font-weight:700;display:block;margin-bottom:4px}input,select,textarea{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box}textarea{min-height:70px}.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:600}.btn.secondary{background:#fff;color:#1f2937;border:1px solid #cbd5e1}.btn.quiet{background:#f8fafc;color:#475569;border:1px solid #e2e8f0}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #e2e8f0;padding:11px 10px;text-align:left;font-size:13px;vertical-align:top}th{background:#f8fafc;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:.04em}.muted{color:#64748b}.alert{padding:8px;border-radius:8px;margin-bottom:12px}.ok{background:#ecfdf5}.err{background:#fef2f2}.quotation-tabs{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin:0 0 14px;padding:5px;background:#fff;border:1px solid #dbe1ea;border-radius:12px}.quotation-tabs a{padding:9px 13px;border-radius:8px;color:#475569;text-decoration:none;font-weight:700}.quotation-tabs a.active{background:#1d4ed8;color:#fff}.quotation-tabs .primary-tab{margin-left:auto;background:#dbeafe;color:#1d4ed8}.quotation-tabs .primary-tab.active{background:#1d4ed8;color:#fff}.workspace-panel{display:none}.workspace-panel.active{display:block}.section-card{border:1px solid #dbe2ee;border-radius:12px;padding:0;background:#fcfdff;margin-bottom:14px;overflow:hidden}.section-card>h3{padding:13px 14px;margin:0}.section-card>summary{cursor:pointer;padding:13px 14px;font-size:15px;font-weight:700;list-style:none}.section-card>summary::-webkit-details-marker{display:none}.section-card>summary:after{content:'+';float:right;color:#64748b}.section-card[open]>summary:after{content:'−'}.section-grid{display:grid;grid-template-columns:repeat(4,minmax(170px,1fr));gap:12px;padding:0 14px 14px}.section-grid .full-span{grid-column:1/-1}.section-card.savings{background:#f8fbff;border-color:#bfdbfe}.section-card .muted{margin-bottom:8px}form.section-card{padding:14px}.editor-intro,.list-toolbar,.form-quick-actions{display:flex;gap:10px;align-items:end;justify-content:space-between;flex-wrap:wrap}.form-quick-actions{position:sticky;top:8px;z-index:20;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:9px 10px;margin-bottom:12px;align-items:center}.list-table-wrap{overflow-x:auto}.quote-customer{font-weight:700;color:#0f172a}.quote-meta{font-size:11px;color:#64748b;margin-top:3px}.quote-amount{text-align:right;white-space:nowrap;font-weight:700}.status-pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:11px;font-weight:700}.list-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-width:260px}.more-actions{position:relative}.more-actions>summary{list-style:none;cursor:pointer}.more-actions>summary::-webkit-details-marker{display:none}.more-menu{margin-top:7px;padding:9px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;box-shadow:0 12px 30px rgba(15,23,42,.12);min-width:280px}.more-menu .secondary-actions{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}.share-actions{padding-top:8px;border-top:1px solid #e2e8f0}.sticky-head th{position:sticky;top:0;background:#f8fafc;z-index:2}.ux-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.42);display:none;z-index:60}.ux-modal{position:fixed;inset:6vh 4vw;background:#fff;border-radius:12px;display:none;z-index:61;box-shadow:0 22px 56px rgba(0,0,0,.25);overflow:hidden}.ux-modal iframe{width:100%;height:100%;border:none}.ux-modal-head{padding:10px 12px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center}.ux-open{display:block}.toast{position:fixed;right:16px;top:16px;z-index:120;background:#111827;color:#fff;padding:10px 14px;border-radius:10px;display:none;max-width:420px}.toast.show{display:block}.toast.err{background:#b91c1c}@media (max-width:1100px){.section-grid{grid-template-columns:repeat(2,minmax(170px,1fr));}}@media (max-width:700px){.section-grid{grid-template-columns:1fr}.quotation-tabs .primary-tab{margin-left:0}.list-actions{min-width:220px}.wrap{padding:10px}.commercial-flow-strip{overflow:auto}.form-quick-actions{position:static}}
+.quote-builder-progress{position:sticky;top:8px;z-index:25;display:flex;gap:6px;overflow-x:auto;padding:7px;margin:0 0 12px;background:rgba(255,255,255,.96);border:1px solid #dbe2ee;border-radius:12px;box-shadow:0 8px 22px rgba(15,23,42,.07)}.quote-builder-progress button{flex:0 0 auto;border:0;background:#f1f5f9;color:#334155;border-radius:999px;padding:7px 10px;cursor:pointer;font-size:12px}.quote-builder-progress b{display:inline-grid;place-items:center;width:19px;height:19px;margin-right:3px;border-radius:50%;background:#dbeafe;color:#1d4ed8}.builder-section{scroll-margin-top:76px}.builder-section>summary,.static-section-heading{display:flex;align-items:flex-start;gap:10px;padding:14px}.builder-section>summary small,.static-section-heading small{display:block;color:#64748b;font-size:12px;font-weight:400;margin-top:3px}.section-number{flex:0 0 25px;display:inline-grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#1d4ed8;color:#fff;font-size:12px}.builder-section--advanced{background:#f8fafc}.builder-section--advanced>summary strong:after{content:'Advanced';margin-left:8px;padding:2px 6px;border-radius:999px;background:#e2e8f0;color:#475569;font-size:10px;text-transform:uppercase}.lookup-section{padding-bottom:14px}.lookup-form{padding:0 14px;margin:0!important}.lookup-controls{display:flex;gap:8px;max-width:620px}.lookup-result{display:grid;gap:3px;margin-top:10px;padding:10px 12px;border-radius:9px}.lookup-result span,.lookup-result small{font-size:12px}.lookup-result--matched{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}.lookup-result--empty{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412}.required-mark{color:#dc2626}.review-summary{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;padding:0 14px 14px}.review-summary div{display:grid;gap:4px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px}.review-summary span,.review-summary small{color:#64748b;font-size:11px}.save-actions{display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 14px}.save-errors{padding:0 14px 14px}.validation-ok,.validation-warning{padding:10px 12px;border-radius:9px}.validation-ok{background:#ecfdf5;color:#065f46}.validation-warning{background:#fff7ed;color:#9a3412}.validation-links{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.validation-links button{border:1px solid #fdba74;background:#fff;color:#9a3412;border-radius:7px;padding:5px 8px;cursor:pointer}.quick-action-buttons{display:flex;gap:7px;flex-wrap:wrap}.section-grid>div:has(>label+input[required]),.section-grid>div:has(>label+select[required]){order:-1}.section-grid input:focus,.section-grid select:focus,.section-grid textarea:focus,.lookup-controls input:focus{outline:3px solid rgba(37,99,235,.16);border-color:#2563eb}.section-grid table{min-width:900px}.section-grid>div:has(>table){overflow-x:auto}@media(max-width:700px){.quote-builder-progress{top:0;margin-left:-4px;margin-right:-4px}.lookup-controls{display:grid}.lookup-controls .btn,.quick-action-buttons,.quick-action-buttons .btn,.save-actions .btn{width:100%}.form-quick-actions{align-items:stretch}.review-summary{grid-template-columns:1fr}.builder-section>summary,.static-section-heading{padding:12px}.section-grid{padding:0 10px 12px}.section-card>summary:after{margin-left:auto}}
+
 </style></head>
 <body class="admin-shell commercial-admin"><main class="wrap commercial-shell">
 <header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Quotations</h1><p class="muted">Build the customer offer, then continue it through agreement, delivery, invoice, and receipt.</p></div><nav class="commercial-header__actions" aria-label="Page actions"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php">Document Center</a><a class="btn commercial-header__primary" href="admin-quotations.php?tab=editor">+ New Quotation</a></nav></header>
@@ -1363,12 +1365,12 @@ body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px
 <div id="quotationEditor" class="card workspace-panel <?= $tab === 'editor' ? 'active' : '' ?>">
 <div class="editor-intro"><div><h2><?= $editing['id'] === '' ? 'Create Quotation' : 'Edit Quotation' ?></h2><p class="muted">Start with customer and system details. Open advanced sections only when needed.</p></div><a class="btn secondary" href="admin-quotations.php?tab=quotations">Back to quotations</a></div>
 <form method="get" style="margin-bottom:10px"><input type="hidden" name="tab" value="editor">
-<label>Customer Lookup by Mobile</label><div style="display:flex;gap:8px"><input type="text" name="lookup_mobile" value="<?= htmlspecialchars($lookupMobile, ENT_QUOTES) ?>"><button class="btn secondary" type="submit">Lookup</button></div>
+<label for="quoteLookupMobile">Mobile number</label><div class="lookup-controls"><input id="quoteLookupMobile" type="text" name="lookup_mobile" value="<?= htmlspecialchars($lookupMobile, ENT_QUOTES) ?>"><button class="btn" type="submit">Find customer / lead</button></div>
 <?php if ($lookupMobile !== ""): ?>
     <?php if ($lookup !== null): ?>
-        <div class="muted" style="margin-top:6px">Lookup matched: <strong><?= htmlspecialchars($lookupBadge, ENT_QUOTES) ?></strong><?php if ($lookupType === "lead"): ?> • <?= htmlspecialchars($lookupNote, ENT_QUOTES) ?><?php endif; ?></div>
+        <div class="lookup-result lookup-result--matched"><span>Matched record</span><strong><?= htmlspecialchars($lookupBadge, ENT_QUOTES) ?></strong><?php if ($lookupType === "lead"): ?><small><?= htmlspecialchars($lookupNote, ENT_QUOTES) ?></small><?php endif; ?></div>
     <?php else: ?>
-        <div class="muted" style="margin-top:6px">Not found in customers or leads.</div>
+        <div class="lookup-result lookup-result--empty"><strong>No match found</strong><small>Continue below to create the quotation with new party details.</small></div>
     <?php endif; ?>
 <?php endif; ?>
 </form>
@@ -1535,116 +1537,97 @@ $canWhatsappShare = $quoteShareMobile !== '';
   if(editorCard){
     const quoteForm=editorCard.querySelector('form input[name="action"][value="save_quote"]')?.form;
     const grid=quoteForm?.querySelector('.grid');
-    if(grid){
-      const sections=[
-        {title:'1. Customer & Template',open:true, names:['Template Set','Party Type','Mobile','Name']},
-        {title:'2. System & Quotation Basics',open:true, names:['System Type','Capacity kWp','Quotation Date','Valid Until','Pricing Mode','Tax Profile']},
-        {title:'3. Customer & Site Details',open:true, names:['Billing Address','Site Address','District','City','State','PIN','Consumer Account No. (JBVNL)','Meter Number','Meter Serial Number','Application ID','Application Submitted Date','Sanction Load (kWp)','Installed PV Capacity (kWp)','Circle','Division','Sub Division']},
-        {title:'4. Items',open:true, containsHeadings:['Items Table','Item Builder (Structured)']},
-        {title:'5. Solar & Savings',open:false, names:['Main Solar Size (kWp)','Complimentary Non-DCR Solar Size (kWp)','Total System Capacity (kWp)','Monthly electricity bill (₹)','Unit rate (₹/kWh)','Annual generation per kW','Transportation ₹','Discount (₹)','Discount note','Subsidy ₹'], containsHeadings:['Customer Savings Inputs'], className:'savings'},
-        {title:'6. Scenario Prices',open:false, names:['Self Funded Price ₹','Loan up to ₹2 lacs Price ₹','Loan above ₹2 lacs Price ₹','Primary Finance Scenario'], containsHeadings:['Section 6 — Scenario Prices'], className:'funding-prices'},
-        {title:'7. Finance Details',open:false, names:['Selected Primary Scenario Price (including GST) ₹','Finance mode','Margin %','Loan %','Margin ₹','Loan ₹','Interest %','Tenure years'], containsHeadings:['Section 7 — Funding Scenario Financial Inputs','Loan up to ₹2 lacs','Loan above ₹2 lacs'], className:'funding-inputs'},
-        {title:'8. Hybrid Configuration',open:false, names:['Hybrid Inverter (kVA)','Hybrid Phase','Hybrid Battery Count'], className:'hybrid-config'},
-        {title:'9. Annexure & Appearance',open:false, names:['Cover Notes','System Inclusions','Payment Terms','Warranty','System Type Explainer','Transportation','Terms & Conditions','PM Subsidy Info','Completion Milestones','Next Steps','Base font px','Heading scale','Density','Watermark image path'], containsHeadings:['Annexure Overrides','Typography & Watermark Overrides']},
+    const lookupForm=editorCard.querySelector('form[method="get"]');
+    if(grid && quoteForm){
+      const sectionDefinitions=[
+        {id:'customer-details',title:'Customer details',help:'Confirm the matched party and the details that will appear on the quotation.',open:true},
+        {id:'system-details',title:'System details',help:'Set the system type, main solar size, complimentary capacity, and project details.',open:true},
+        {id:'pricing-template',title:'Pricing, tax, and quotation template',help:'Choose the template and confirm quotation dates, price, GST, and pricing mode.',open:true},
+        {id:'finance-savings',title:'Finance, subsidy, and savings assumptions',help:'Optional assumptions used in finance, subsidy, savings, and payback calculations.',open:false,advanced:true},
+        {id:'items-scope',title:'Items / scope / structured quotation items',help:'Build the customer-facing scope using the existing structured item tools.',open:true},
+        {id:'notes-terms',title:'Notes, terms, annexures, customer-facing details',help:'Optional notes, terms, annexure text, and appearance overrides.',open:false,advanced:true}
       ];
-
+      const sections=Object.fromEntries(sectionDefinitions.map((definition,index)=>{
+        const card=document.createElement('details');
+        card.className='section-card builder-section'+(definition.advanced?' builder-section--advanced':'');
+        card.id='quote-'+definition.id;
+        card.open=definition.open;
+        card.style.gridColumn='1/-1';
+        card.innerHTML='<summary><span class="section-number">'+(index+2)+'</span><span><strong>'+definition.title+'</strong><small>'+definition.help+'</small></span><span class="section-state" aria-hidden="true"></span></summary><div class="section-grid"></div>';
+        return [definition.id,{...definition,card,inner:card.querySelector('.section-grid')}];
+      }));
       const controls=[...grid.children];
-      const lookupForm=[...editorCard.querySelectorAll('form')][0];
-      const sectionCards=sections.map((sec)=>{const card=document.createElement('details');card.className='section-card'+(sec.className?' '+sec.className:'');card.style.gridColumn='1/-1';card.open=sec.open!==false;const h=document.createElement('summary');h.textContent=sec.title;card.appendChild(h);const inner=document.createElement('div');inner.className='section-grid';card.appendChild(inner);return {cfg:sec,el:card,inner};});
-      const saveCard=document.createElement('div');saveCard.className='section-card';saveCard.style.gridColumn='1/-1';saveCard.innerHTML='<h3>Section 10 — Save Actions</h3><div class="muted">Use Save Quotation to store changes, or return to list.</div>';
-      const backBtn=document.createElement('a');backBtn.className='btn secondary';backBtn.textContent='Cancel / Back to list';backBtn.href='admin-quotations.php?tab=quotations';
-      const saveInner=document.createElement('div');saveInner.className='section-grid';saveCard.appendChild(saveInner);
-
-      const getLabel=(node)=>{const label=node.querySelector(':scope > label');return (label?.textContent||'').trim();};
-      const isHeadingBlock=(node,texts)=>{const h=node.querySelector('h3');if(!h)return false;const t=(h.textContent||'').trim();return texts.some(x=>t.includes(x));};
-      const getFieldNames=(node)=>[...node.querySelectorAll('input[name],select[name],textarea[name]')].map((el)=>(el.getAttribute('name')||'').trim()).filter(Boolean);
-      const hasFieldName=(node,name)=>getFieldNames(node).includes(name);
-      const hasFieldPrefix=(node,prefix)=>getFieldNames(node).some((field)=>field.startsWith(prefix));
-      const SECTION_CUSTOMER=2;
-      const SECTION_ITEMS=3;
-      const SECTION_SAVINGS=4;
-      const SECTION_SCENARIO_PRICES=5;
-      const SECTION_FUNDING_INPUTS=6;
-      const SECTION_HYBRID=7;
-      const SECTION_ANNEXURE=8;
-
+      const fieldNames=(node)=>[...node.querySelectorAll('input[name],select[name],textarea[name]')].map((field)=>field.name.replace(/\[\]$/,''));
+      const headingText=(node)=>node.querySelector(':scope > h3')?.textContent?.trim()||'';
+      const textLabel=(node)=>node.querySelector(':scope > label')?.textContent?.trim()||'';
+      const customerNames=['party_type','customer_mobile','customer_name','consumer_account_no','meter_number','meter_serial_number','district','city','state','pin','billing_address','site_address','circle_name','division_name','sub_division_name'];
+      const systemNames=['system_type','main_solar_kwp','complimentary_non_dcr_kwp','capacity_kwp','application_id','application_submitted_date','sanction_load_kwp','installed_pv_module_capacity_kwp','project_summary_line','special_requests_text','hybrid_inverter_kva','hybrid_phase','hybrid_battery_count'];
+      const pricingNames=['template_set_id','quotation_date','valid_until','pricing_mode','tax_profile_id','show_tax_breakup','place_of_supply_state','scenario_price_self_funded','scenario_price_loan_upto_2_lacs','scenario_price_loan_above_2_lacs','transportation_cost','discount_rs','discount_note'];
+      const financeNames=['primary_finance_scenario','system_total_incl_gst_rs','monthly_bill_rs','unit_rate_rs_per_kwh','annual_generation_per_kw','transportation_rs','subsidy_expected_rs'];
+      const destinationFor=(node)=>{
+        const names=fieldNames(node); const heading=headingText(node);
+        if(node.id==='splitCapacityFields'||node.id==='legacyCapacityField'||names.some((name)=>systemNames.includes(name)))return sections['system-details'];
+        if(heading.includes('Items Table')||heading.includes('Item Builder')||names.some((name)=>name.startsWith('quote_item_')))return sections['items-scope'];
+        if(names.some((name)=>financeNames.includes(name))||names.some((name)=>name.startsWith('loan_'))||heading.includes('Funding Scenario Financial Inputs')||heading.includes('Loan up to')||heading.includes('Loan above')||heading.includes('Customer Savings Inputs'))return sections['finance-savings'];
+        if(names.some((name)=>pricingNames.includes(name))||heading.includes('Scenario Prices'))return sections['pricing-template'];
+        if(names.some((name)=>customerNames.includes(name)))return sections['customer-details'];
+        return sections['notes-terms'];
+      };
       controls.forEach((node)=>{
-        if(node.tagName==='INPUT' && node.type==='hidden')return;
-        if(isHeadingBlock(node,['Section 6 — Scenario Prices','Section 7 — Funding Scenario Financial Inputs']))return;
-        const label=getLabel(node);
-        let target=sectionCards[SECTION_CUSTOMER];
-
-        if(
-          hasFieldName(node,'primary_finance_scenario') ||
-          hasFieldName(node,'scenario_price_self_funded') ||
-          hasFieldName(node,'scenario_price_loan_upto_2_lacs') ||
-          hasFieldName(node,'scenario_price_loan_above_2_lacs')
-        ){
-          target=sectionCards[SECTION_SCENARIO_PRICES];
-        }else if(
-          hasFieldName(node,'system_total_incl_gst_rs') ||
-          hasFieldName(node,'loan_upto_2_lacs_applicable') ||
-          hasFieldName(node,'loan_above_2_lacs_applicable') ||
-          hasFieldPrefix(node,'loan_upto_2_lacs_') ||
-          hasFieldPrefix(node,'loan_above_2_lacs_')
-        ){
-          target=sectionCards[SECTION_FUNDING_INPUTS];
-        }else if(
-          hasFieldName(node,'hybrid_inverter_kva') ||
-          hasFieldName(node,'hybrid_phase') ||
-          hasFieldName(node,'hybrid_battery_count')
-        ){
-          target=sectionCards[SECTION_HYBRID];
-        }
-
-        if(node.id==='splitCapacityFields'){
-          target=sectionCards[SECTION_SAVINGS];
-        }
-        for(const sec of sectionCards){
-          if((sec.cfg.names||[]).includes(label)){target=sec;break;}
-          if((sec.cfg.containsHeadings||[]).length && isHeadingBlock(node,sec.cfg.containsHeadings)){target=sec;break;}
-        }
-        if(label==='Project Summary' || label==='Special Requests From Consumer (Inclusive in the rate)' || label==='Place of Supply State'){ target=sectionCards[SECTION_CUSTOMER]; }
-        if((label.includes('Address') || label.includes('Summary') || label.includes('Special Requests')) && node.style.gridColumn!=='1/-1'){node.classList.add('full-span');}
-        if(node.querySelector('table') || isHeadingBlock(node,['Item Builder (Structured)','Annexure Overrides']) || node.querySelector('textarea')){ if((sectionCards[SECTION_ITEMS].inner===target.inner || sectionCards[SECTION_FUNDING_INPUTS].inner===target.inner)){node.classList.add('full-span');} }
+        if(node.matches('input[type="hidden"]'))return;
+        if(headingText(node).includes('Section 6 — Scenario Prices')||headingText(node).includes('Section 7 — Funding Scenario Financial Inputs'))return;
+        const target=destinationFor(node);
+        if(node.querySelector('table')||node.querySelector('textarea')||headingText(node)||['Billing Address','Site Address','Project Summary','Special Requests From Consumer (Inclusive in the rate)'].includes(textLabel(node)))node.classList.add('full-span');
         target.inner.appendChild(node);
       });
+      Object.values(sections).forEach((section)=>{
+        const required=[...section.inner.children].filter((node)=>node.querySelector('[required]'));
+        required.reverse().forEach((node)=>section.inner.prepend(node));
+      });
 
-      const savingsSection=sectionCards[SECTION_SAVINGS];
-      if(savingsSection){
-        const note=document.createElement('div');
-        note.className='full-span muted';
-        note.textContent='These are the common inputs used to calculate savings, residual bill, monthly outflow, cumulative expense, and payback.';
-        savingsSection.inner.insertBefore(note,savingsSection.inner.firstChild);
-      }
-      const fundingPricesSection=sectionCards[SECTION_SCENARIO_PRICES];
-      if(fundingPricesSection){
-        const note=document.createElement('div');
-        note.className='full-span muted';
-        note.textContent='These are the scenario-wise system prices used for quotation comparisons.';
-        fundingPricesSection.inner.insertBefore(note,fundingPricesSection.inner.firstChild);
-      }
-      const fundingInputsSection=sectionCards[SECTION_FUNDING_INPUTS];
-      if(fundingInputsSection){
-        const note=document.createElement('div');
-        note.className='full-span muted';
-        note.textContent='These values control the funding breakdown for each loan scenario.';
-        fundingInputsSection.inner.insertBefore(note,fundingInputsSection.inner.firstChild);
-      }
-
-      grid.innerHTML='';
-      const quickActions=document.createElement('div');quickActions.className='form-quick-actions';quickActions.style.gridColumn='1/-1';quickActions.innerHTML='<span><strong>Quotation details</strong><br><span class="muted">Required sections are open; advanced sections are collapsed.</span></span><span><button class="btn" type="submit">Save Quotation</button> <a class="btn secondary" href="admin-quotations.php?tab=quotations">Cancel</a></span>';grid.appendChild(quickActions);
-      sectionCards.forEach((sec)=>{if(sec.inner.children.length){grid.appendChild(sec.el);}});
-      const submitBtn=quoteForm.querySelector('button[type="submit"]');
-      if(submitBtn){submitBtn.classList.add('btn');saveInner.appendChild(submitBtn);}      
-      saveInner.appendChild(backBtn);
-      grid.appendChild(saveCard);
+      const lookupSection=document.createElement('section');
+      lookupSection.className='section-card builder-section lookup-section';
+      lookupSection.id='quote-find-customer';
+      lookupSection.innerHTML='<div class="static-section-heading"><span class="section-number">1</span><span><strong>Find customer / lead</strong><small>Search by mobile first to quickly fill known customer or lead details.</small></span></div>';
       if(lookupForm){
-        lookupForm.classList.add('section-card');
-        const heading=document.createElement('h3');
-        heading.textContent='Customer lookup';
-        lookupForm.insertBefore(heading, lookupForm.firstChild);
+        lookupForm.classList.add('lookup-form');
+        lookupForm.querySelector('[name="lookup_mobile"]')?.setAttribute('inputmode','tel');
+        lookupForm.querySelector('[name="lookup_mobile"]')?.setAttribute('autocomplete','tel');
+        lookupForm.querySelector('[name="lookup_mobile"]')?.setAttribute('placeholder','Enter mobile number');
+        lookupSection.appendChild(lookupForm);
+        editorCard.querySelector('.editor-intro')?.after(lookupSection);
       }
+
+      const progress=document.createElement('nav');
+      progress.className='quote-builder-progress';
+      progress.setAttribute('aria-label','Quotation builder sections');
+      progress.innerHTML='<button type="button" data-target="quote-find-customer"><b>1</b> Find party</button>'+sectionDefinitions.map((section,index)=>'<button type="button" data-target="quote-'+section.id+'"><b>'+(index+2)+'</b> '+section.title.replace(' / scope / structured quotation items',' / scope').replace(', annexures, customer-facing details',' & terms')+'</button>').join('')+'<button type="button" data-target="quote-save-actions"><b>8</b> Save</button>';
+      lookupSection.after(progress);
+      progress.addEventListener('click',(event)=>{const button=event.target.closest('[data-target]');const target=button&&document.getElementById(button.dataset.target);if(!target)return;if(target.tagName==='DETAILS')target.open=true;target.scrollIntoView({behavior:'smooth',block:'start'});});
+
+      const quickActions=document.createElement('div');
+      quickActions.className='form-quick-actions';
+      quickActions.innerHTML='<span><strong>Quote builder</strong><br><span class="muted" data-builder-status>Complete the required customer, system, pricing, and item details.</span></span><span class="quick-action-buttons"><button class="btn secondary" type="button" data-review-quote>Review & save</button><button class="btn" type="submit">Save Quotation</button></span>';
+      grid.innerHTML=''; grid.appendChild(quickActions);
+      sectionDefinitions.forEach((definition)=>{const section=sections[definition.id];if(section.inner.children.length)grid.appendChild(section.card);});
+
+      const saveCard=document.createElement('section');
+      saveCard.className='section-card builder-section save-section';saveCard.id='quote-save-actions';saveCard.style.gridColumn='1/-1';
+      saveCard.innerHTML='<div class="static-section-heading"><span class="section-number">8</span><span><strong>Save and next actions</strong><small>Review the essentials, then save. Sharing, PDF, clone, archive, and next-document actions remain available after save.</small></span></div><div class="review-summary" id="quoteReviewSummary" aria-live="polite"></div><div class="save-errors" id="quoteSaveErrors" aria-live="polite"></div><div class="save-actions"></div>';
+      const originalSubmit=quoteForm.querySelector(':scope > button[type="submit"]');
+      if(originalSubmit){originalSubmit.classList.add('btn');originalSubmit.textContent='Save Quotation';saveCard.querySelector('.save-actions').appendChild(originalSubmit);}
+      const cancel=document.createElement('a');cancel.className='btn secondary';cancel.href='admin-quotations.php?tab=quotations';cancel.textContent='Cancel / Back to quotations';saveCard.querySelector('.save-actions').appendChild(cancel);grid.appendChild(saveCard);
+
+      quoteForm.querySelectorAll('[required]').forEach((field)=>{const label=field.closest('div')?.querySelector(':scope > label');if(label&&!label.querySelector('.required-mark'))label.insertAdjacentHTML('beforeend',' <span class="required-mark" title="Required">*</span>');});
+      const escapeHtml=(value)=>String(value).replace(/[&<>\"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[char]));
+      const valueOf=(name)=>{const field=quoteForm.querySelector('[name="'+name+'"]');if(!field)return '—';if(field instanceof HTMLSelectElement)return field.selectedOptions[0]?.textContent?.trim()||'—';return String(field.value||'').trim()||'—';};
+      const updateReview=()=>{const capacity=(Number(quoteForm.querySelector('[name="main_solar_kwp"]')?.value||0)+Number(quoteForm.querySelector('[name="complimentary_non_dcr_kwp"]')?.value||0))||Number(quoteForm.querySelector('[name="capacity_kwp"]')?.value||0);const count=quoteForm.querySelectorAll('#structuredItemsTable tbody tr').length;document.getElementById('quoteReviewSummary').innerHTML='<div><span>Customer / lead</span><strong>'+escapeHtml(valueOf('customer_name'))+'</strong><small>'+escapeHtml(valueOf('customer_mobile'))+'</small></div><div><span>System</span><strong>'+escapeHtml(valueOf('system_type'))+'</strong><small>'+escapeHtml(Math.round(capacity*100)/100)+' kWp total capacity</small></div><div><span>Template & pricing</span><strong>'+escapeHtml(valueOf('template_set_id'))+'</strong><small>'+escapeHtml(valueOf('pricing_mode'))+'</small></div><div><span>Structured scope</span><strong>'+count+' item'+(count===1?'':'s')+'</strong><small>Ready for review</small></div>';};
+      const revealInvalid=(field)=>{const details=field.closest('details');if(details)details.open=true;field.scrollIntoView({behavior:'smooth',block:'center'});field.focus({preventScroll:true});};
+      const reviewValidity=()=>{const invalid=[...quoteForm.querySelectorAll(':invalid')];const box=document.getElementById('quoteSaveErrors');if(!invalid.length){box.innerHTML='<div class="validation-ok">Required fields are complete. You can save this quotation.</div>';return true;}box.innerHTML='<div class="validation-warning"><strong>'+invalid.length+' required field'+(invalid.length===1?' needs':'s need')+' attention.</strong> Use the links below to fix them before saving.</div><div class="validation-links">'+invalid.map((field,index)=>'<button type="button" data-invalid-index="'+index+'">'+escapeHtml(field.closest('div')?.querySelector('label')?.textContent?.trim()||field.name||'Required field')+'</button>').join('')+'</div>';box.querySelectorAll('[data-invalid-index]').forEach((button)=>button.addEventListener('click',()=>revealInvalid(invalid[Number(button.dataset.invalidIndex)])));return false;};
+      quickActions.querySelector('[data-review-quote]').addEventListener('click',()=>{updateReview();reviewValidity();saveCard.scrollIntoView({behavior:'smooth',block:'start'});});
+      quoteForm.addEventListener('invalid',(event)=>revealInvalid(event.target),true);
+      quoteForm.addEventListener('input',updateReview);quoteForm.addEventListener('change',updateReview);updateReview();
+      if(!quoteForm.querySelector('[name="customer_mobile"]')?.value)lookupForm?.querySelector('[name="lookup_mobile"]')?.focus();
     }
   }
 
