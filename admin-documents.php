@@ -3307,6 +3307,13 @@ $activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace'
           ?>
           <p><a class="btn secondary" href="?tab=accepted_customers">&larr; Back to Accepted Customers</a></p>
           <h2 style="margin-top:0;">Document Pack: <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></h2>
+          <div class="document-pack-flow" aria-label="Document pack lifecycle">
+            <div class="done"><strong>1</strong><span>Quotation<small>Accepted source</small></span></div>
+            <div class="<?= $packAgreements !== [] ? 'done' : '' ?>"><strong>2</strong><span>Agreement<small><?= $packAgreements !== [] ? 'Created' : 'Create from quotation' ?></small></span></div>
+            <div class="<?= $packChallans !== [] ? 'done' : '' ?>"><strong>3</strong><span>Challan<small><?= $packChallans !== [] ? 'Dispatch recorded' : 'Create for delivery' ?></small></span></div>
+            <div class="<?= $packInvoices !== [] ? 'done' : '' ?>"><strong>4</strong><span>Invoice<small><?= $packInvoices !== [] ? 'Created' : 'Create after delivery' ?></small></span></div>
+            <div class="<?= $packReceipts !== [] ? 'done' : '' ?>"><strong>5</strong><span>Receipt<small><?= $packReceipts !== [] ? 'Payment recorded' : 'Record payment' ?></small></span></div>
+          </div>
           <div class="card" style="padding:10px;margin-bottom:10px"><strong>Current Version: v<?= (int) $packCurrentVersionNo ?></strong><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><?php foreach ($packVersions as $versionRow): $isCurrentVersionRow = (bool) ($versionRow['is_current_version'] ?? false); ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => (string) ($versionRow['id'] ?? ''), 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">v<?= (int) ($versionRow['version_no'] ?? 1) ?></a><?php if ($isCurrentVersionRow): ?><span class="pill" style="background:#dcfce7;color:#166534">CURRENT</span><?php endif; ?><?php endforeach; ?></div></div>
           <?php if ($packIsOlderVersion): ?><div class="alert err">You are viewing an older version.</div><?php endif; ?>
           <form method="get" style="margin-bottom:1rem;">
@@ -4174,6 +4181,18 @@ $activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace'
                 <img class="logo-preview" src="<?= htmlspecialchars((string) $company['logo_path'], ENT_QUOTES) ?>" alt="Current logo" />
               <?php endif; ?>
             </div>
+            <section class="company-payment-qr" aria-labelledby="company-payment-qr-title">
+              <div>
+                <p class="admin-section-heading__eyebrow">Customer payments</p>
+                <h3 id="company-payment-qr-title">Fixed quotation UPI options</h3>
+                <p class="muted">Every customer quotation shows these local, print-safe QR codes. Payments never create receipts automatically; record and finalize receipts only after verification.</p>
+                <p><strong>UPI ID:</strong> d.entranchi@ybl</p>
+              </div>
+              <div class="company-payment-qr__preview" style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+                <figure style="margin:0;text-align:center"><img src="assets/images/payments/upi-advance-10000.svg" alt="UPI QR for fixed ₹10,000 booking advance" /><figcaption><strong>₹10,000 advance</strong></figcaption></figure>
+                <figure style="margin:0;text-align:center"><img src="assets/images/payments/upi-any-amount.svg" alt="UPI QR for any amount" /><figcaption><strong>Any amount</strong></figcaption></figure>
+              </div>
+            </section>
           </div>
           <p class="muted">WhatsApp accepts 10-12 digits. PAN is optional but should look like ABCDE1234F.</p>
           <p class="muted">Last updated: <?= htmlspecialchars((string) ($company['updated_at'] ?: 'Never'), ENT_QUOTES) ?></p>
