@@ -299,8 +299,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     return [
                         'model_number' => safe_text((string) ($row['model_number'] ?? '')),
                         'solar_size_kwp' => (float) ($row['solar_size_kwp'] ?? 0),
-                        'dcr_solar_size_kwp' => (float) ($row['dcr_solar_size_kwp'] ?? $row['solar_size_kwp'] ?? 0),
-                        'non_dcr_solar_size_kwp' => (float) ($row['non_dcr_solar_size_kwp'] ?? 0),
                         'phase' => safe_text((string) ($row['phase'] ?? '')),
                         'variant' => safe_text((string) ($row['variant'] ?? '')),
                         'self_funded_price' => (float) ($row['self_funded_price'] ?? 0),
@@ -324,8 +322,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     return [
                         'model_number' => safe_text((string) ($row['model_number'] ?? '')),
                         'solar_size_kwp' => (float) ($row['solar_size_kwp'] ?? 0),
-                        'dcr_solar_size_kwp' => (float) ($row['dcr_solar_size_kwp'] ?? $row['solar_size_kwp'] ?? 0),
-                        'non_dcr_solar_size_kwp' => (float) ($row['non_dcr_solar_size_kwp'] ?? 0),
                         'inverter_kva' => (float) ($row['inverter_kva'] ?? 0),
                         'phase' => safe_text((string) ($row['phase'] ?? '')),
                         'battery_count' => (int) ($row['battery_count'] ?? 0),
@@ -761,27 +757,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'loan_above_2_lacs' => ['price' => $priceLoanAbove2, 'applicable' => $loanAboveApplicable],
         ];
         $selectedModelNumber = safe_text((string) $requestValue('selected_model_number', $savedRateChartSnapshot['model_number'] ?? ''));
-        $selectedRateChartIndexRaw = trim((string) $requestValue('selected_rate_chart_index', $savedRateChartSnapshot['rate_chart_index'] ?? ''));
-        $selectedRateChartIndex = ctype_digit($selectedRateChartIndexRaw) ? (int) $selectedRateChartIndexRaw : -1;
-        $rateChartType = strtolower($quote['system_type']) === 'hybrid' ? 'hybrid' : 'on_grid';
-        $rateChartRows = array_values((array) ($quoteDefaults['rate_chart'][$rateChartType] ?? []));
         $selectedRateChartRow = [];
-        if ($selectedRateChartIndex >= 0 && is_array($rateChartRows[$selectedRateChartIndex] ?? null)) {
-            $candidateRow = $rateChartRows[$selectedRateChartIndex];
-            if ($selectedModelNumber === '' || safe_text((string) ($candidateRow['model_number'] ?? '')) === $selectedModelNumber) {
-                $selectedRateChartRow = $candidateRow;
-            }
-        }
-        if ($selectedRateChartRow === [] && $selectedModelNumber !== '') {
-            foreach ($rateChartRows as $rateChartIndex => $rateChartRow) {
+        if ($selectedModelNumber !== '') {
+            $rateChartType = strtolower($quote['system_type']) === 'hybrid' ? 'hybrid' : 'on_grid';
+            foreach ((array) ($quoteDefaults['rate_chart'][$rateChartType] ?? []) as $rateChartRow) {
                 if (is_array($rateChartRow) && safe_text((string) ($rateChartRow['model_number'] ?? '')) === $selectedModelNumber) {
                     $selectedRateChartRow = $rateChartRow;
-                    $selectedRateChartIndex = $rateChartIndex;
                     break;
                 }
             }
         }
-        $selectedModelMetadata = $selectedRateChartRow;
         if ($selectedRateChartRow === [] && $selectedModelNumber !== '') {
             $selectedRateChartRow = $savedRateChartSnapshot;
         }
@@ -789,10 +774,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['rate_chart_snapshot'] = array_merge($savedRateChartSnapshot, [
             'system_type' => safe_text((string) $requestValue('system_type', $savedRateChartSnapshot['system_type'] ?? $quote['system_type'] ?? '')),
             'model_number' => safe_text((string) ($selectedRateChartRow['model_number'] ?? $selectedModelNumber)),
-            'rate_chart_index' => $selectedRateChartIndex >= 0 ? $selectedRateChartIndex : null,
-            'selected_model_metadata' => ($selectedModelNumber !== '' || $selectedRateChartIndex >= 0)
-                ? ($selectedModelMetadata !== [] ? $selectedModelMetadata : (array) ($savedRateChartSnapshot['selected_model_metadata'] ?? []))
-                : [],
             'scenario_model_numbers' => [
                 'self_funded' => safe_text((string) ($selectedScenarioModelNumbers['self_funded'] ?? '')),
                 'loan_upto_2_lacs' => safe_text((string) ($selectedScenarioModelNumbers['loan_upto_2_lacs'] ?? '')),
@@ -802,9 +783,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'battery_code' => safe_text((string) ($selectedRateChartRow['battery_code'] ?? '')),
             'inverter_code' => safe_text((string) ($selectedRateChartRow['inverter_code'] ?? '')),
             'solar_size_kwp' => (float) $requestValue('main_solar_kwp', $requestValue('capacity_kwp', $savedRateChartSnapshot['solar_size_kwp'] ?? 0)),
-            'dcr_solar_size_kwp' => (float) $requestValue('main_solar_kwp', $savedRateChartSnapshot['dcr_solar_size_kwp'] ?? $savedRateChartSnapshot['solar_size_kwp'] ?? 0),
-            'non_dcr_solar_size_kwp' => (float) $requestValue('complimentary_non_dcr_kwp', $savedRateChartSnapshot['non_dcr_solar_size_kwp'] ?? 0),
-            'total_system_capacity_kwp' => (float) $requestValue('capacity_kwp', $savedRateChartSnapshot['total_system_capacity_kwp'] ?? 0),
             'hybrid_inverter_kva' => (float) $requestValue('hybrid_inverter_kva', $savedRateChartSnapshot['hybrid_inverter_kva'] ?? 0),
             'hybrid_phase' => solar_finance_normalize_phase_label((string) $requestValue('hybrid_phase', $savedRateChartSnapshot['hybrid_phase'] ?? '')),
             'hybrid_battery_count' => (int) $requestValue('hybrid_battery_count', $savedRateChartSnapshot['hybrid_battery_count'] ?? 0),
@@ -1484,7 +1462,7 @@ body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px
 <div><label>Meter Number</label><input name="meter_number" value="<?= htmlspecialchars((string)(($editing['meter_number'] !== '') ? $editing['meter_number'] : ($quoteSnapshot['meter_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Meter Serial Number</label><input name="meter_serial_number" value="<?= htmlspecialchars((string)(($editing['meter_serial_number'] !== '') ? $editing['meter_serial_number'] : ($quoteSnapshot['meter_serial_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>System Type</label><select name="system_type"><?php foreach (['Ongrid','Hybrid','Offgrid','Product'] as $t): ?><option value="<?= $t ?>" <?= $editing['system_type']===$t?'selected':'' ?>><?= $t ?></option><?php endforeach; ?></select></div>
-<div id="rateChartModelField"><label>Rate Chart Model</label><select id="rateChartModelSelect"><option value="">-- select model --</option></select><input type="hidden" name="selected_model_number" value="<?= htmlspecialchars((string)($editing['rate_chart_snapshot']['model_number'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="selected_rate_chart_index" value="<?= htmlspecialchars((string)($editing['rate_chart_snapshot']['rate_chart_index'] ?? ''), ENT_QUOTES) ?>"><div class="muted">Models come from the selected System Type rate chart. System details and an empty item builder auto-fill; prices remain editable after selection.</div><button type="button" class="btn secondary" id="applyModelKitBtn" style="display:none;margin-top:8px">Apply model kit</button><div class="muted" id="modelKitStatus" aria-live="polite"></div></div>
+<div id="rateChartModelField"><label>Rate Chart Model</label><select id="rateChartModelSelect"><option value="">-- select model --</option></select><input type="hidden" name="selected_model_number" value="<?= htmlspecialchars((string)($editing['rate_chart_snapshot']['model_number'] ?? ''), ENT_QUOTES) ?>"><div class="muted">Models come from the selected System Type rate chart. Prices remain editable after selection.</div></div>
 <?php $hasMainSolarOnQuote = safe_text((string)($editing['main_solar_kwp'] ?? '')) !== ''; ?>
 <div id="splitCapacityFields" style="display:<?= ($editing['id'] === '' || $hasMainSolarOnQuote) ? 'block' : 'none' ?>;grid-column:span 2">
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
@@ -1798,19 +1776,14 @@ document.addEventListener('click', function(e){
 });
 </script>
 <script>
-const createStructuredItemRow = () => {
-    const tb = document.querySelector('#structuredItemsTable tbody');
-    if (!tb) return null;
-    const tr = document.createElement('tr');
-    tr.innerHTML = '<td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit">Kit</option><option value="component" selected>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="1"></td><td><input name="quote_item_unit[]" value=""></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"></div><div class="muted" style="font-size:11px;margin-bottom:4px"></div><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"></textarea></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td>';
-    tb.appendChild(tr);
-    syncStructuredItemRow(tr);
-    return tr;
-};
-
 document.addEventListener('click', function (e) {
     if (e.target && e.target.id === 'addStructuredItemBtn') {
-        createStructuredItemRow();
+        const tb = document.querySelector('#structuredItemsTable tbody');
+        if (!tb) return;
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit">Kit</option><option value="component" selected>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="1"></td><td><input name="quote_item_unit[]" value=""></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"></div><div class="muted" style="font-size:11px;margin-bottom:4px"></div><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"></textarea></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td>';
+        tb.appendChild(tr);
+        syncStructuredItemRow(tr);
     }
     if (e.target && e.target.classList.contains('rm-structured-item')) {
         e.target.closest('tr')?.remove();
@@ -1962,18 +1935,13 @@ document.querySelectorAll('#structuredItemsTable tbody tr').forEach((tr) => sync
         return Number.isFinite(n) ? n : 0;
     };
 
-    let enableSplitMode = isNewQuote || hasSplitData;
-    const setSplitMode = (enabled) => {
-        enableSplitMode = enabled;
-        if (splitWrap) splitWrap.style.display = enableSplitMode ? 'block' : 'none';
-        if (legacyWrap) legacyWrap.style.display = enableSplitMode ? 'none' : 'block';
-        if (mainInput) mainInput.required = enableSplitMode;
-    };
-    setSplitMode(enableSplitMode);
+    const enableSplitMode = isNewQuote || hasSplitData;
+    if (splitWrap) splitWrap.style.display = enableSplitMode ? 'block' : 'none';
+    if (legacyWrap) legacyWrap.style.display = enableSplitMode ? 'none' : 'block';
+    if (mainInput) mainInput.required = enableSplitMode;
 
     const syncCapacity = () => {
         if (!hiddenCapacity) return;
-        if (!enableSplitMode && mainInput && String(mainInput.value || '').trim() !== '') setSplitMode(true);
         const previousValue = String(hiddenCapacity.value || '').trim();
         if (enableSplitMode) {
             const total = parseNum(mainInput?.value || 0) + parseNum(complimentaryInput?.value || 0);
@@ -2003,7 +1971,6 @@ window.quoteFormAutofillConfig = {
     const rateChart = <?= json_encode((array)($quoteDefaults['rate_chart'] ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const systemType = document.querySelector('select[name="system_type"]');
     const solarSize = document.querySelector('input[name="main_solar_kwp"]') || document.querySelector('input[name="capacity_kwp"]');
-    const nonDcrSolarSize = document.querySelector('input[name="complimentary_non_dcr_kwp"]');
     const inverter = document.querySelector('input[name="hybrid_inverter_kva"]');
     const phase = document.querySelector('select[name="hybrid_phase"]');
     const battery = document.querySelector('input[name="hybrid_battery_count"]');
@@ -2015,10 +1982,6 @@ window.quoteFormAutofillConfig = {
     const modelField = document.getElementById('rateChartModelField');
     const modelSelect = document.getElementById('rateChartModelSelect');
     const selectedModelNumber = document.querySelector('input[name="selected_model_number"]');
-    const selectedRateChartIndex = document.querySelector('input[name="selected_rate_chart_index"]');
-    const applyModelKitBtn = document.getElementById('applyModelKitBtn');
-    const modelKitStatus = document.getElementById('modelKitStatus');
-    let applyingRateChartModel = false;
 
     const parseNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
     const chartType = () => String(systemType?.value || '').toLowerCase() === 'hybrid' ? 'hybrid' : 'on_grid';
@@ -2036,129 +1999,48 @@ window.quoteFormAutofillConfig = {
         const typeSupported = ['ongrid', 'hybrid'].includes(String(systemType?.value || '').toLowerCase());
         modelField.style.display = typeSupported ? '' : 'none';
         const wantedModel = preserveSelection ? String(selectedModelNumber?.value || '') : '';
-        const wantedIndex = preserveSelection ? String(selectedRateChartIndex?.value || '') : '';
         modelSelect.innerHTML = '<option value="">-- select model --</option>';
         chartRows().forEach((row, index) => {
             const option = document.createElement('option');
             option.value = String(index);
             option.textContent = rowLabel(row, index);
-            if ((wantedModel !== '' && String(row.model_number || '') === wantedModel) || (wantedModel === '' && wantedIndex === String(index))) option.selected = true;
+            if (wantedModel !== '' && String(row.model_number || '') === wantedModel) option.selected = true;
             modelSelect.appendChild(option);
         });
         if (!preserveSelection && selectedModelNumber) selectedModelNumber.value = '';
-        if (!preserveSelection && selectedRateChartIndex) selectedRateChartIndex.value = '';
-        if (!preserveSelection && applyModelKitBtn) applyModelKitBtn.style.display = 'none';
-        if (!preserveSelection && modelKitStatus) modelKitStatus.textContent = '';
     };
-    const hasOwn = (row, key) => Object.prototype.hasOwnProperty.call(row || {}, key);
-    const modelSolarSplit = (row) => ({
-        dcr: parseNum(hasOwn(row, 'dcr_solar_size_kwp') ? row.dcr_solar_size_kwp : row.solar_size_kwp),
-        nonDcr: parseNum(hasOwn(row, 'non_dcr_solar_size_kwp') ? row.non_dcr_solar_size_kwp : 0)
-    });
-    const normalizeKitName = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
-    const hybridVariant = (row) => {
-        const code = `${String(row?.model_number || '')} ${String(row?.inverter_code || '')}`;
-        if (code.toUpperCase().includes('TB')) return 'tb';
-        if (code.toUpperCase().includes('TL')) return 'tl';
-        return '';
-    };
-    const modelKitName = (row) => {
-        if (chartType() === 'on_grid') return 'ongrid solar power generation system';
-        const variant = hybridVariant(row);
-        if (variant === 'tb') return 'hybrid solar power generation system tbased';
-        if (variant === 'tl') return 'hybrid solar power generation system tless';
-        return '';
-    };
-    const findKitIdByName = (name) => Object.keys(quoteKitMeta).find((id) => normalizeKitName(quoteKitMeta[id]?.name) === normalizeKitName(name)) || '';
-    const applySelectedModelKit = (replaceExisting = false) => {
-        const rawIndex = String(modelSelect?.value || '');
-        const index = rawIndex === '' ? -1 : Number(rawIndex);
-        const row = Number.isInteger(index) && index >= 0 ? chartRows()[index] : null;
-        if (!row) return false;
-        const targetName = modelKitName(row);
-        if (targetName === '') {
-            if (modelKitStatus) modelKitStatus.textContent = 'Select a Hybrid model whose model number or inverter code contains TB or TL to choose its kit.';
-            return false;
-        }
-        const kitId = findKitIdByName(targetName);
-        if (kitId === '') {
-            if (modelKitStatus) modelKitStatus.textContent = `Required Items Master kit not found: ${targetName}.`;
-            return false;
-        }
-        const tbody = document.querySelector('#structuredItemsTable tbody');
-        const existingRows = Array.from(tbody?.querySelectorAll('tr') || []);
-        if (existingRows.length && !replaceExisting) {
-            if (modelKitStatus) modelKitStatus.textContent = 'Existing item rows were preserved. Use Apply model kit to replace them explicitly.';
-            if (applyModelKitBtn) applyModelKitBtn.style.display = '';
-            return false;
-        }
-        if (replaceExisting) existingRows.forEach((existingRow) => existingRow.remove());
-        const itemRow = createStructuredItemRow();
-        if (!itemRow) return false;
-        const typeField = itemRow.querySelector('.quote-item-type');
-        const kitField = itemRow.querySelector('.quote-item-kit');
-        const qtyField = itemRow.querySelector('input[name="quote_item_qty[]"]');
-        const unitField = itemRow.querySelector('input[name="quote_item_unit[]"]');
-        if (typeField) typeField.value = 'kit';
-        syncStructuredItemRow(itemRow);
-        if (kitField) kitField.value = kitId;
-        if (qtyField) qtyField.value = '1';
-        if (unitField) unitField.value = 'set';
-        syncStructuredItemRow(itemRow);
-        itemRow.dataset.modelKitManaged = 'true';
-        if (chartType() === 'hybrid') updateHybridItemDescriptionPreview();
-        if (modelKitStatus) modelKitStatus.textContent = `Applied kit: ${quoteKitMeta[kitId].name}.`;
-        if (applyModelKitBtn) applyModelKitBtn.style.display = 'none';
-        return true;
-    };
-
     const applyModel = () => {
         const rawIndex = String(modelSelect?.value || '');
         const index = rawIndex === '' ? -1 : Number(rawIndex);
         const row = Number.isInteger(index) && index >= 0 ? chartRows()[index] : null;
         if (!row) {
             if (selectedModelNumber) selectedModelNumber.value = '';
-            if (selectedRateChartIndex) selectedRateChartIndex.value = '';
-            if (applyModelKitBtn) applyModelKitBtn.style.display = 'none';
-            if (modelKitStatus) modelKitStatus.textContent = '';
             return;
         }
         if (selectedModelNumber) selectedModelNumber.value = String(row.model_number || '');
-        if (selectedRateChartIndex) selectedRateChartIndex.value = String(index);
-        const split = modelSolarSplit(row);
-        if (solarSize) solarSize.value = String(split.dcr);
-        if (nonDcrSolarSize) nonDcrSolarSize.value = String(split.nonDcr);
+        if (solarSize) solarSize.value = String(parseNum(row.solar_size_kwp));
         if (chartType() === 'hybrid') {
             if (inverter) inverter.value = String(parseNum(row.inverter_kva));
             if (phase) phase.value = normalizePhaseValue(row.phase);
             if (battery) battery.value = String(parseNum(row.battery_count));
         }
-        applyingRateChartModel = true;
         [[selfPrice, row.self_funded_price], [up2Price, row.loan_upto_2_lacs_price], [above2Price, row.loan_above_2_lacs_price]].forEach(([field, value]) => {
             if (!field) return;
             field.value = String(parseNum(value));
             field.dispatchEvent(new Event('input', { bubbles: true }));
         });
         solarSize?.dispatchEvent(new Event('input', { bubbles: true }));
-        nonDcrSolarSize?.dispatchEvent(new Event('input', { bubbles: true }));
-        [solarSize, nonDcrSolarSize, inverter, phase, battery].forEach((field) => field?.dispatchEvent(new Event('change', { bubbles: true })));
-        applyingRateChartModel = false;
-        applySelectedModelKit(false);
+        [solarSize, inverter, phase, battery].forEach((field) => field?.dispatchEvent(new Event('change', { bubbles: true })));
     };
     populateModels(true);
     modelSelect?.addEventListener('change', applyModel);
-    applyModelKitBtn?.addEventListener('click', () => {
-        const existingRows = document.querySelectorAll('#structuredItemsTable tbody tr').length;
-        if (existingRows > 0 && !window.confirm('Replace all current item rows with the selected model kit?')) return;
-        applySelectedModelKit(true);
-    });
     systemType?.addEventListener('change', () => populateModels(false));
 
     const pickRow = () => {
         const type = chartType();
         const rows = chartRows();
         return rows.find((row) => {
-            if (Math.abs(modelSolarSplit(row).dcr - parseNum(solarSize?.value || 0)) > 0.01) return false;
+            if (Math.abs(parseNum(row.solar_size_kwp) - parseNum(solarSize?.value || 0)) > 0.01) return false;
             if (type === 'hybrid') {
                 if (Math.abs(parseNum(row.inverter_kva) - parseNum(inverter?.value || 0)) > 0.01) return false;
                 if (normalizePhaseValue(row.phase) !== normalizePhaseValue(phase?.value)) return false;
@@ -2225,7 +2107,7 @@ window.quoteFormAutofillConfig = {
     bindRatioSync('loan_above_2_lacs');
 
     const updateHybridItemDescriptionPreview = () => {
-        if (applyingRateChartModel || String(systemType?.value || '').toLowerCase() !== 'hybrid') return;
+        if (String(systemType?.value || '').toLowerCase() !== 'hybrid') return;
         const inverterText = parseNum(inverter?.value) > 0 ? `${parseNum(inverter.value).toFixed(1).replace(/\.0$/, '')} kVA inverter` : '';
         const phaseRaw = String(phase?.value || '').trim();
         const phaseText = phaseRaw === '' ? '' : (phaseRaw.includes('Phase') ? phaseRaw : `${phaseRaw} Phase`);
