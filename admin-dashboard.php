@@ -483,6 +483,13 @@ $cardConfigs[] = [
             </time>
           </div>
         </div>
+        <div class="dashboard-nav-finder" role="search">
+          <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+          <label class="sr-only" for="dashboard-nav-search">Find an admin area</label>
+          <input id="dashboard-nav-search" type="search" placeholder="Find an admin area…" autocomplete="off" />
+          <kbd>/</kbd>
+          <span class="dashboard-nav-finder__status" data-dashboard-search-status aria-live="polite"></span>
+        </div>
         <div class="admin-overview__primary-actions">
           <a href="<?= htmlspecialchars($pathFor('admin-tasks.php'), ENT_QUOTES) ?>" class="btn btn-primary"><i class="fa-solid fa-list-check" aria-hidden="true"></i> Tasks</a>
           <a href="<?= htmlspecialchars($pathFor('complaints-overview.php'), ENT_QUOTES) ?>" class="btn btn-ghost"><i class="fa-solid fa-headset" aria-hidden="true"></i> Complaints</a>
@@ -530,6 +537,13 @@ $cardConfigs[] = [
       </div>
     </header>
 
+    <div class="admin-section-heading">
+      <div>
+        <p class="admin-section-heading__eyebrow">At a glance</p>
+        <h2>Operational overview</h2>
+        <p>Open the area that needs attention without losing your place.</p>
+      </div>
+    </div>
     <section class="admin-overview__cards" aria-label="Operational summaries">
       <?php foreach ($cardConfigs as $card): ?>
       <?php
