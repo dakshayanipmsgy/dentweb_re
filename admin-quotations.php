@@ -295,11 +295,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $decoded = json_decode($rateChartOnGridRaw, true);
             if (is_array($decoded)) {
                 $d['rate_chart']['on_grid'] = array_values(array_filter(array_map(static function ($row): array {
+                    $scenarioModelNumbers = is_array($row['scenario_model_numbers'] ?? null) ? $row['scenario_model_numbers'] : [];
                     return [
+                        'model_number' => safe_text((string) ($row['model_number'] ?? '')),
                         'solar_size_kwp' => (float) ($row['solar_size_kwp'] ?? 0),
+                        'phase' => safe_text((string) ($row['phase'] ?? '')),
+                        'variant' => safe_text((string) ($row['variant'] ?? '')),
                         'self_funded_price' => (float) ($row['self_funded_price'] ?? 0),
                         'loan_upto_2_lacs_price' => (float) ($row['loan_upto_2_lacs_price'] ?? 0),
                         'loan_above_2_lacs_price' => (float) ($row['loan_above_2_lacs_price'] ?? 0),
+                        'scenario_model_numbers' => [
+                            'self_funded' => safe_text((string) ($scenarioModelNumbers['self_funded'] ?? '')),
+                            'loan_upto_2_lacs' => safe_text((string) ($scenarioModelNumbers['loan_upto_2_lacs'] ?? '')),
+                            'loan_above_2_lacs' => safe_text((string) ($scenarioModelNumbers['loan_above_2_lacs'] ?? '')),
+                        ],
                     ];
                 }, $decoded), static fn(array $row): bool => $row['solar_size_kwp'] > 0));
             }
@@ -309,14 +318,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $decoded = json_decode($rateChartHybridRaw, true);
             if (is_array($decoded)) {
                 $d['rate_chart']['hybrid'] = array_values(array_filter(array_map(static function ($row): array {
+                    $scenarioModelNumbers = is_array($row['scenario_model_numbers'] ?? null) ? $row['scenario_model_numbers'] : [];
                     return [
+                        'model_number' => safe_text((string) ($row['model_number'] ?? '')),
                         'solar_size_kwp' => (float) ($row['solar_size_kwp'] ?? 0),
                         'inverter_kva' => (float) ($row['inverter_kva'] ?? 0),
                         'phase' => safe_text((string) ($row['phase'] ?? '')),
                         'battery_count' => (int) ($row['battery_count'] ?? 0),
+                        'battery_code' => safe_text((string) ($row['battery_code'] ?? '')),
+                        'inverter_code' => safe_text((string) ($row['inverter_code'] ?? '')),
+                        'variant' => safe_text((string) ($row['variant'] ?? '')),
                         'self_funded_price' => (float) ($row['self_funded_price'] ?? 0),
                         'loan_upto_2_lacs_price' => (float) ($row['loan_upto_2_lacs_price'] ?? 0),
                         'loan_above_2_lacs_price' => (float) ($row['loan_above_2_lacs_price'] ?? 0),
+                        'scenario_model_numbers' => [
+                            'self_funded' => safe_text((string) ($scenarioModelNumbers['self_funded'] ?? '')),
+                            'loan_upto_2_lacs' => safe_text((string) ($scenarioModelNumbers['loan_upto_2_lacs'] ?? '')),
+                            'loan_above_2_lacs' => safe_text((string) ($scenarioModelNumbers['loan_above_2_lacs'] ?? '')),
+                        ],
                     ];
                 }, $decoded), static fn(array $row): bool => $row['inverter_kva'] > 0 && $row['phase'] !== ''));
             }
@@ -718,8 +737,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'loan_upto_2_lacs' => ['price' => $priceLoanUp2],
             'loan_above_2_lacs' => ['price' => $priceLoanAbove2, 'applicable' => $loanAboveApplicable],
         ];
+        $selectedModelNumber = safe_text((string) ($_POST['selected_model_number'] ?? ''));
+        $selectedRateChartRow = [];
+        if ($selectedModelNumber !== '') {
+            $rateChartType = strtolower($quote['system_type']) === 'hybrid' ? 'hybrid' : 'on_grid';
+            foreach ((array) ($quoteDefaults['rate_chart'][$rateChartType] ?? []) as $rateChartRow) {
+                if (is_array($rateChartRow) && safe_text((string) ($rateChartRow['model_number'] ?? '')) === $selectedModelNumber) {
+                    $selectedRateChartRow = $rateChartRow;
+                    break;
+                }
+            }
+        }
+        $selectedScenarioModelNumbers = is_array($selectedRateChartRow['scenario_model_numbers'] ?? null) ? $selectedRateChartRow['scenario_model_numbers'] : [];
         $quote['rate_chart_snapshot'] = [
             'system_type' => safe_text((string) ($_POST['system_type'] ?? '')),
+            'model_number' => safe_text((string) ($selectedRateChartRow['model_number'] ?? '')),
+            'scenario_model_numbers' => [
+                'self_funded' => safe_text((string) ($selectedScenarioModelNumbers['self_funded'] ?? '')),
+                'loan_upto_2_lacs' => safe_text((string) ($selectedScenarioModelNumbers['loan_upto_2_lacs'] ?? '')),
+                'loan_above_2_lacs' => safe_text((string) ($selectedScenarioModelNumbers['loan_above_2_lacs'] ?? '')),
+            ],
+            'variant' => safe_text((string) ($selectedRateChartRow['variant'] ?? '')),
+            'battery_code' => safe_text((string) ($selectedRateChartRow['battery_code'] ?? '')),
+            'inverter_code' => safe_text((string) ($selectedRateChartRow['inverter_code'] ?? '')),
             'solar_size_kwp' => (float) ($_POST['main_solar_kwp'] ?? $_POST['capacity_kwp'] ?? 0),
             'hybrid_inverter_kva' => (float) ($_POST['hybrid_inverter_kva'] ?? 0),
             'hybrid_phase' => solar_finance_normalize_phase_label((string) ($_POST['hybrid_phase'] ?? '')),
@@ -1389,6 +1429,7 @@ body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px
 <div><label>Meter Number</label><input name="meter_number" value="<?= htmlspecialchars((string)(($editing['meter_number'] !== '') ? $editing['meter_number'] : ($quoteSnapshot['meter_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Meter Serial Number</label><input name="meter_serial_number" value="<?= htmlspecialchars((string)(($editing['meter_serial_number'] !== '') ? $editing['meter_serial_number'] : ($quoteSnapshot['meter_serial_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>System Type</label><select name="system_type"><?php foreach (['Ongrid','Hybrid','Offgrid','Product'] as $t): ?><option value="<?= $t ?>" <?= $editing['system_type']===$t?'selected':'' ?>><?= $t ?></option><?php endforeach; ?></select></div>
+<div id="rateChartModelField"><label>Rate Chart Model</label><select id="rateChartModelSelect"><option value="">-- select model --</option></select><input type="hidden" name="selected_model_number" value="<?= htmlspecialchars((string)($editing['rate_chart_snapshot']['model_number'] ?? ''), ENT_QUOTES) ?>"><div class="muted">Models come from the selected System Type rate chart. Prices remain editable after selection.</div></div>
 <?php $hasMainSolarOnQuote = safe_text((string)($editing['main_solar_kwp'] ?? '')) !== ''; ?>
 <div id="splitCapacityFields" style="display:<?= ($editing['id'] === '' || $hasMainSolarOnQuote) ? 'block' : 'none' ?>;grid-column:span 2">
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
@@ -1420,7 +1461,7 @@ body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
-<div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Add kits/components from Items Master. Name/description snapshots are captured automatically.</div><table id="structuredItemsTable"><thead><tr><th>Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Quotation-specific description / note</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?></div><?php $masterPreview = (string)($sItem['master_description_snapshot'] ?? ($sItem['description_snapshot'] ?? '')); if (trim($masterPreview) !== ''): ?><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars($masterPreview, ENT_QUOTES) ?></div><?php endif; ?><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"><?= htmlspecialchars((string)($sItem['custom_description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">These are the common inputs used to calculate savings, residual bill, monthly outflow, cumulative expense, and payback.</div></div>
+<div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Add kits/components from Items Master. Name/description snapshots are captured automatically.</div><table id="structuredItemsTable"><thead><tr><th>Kit / Component Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Quotation-specific description / note</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?></div><?php $masterPreview = (string)($sItem['master_description_snapshot'] ?? ($sItem['description_snapshot'] ?? '')); if (trim($masterPreview) !== ''): ?><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars($masterPreview, ENT_QUOTES) ?></div><?php endif; ?><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"><?= htmlspecialchars((string)($sItem['custom_description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">These are the common inputs used to calculate savings, residual bill, monthly outflow, cumulative expense, and payback.</div></div>
 <div style="grid-column:1/-1"><h3>Section 6 — Scenario Prices</h3><div class="muted">Scenario pricing only (self funded, loan up to ₹2 lacs, loan above ₹2 lacs, hybrid configuration, and primary finance scenario).</div></div>
 <div><label>Primary Finance Scenario</label><select name="primary_finance_scenario"><option value="self_funded" <?= (($editing['primary_finance_scenario'] ?? '')==='self_funded')?'selected':'' ?>>Self Funded</option><option value="loan_upto_2_lacs_subsidy_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_upto_2_lacs_subsidy_to_loan')?'selected':'' ?>>Loan up to ₹2 lacs (subsidy to loan)</option><option value="loan_upto_2_lacs_subsidy_not_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_upto_2_lacs_subsidy_not_to_loan')?'selected':'' ?>>Loan up to ₹2 lacs (subsidy self kept)</option><option value="loan_above_2_lacs_subsidy_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_above_2_lacs_subsidy_to_loan')?'selected':'' ?>>Loan above ₹2 lacs (subsidy to loan)</option><option value="loan_above_2_lacs_subsidy_not_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_above_2_lacs_subsidy_not_to_loan')?'selected':'' ?>>Loan above ₹2 lacs (subsidy self kept)</option></select></div>
 <div><label>Self Funded Price ₹</label><input type="number" step="0.01" name="scenario_price_self_funded" value="<?= htmlspecialchars((string)($editing['scenario_prices']['self_funded']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
@@ -1561,7 +1602,7 @@ $canWhatsappShare = $quoteShareMobile !== '';
       const headingText=(node)=>node.querySelector(':scope > h3')?.textContent?.trim()||'';
       const textLabel=(node)=>node.querySelector(':scope > label')?.textContent?.trim()||'';
       const customerNames=['party_type','customer_mobile','customer_name','consumer_account_no','meter_number','meter_serial_number','district','city','state','pin','billing_address','site_address','circle_name','division_name','sub_division_name'];
-      const systemNames=['system_type','main_solar_kwp','complimentary_non_dcr_kwp','capacity_kwp','application_id','application_submitted_date','sanction_load_kwp','installed_pv_module_capacity_kwp','project_summary_line','special_requests_text','hybrid_inverter_kva','hybrid_phase','hybrid_battery_count'];
+      const systemNames=['system_type','selected_model_number','main_solar_kwp','complimentary_non_dcr_kwp','capacity_kwp','application_id','application_submitted_date','sanction_load_kwp','installed_pv_module_capacity_kwp','project_summary_line','special_requests_text','hybrid_inverter_kva','hybrid_phase','hybrid_battery_count'];
       const pricingNames=['template_set_id','quotation_date','valid_until','pricing_mode','tax_profile_id','show_tax_breakup','place_of_supply_state','scenario_price_self_funded','scenario_price_loan_upto_2_lacs','scenario_price_loan_above_2_lacs','transportation_cost','discount_rs','discount_note'];
       const financeNames=['primary_finance_scenario','system_total_incl_gst_rs','monthly_bill_rs','unit_rate_rs_per_kwh','annual_generation_per_kw','transportation_rs','subsidy_expected_rs'];
       const destinationFor=(node)=>{
@@ -1905,16 +1946,71 @@ window.quoteFormAutofillConfig = {
     const above2Price = document.querySelector('input[name="scenario_price_loan_above_2_lacs"]');
     const above2Applicable = document.querySelector('input[name="loan_above_2_lacs_applicable"]');
     const primaryScenario = document.querySelector('select[name="primary_finance_scenario"]');
+    const modelField = document.getElementById('rateChartModelField');
+    const modelSelect = document.getElementById('rateChartModelSelect');
+    const selectedModelNumber = document.querySelector('input[name="selected_model_number"]');
 
     const parseNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+    const chartType = () => String(systemType?.value || '').toLowerCase() === 'hybrid' ? 'hybrid' : 'on_grid';
+    const chartRows = () => Array.isArray(rateChart[chartType()]) ? rateChart[chartType()] : [];
+    const normalizePhaseValue = (value) => String(value || '').trim().replace(/\s*Phase$/i, '');
+    const rowLabel = (row, index) => {
+        if (String(row.model_number || '').trim() !== '') return String(row.model_number);
+        const details = chartType() === 'hybrid'
+            ? `${parseNum(row.solar_size_kwp)} kWp / ${parseNum(row.inverter_kva)} kVA / ${String(row.phase || '')} / ${parseNum(row.battery_count)} batteries`
+            : `${parseNum(row.solar_size_kwp)} kWp${String(row.phase || '').trim() ? ` / ${String(row.phase)}` : ''}`;
+        return `Legacy rate row ${index + 1} — ${details}`;
+    };
+    const populateModels = (preserveSelection = true) => {
+        if (!modelSelect || !modelField) return;
+        const typeSupported = ['ongrid', 'hybrid'].includes(String(systemType?.value || '').toLowerCase());
+        modelField.style.display = typeSupported ? '' : 'none';
+        const wantedModel = preserveSelection ? String(selectedModelNumber?.value || '') : '';
+        modelSelect.innerHTML = '<option value="">-- select model --</option>';
+        chartRows().forEach((row, index) => {
+            const option = document.createElement('option');
+            option.value = String(index);
+            option.textContent = rowLabel(row, index);
+            if (wantedModel !== '' && String(row.model_number || '') === wantedModel) option.selected = true;
+            modelSelect.appendChild(option);
+        });
+        if (!preserveSelection && selectedModelNumber) selectedModelNumber.value = '';
+    };
+    const applyModel = () => {
+        const rawIndex = String(modelSelect?.value || '');
+        const index = rawIndex === '' ? -1 : Number(rawIndex);
+        const row = Number.isInteger(index) && index >= 0 ? chartRows()[index] : null;
+        if (!row) {
+            if (selectedModelNumber) selectedModelNumber.value = '';
+            return;
+        }
+        if (selectedModelNumber) selectedModelNumber.value = String(row.model_number || '');
+        if (solarSize) solarSize.value = String(parseNum(row.solar_size_kwp));
+        if (chartType() === 'hybrid') {
+            if (inverter) inverter.value = String(parseNum(row.inverter_kva));
+            if (phase) phase.value = normalizePhaseValue(row.phase);
+            if (battery) battery.value = String(parseNum(row.battery_count));
+        }
+        [[selfPrice, row.self_funded_price], [up2Price, row.loan_upto_2_lacs_price], [above2Price, row.loan_above_2_lacs_price]].forEach(([field, value]) => {
+            if (!field) return;
+            field.value = String(parseNum(value));
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        solarSize?.dispatchEvent(new Event('input', { bubbles: true }));
+        [solarSize, inverter, phase, battery].forEach((field) => field?.dispatchEvent(new Event('change', { bubbles: true })));
+    };
+    populateModels(true);
+    modelSelect?.addEventListener('change', applyModel);
+    systemType?.addEventListener('change', () => populateModels(false));
+
     const pickRow = () => {
-        const type = String(systemType?.value || '').toLowerCase() === 'hybrid' ? 'hybrid' : 'on_grid';
-        const rows = Array.isArray(rateChart[type]) ? rateChart[type] : [];
+        const type = chartType();
+        const rows = chartRows();
         return rows.find((row) => {
             if (Math.abs(parseNum(row.solar_size_kwp) - parseNum(solarSize?.value || 0)) > 0.01) return false;
             if (type === 'hybrid') {
                 if (Math.abs(parseNum(row.inverter_kva) - parseNum(inverter?.value || 0)) > 0.01) return false;
-                if (String(row.phase || '') !== String(phase?.value || '')) return false;
+                if (normalizePhaseValue(row.phase) !== normalizePhaseValue(phase?.value)) return false;
                 if (parseNum(row.battery_count) !== parseNum(battery?.value || 0)) return false;
             }
             return true;
