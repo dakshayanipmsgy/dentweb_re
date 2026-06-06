@@ -260,7 +260,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $fields = array_keys(documents_company_profile_defaults());
         foreach ($fields as $field) {
-            if ($field === 'logo_path' || $field === 'upi_qr_path' || $field === 'updated_at') {
+            if ($field === 'logo_path' || $field === 'updated_at') {
                 continue;
             }
             $profile[$field] = safe_text($_POST[$field] ?? '');
@@ -272,17 +272,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $redirectWith('company', 'error', (string) $upload['error']);
             }
             $profile['logo_path'] = '/images/documents/branding/' . $upload['filename'];
-        }
-
-        $hasNewUpiQr = isset($_FILES['upi_qr_upload']) && (int) ($_FILES['upi_qr_upload']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
-        if ($hasNewUpiQr) {
-            $upload = documents_handle_image_upload($_FILES['upi_qr_upload'], documents_public_branding_dir(), 'upi_qr_');
-            if (!$upload['ok']) {
-                $redirectWith('company', 'error', 'UPI QR upload failed: ' . (string) $upload['error']);
-            }
-            $profile['upi_qr_path'] = documents_normalize_upi_qr_path('/images/documents/branding/' . $upload['filename']);
-        } elseif (isset($_POST['clear_upi_qr_path']) && (string) $_POST['clear_upi_qr_path'] === '1') {
-            $profile['upi_qr_path'] = '';
         }
 
         $waDigits = preg_replace('/\D+/', '', (string) ($profile['whatsapp_number'] ?? '')) ?? '';
@@ -3318,13 +3307,6 @@ $activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace'
           ?>
           <p><a class="btn secondary" href="?tab=accepted_customers">&larr; Back to Accepted Customers</a></p>
           <h2 style="margin-top:0;">Document Pack: <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></h2>
-          <div class="document-pack-flow" aria-label="Document pack lifecycle">
-            <div class="done"><strong>1</strong><span>Quotation<small>Accepted source</small></span></div>
-            <div class="<?= $packAgreements !== [] ? 'done' : '' ?>"><strong>2</strong><span>Agreement<small><?= $packAgreements !== [] ? 'Created' : 'Create from quotation' ?></small></span></div>
-            <div class="<?= $packChallans !== [] ? 'done' : '' ?>"><strong>3</strong><span>Challan<small><?= $packChallans !== [] ? 'Dispatch recorded' : 'Create for delivery' ?></small></span></div>
-            <div class="<?= $packInvoices !== [] ? 'done' : '' ?>"><strong>4</strong><span>Invoice<small><?= $packInvoices !== [] ? 'Created' : 'Create after delivery' ?></small></span></div>
-            <div class="<?= $packReceipts !== [] ? 'done' : '' ?>"><strong>5</strong><span>Receipt<small><?= $packReceipts !== [] ? 'Payment recorded' : 'Record payment' ?></small></span></div>
-          </div>
           <div class="card" style="padding:10px;margin-bottom:10px"><strong>Current Version: v<?= (int) $packCurrentVersionNo ?></strong><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><?php foreach ($packVersions as $versionRow): $isCurrentVersionRow = (bool) ($versionRow['is_current_version'] ?? false); ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => (string) ($versionRow['id'] ?? ''), 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">v<?= (int) ($versionRow['version_no'] ?? 1) ?></a><?php if ($isCurrentVersionRow): ?><span class="pill" style="background:#dcfce7;color:#166534">CURRENT</span><?php endif; ?><?php endforeach; ?></div></div>
           <?php if ($packIsOlderVersion): ?><div class="alert err">You are viewing an older version.</div><?php endif; ?>
           <form method="get" style="margin-bottom:1rem;">
@@ -4179,7 +4161,7 @@ $activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace'
           <input type="hidden" name="action" value="save_company_profile" />
           <div class="grid">
             <?php foreach ($company as $key => $value): ?>
-              <?php if ($key === 'logo_path' || $key === 'upi_qr_path' || $key === 'updated_at') { continue; } ?>
+              <?php if ($key === 'logo_path' || $key === 'updated_at') { continue; } ?>
               <div>
                 <label for="<?= htmlspecialchars($key, ENT_QUOTES) ?>"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $key)), ENT_QUOTES) ?></label>
                 <input id="<?= htmlspecialchars($key, ENT_QUOTES) ?>" type="text" name="<?= htmlspecialchars($key, ENT_QUOTES) ?>" value="<?= htmlspecialchars((string) $value, ENT_QUOTES) ?>" />
@@ -4192,24 +4174,6 @@ $activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace'
                 <img class="logo-preview" src="<?= htmlspecialchars((string) $company['logo_path'], ENT_QUOTES) ?>" alt="Current logo" />
               <?php endif; ?>
             </div>
-            <section class="company-payment-qr" aria-labelledby="company-payment-qr-title">
-              <div>
-                <p class="admin-section-heading__eyebrow">Customer payments</p>
-                <h3 id="company-payment-qr-title">Payment QR / UPI Barcode</h3>
-                <p class="muted">Upload the QR/barcode customers can scan for UPI payment. This will appear in quotations/payment section.</p>
-                <label for="upi_qr_upload">UPI QR / barcode image</label>
-                <input id="upi_qr_upload" type="file" name="upi_qr_upload" accept="image/png,image/jpeg,image/webp" />
-                <p class="muted">JPG, PNG, or WebP only; maximum 5MB. A new upload replaces the current quotation payment QR.</p>
-              </div>
-              <div class="company-payment-qr__preview">
-                <?php if (documents_upi_qr_asset_exists($company['upi_qr_path'] ?? '')): ?>
-                  <img src="<?= htmlspecialchars((string) $company['upi_qr_path'], ENT_QUOTES) ?>" alt="Current UPI QR or barcode" />
-                  <label class="company-payment-qr__clear"><input type="checkbox" name="clear_upi_qr_path" value="1" /> Clear current QR when saving</label>
-                <?php else: ?>
-                  <div class="company-payment-qr__empty">No payment QR uploaded yet.</div>
-                <?php endif; ?>
-              </div>
-            </section>
           </div>
           <p class="muted">WhatsApp accepts 10-12 digits. PAN is optional but should look like ABCDE1234F.</p>
           <p class="muted">Last updated: <?= htmlspecialchars((string) ($company['updated_at'] ?: 'Never'), ENT_QUOTES) ?></p>
