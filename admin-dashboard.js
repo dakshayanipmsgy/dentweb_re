@@ -207,6 +207,56 @@ function computeRelativeTimeParts(isoString) {
 
   initTheme();
 
+  const dashboardSearch = document.getElementById('dashboard-nav-search');
+  const dashboardSearchStatus = document.querySelector('[data-dashboard-search-status]');
+  const dashboardActionGroups = Array.from(document.querySelectorAll('.dashboard-action-group'));
+
+  function filterDashboardNavigation() {
+    if (!dashboardSearch) return;
+    const query = dashboardSearch.value.trim().toLowerCase();
+    let visibleLinks = 0;
+
+    dashboardActionGroups.forEach(group => {
+      const links = Array.from(group.querySelectorAll('a'));
+      let groupMatches = 0;
+      links.forEach(link => {
+        const matches = query === '' || link.textContent.toLowerCase().includes(query);
+        link.hidden = !matches;
+        if (matches) groupMatches += 1;
+      });
+      group.hidden = query !== '' && groupMatches === 0;
+      visibleLinks += groupMatches;
+    });
+
+    if (dashboardSearchStatus) {
+      dashboardSearchStatus.textContent = query === '' ? '' : `${visibleLinks} area${visibleLinks === 1 ? '' : 's'} found`;
+    }
+  }
+
+  dashboardSearch?.addEventListener('input', filterDashboardNavigation);
+  dashboardSearch?.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      const firstMatch = document.querySelector('.dashboard-action-group:not([hidden]) a:not([hidden])');
+      if (firstMatch) {
+        event.preventDefault();
+        firstMatch.click();
+      }
+    }
+  });
+  document.addEventListener('keydown', event => {
+    const target = event.target;
+    const isTyping = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target?.isContentEditable;
+    if (event.key === '/' && !isTyping && dashboardSearch) {
+      event.preventDefault();
+      dashboardSearch.focus();
+    }
+    if (event.key === 'Escape' && document.activeElement === dashboardSearch) {
+      dashboardSearch.value = '';
+      filterDashboardNavigation();
+      dashboardSearch.blur();
+    }
+  });
+
   function showModal(title, content, onConfirm) {
     const modal = document.createElement('div');
     modal.className = 'admin-modal';

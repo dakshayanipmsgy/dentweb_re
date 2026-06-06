@@ -3165,6 +3165,16 @@ usort($archivedRows, static function (array $a, array $b): int {
 });
 
 
+$workspaceDetails = [
+    'company' => ['Company profile & branding', 'Keep the identity used across every customer-facing document accurate.'],
+    'numbering' => ['Numbering rules', 'Manage consistent document references without changing existing records.'],
+    'templates' => ['Template sets', 'Maintain reusable wording and layouts for document creation.'],
+    'accepted_customers' => ['Accepted customers', 'Continue accepted quotations through agreement, challan, invoice, and receipt workflows.'],
+    'items' => ['Items & inventory', 'Maintain catalogue, kits, stock movements, and verification in one workspace.'],
+    'archived' => ['Archived records', 'Review retained records without mixing them into active work.'],
+];
+$activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace', 'Manage document settings and customer workflows.'];
+
 ?>
 <!doctype html>
 <html lang="en">
@@ -3222,31 +3232,45 @@ usort($archivedRows, static function (array $a, array $b): int {
 </head>
 <body class="admin-shell admin-documents">
   <main class="page">
-    <div class="top">
-      <div>
-        <h1>Documents &amp; Billing Control Center</h1>
-        <p class="muted">User: <?= htmlspecialchars((string) ($user['full_name'] ?? 'User'), ENT_QUOTES) ?> (<?= htmlspecialchars((string) ($user['role_name'] ?? ''), ENT_QUOTES) ?>)</p>
+    <header class="top admin-documents__header">
+      <div class="admin-documents__identity">
+        <p class="admin-kicker">Secure operations workspace</p>
+        <h1>Documents &amp; Billing</h1>
+        <p class="muted">Create, continue, and review customer document workflows with less visual noise.</p>
+        <p class="admin-documents__user">Signed in as <strong><?= htmlspecialchars((string) ($user['full_name'] ?? 'User'), ENT_QUOTES) ?></strong> · <?= htmlspecialchars((string) ($user['role_name'] ?? ''), ENT_QUOTES) ?></p>
       </div>
-      <div>
+      <div class="admin-documents__header-actions">
         <a class="btn" href="admin-quotations.php">Quotations</a>
         <a class="btn" href="admin-challans.php">Challans</a>
         <a class="btn" href="admin-agreements.php">Agreements</a>
+        <a class="btn" href="admin-invoices.php">Invoices</a>
         <a class="btn secondary" href="admin-templates.php">Template Blocks &amp; Media</a>
         <a class="btn secondary" href="<?= $isAdmin ? 'admin-dashboard.php' : 'employee-dashboard.php' ?>"><?= $isAdmin ? 'Back to Admin Dashboard' : 'Back to Employee Dashboard' ?></a>
       </div>
-    </div>
+    </header>
 
     <?php if ($message !== '' && ($status === 'success' || $status === 'error')): ?>
       <div class="banner <?= htmlspecialchars($status, ENT_QUOTES) ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div>
     <?php endif; ?>
 
-    <nav class="tabs">
-      <a class="tab <?= $activeTab === 'company' ? 'active' : '' ?>" href="?tab=company">Company Profile &amp; Branding</a>
-      <a class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering">Numbering Rules</a>
-      <a class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates">Template Sets</a>
-      <a class="tab <?= $activeTab === 'accepted_customers' ? 'active' : '' ?>" href="?tab=accepted_customers">Accepted Customers</a>
-      <a class="tab <?= $activeTab === 'items' ? 'active' : '' ?>" href="?tab=items">Items</a>
-      <a class="tab <?= $activeTab === 'archived' ? 'active' : '' ?>" href="?tab=archived">Archived</a>
+    <section class="admin-documents__context" aria-labelledby="workspace-title">
+      <div>
+        <p class="admin-section-heading__eyebrow">Current workspace</p>
+        <h2 id="workspace-title"><?= htmlspecialchars($activeWorkspaceDetail[0], ENT_QUOTES) ?></h2>
+        <p><?= htmlspecialchars($activeWorkspaceDetail[1], ENT_QUOTES) ?></p>
+      </div>
+      <div class="admin-documents__flow" aria-label="Core document flow">
+        <span>Quotation</span><i aria-hidden="true">→</i><span>Agreement</span><i aria-hidden="true">→</i><span>Challan</span><i aria-hidden="true">→</i><span>Invoice</span><i aria-hidden="true">→</i><span>Receipt</span>
+      </div>
+    </section>
+
+    <nav class="tabs admin-documents__tabs" aria-label="Documents workspaces">
+      <a class="tab <?= $activeTab === 'company' ? 'active' : '' ?>" href="?tab=company"<?= $activeTab === 'company' ? ' aria-current="page"' : '' ?>>Company Profile &amp; Branding</a>
+      <a class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering"<?= $activeTab === 'numbering' ? ' aria-current="page"' : '' ?>>Numbering Rules</a>
+      <a class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates"<?= $activeTab === 'templates' ? ' aria-current="page"' : '' ?>>Template Sets</a>
+      <a class="tab <?= $activeTab === 'accepted_customers' ? 'active' : '' ?>" href="?tab=accepted_customers"<?= $activeTab === 'accepted_customers' ? ' aria-current="page"' : '' ?>>Accepted Customers</a>
+      <a class="tab <?= $activeTab === 'items' ? 'active' : '' ?>" href="?tab=items"<?= $activeTab === 'items' ? ' aria-current="page"' : '' ?>>Items</a>
+      <a class="tab <?= $activeTab === 'archived' ? 'active' : '' ?>" href="?tab=archived"<?= $activeTab === 'archived' ? ' aria-current="page"' : '' ?>>Archived</a>
       <a class="tab" href="admin-templates.php">Template Blocks &amp; Media</a>
       <a class="tab" href="admin-quotations.php">Quotation Manager</a>
       <a class="tab" href="admin-challans.php">Challans</a>
@@ -4275,6 +4299,7 @@ usort($archivedRows, static function (array $a, array $b): int {
         </form>
       </section>
     <?php endif; ?>
+    <a class="admin-back-to-top" href="#" aria-label="Back to top">↑ <span>Back to top</span></a>
   </main>
 <script>
 document.addEventListener('click', function (e) {
