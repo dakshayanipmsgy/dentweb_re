@@ -232,149 +232,18 @@ $rows = array_values(array_filter($all, static function (array $row) use ($searc
 $status = safe_text($_GET['status'] ?? '');
 $message = safe_text($_GET['message'] ?? '');
 ?>
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Agreements</title>
-  <style>
-    body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}
-    .wrap{width:100%;max-width:none;margin:0;padding:16px 20px;box-sizing:border-box}
-    .card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
-    .btn{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}
-    .btn.secondary{background:#fff;color:#1f2937;border:1px solid #cbd5e1}
-    .btn.warn{background:#b91c1c}
-    table{width:100%;border-collapse:collapse}
-    th,td{border:1px solid #dbe1ea;padding:8px;text-align:left;font-size:13px;vertical-align:top}
-    input,select,textarea{width:100%;padding:7px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box}
-    .banner{padding:9px;border-radius:8px;margin-bottom:10px}.success{background:#ecfdf5;color:#065f46}.error{background:#fef2f2;color:#991b1b}
-    .muted{color:#64748b;font-size:12px}
-    @media (max-width: 768px){
-      .wrap{padding:12px}
-    }
-  </style>
-</head>
-<body>
-<main class="wrap">
-  <div class="card">
-    <h1 style="margin:0 0 10px 0">Vendor–Consumer Agreements</h1>
-    <a class="btn secondary" href="admin-documents.php">Back to Documents</a>
-  </div>
-
-  <?php if ($message !== '' && ($status === 'success' || $status === 'error')): ?>
-    <div class="banner <?= htmlspecialchars($status, ENT_QUOTES) ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div>
-  <?php endif; ?>
-
-  <div class="card">
-    <h2 style="margin-top:0">Create New Agreement</h2>
-    <form method="get" class="grid" style="margin-bottom:10px">
-      <div>
-        <label>Lookup Customer by Mobile</label>
-        <input name="lookup_mobile" value="<?= htmlspecialchars($lookupMobile, ENT_QUOTES) ?>" placeholder="10-digit mobile" />
-      </div>
-      <div style="align-self:end"><button class="btn secondary" type="submit">Search</button></div>
-    </form>
-
-    <form method="post">
-      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>">
-      <input type="hidden" name="action" value="create_agreement">
-      <div class="grid">
-        <div><label>Customer Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string) (($selectedQuoteSnapshot['mobile'] ?? '') ?: ($lookupMobile !== '' ? $lookupMobile : '')), ENT_QUOTES) ?>"></div>
-        <div><label>Customer Name</label><input name="customer_name" required value="<?= htmlspecialchars((string) (($selectedQuoteSnapshot['name'] ?? '') ?: ($lookupCustomer['name'] ?? '')), ENT_QUOTES) ?>"></div>
-        <div><label>Consumer Account No. (JBVNL)</label><input name="consumer_account_no" value="<?= htmlspecialchars((string) (($selectedQuote['consumer_account_no'] ?? '') ?: ($selectedQuoteSnapshot['consumer_account_no'] ?? ($lookupCustomer['consumer_account_no'] ?? ''))), ENT_QUOTES) ?>"></div>
-        <div><label>Execution Date</label><input type="date" name="execution_date" required value="<?= htmlspecialchars((string) date('Y-m-d'), ENT_QUOTES) ?>"></div>
-        <div><label>System Capacity (kWp)</label><input name="system_capacity_kwp" required value="<?= htmlspecialchars((string) ($selectedQuote['capacity_kwp'] ?? ''), ENT_QUOTES) ?>"></div>
-        <div><label>Total RTS Cost</label><input name="total_cost" required value="<?= htmlspecialchars((string) (($selectedQuote['calc']['grand_total'] ?? '') !== '' ? documents_format_money_indian((float) ($selectedQuote['calc']['grand_total'] ?? 0)) : ''), ENT_QUOTES) ?>"></div>
-        <div style="grid-column:1/-1"><label>Consumer Address</label><textarea name="consumer_address"><?= htmlspecialchars((string) (($selectedQuote['site_address'] ?? '') ?: ($selectedQuoteSnapshot['address'] ?? ($lookupCustomer['address'] ?? ''))), ENT_QUOTES) ?></textarea></div>
-        <div style="grid-column:1/-1"><label>Consumer Site Address</label><textarea name="site_address"><?= htmlspecialchars((string) (($selectedQuote['site_address'] ?? '') ?: ($selectedQuoteSnapshot['address'] ?? ($lookupCustomer['address'] ?? ''))), ENT_QUOTES) ?></textarea></div>
-
-        <div>
-          <label>Link Quotation (Optional)</label>
-          <select name="linked_quote_id" onchange="if(this.value){window.location='admin-agreements.php?lookup_mobile=<?= urlencode($lookupMobile) ?>&quote_id='+encodeURIComponent(this.value)}">
-            <option value="">-- none --</option>
-            <?php foreach ($quoteCandidates as $q): ?>
-              <option value="<?= htmlspecialchars((string) $q['id'], ENT_QUOTES) ?>" <?= ((string) ($selectedQuote['id'] ?? '') === (string) ($q['id'] ?? '')) ? 'selected' : '' ?>>
-                <?= htmlspecialchars((string) ($q['quote_no'] ?? ''), ENT_QUOTES) ?> | ₹<?= number_format((float) ($q['calc']['grand_total'] ?? 0), 2) ?> | <?= htmlspecialchars((string) ($q['capacity_kwp'] ?? ''), ENT_QUOTES) ?> kWp
-              </option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-
-        <div>
-          <label>Template</label>
-          <select name="template_id" required>
-            <?php foreach ($activeTemplates as $template): if (!is_array($template)) { continue; } ?>
-              <option value="<?= htmlspecialchars((string) ($template['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($template['id'] ?? '') === $seedTemplateId) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($template['name'] ?? ''), ENT_QUOTES) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-
-        <div><label>Background Image (optional path/url)</label><input name="background_image" value="<?= htmlspecialchars($seedBackground, ENT_QUOTES) ?>"></div>
-        <div><label>Background Opacity</label><input name="background_opacity" type="number" min="0.1" max="1" step="0.05" value="1"></div>
-      </div>
-      <p class="muted">Vendor details are auto-fetched from company profile: <?= htmlspecialchars(documents_company_vendor_name($company), ENT_QUOTES) ?></p>
-      <button class="btn" type="submit">Create Agreement</button>
-    </form>
-  </div>
-
-
-  <div class="card">
-    <h2 style="margin-top:0">Default Agreement Template (Admin Editable)</h2>
-    <?php $defaultTemplate = $templates['default_pm_surya_ghar_agreement'] ?? null; if (is_array($defaultTemplate)): ?>
-    <form method="post">
-      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>">
-      <input type="hidden" name="action" value="save_template">
-      <input type="hidden" name="template_id" value="default_pm_surya_ghar_agreement">
-      <div class="grid">
-        <div style="grid-column:1/-1"><label>Template Name</label><input name="template_name" value="<?= htmlspecialchars((string) ($defaultTemplate['name'] ?? ''), ENT_QUOTES) ?>"></div>
-        <div style="grid-column:1/-1"><label>HTML Template</label><textarea name="html_template" style="min-height:240px"><?= htmlspecialchars((string) ($defaultTemplate['html_template'] ?? ''), ENT_QUOTES) ?></textarea></div>
-      </div>
-      <button class="btn secondary" type="submit">Save Template</button>
-    </form>
-    <?php endif; ?>
-  </div>
-
-  <div class="card">
-    <h2 style="margin-top:0">Agreements List</h2>
-    <form method="get" class="grid" style="margin-bottom:10px">
-      <div><label>Search (mobile/name/agreement no)</label><input name="q" value="<?= htmlspecialchars($search, ENT_QUOTES) ?>"></div>
-      <div><label>Status</label><select name="status_filter"><option value="">All</option><?php foreach (['Draft','Final','Archived'] as $st): ?><option value="<?= $st ?>" <?= $statusFilter===$st?'selected':'' ?>><?= $st ?></option><?php endforeach; ?></select></div>
-      <div style="align-self:end"><button class="btn secondary" type="submit">Filter</button></div>
-    </form>
-
-    <table>
-      <thead><tr><th>Agreement No</th><th>Customer</th><th>Execution Date</th><th>kWp</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody>
-      <?php foreach ($rows as $row): ?>
-        <tr>
-          <td><?= htmlspecialchars((string) $row['agreement_no'], ENT_QUOTES) ?></td>
-          <td><?= htmlspecialchars((string) $row['customer_name'], ENT_QUOTES) ?><br><span class="muted"><?= htmlspecialchars((string) $row['customer_mobile'], ENT_QUOTES) ?></span></td>
-          <td><?= htmlspecialchars((string) $row['execution_date'], ENT_QUOTES) ?></td>
-          <td><?= htmlspecialchars((string) $row['system_capacity_kwp'], ENT_QUOTES) ?></td>
-          <td>₹<?= htmlspecialchars((string) $row['total_cost'], ENT_QUOTES) ?></td>
-          <td><?= htmlspecialchars((string) $row['status'], ENT_QUOTES) ?></td>
-          <td>
-            <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) $row['id']) ?>&mode=edit">View/Edit</a>
-            <a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) $row['id']) ?>" target="_blank" rel="noopener">View as HTML</a>
-            
-            <?php if (!documents_is_archived($row)): ?>
-            <form method="post" style="display:inline-block">
-              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>">
-              <input type="hidden" name="action" value="archive_agreement">
-              <input type="hidden" name="agreement_id" value="<?= htmlspecialchars((string) $row['id'], ENT_QUOTES) ?>">
-              <button class="btn warn" type="submit">Archive</button>
-            </form>
-            <?php endif; ?>
-          </td>
-        </tr>
-      <?php endforeach; if ($rows === []): ?>
-        <tr><td colspan="7">No agreements found.</td></tr>
-      <?php endif; ?>
-      </tbody>
-    </table>
-  </div>
-</main>
-</body>
-</html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agreements</title><link rel="stylesheet" href="assets/css/admin-unified.css"></head>
+<body class="admin-shell commercial-admin"><main class="commercial-shell">
+<header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Vendor–Consumer Agreements</h1><p>Turn an accepted quotation into a clear, traceable customer agreement.</p></div><nav class="commercial-header__actions" aria-label="Page actions"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php">Document Center</a><a class="btn commercial-header__primary" href="#create-agreement">+ New Agreement</a></nav></header>
+<nav class="commercial-flow-strip" aria-label="Commercial lifecycle"><a href="admin-quotations.php">Quotation</a><span>→</span><a class="active" href="admin-agreements.php">Agreement</a><span>→</span><a href="admin-challans.php">Challan</a><span>→</span><a href="admin-invoices.php">Invoice</a><span>→</span><a href="admin-documents.php?tab=accepted_customers">Receipt</a></nav>
+<?php if ($message !== '' && ($status === 'success' || $status === 'error')): ?><div class="banner <?= htmlspecialchars($status, ENT_QUOTES) ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
+<section id="create-agreement" class="card"><h2>Create New Agreement</h2><p class="muted-helper">Find the customer first, then confirm the project essentials. Template and appearance options are secondary.</p>
+<form method="get" class="form-section-card"><h3>1. Customer lookup</h3><div class="form-grid form-grid--two"><div><label>Lookup Customer by Mobile</label><input name="lookup_mobile" value="<?= htmlspecialchars($lookupMobile, ENT_QUOTES) ?>" placeholder="10-digit mobile"></div><div style="align-self:end"><button class="btn secondary" type="submit">Search Customer</button></div></div></form>
+<form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="action" value="create_agreement">
+<section class="form-section-card"><h3>2. Customer / project details</h3><div class="form-grid"><div><label>Customer Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string) (($selectedQuoteSnapshot['mobile'] ?? '') ?: ($lookupMobile !== '' ? $lookupMobile : '')), ENT_QUOTES) ?>"></div><div><label>Customer Name</label><input name="customer_name" required value="<?= htmlspecialchars((string) (($selectedQuoteSnapshot['name'] ?? '') ?: ($lookupCustomer['name'] ?? '')), ENT_QUOTES) ?>"></div><div><label>Consumer Account No. (JBVNL)</label><input name="consumer_account_no" value="<?= htmlspecialchars((string) (($selectedQuote['consumer_account_no'] ?? '') ?: ($selectedQuoteSnapshot['consumer_account_no'] ?? ($lookupCustomer['consumer_account_no'] ?? ''))), ENT_QUOTES) ?>"></div><div><label>Execution Date</label><input type="date" name="execution_date" required value="<?= htmlspecialchars((string) date('Y-m-d'), ENT_QUOTES) ?>"></div><div><label>System Capacity (kWp)</label><input name="system_capacity_kwp" required value="<?= htmlspecialchars((string) ($selectedQuote['capacity_kwp'] ?? ''), ENT_QUOTES) ?>"></div><div><label>Total RTS Cost</label><input name="total_cost" required value="<?= htmlspecialchars((string) (($selectedQuote['calc']['grand_total'] ?? '') !== '' ? documents_format_money_indian((float) ($selectedQuote['calc']['grand_total'] ?? 0)) : ''), ENT_QUOTES) ?>"></div></div></section>
+<section class="form-section-card"><h3>3. Address details</h3><div class="form-grid form-grid--two"><div><label>Consumer Address</label><textarea name="consumer_address"><?= htmlspecialchars((string) (($selectedQuote['site_address'] ?? '') ?: ($selectedQuoteSnapshot['address'] ?? ($lookupCustomer['address'] ?? ''))), ENT_QUOTES) ?></textarea></div><div><label>Consumer Site Address</label><textarea name="site_address"><?= htmlspecialchars((string) (($selectedQuote['site_address'] ?? '') ?: ($selectedQuoteSnapshot['address'] ?? ($lookupCustomer['address'] ?? ''))), ENT_QUOTES) ?></textarea></div></div></section>
+<section class="form-section-card"><h3>4. Linked quotation / template</h3><div class="form-grid form-grid--two"><div><label>Link Quotation (Optional)</label><select name="linked_quote_id" onchange="if(this.value){window.location='admin-agreements.php?lookup_mobile=<?= urlencode($lookupMobile) ?>&quote_id='+encodeURIComponent(this.value)}"><option value="">-- none --</option><?php foreach ($quoteCandidates as $q): ?><option value="<?= htmlspecialchars((string) $q['id'], ENT_QUOTES) ?>" <?= ((string) ($selectedQuote['id'] ?? '') === (string) ($q['id'] ?? '')) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($q['quote_no'] ?? ''), ENT_QUOTES) ?> | ₹<?= number_format((float) ($q['calc']['grand_total'] ?? 0), 2) ?> | <?= htmlspecialchars((string) ($q['capacity_kwp'] ?? ''), ENT_QUOTES) ?> kWp</option><?php endforeach; ?></select></div><div><label>Template</label><select name="template_id" required><?php foreach ($activeTemplates as $template): if (!is_array($template)) { continue; } ?><option value="<?= htmlspecialchars((string) ($template['id'] ?? ''), ENT_QUOTES) ?>" <?= ((string) ($template['id'] ?? '') === $seedTemplateId) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($template['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></div></div><details class="advanced-fields"><summary>Optional background appearance</summary><div class="form-grid form-grid--two"><div><label>Background Image (optional path/url)</label><input name="background_image" value="<?= htmlspecialchars($seedBackground, ENT_QUOTES) ?>"></div><div><label>Background Opacity</label><input name="background_opacity" type="number" min="0.1" max="1" step="0.05" value="1"></div></div></details></section>
+<p class="muted-helper">Vendor details are auto-fetched from company profile: <?= htmlspecialchars(documents_company_vendor_name($company), ENT_QUOTES) ?></p><footer class="sticky-action-footer"><button class="btn" type="submit">Create Agreement</button></footer></form></section>
+<details class="card advanced-fields"><summary>Default Agreement Template (Admin Editable)</summary><?php $defaultTemplate = $templates['default_pm_surya_ghar_agreement'] ?? null; if (is_array($defaultTemplate)): ?><form method="post" style="padding:.85rem"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_template"><input type="hidden" name="template_id" value="default_pm_surya_ghar_agreement"><div class="form-grid"><div class="full-span"><label>Template Name</label><input name="template_name" value="<?= htmlspecialchars((string) ($defaultTemplate['name'] ?? ''), ENT_QUOTES) ?>"></div><div class="full-span"><label>HTML Template</label><textarea name="html_template" style="min-height:240px"><?= htmlspecialchars((string) ($defaultTemplate['html_template'] ?? ''), ENT_QUOTES) ?></textarea></div></div><button class="btn secondary" type="submit">Save Template</button></form><?php endif; ?></details>
+<section class="card"><h2>Agreements List</h2><form method="get" class="filter-grid"><div><label>Search mobile / name / agreement no</label><input name="q" value="<?= htmlspecialchars($search, ENT_QUOTES) ?>"></div><div><label>Status</label><select name="status_filter"><option value="">All</option><?php foreach (['Draft','Final','Archived'] as $st): ?><option value="<?= $st ?>" <?= $statusFilter===$st?'selected':'' ?>><?= $st ?></option><?php endforeach; ?></select></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form><div class="responsive-table"><table><thead><tr><th>Agreement</th><th>Customer</th><th>Execution Date</th><th>kWp</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead><tbody><?php foreach ($rows as $row): ?><tr><td><strong><?= htmlspecialchars((string) $row['agreement_no'], ENT_QUOTES) ?></strong></td><td><?= htmlspecialchars((string) $row['customer_name'], ENT_QUOTES) ?><br><span class="muted-helper"><?= htmlspecialchars((string) $row['customer_mobile'], ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string) $row['execution_date'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) $row['system_capacity_kwp'], ENT_QUOTES) ?></td><td>₹<?= number_format((float) str_replace(',', '', (string) $row['total_cost']), 2) ?></td><td><span class="status-badge status-badge--<?= strtolower(htmlspecialchars((string) $row['status'], ENT_QUOTES)) ?>"><?= htmlspecialchars((string) $row['status'], ENT_QUOTES) ?></span></td><td><div class="row-action-group"><a class="btn" href="agreement-view.php?id=<?= urlencode((string) $row['id']) ?>&mode=edit">View / Edit</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="agreement-view.php?id=<?= urlencode((string) $row['id']) ?>" target="_blank" rel="noopener">View HTML</a><a class="btn secondary" href="agreement-print.php?id=<?= urlencode((string) $row['id']) ?>" target="_blank" rel="noopener">Print</a><?php if (!documents_is_archived($row)): ?><form method="post" onsubmit="return confirm('Archive this agreement?');"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_agreement"><input type="hidden" name="agreement_id" value="<?= htmlspecialchars((string) $row['id'], ENT_QUOTES) ?>"><button class="btn danger" type="submit">Archive</button></form><?php endif; ?></div></details></div></td></tr><?php endforeach; if ($rows === []): ?><tr><td colspan="7" class="empty-state">No agreements found.</td></tr><?php endif; ?></tbody></table></div></section>
+</main></body></html>
