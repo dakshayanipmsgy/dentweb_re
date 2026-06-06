@@ -20,6 +20,7 @@ $problemCategories = complaint_problem_categories();
 $handoverHtmlPath = trim((string) ($customer['handover_html_path'] ?? ($customer['handover_document_path'] ?? '')));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['complaint_action'] ?? '') === 'raise') {
+    require_valid_csrf();
     $title = trim((string) ($_POST['title'] ?? ''));
     $description = trim((string) ($_POST['description'] ?? ''));
     $problemCategory = trim((string) ($_POST['problem_category'] ?? ''));
@@ -56,6 +57,7 @@ $customerComplaints = get_complaints_by_customer((string) ($customer['mobile'] ?
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Customer Dashboard | Dakshayani Enterprises</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <style>
     .customer-dashboard-layout {
       display: flex;
@@ -436,6 +438,7 @@ $customerComplaints = get_complaints_by_customer((string) ($customer['mobile'] ?
               </div>
             <?php endif; ?>
             <form method="post" class="complaint-form">
+        <?= csrf_field() ?>
               <input type="hidden" name="complaint_action" value="raise" />
               <label for="title">Title *</label>
               <input id="title" name="title" type="text" required />

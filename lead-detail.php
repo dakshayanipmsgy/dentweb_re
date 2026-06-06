@@ -38,6 +38,7 @@ $interestTypes = ['Residential Rooftop', 'Commercial', 'Industrial', 'Petrol Pum
 $messages = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_valid_csrf();
     $intent = isset($_POST['intent']) ? (string) $_POST['intent'] : 'save';
     $payload = [
         'name' => trim((string) ($_POST['name'] ?? $lead['name'])),
@@ -143,6 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Lead Detail | Dakshayani Enterprises</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <style>
     body { background: #f7f8fb; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
     .page-shell { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
@@ -188,6 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php endif; ?>
 
     <form method="post">
+        <?= csrf_field() ?>
       <input type="hidden" name="intent" value="save" />
       <div class="card">
         <h2 class="section-title">Basic Info</h2>

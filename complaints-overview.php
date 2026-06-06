@@ -395,6 +395,7 @@ if (($_GET['ajax'] ?? '') === '1') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'quick_action') {
+    require_valid_csrf();
     header('Content-Type: application/json; charset=UTF-8');
 
     $quickType = strtolower(trim((string) ($_POST['quick_type'] ?? '')));
@@ -474,6 +475,7 @@ if (!isset($highlightColorOptions[$exportHighlightColor])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'export_excel') {
+    require_valid_csrf();
     $validAssigneeMap = array_fill_keys($assigneeOptions, true);
     $validCategoryMap = array_fill_keys(complaint_problem_categories(), true);
     $validStatusMap = array_fill_keys(['open', 'intake', 'triage', 'work', 'resolved', 'closed'], true);
@@ -692,6 +694,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
     <section class="complaints-export complaints-export--secondary">
       <h2>Export Excel</h2>
       <form method="post" target="_blank" rel="noopener">
+        <?= csrf_field() ?>
         <input type="hidden" name="action" value="export_excel" />
         <div class="complaints-export-grid">
           <div>

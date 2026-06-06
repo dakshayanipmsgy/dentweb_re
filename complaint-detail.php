@@ -177,6 +177,7 @@ if (in_array($action, ['whatsapp', 'email', 'notify_whatsapp', 'notify_sms', 'cl
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_valid_csrf();
     try {
         $updates = [
             'id' => $complaintId,
@@ -356,6 +357,7 @@ function complaint_detail_safe(string $value): string
       <div class="detail-card">
         <h3 style="margin-top:0;">Update complaint</h3>
         <form method="post" class="detail-form">
+        <?= csrf_field() ?>
           <input type="hidden" name="id" value="<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>" />
           <label for="problem_category">Problem category</label>
           <select id="problem_category" name="problem_category" required>

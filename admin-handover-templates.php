@@ -12,6 +12,7 @@ $message = '';
 $tone = 'info';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_valid_csrf();
     $next = [];
     foreach (handover_template_defaults() as $key => $default) {
         $next[$key] = (string) ($_POST[$key] ?? '');
@@ -106,6 +107,7 @@ $placeholders = [
         </div>
 
         <form method="post">
+        <?= csrf_field() ?>
             <div class="field">
                 <label for="handover_style_css">Handover Document CSS (global style)</label>
                 <textarea id="handover_style_css" name="handover_style_css" rows="8"><?= admin_handover_safe($templates['handover_style_css'] ?? '') ?></textarea>

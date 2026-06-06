@@ -21,6 +21,7 @@ function customer_portal_logout(): void
 function customer_portal_require_login(): void
 {
     customer_portal_session();
+    send_private_workspace_headers();
     if (empty($_SESSION['customer_logged_in']) || !isset($_SESSION['customer_mobile'])) {
         header('Location: login.php?login_type=customer');
         exit;

@@ -127,6 +127,7 @@ function employee_dashboard_safe(string $value): string
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Employee Dashboard | Dakshayani Enterprises</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <style>
     .employee-shell {
       min-height: 100vh;

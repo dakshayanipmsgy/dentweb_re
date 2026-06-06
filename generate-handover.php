@@ -28,6 +28,7 @@ if ($customer === null) {
 }
 
 if ($customer !== null && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['handover_action'] ?? '') === 'save_generate') {
+    require_valid_csrf();
     $submittedHtml = trim((string) ($_POST['handover_html_content'] ?? ''));
     if ($submittedHtml === '') {
         $errors[] = 'Handover content cannot be empty.';
@@ -141,6 +142,7 @@ function handover_editor_safe(string $value): string
         <?php endif; ?>
 
         <form method="post">
+        <?= csrf_field() ?>
             <input type="hidden" name="handover_action" value="save_generate" />
             <input type="hidden" name="customer_mobile" value="<?= handover_editor_safe($customerMobileValue) ?>" />
             <div class="notice">You can paste or edit HTML directly, including headings, images, and formatting. The saved file will include the global handover CSS.</div>

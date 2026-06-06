@@ -272,3 +272,38 @@
 .website-settings-admin { background:var(--admin-bg); color:var(--admin-text); }
 .website-settings-admin form { display:grid; gap:.8rem; }
 .website-settings-admin .admin-save-btn { background:#1d4ed8 !important; color:#fff !important; border-radius:10px !important; }
+
+/* Shared operational workspace safeguards and responsive primitives. */
+.admin-page-header {
+  display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap;
+  gap:.8rem; margin-bottom:1rem;
+}
+.admin-page-header h1 { margin:0; }
+.admin-page-header p { margin:.3rem 0 0; color:#64748b; }
+.admin-actions { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; }
+.admin-empty-state {
+  padding:1.35rem; text-align:center; color:#64748b; background:#f8fafc;
+  border:1px dashed #cbd5e1; border-radius:12px;
+}
+.admin-empty-state strong { display:block; color:#334155; margin-bottom:.25rem; }
+.admin-table-wrapper { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.admin-table-wrapper table { min-width:680px; }
+.admin-table-wrapper th { position:sticky; top:0; z-index:1; }
+.admin-status-badge {
+  display:inline-flex; align-items:center; gap:.3rem; border-radius:999px; padding:.2rem .55rem;
+  font-size:.75rem; line-height:1.35; font-weight:700; border:1px solid #cbd5e1;
+  background:#f8fafc; color:#334155; white-space:nowrap;
+}
+.admin-status-badge::before { content:''; width:.42rem; height:.42rem; border-radius:50%; background:currentColor; }
+.admin-status-badge--success,.admin-status-badge--completed,.admin-status-badge--approved,.admin-status-badge--active { color:#166534; background:#f0fdf4; border-color:#bbf7d0; }
+.admin-status-badge--warning,.admin-status-badge--pending,.admin-status-badge--overdue { color:#92400e; background:#fffbeb; border-color:#fde68a; }
+.admin-status-badge--danger,.admin-status-badge--rejected,.admin-status-badge--inactive { color:#991b1b; background:#fef2f2; border-color:#fecaca; }
+.admin-status-badge--info,.admin-status-badge--new,.admin-status-badge--progress { color:#1e40af; background:#eff6ff; border-color:#bfdbfe; }
+form :is(button,input[type="submit"]):disabled { cursor:not-allowed; opacity:.65; }
+:is(input,select,textarea,button,a):focus-visible { outline:3px solid rgba(37,99,235,.35); outline-offset:2px; }
+@media (max-width:720px) {
+  .admin-page-header,.admin-actions { align-items:stretch; }
+  .admin-actions > :is(a,button) { justify-content:center; text-align:center; }
+  .admin-form,.users-form-grid { grid-template-columns:1fr !important; }
+  .admin-table-wrapper { margin-inline:-.35rem; padding-inline:.35rem; }
+}

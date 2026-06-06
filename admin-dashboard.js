@@ -1,8 +1,20 @@
 // Moved from IIFE to global scope
+function adminApiFetch(url, options = {}) {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const headers = new Headers(options.headers || {});
+    if (csrfToken) headers.set('X-CSRF-Token', csrfToken);
+    return fetch(url, { ...options, headers });
+}
+
 function showToast(message, tone = 'info') {
+    const allowedTones = ['success', 'warning', 'error', 'info'];
     const toast = document.createElement('div');
-    toast.className = `admin-toast admin-toast--${tone}`;
-    toast.innerHTML = `<i class="fa-solid fa-circle-info"></i><span>${message}</span>`;
+    toast.className = `admin-toast admin-toast--${allowedTones.includes(tone) ? tone : 'info'}`;
+    const icon = document.createElement('i');
+    icon.className = 'fa-solid fa-circle-info';
+    const text = document.createElement('span');
+    text.textContent = String(message);
+    toast.append(icon, text);
     document.body.appendChild(toast);
     setTimeout(() => {
         toast.remove();
@@ -257,7 +269,7 @@ function computeRelativeTimeParts(isoString) {
           payload.state = selectedOption.dataset.state;
         }
 
-        fetch('api/admin.php?action=bulk-update-customers', {
+        adminApiFetch('api/admin.php?action=bulk-update-customers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -303,7 +315,7 @@ function computeRelativeTimeParts(isoString) {
         formData.append('dry_run', '1');
       }
 
-      fetch('api/admin.php?action=import-customers', {
+      adminApiFetch('api/admin.php?action=import-customers', {
         method: 'POST',
         body: formData,
       })
@@ -327,7 +339,7 @@ function computeRelativeTimeParts(isoString) {
   }
 
   function pollDashboardData() {
-    fetch('api/admin.php?action=dashboard-data')
+    adminApiFetch('api/admin.php?action=dashboard-data')
       .then(response => response.json())
       .then(data => {
         if (data.success) {
@@ -344,7 +356,7 @@ function computeRelativeTimeParts(isoString) {
 
 async function getEmployees() {
   try {
-    const response = await fetch('api/admin.php?action=list-employees');
+    const response = await adminApiFetch('api/admin.php?action=list-employees');
     if (!response.ok) return [];
     const data = await response.json();
     if (data.success && Array.isArray(data.data)) {
@@ -441,7 +453,7 @@ function showFormModal(title, content, onConfirm) {
 async function changeState(customerId, state) {
   const performStateChange = async (payload) => {
     try {
-      const response = await fetch('api/admin.php?action=change-customer-state', {
+      const response = await adminApiFetch('api/admin.php?action=change-customer-state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
@@ -544,7 +556,7 @@ function deactivateCustomer(customerId) {
         'Confirm Deactivation',
         '<p>Are you sure you want to deactivate this customer?</p>',
         () => {
-            fetch('api/admin.php?action=deactivate-customer', {
+            adminApiFetch('api/admin.php?action=deactivate-customer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: customerId }),
@@ -570,7 +582,7 @@ function reactivateCustomer(customerId) {
         'Confirm Reactivation',
         '<p>Are you sure you want to reactivate this customer?</p>',
         () => {
-            fetch('api/admin.php?action=reactivate-customer', {
+            adminApiFetch('api/admin.php?action=reactivate-customer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: customerId }),
@@ -596,7 +608,7 @@ function deleteCustomer(customerId) {
         'Confirm Deletion',
         '<p>Are you sure you want to permanently delete this customer?</p>',
         () => {
-            fetch('api/admin.php?action=delete-customer', {
+            adminApiFetch('api/admin.php?action=delete-customer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: customerId }),

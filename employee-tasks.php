@@ -31,6 +31,7 @@ function employee_task_status_message(): ?string
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_valid_csrf();
     $action = (string) ($_POST['task_action'] ?? '');
 
     if ($action === 'employee_create') {
@@ -220,6 +221,7 @@ $flashMsg = employee_task_status_message();
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>My Tasks | Dakshayani Enterprises</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="assets/css/admin-unified.css" />
   <style>
     body { background: #f6f8fb; font-family: Arial, sans-serif; }
     .shell { max-width: 960px; margin: 20px auto 40px; padding: 0 16px; }
@@ -261,6 +263,7 @@ $flashMsg = employee_task_status_message();
     <div class="card">
       <h3 style="margin-top:0;">Create My Task</h3>
       <form method="post">
+        <?= csrf_field() ?>
         <input type="hidden" name="task_action" value="employee_create" />
         <div class="grid">
           <div>
@@ -343,6 +346,7 @@ $flashMsg = employee_task_status_message();
                   </div>
                   <?php if (($task['status'] ?? 'Open') === 'Open'): ?>
                     <form method="post" style="margin:0;">
+        <?= csrf_field() ?>
                       <input type="hidden" name="task_action" value="employee_complete" />
                       <input type="hidden" name="task_id" value="<?= task_safe((string) ($task['id'] ?? '')) ?>" />
                       <label style="font-size:12px;margin-bottom:4px;">Note</label>
