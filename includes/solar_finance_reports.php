@@ -889,8 +889,12 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         $price = max(0, $toFloat($row['price'] ?? $priceFallback ?? $grossFallback));
         $scenarioSubsidy = max(0, $toFloat($row['subsidy'] ?? $subsidy));
         $interestPct = max(0, $toFloat($hasScalarValue($row, 'interest_pct') ? $row['interest_pct'] : $defaultInterestPct));
-        $tenureMonths = max(1, $toInt($row['tenure_months'] ?? null, (int) round(max(0, $toFloat($row['tenure_years'] ?? null, 10)) * 12)));
-        $tenureYears = $tenureMonths / 12;
+        $hasSavedTenureYears = $hasScalarValue($row, 'tenure_years');
+        $savedTenureYears = $hasSavedTenureYears ? max(0, $toFloat($row['tenure_years'])) : null;
+        $tenureMonths = max(1, $toInt($row['tenure_months'] ?? null, (int) round(($savedTenureYears ?? 10) * 12)));
+        // Keep an explicitly saved 0 distinct from a missing tenure while retaining a safe
+        // one-month calculation floor for EMI/payback math.
+        $tenureYears = $savedTenureYears ?? ($tenureMonths / 12);
         $marginMoney = max(0, $toFloat($row['margin_money_rs'] ?? 0));
         $loanAmount = max(0, $toFloat($row['loan_amount_rs'] ?? 0));
         $loanRatioPct = max(0, min(100, $toFloat($hasScalarValue($row, 'loan_ratio_pct') ? $row['loan_ratio_pct'] : $defaultLoanRatio)));
