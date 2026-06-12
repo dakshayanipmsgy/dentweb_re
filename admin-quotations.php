@@ -135,6 +135,7 @@ $respondAction = static function (bool $ok, string $message, array $extra = []) 
 };
 $quoteActionState = static function (array $quote): array {
     $quote = documents_quote_prepare($quote);
+    $acceptance = documents_quote_has_valid_acceptance_data($quote);
     return [
         'quote_id' => (string) ($quote['id'] ?? ''),
         'status' => documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')),
@@ -143,6 +144,8 @@ $quoteActionState = static function (array $quote): array {
         'archived_flag' => documents_is_archived($quote),
         'locked_flag' => documents_quote_is_locked($quote),
         'public_share_enabled' => !empty($quote['public_share_enabled']),
+        'missing_fields' => array_values((array) ($acceptance['missing_fields'] ?? [])),
+        'edit_url' => 'admin-quotations.php?tab=editor&edit=' . urlencode((string) ($quote['id'] ?? '')),
     ];
 };
 
@@ -378,9 +381,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (documents_quote_is_locked($existing)) {
                 $redirectWith('error', 'This quotation is locked because it was accepted. Create a revision to make changes.');
             }
-            $existingStatus = documents_quote_normalize_status((string) ($existing['status'] ?? 'draft'));
-            if ($existingStatus !== 'draft') {
-                $redirectWith('error', 'This quotation is locked because it was accepted. Create a revision to make changes.');
+            if (documents_is_archived($existing)) {
+                $redirectWith('error', 'Archived quotations cannot be edited.');
             }
         }
 
@@ -1163,7 +1165,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $validAcceptance = documents_quote_has_valid_acceptance_data($quote);
         if (!($validAcceptance['ok'] ?? false)) {
-            $respondAction(false, (string) ($validAcceptance['error'] ?? 'Acceptance data missing.'));
+            $respondAction(false, (string) ($validAcceptance['error'] ?? 'Acceptance data missing.'), array_merge(
+                $quoteActionState($quote),
+                ['missing_fields' => array_values((array) ($validAcceptance['missing_fields'] ?? []))]
+            ));
         }
         $acceptedAt = date('c');
         $acceptor = [
@@ -1446,9 +1451,7 @@ foreach (['RES', 'COM', 'IND', 'INST'] as $segCode) {
     $autofillSegments[$segCode] = $resolveSegmentDefaults($segCode);
 }
 
-if ($editing !== null && documents_quote_is_locked($editing)) {
-    $editing = null;
-} elseif ($editing !== null && documents_quote_normalize_status((string) ($editing['status'] ?? 'draft')) !== 'draft') {
+if ($editing !== null && (documents_quote_is_locked($editing) || documents_is_archived($editing))) {
     $editing = null;
 }
 
@@ -1696,14 +1699,18 @@ $quoteLocked = documents_quote_is_locked($q);
 $isQuotationAdmin = (string) (current_user()['role_name'] ?? '') === 'admin';
 $canApproveQuote = $isQuotationAdmin && !$quoteArchived && !$quoteLocked && in_array($quoteStatusNorm, ['draft', 'pending_admin_approval'], true);
 $canAcceptQuote = $isQuotationAdmin && !$quoteArchived && !$quoteLocked && in_array($quoteStatusNorm, ['draft', 'pending_admin_approval', 'approved'], true);
+$acceptanceCheck = documents_quote_has_valid_acceptance_data($q);
+$acceptanceReady = (bool) ($acceptanceCheck['ok'] ?? false);
+$quoteEditUrl = 'admin-quotations.php?tab=editor&amp;edit=' . urlencode((string) $q['id']);
 ?>
 <div class="list-actions">
 <a class="btn" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">Open</a>
-<?php if (documents_quote_can_edit($q, 'admin')): ?><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?>
+<?php if ($isQuotationAdmin && !$quoteArchived && !$quoteLocked): ?><a class="btn secondary" href="<?= $quoteEditUrl ?>">Edit</a><?php endif; ?>
 <button class="btn secondary js-wa-share" type="button" data-quote-id="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars($quoteShareMobile, ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($q['customer_name'] ?? ''), ENT_QUOTES) ?>" <?= $canWhatsappShare ? '' : 'disabled title="Missing valid mobile"' ?>>Share</button>
 <details class="more-actions"><summary class="btn quiet">More ▾</summary><div class="more-menu"><div class="secondary-actions">
 <?php if ($canApproveQuote): ?><form method="post" class="js-quote-action" style="margin:0"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="approve_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><button class="btn" type="submit">Approve</button></form><?php endif; ?>
-<?php if ($canAcceptQuote): ?><form method="post" class="js-quote-action" style="margin:0" data-confirm="Accept and lock this quotation?"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="accept_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><button class="btn" type="submit" onclick="return confirm('Accept and lock this quotation?');">Accept</button></form><?php endif; ?>
+<?php if ($canAcceptQuote && $acceptanceReady): ?><form method="post" class="js-quote-action" style="margin:0" data-confirm="Accept and lock this quotation?"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="accept_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><button class="btn" type="submit" onclick="return confirm('Accept and lock this quotation?');">Accept</button></form><?php endif; ?>
+<?php if ($canAcceptQuote && !$acceptanceReady): ?><div class="muted acceptance-helper"><?= htmlspecialchars((string) ($acceptanceCheck['error'] ?? 'Complete quotation details before acceptance.'), ENT_QUOTES) ?> <a href="<?= $quoteEditUrl ?>">Edit quotation</a></div><?php endif; ?>
 <?php if (($quoteStatusNorm === 'accepted' || $quoteLocked) && !$quoteArchived): ?><span class="muted">Accepted / locked</span><?php endif; ?>
 <a class="btn secondary js-open-new-tab" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>" target="_blank" rel="noopener">Print HTML</a>
 <form method="post" class="js-quote-action" style="margin:0" data-confirm="Clone this quotation into a new draft?"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="clone_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><button class="btn secondary" type="submit" onclick="return confirm('Clone this quotation into a new draft?');">Clone</button></form>
@@ -1766,10 +1773,20 @@ $canAcceptQuote = $isQuotationAdmin && !$quoteArchived && !$quoteLocked && in_ar
       return window.location.href;
     }
   };
+  const quotationListUrl=()=>{
+    const url=new URL('admin-quotations.php',window.location.href);
+    const filterForm=document.querySelector('#quotationList form[method="get"]');
+    const filterData=filterForm?new FormData(filterForm):null;
+    ['tab','status_filter'].forEach((key)=>{
+      const value=String(filterData?.get(key)||'').trim();
+      if(value)url.searchParams.set(key,value);
+    });
+    return url.href;
+  };
   const refreshQuotationList=async()=>{
     const currentList=document.getElementById('quotationList');
     if(!currentList)return;
-    const response=await fetch(window.location.href,{credentials:'same-origin',headers:{'X-Requested-With':'quotation-list'}});
+    const response=await fetch(quotationListUrl(),{credentials:'same-origin',headers:{'X-Requested-With':'quotation-list'}});
     const text=await response.text();
     if(!response.ok||response.redirected||responseLooksLikeLogin(text)||responseLooksLikePhpError(text))throw new Error(responseFailureMessage(response,text,'Quotation was updated, but the quotation list could not be refreshed.'));
     const parsed=new DOMParser().parseFromString(text,'text/html');
@@ -1799,7 +1816,12 @@ $canAcceptQuote = $isQuotationAdmin && !$quoteArchived && !$quoteLocked && in_ar
         const statusPill=row?.querySelector('.status-pill');
         if(statusPill&&payload.status_label)statusPill.textContent=String(payload.status_label);
         if(payload.status==='accepted')row?.querySelectorAll('form input[name="action"][value="approve_quote"],form input[name="action"][value="accept_quote"]').forEach((input)=>input.form?.remove());
-        await refreshQuotationList();
+        try{
+          await refreshQuotationList();
+        }catch(refreshError){
+          showToast(`${payload.message||'Quotation updated.'} The row was updated, but the full list could not be refreshed automatically.`,false);
+          console.warn('Quotation list refresh failed after a successful action.',refreshError);
+        }
       }catch(error){
         showToast(error instanceof Error?error.message:'Quotation action failed.',true);
         if(submitter){submitter.disabled=false;submitter.textContent=originalLabel;}
