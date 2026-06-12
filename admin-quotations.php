@@ -1104,99 +1104,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    if ($action === 'approve_quote') {
+    if ($action === 'approve_quote' || $action === 'accept_quote') {
         $quoteId = safe_text($_POST['quote_id'] ?? '');
         $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         if ($quote === null) {
             $respondAction(false, 'Quotation not found.');
         }
 
-        $quote = documents_quote_prepare($quote);
         $user = current_user();
         if ((string) ($user['role_name'] ?? '') !== 'admin') {
-            $respondAction(false, 'Only administrators can approve quotations.');
-        }
-        $statusNorm = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
-        if (documents_is_archived($quote)) {
-            $respondAction(false, 'Archived quotations cannot be approved.');
-        }
-        if (documents_quote_is_locked($quote) || $statusNorm === 'accepted') {
-            $respondAction(false, 'Accepted or locked quotations cannot be approved.');
-        }
-        if (!in_array($statusNorm, ['draft', 'pending_admin_approval'], true)) {
-            $respondAction(false, 'Only draft or pending quotations can be approved.');
-        }
-        $approvedAt = date('c');
-        $quote['status'] = 'approved';
-        $quote['approval'] = [
-            'approved_by_id' => (string) ($user['id'] ?? ''),
-            'approved_by_name' => (string) ($user['full_name'] ?? 'Admin'),
-            'approved_at' => $approvedAt,
-        ];
-        $quote['updated_at'] = $approvedAt;
-        $saved = documents_save_quote($quote);
-        if (!($saved['ok'] ?? false)) {
-            $respondAction(false, 'Unable to approve quotation.');
+            $respondAction(false, $action === 'approve_quote' ? 'Only administrators can approve quotations.' : 'Only administrators can accept quotations.');
         }
 
-        $respondAction(true, 'Quotation approved successfully.', $quoteActionState($quote));
-    }
-
-    if ($action === 'accept_quote') {
-        $quoteId = safe_text($_POST['quote_id'] ?? '');
-        $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
-        if ($quote === null) {
-            $respondAction(false, 'Quotation not found.');
-        }
-
-        $quote = documents_quote_prepare($quote);
-        $user = current_user();
-        if ((string) ($user['role_name'] ?? '') !== 'admin') {
-            $respondAction(false, 'Only administrators can accept quotations.');
-        }
-        $statusNorm = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
-        if (documents_is_archived($quote)) {
-            $respondAction(false, 'Archived quotations cannot be accepted.');
-        }
-        if (!in_array($statusNorm, ['draft', 'pending_admin_approval', 'approved'], true) || documents_quote_is_locked($quote)) {
-            $respondAction(false, 'Only draft, pending, or approved unlocked quotations can be accepted.');
-        }
-        $validAcceptance = documents_quote_has_valid_acceptance_data($quote);
-        if (!($validAcceptance['ok'] ?? false)) {
-            $respondAction(false, (string) ($validAcceptance['error'] ?? 'Acceptance data missing.'));
-        }
-        $acceptedAt = date('c');
-        $acceptor = [
-            'type' => (string) ($user['role_name'] ?? 'admin'),
+        $targetStatus = $action === 'approve_quote' ? 'approved' : 'accepted';
+        $transition = documents_quote_apply_admin_status_transition($quote, $targetStatus, [
             'id' => (string) ($user['id'] ?? ''),
             'name' => (string) ($user['full_name'] ?? 'Admin'),
-        ];
-        $quote['status'] = 'accepted';
-        $quote['accepted_at'] = $acceptedAt;
-        $quote['accepted_by'] = $acceptor;
-        $quote['acceptance'] = array_merge(
-            ['accepted_by_admin_id' => '', 'accepted_by_admin_name' => '', 'accepted_at' => '', 'accepted_note' => ''],
-            is_array($quote['acceptance'] ?? null) ? $quote['acceptance'] : [],
-            [
-                'accepted_by_admin_id' => $acceptor['id'],
-                'accepted_by_admin_name' => $acceptor['name'],
-                'accepted_at' => $acceptedAt,
-            ]
-        );
-        $quote['locked_flag'] = true;
-        $quote['locked_at'] = $acceptedAt;
-        $quote['is_current_version'] = true;
-        $quote['updated_at'] = $acceptedAt;
-        $syncResult = documents_sync_after_quote_accepted($quote);
-        $quote = is_array($syncResult['quote'] ?? null) ? $syncResult['quote'] : $quote;
-        documents_quote_set_current_for_series($quote);
-        $quote['updated_at'] = date('c');
-        $saved = documents_save_quote($quote);
-        if (!($saved['ok'] ?? false)) {
-            $respondAction(false, 'Unable to accept quotation.');
+        ]);
+        $quote = is_array($transition['quote'] ?? null) ? $transition['quote'] : $quote;
+        if (!($transition['ok'] ?? false)) {
+            $respondAction(false, (string) ($transition['error'] ?? 'Unable to update quotation.'), $quoteActionState($quote));
         }
 
-        $respondAction(true, 'Quotation accepted and locked successfully.', $quoteActionState($quote));
+        $respondAction(
+            true,
+            $targetStatus === 'approved' ? 'Quotation approved successfully.' : 'Quotation accepted and locked successfully.',
+            $quoteActionState($quote)
+        );
     }
 
     if ($action === 'archive_quote') {
@@ -1356,22 +1290,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $q['archived_at'] = '';
                 $q['archived_by'] = ['type' => '', 'id' => '', 'name' => ''];
                 $q['status'] = (string)($q['accepted_at'] ?? '') !== '' ? 'accepted' : ($statusNorm === 'archived' ? 'approved' : $statusNorm);
-            } elseif ($bulkAction === 'set_approved') {
-                $q['status'] = 'approved';
-            } elseif ($bulkAction === 'set_accepted') {
-                if ($statusNorm !== 'approved' && $statusNorm !== 'accepted') {
-                    continue;
+            } elseif ($bulkAction === 'set_approved' || $bulkAction === 'set_accepted') {
+                $user = current_user();
+                $transition = documents_quote_apply_admin_status_transition(
+                    $q,
+                    $bulkAction === 'set_approved' ? 'approved' : 'accepted',
+                    [
+                        'id' => (string) ($user['id'] ?? ''),
+                        'name' => (string) ($user['full_name'] ?? 'Admin'),
+                    ]
+                );
+                if ($transition['ok'] ?? false) {
+                    $updated++;
                 }
-                $q['status'] = 'accepted';
-                if ((string)($q['accepted_at'] ?? '') === '') {
-                    $q['accepted_at'] = date('c');
-                }
-                $q['locked_flag'] = true;
-                $q['locked_at'] = date('c');
-                $q['is_current_version'] = true;
-                $syncResult = documents_sync_after_quote_accepted($q);
-                $q = $syncResult['quote'];
-                documents_quote_set_current_for_series($q);
+                continue;
             } else {
                 continue;
             }
@@ -1695,7 +1627,7 @@ $quoteArchived = documents_is_archived($q);
 $quoteLocked = documents_quote_is_locked($q);
 $isQuotationAdmin = (string) (current_user()['role_name'] ?? '') === 'admin';
 $canApproveQuote = $isQuotationAdmin && !$quoteArchived && !$quoteLocked && in_array($quoteStatusNorm, ['draft', 'pending_admin_approval'], true);
-$canAcceptQuote = $isQuotationAdmin && !$quoteArchived && !$quoteLocked && in_array($quoteStatusNorm, ['draft', 'pending_admin_approval', 'approved'], true);
+$canAcceptQuote = $isQuotationAdmin && !$quoteArchived && !$quoteLocked && $quoteStatusNorm === 'approved';
 ?>
 <div class="list-actions">
 <a class="btn" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">Open</a>
@@ -1766,10 +1698,20 @@ $canAcceptQuote = $isQuotationAdmin && !$quoteArchived && !$quoteLocked && in_ar
       return window.location.href;
     }
   };
+  const quotationListUrl=()=>{
+    const url=new URL('admin-quotations.php',window.location.href);
+    const filterForm=document.querySelector('#quotationList form[method="get"]');
+    const filterData=filterForm?new FormData(filterForm):null;
+    ['tab','status_filter'].forEach((key)=>{
+      const value=String(filterData?.get(key)||'').trim();
+      if(value)url.searchParams.set(key,value);
+    });
+    return url.href;
+  };
   const refreshQuotationList=async()=>{
     const currentList=document.getElementById('quotationList');
     if(!currentList)return;
-    const response=await fetch(window.location.href,{credentials:'same-origin',headers:{'X-Requested-With':'quotation-list'}});
+    const response=await fetch(quotationListUrl(),{credentials:'same-origin',headers:{'X-Requested-With':'quotation-list'}});
     const text=await response.text();
     if(!response.ok||response.redirected||responseLooksLikeLogin(text)||responseLooksLikePhpError(text))throw new Error(responseFailureMessage(response,text,'Quotation was updated, but the quotation list could not be refreshed.'));
     const parsed=new DOMParser().parseFromString(text,'text/html');
