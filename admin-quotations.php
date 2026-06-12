@@ -121,31 +121,6 @@ $redirectWith = static function (string $type, string $msg): void {
     exit;
 };
 
-$isAjaxRequest = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
-    || strpos(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json') !== false
-    || safe_text((string) ($_POST['ajax'] ?? '')) === '1';
-$respondAction = static function (bool $ok, string $message, array $extra = []) use ($isAjaxRequest, $redirectWith): void {
-    if ($isAjaxRequest) {
-        http_response_code($ok ? 200 : 422);
-        header('Content-Type: application/json; charset=UTF-8');
-        echo json_encode(array_merge(['ok' => $ok, 'message' => $message], $extra));
-        exit;
-    }
-    $redirectWith($ok ? 'success' : 'error', $message);
-};
-$quoteActionState = static function (array $quote): array {
-    $quote = documents_quote_prepare($quote);
-    return [
-        'quote_id' => (string) ($quote['id'] ?? ''),
-        'status' => documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')),
-        'status_label' => documents_status_label($quote, 'admin'),
-        'updated_at' => (string) ($quote['updated_at'] ?? ''),
-        'archived_flag' => documents_is_archived($quote),
-        'locked_flag' => documents_quote_is_locked($quote),
-        'public_share_enabled' => !empty($quote['public_share_enabled']),
-    ];
-};
-
 $traceRole = 'guest';
 $traceUser = current_user();
 if (is_array($traceUser) && safe_text((string) ($traceUser['role_name'] ?? '')) !== '') {
@@ -272,7 +247,7 @@ $quotationResolveWhatsappMessage = static function (array $quote, string $templa
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
-        $respondAction(false, 'Security validation failed.');
+        $redirectWith('error', 'Security validation failed.');
     }
 
     $action = safe_text($_POST['action'] ?? '');
@@ -1104,102 +1079,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    if ($action === 'approve_quote') {
-        $quoteId = safe_text($_POST['quote_id'] ?? '');
-        $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
-        if ($quote === null) {
-            $respondAction(false, 'Quotation not found.');
-        }
-
-        $quote = documents_quote_prepare($quote);
-        $statusNorm = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
-        if (documents_is_archived($quote)) {
-            $respondAction(false, 'Archived quotations cannot be approved.');
-        }
-        if (documents_quote_is_locked($quote) || $statusNorm === 'accepted') {
-            $respondAction(false, 'Accepted or locked quotations cannot be approved.');
-        }
-        if ($statusNorm !== 'draft') {
-            $respondAction(false, 'Only draft quotations can be approved.');
-        }
-
-        $user = current_user();
-        $approvedAt = date('c');
-        $quote['status'] = 'approved';
-        $quote['approval'] = [
-            'approved_by_id' => (string) ($user['id'] ?? ''),
-            'approved_by_name' => (string) ($user['full_name'] ?? 'Admin'),
-            'approved_at' => $approvedAt,
-        ];
-        $quote['updated_at'] = $approvedAt;
-        $saved = documents_save_quote($quote);
-        if (!($saved['ok'] ?? false)) {
-            $respondAction(false, 'Unable to approve quotation.');
-        }
-
-        $respondAction(true, 'Quotation approved successfully.', $quoteActionState($quote));
-    }
-
-    if ($action === 'accept_quote') {
-        $quoteId = safe_text($_POST['quote_id'] ?? '');
-        $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
-        if ($quote === null) {
-            $respondAction(false, 'Quotation not found.');
-        }
-
-        $quote = documents_quote_prepare($quote);
-        $statusNorm = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
-        if (documents_is_archived($quote)) {
-            $respondAction(false, 'Archived quotations cannot be accepted.');
-        }
-        if ($statusNorm !== 'approved' || documents_quote_is_locked($quote)) {
-            $respondAction(false, 'Only approved, unlocked quotations can be accepted.');
-        }
-
-        $user = current_user();
-        $acceptedAt = date('c');
-        $acceptor = [
-            'type' => (string) ($user['role_name'] ?? 'admin'),
-            'id' => (string) ($user['id'] ?? ''),
-            'name' => (string) ($user['full_name'] ?? 'Admin'),
-        ];
-        $quote['status'] = 'accepted';
-        $quote['accepted_at'] = $acceptedAt;
-        $quote['accepted_by'] = $acceptor;
-        $quote['acceptance'] = array_merge(
-            ['accepted_by_admin_id' => '', 'accepted_by_admin_name' => '', 'accepted_at' => '', 'accepted_note' => ''],
-            is_array($quote['acceptance'] ?? null) ? $quote['acceptance'] : [],
-            [
-                'accepted_by_admin_id' => $acceptor['id'],
-                'accepted_by_admin_name' => $acceptor['name'],
-                'accepted_at' => $acceptedAt,
-            ]
-        );
-        $quote['locked_flag'] = true;
-        $quote['locked_at'] = $acceptedAt;
-        $quote['is_current_version'] = true;
-        $quote['updated_at'] = $acceptedAt;
-        $syncResult = documents_sync_after_quote_accepted($quote);
-        $quote = is_array($syncResult['quote'] ?? null) ? $syncResult['quote'] : $quote;
-        documents_quote_set_current_for_series($quote);
-        $quote['updated_at'] = date('c');
-        $saved = documents_save_quote($quote);
-        if (!($saved['ok'] ?? false)) {
-            $respondAction(false, 'Unable to accept quotation.');
-        }
-
-        $respondAction(true, 'Quotation accepted and locked successfully.', $quoteActionState($quote));
-    }
-
     if ($action === 'archive_quote') {
         $quoteId = safe_text($_POST['quote_id'] ?? '');
         $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         if ($quote === null) {
-            $respondAction(false, 'Quotation not found.');
+            $redirectWith('error', 'Quotation not found.');
         }
 
         if (documents_is_archived($quote)) {
-            $respondAction(true, 'Quotation is already archived.', $quoteActionState($quote));
+            $redirectWith('success', 'Quotation is already archived.');
         }
 
         $user = current_user();
@@ -1211,23 +1099,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['updated_at'] = date('c');
         $saved = documents_save_quote($quote);
         if (!($saved['ok'] ?? false)) {
-            $respondAction(false, 'Unable to archive quotation.');
+            $redirectWith('error', 'Unable to archive quotation.');
         }
 
-        $respondAction(true, 'Quotation archived successfully.', $quoteActionState($quote));
+        $redirectWith('success', 'Quotation archived successfully.');
     }
 
     if ($action === 'clone_quote') {
         $quoteId = safe_text($_POST['quote_id'] ?? '');
         $original = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         if ($original === null) {
-            $respondAction(false, 'Quotation not found for cloning.');
+            $redirectWith('error', 'Quotation not found for cloning.');
         }
 
         $original = documents_quote_prepare($original);
         $number = documents_generate_quote_number((string) ($original['segment'] ?? 'RES'));
         if (!($number['ok'] ?? false)) {
-            $respondAction(false, (string) ($number['error'] ?? 'Unable to generate quotation number for clone.'));
+            $redirectWith('error', (string) ($number['error'] ?? 'Unable to generate quotation number for clone.'));
         }
 
         $user = current_user();
@@ -1276,14 +1164,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $saved = documents_save_quote($cloned);
         if (!($saved['ok'] ?? false)) {
-            $respondAction(false, 'Unable to clone quotation.');
+            $redirectWith('error', 'Unable to clone quotation.');
         }
 
-        $cloneUrl = 'admin-quotations.php?tab=editor&edit=' . urlencode($newId) . '&status=success&message=' . urlencode('Quotation cloned successfully. You can now edit the draft copy.');
-        if ($isAjaxRequest) {
-            $respondAction(true, 'Quotation cloned successfully.', ['redirect_url' => $cloneUrl, 'quote_id' => $newId]);
-        }
-        header('Location: ' . $cloneUrl);
+        header('Location: admin-quotations.php?edit=' . urlencode($newId) . '&status=success&message=' . urlencode('Quotation cloned successfully. You can now edit the draft copy.'));
         exit;
     }
 
@@ -1292,7 +1176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $shareMode = safe_text($_POST['share_mode'] ?? '');
         $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         if ($quote === null) {
-            $respondAction(false, 'Quotation not found.');
+            $redirectWith('error', 'Quotation not found.');
         }
 
         if ($shareMode === 'enable') {
@@ -1305,9 +1189,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quote['updated_at'] = date('c');
             $saved = documents_save_quote($quote);
             if (!($saved['ok'] ?? false)) {
-                $respondAction(false, 'Unable to enable public link.');
+                $redirectWith('error', 'Unable to enable public link.');
             }
-            $respondAction(true, 'Public share link enabled.', array_merge($quoteActionState($quote), ['public_share_url' => $quotationPublicShareUrl($quote)]));
+            $redirectWith('success', 'Public share link enabled.');
         }
 
         if ($shareMode === 'disable') {
@@ -1316,12 +1200,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quote['updated_at'] = date('c');
             $saved = documents_save_quote($quote);
             if (!($saved['ok'] ?? false)) {
-                $respondAction(false, 'Unable to disable public link.');
+                $redirectWith('error', 'Unable to disable public link.');
             }
-            $respondAction(true, 'Public share link disabled.', $quoteActionState($quote));
+            $redirectWith('success', 'Public share link disabled.');
         }
 
-        $respondAction(false, 'Invalid share action.');
+        $redirectWith('error', 'Invalid share action.');
     }
 
     if ($action === 'bulk_quote_action') {
@@ -1542,8 +1426,7 @@ body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px
 <body class="admin-shell commercial-admin"><main class="wrap commercial-shell">
 <header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Quotations</h1><p class="muted">Build the customer offer, then continue it through agreement, delivery, invoice, and receipt.</p></div><nav class="commercial-header__actions" aria-label="Page actions"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php">Document Center</a><a class="btn commercial-header__primary" href="admin-quotations.php?tab=editor">+ New Quotation</a></nav></header>
 <nav class="commercial-flow-strip" aria-label="Commercial lifecycle"><a class="active" href="admin-quotations.php">Quotation</a><span>→</span><a href="admin-agreements.php">Agreement</a><span>→</span><a href="admin-challans.php">Challan</a><span>→</span><a href="admin-invoices.php">Invoice</a><span>→</span><a href="admin-documents.php?tab=accepted_customers">Receipt</a></nav>
-<div data-workspace-root>
-<nav class="quotation-tabs workspace-tabs" data-workspace-tabs="fetch" aria-label="Quotation workspace">
+<nav class="quotation-tabs workspace-tabs" data-workspace-tabs="reload" aria-label="Quotation workspace">
 <a class="<?= $tab === 'quotations' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=quotations">Quotations</a>
 <a class="<?= $tab === 'archived' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=archived">Archived</a>
 <a class="<?= $tab === 'bulk' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=bulk">Bulk Tools</a>
@@ -1669,7 +1552,7 @@ body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px
 <div id="quotationList" class="card workspace-panel <?= in_array($tab, ['quotations', 'archived'], true) ? 'active' : '' ?>"><div class="list-toolbar"><div><h2><?= $tab === 'archived' ? 'Archived Quotations' : 'Quotations' ?></h2><p class="muted"><?= count($allQuotes) ?> quotation<?= count($allQuotes) === 1 ? '' : 's' ?> shown</p></div><form method="get" style="display:flex;gap:8px;align-items:end"><input type="hidden" name="tab" value="<?= htmlspecialchars($tab, ENT_QUOTES) ?>"><div><label>Status Filter</label><select name="status_filter"><option value="">All</option><option value="needs_approval" <?= $statusFilter==='needs_approval'?'selected':'' ?>>Needs Approval</option><option value="Approved" <?= $statusFilter==='Approved'?'selected':'' ?>>Approved</option><option value="Accepted" <?= $statusFilter==='Accepted'?'selected':'' ?>>Accepted</option></select></div><button class="btn secondary" type="submit">Apply</button></form></div>
 <div class="list-table-wrap"><table class="sticky-head"><thead><tr><th>Quotation</th><th>Customer</th><th>Status</th><th class="quote-amount">Amount</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
 <?php foreach ($allQuotes as $q): ?>
-<tr data-quote-id="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>">
+<tr>
 <td><strong><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></strong><div class="quote-meta">By <?= htmlspecialchars((string)$q['created_by_name'], ENT_QUOTES) ?></div></td>
 <td><div class="quote-customer"><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></div><div class="quote-meta"><?= htmlspecialchars((string)($q['customer_mobile'] ?? ''), ENT_QUOTES) ?></div></td>
 <td><span class="status-pill"><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></span></td>
@@ -1682,24 +1565,16 @@ $publicShareEnabled = !empty($q['public_share_enabled']) && $publicShareToken !=
 $publicShareUrl = $quotationPublicShareUrl($q);
 $quoteShareMobile = $quotationExtractMobile($q);
 $canWhatsappShare = $quoteShareMobile !== '';
-$quoteStatusNorm = documents_quote_normalize_status((string) ($q['status'] ?? 'draft'));
-$quoteArchived = documents_is_archived($q);
-$quoteLocked = documents_quote_is_locked($q);
-$canApproveQuote = !$quoteArchived && !$quoteLocked && $quoteStatusNorm === 'draft';
-$canAcceptQuote = !$quoteArchived && !$quoteLocked && $quoteStatusNorm === 'approved';
 ?>
 <div class="list-actions">
 <a class="btn" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">Open</a>
 <?php if (documents_quote_can_edit($q, 'admin')): ?><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?>
 <button class="btn secondary js-wa-share" type="button" data-quote-id="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars($quoteShareMobile, ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($q['customer_name'] ?? ''), ENT_QUOTES) ?>" <?= $canWhatsappShare ? '' : 'disabled title="Missing valid mobile"' ?>>Share</button>
 <details class="more-actions"><summary class="btn quiet">More ▾</summary><div class="more-menu"><div class="secondary-actions">
-<?php if ($canApproveQuote): ?><form method="post" class="js-quote-action" style="margin:0"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="approve_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><button class="btn" type="submit">Approve</button></form><?php endif; ?>
-<?php if ($canAcceptQuote): ?><form method="post" class="js-quote-action" style="margin:0" data-confirm="Accept and lock this quotation?"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="accept_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><button class="btn" type="submit" onclick="return confirm('Accept and lock this quotation?');">Accept</button></form><?php endif; ?>
-<?php if (($quoteStatusNorm === 'accepted' || $quoteLocked) && !$quoteArchived): ?><span class="muted">Accepted / locked</span><?php endif; ?>
 <a class="btn secondary js-open-new-tab" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>" target="_blank" rel="noopener">Print HTML</a>
-<form method="post" class="js-quote-action" style="margin:0" data-confirm="Clone this quotation into a new draft?"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="clone_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><button class="btn secondary" type="submit" onclick="return confirm('Clone this quotation into a new draft?');">Clone</button></form>
-<?php if (!$quoteArchived): ?><form method="post" class="js-quote-action" style="margin:0" data-confirm="Archive this quotation?"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><button class="btn secondary" type="submit" onclick="return confirm('Archive this quotation?');">Archive</button></form><?php endif; ?>
-</div><div class="share-actions"><strong>Public link</strong><form method="post" class="js-quote-action" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="toggle_public_share"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><?php if (!$publicShareEnabled): ?><input type="hidden" name="share_mode" value="enable"><button class="btn secondary" type="submit">Enable Public Link</button><?php else: ?><input id="public-share-link-<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>" type="text" readonly value="<?= htmlspecialchars($publicShareUrl, ENT_QUOTES) ?>" style="flex:1;min-width:220px"><button class="btn secondary" type="button" data-copy-target="public-share-link-<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>">Copy Link</button><button class="btn secondary" type="submit" name="share_mode" value="disable">Disable</button><?php endif; ?></form></div>
+<form method="post" style="margin:0"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="clone_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><button class="btn secondary" type="submit" onclick="return confirm('Clone this quotation into a new draft?');">Clone</button></form>
+<form method="post" style="margin:0"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><button class="btn secondary" type="submit" onclick="return confirm('Archive this quotation?');">Archive</button></form>
+</div><div class="share-actions"><strong>Public link</strong><form method="post" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="toggle_public_share"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><?php if (!$publicShareEnabled): ?><input type="hidden" name="share_mode" value="enable"><button class="btn secondary" type="submit">Enable Public Link</button><?php else: ?><input id="public-share-link-<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>" type="text" readonly value="<?= htmlspecialchars($publicShareUrl, ENT_QUOTES) ?>" style="flex:1;min-width:220px"><button class="btn secondary" type="button" data-copy-target="public-share-link-<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>">Copy Link</button><button class="btn secondary" type="submit" name="share_mode" value="disable">Disable</button><?php endif; ?></form></div>
 <?php if (documents_quote_is_locked($q)): ?><details style="margin-top:8px"><summary class="muted" style="cursor:pointer">Create revision</summary><form method="post" style="margin-top:6px"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="create_revision"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"><label>Revision reason (optional)</label><textarea name="revision_reason" placeholder="Reason for revision"></textarea><?php if (documents_quote_has_workflow_documents($q)): ?><p class="muted" style="margin:6px 0">Documents already exist for this accepted quotation. New documents must be created under the revision.</p><label><input type="checkbox" name="archive_existing_documents" value="1"> Archive existing PI/Invoice</label><?php endif; ?><div style="margin-top:6px"><button class="btn" type="submit" onclick="return confirm('Create a new revision from this accepted quotation?');">Create Revision</button></div></form></details><?php endif; ?>
 </div></details>
 </div></td></tr>
@@ -1715,58 +1590,22 @@ $canAcceptQuote = !$quoteArchived && !$quoteLocked && $quoteStatusNorm === 'appr
 <?php foreach ($allQuotes as $q): ?><tr><td><input type="checkbox" name="selected_ids[]" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"></td><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td></tr><?php endforeach; ?>
 </tbody></table>
 </form></div>
-</div>
 <div class="ux-backdrop" id="uxBackdrop"></div><div class="ux-modal" id="uxModal" aria-hidden="true"><div class="ux-modal-head"><strong id="uxModalTitle">Preview</strong><button class="btn secondary" type="button" id="uxModalClose">Close</button></div><iframe id="uxModalFrame" src="about:blank"></iframe></div>
 <script>
 (function(){
   const wrap=document.querySelector('.wrap');
   if(!wrap)return;
 
+  const toast=document.getElementById('uxToast');
   let toastTimer=0;
   const showToast=(message,isError=false)=>{
-    const toast=document.getElementById('uxToast');
     if(!toast)return;
-    toast.textContent=String(message||'');
+    toast.textContent=message;
     toast.classList.toggle('err',!!isError);
     toast.classList.add('show');
     window.clearTimeout(toastTimer);
     toastTimer=window.setTimeout(()=>toast.classList.remove('show'),3000);
   };
-  const refreshQuotationList=async()=>{
-    const currentList=document.getElementById('quotationList');
-    if(!currentList)return;
-    const response=await fetch(window.location.href,{credentials:'same-origin',headers:{'X-Requested-With':'quotation-list'}});
-    if(!response.ok)throw new Error('Unable to refresh quotation list.');
-    const parsed=new DOMParser().parseFromString(await response.text(),'text/html');
-    const nextList=parsed.getElementById('quotationList');
-    if(!nextList)throw new Error('Quotation list was not found.');
-    currentList.replaceWith(nextList);
-  };
-
-  if(window.fetch){
-    document.addEventListener('submit',async(event)=>{
-      const form=event.target instanceof HTMLFormElement?event.target:null;
-      if(!form||!form.classList.contains('js-quote-action')||!form.closest('#quotationList'))return;
-      event.preventDefault();
-      const submitter=event.submitter instanceof HTMLButtonElement?event.submitter:null;
-      const originalLabel=submitter?submitter.textContent:'';
-      if(submitter){submitter.disabled=true;submitter.textContent='Working…';}
-      try{
-        const formData=new FormData(form);
-        if(submitter?.name)formData.set(submitter.name,submitter.value);
-        formData.set('ajax','1');
-        const response=await fetch(form.action||window.location.href,{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'},body:formData});
-        const payload=await response.json();
-        if(!payload?.ok)throw new Error(payload?.message||'Quotation action failed.');
-        showToast(payload.message||'Quotation updated.');
-        if(payload.redirect_url){window.location.assign(String(payload.redirect_url));return;}
-        await refreshQuotationList();
-      }catch(error){
-        showToast(error instanceof Error?error.message:'Quotation action failed.',true);
-        if(submitter){submitter.disabled=false;submitter.textContent=originalLabel;}
-      }
-    });
-  }
 
   const editorCard=document.getElementById('quotationEditor');
   if(editorCard){
@@ -1904,8 +1743,6 @@ $canAcceptQuote = !$quoteArchived && !$quoteLocked && $quoteStatusNorm === 'appr
           if(!(mobile.length===12 && mobile.startsWith('91'))){showToast('Customer mobile number is missing or invalid for WhatsApp sharing.',true);return;}
           const text=encodeURIComponent(String(payload.message||''));
           window.open('https://wa.me/'+mobile+'?text='+text,'_blank','noopener');
-          showToast('WhatsApp share draft prepared.');
-          refreshQuotationList().catch(()=>{});
         })
         .catch(()=>showToast('Unable to prepare WhatsApp share draft.',true));
     }
