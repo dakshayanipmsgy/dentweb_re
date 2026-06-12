@@ -14,7 +14,7 @@ $assertions = [
     'row actions keep the JavaScript-enhanced form class' => 'class="js-quote-action"',
     'row action forms keep CSRF fields' => 'name="csrf_token"',
     'Approve and Accept actions remain available to the backend' => "if (\$action === 'approve_quote' || \$action === 'accept_quote')",
-    'Archive action remains available to the backend' => "if (\$action === 'archive_quote')",
+    'Archive and unarchive actions remain available to the backend' => "if (\$action === 'archive_quote' || \$action === 'unarchive_quote')",
     'AJAX requests still include the CSRF-bearing FormData' => 'body:formData',
     'form action uses the action attribute instead of the shadowable form.action property' => "form.getAttribute('action')||window.location.href",
     'form action is resolved against the current page' => 'new URL(rawAction,window.location.href).href',
@@ -53,7 +53,7 @@ if (str_contains($source, 'fetch(form.action||window.location.href')) {
 fwrite(STDOUT, "PASS: unsafe shadowable form.action fetch is absent\n");
 
 $sharedHandlerStart = strpos($source, "if (\$action === 'approve_quote' || \$action === 'accept_quote')");
-$archiveHandlerStart = strpos($source, "if (\$action === 'archive_quote')", $sharedHandlerStart ?: 0);
+$archiveHandlerStart = strpos($source, "if (\$action === 'archive_quote' || \$action === 'unarchive_quote')", $sharedHandlerStart ?: 0);
 $sharedHandler = ($sharedHandlerStart !== false && $archiveHandlerStart !== false)
     ? substr($source, $sharedHandlerStart, $archiveHandlerStart - $sharedHandlerStart)
     : '';

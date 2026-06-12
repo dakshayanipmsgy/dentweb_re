@@ -279,6 +279,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = safe_text($_POST['action'] ?? '');
     if ($action === 'save_settings') {
         $d = load_quote_defaults();
+        $decodeRateChart = static function (string $field, string $label, array $existing) use ($redirectWith): array {
+            $raw = trim((string) ($_POST[$field] ?? ''));
+            if ($raw === '') {
+                return $existing;
+            }
+            $decoded = json_decode($raw, true);
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded) || !array_is_list($decoded)) {
+                $detail = json_last_error() === JSON_ERROR_NONE ? 'the top-level value must be a JSON array' : json_last_error_msg();
+                $redirectWith('error', $label . ' rate chart JSON is invalid: ' . $detail . '. Existing rate-chart settings were preserved.');
+            }
+            foreach ($decoded as $index => $row) {
+                if (!is_array($row)) {
+                    $redirectWith('error', $label . ' rate chart JSON is invalid: row ' . ($index + 1) . ' must be an object. Existing rate-chart settings were preserved.');
+                }
+            }
+            return $decoded;
+        };
+        $decodedRateChartOnGrid = $decodeRateChart('rate_chart_on_grid_json', 'On-Grid', (array) ($d['rate_chart']['on_grid'] ?? []));
+        $decodedRateChartHybrid = $decodeRateChart('rate_chart_hybrid_json', 'Hybrid', (array) ($d['rate_chart']['hybrid'] ?? []));
         foreach (['primary','accent','text','muted_text','page_bg','card_bg','border'] as $k) {
             $existing = (string) ($d['global']['ui_tokens']['colors'][$k] ?? '');
             $d['global']['ui_tokens']['colors'][$k] = $sanitizeHexColor($_POST['ui_' . $k . '_hex'] ?? '', $existing);
@@ -316,10 +335,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($whyPoints !== []) {
             $d['global']['quotation_ui']['why_dakshayani_points'] = $whyPoints;
         }
-        $rateChartOnGridRaw = trim((string) ($_POST['rate_chart_on_grid_json'] ?? ''));
-        if ($rateChartOnGridRaw !== '') {
-            $decoded = json_decode($rateChartOnGridRaw, true);
-            if (is_array($decoded)) {
+        $decoded = $decodedRateChartOnGrid;
+        {
                 $d['rate_chart']['on_grid'] = array_values(array_filter(array_map(static function ($row): array {
                     $scenarioModelNumbers = is_array($row['scenario_model_numbers'] ?? null) ? $row['scenario_model_numbers'] : [];
                     return [
@@ -337,12 +354,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ],
                     ];
                 }, $decoded), static fn(array $row): bool => $row['solar_size_kwp'] > 0));
-            }
         }
-        $rateChartHybridRaw = trim((string) ($_POST['rate_chart_hybrid_json'] ?? ''));
-        if ($rateChartHybridRaw !== '') {
-            $decoded = json_decode($rateChartHybridRaw, true);
-            if (is_array($decoded)) {
+        $decoded = $decodedRateChartHybrid;
+        {
                 $d['rate_chart']['hybrid'] = array_values(array_filter(array_map(static function ($row): array {
                     $scenarioModelNumbers = is_array($row['scenario_model_numbers'] ?? null) ? $row['scenario_model_numbers'] : [];
                     return [
@@ -364,7 +378,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ],
                     ];
                 }, $decoded), static fn(array $row): bool => $row['inverter_kva'] > 0 && $row['phase'] !== ''));
-            }
         }
         $saved = save_quote_defaults($d);
         if (!($saved['ok'] ?? false)) { $redirectWith('error', 'Unable to save quotation settings.'); }
@@ -808,7 +821,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'variant' => safe_text((string) ($selectedRateChartRow['variant'] ?? '')),
             'battery_code' => safe_text((string) ($selectedRateChartRow['battery_code'] ?? '')),
             'inverter_code' => safe_text((string) ($selectedRateChartRow['inverter_code'] ?? '')),
-            'solar_size_kwp' => (float) $requestValue('main_solar_kwp', $requestValue('capacity_kwp', $savedRateChartSnapshot['solar_size_kwp'] ?? 0)),
+            'solar_size_kwp' => (float) ($quote['capacity_kwp'] ?? 0),
+            'dcr_size_kwp' => (float) ($quote['main_solar_kwp'] ?? 0),
+            'non_dcr_size_kwp' => (float) ($quote['complimentary_non_dcr_kwp'] ?? 0),
+            'total_system_size_kwp' => (float) ($quote['capacity_kwp'] ?? 0),
             'hybrid_inverter_kva' => (float) $requestValue('hybrid_inverter_kva', $savedRateChartSnapshot['hybrid_inverter_kva'] ?? 0),
             'hybrid_phase' => solar_finance_normalize_phase_label((string) $requestValue('hybrid_phase', $savedRateChartSnapshot['hybrid_phase'] ?? '')),
             'hybrid_battery_count' => (int) $requestValue('hybrid_battery_count', $savedRateChartSnapshot['hybrid_battery_count'] ?? 0),
@@ -1134,30 +1150,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
     }
 
-    if ($action === 'archive_quote') {
+    if ($action === 'archive_quote' || $action === 'unarchive_quote') {
         $quoteId = safe_text($_POST['quote_id'] ?? '');
         $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         if ($quote === null) {
             $respondAction(false, 'Quotation not found.');
         }
 
-        if (documents_is_archived($quote)) {
+        $isUnarchive = $action === 'unarchive_quote';
+        if (!$isUnarchive && documents_is_archived($quote)) {
             $respondAction(true, 'Quotation is already archived.', $quoteActionState($quote));
+        }
+        if ($isUnarchive && !documents_is_archived($quote)) {
+            $respondAction(true, 'Quotation is already unarchived.', $quoteActionState($quote));
         }
 
         $user = current_user();
-        $quote = documents_set_archived($quote, [
+        $transition = documents_quote_apply_admin_status_transition($quote, $isUnarchive ? 'unarchived' : 'archived', [
             'type' => (string) ($user['role_name'] ?? 'admin'),
             'id' => (string) ($user['id'] ?? ''),
             'name' => (string) ($user['full_name'] ?? 'Admin'),
         ]);
-        $quote['updated_at'] = date('c');
-        $saved = documents_save_quote($quote);
-        if (!($saved['ok'] ?? false)) {
-            $respondAction(false, 'Unable to archive quotation.');
+        $quote = is_array($transition['quote'] ?? null) ? $transition['quote'] : $quote;
+        if (!($transition['ok'] ?? false)) {
+            $respondAction(false, (string) ($transition['error'] ?? 'Unable to update quotation archive status.'), $quoteActionState($quote));
         }
-
-        $respondAction(true, 'Quotation archived successfully.', $quoteActionState($quote));
+        $respondAction(true, $isUnarchive ? 'Quotation unarchived successfully.' : 'Quotation archived successfully.', $quoteActionState($quote));
     }
 
     if ($action === 'clone_quote') {
@@ -1280,37 +1298,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($q === null) {
                 continue;
             }
-            $statusNorm = documents_quote_normalize_status((string)($q['status'] ?? 'draft'));
-            if ($bulkAction === 'archive') {
-                $q['status'] = 'archived';
-                $q['archived_flag'] = true;
-                $q['archived_at'] = date('c');
-                $q['archived_by'] = ['type' => 'admin', 'id' => (string)((current_user()['id'] ?? '')), 'name' => (string)((current_user()['full_name'] ?? 'Admin'))];
-            } elseif ($bulkAction === 'unarchive') {
-                $q['archived_flag'] = false;
-                $q['archived_at'] = '';
-                $q['archived_by'] = ['type' => '', 'id' => '', 'name' => ''];
-                $q['status'] = (string)($q['accepted_at'] ?? '') !== '' ? 'accepted' : ($statusNorm === 'archived' ? 'approved' : $statusNorm);
-            } elseif ($bulkAction === 'set_approved' || $bulkAction === 'set_accepted') {
-                $user = current_user();
-                $transition = documents_quote_apply_admin_status_transition(
-                    $q,
-                    $bulkAction === 'set_approved' ? 'approved' : 'accepted',
-                    [
-                        'id' => (string) ($user['id'] ?? ''),
-                        'name' => (string) ($user['full_name'] ?? 'Admin'),
-                    ]
-                );
-                if ($transition['ok'] ?? false) {
-                    $updated++;
-                }
-                continue;
-            } else {
+            $targets = ['archive' => 'archived', 'unarchive' => 'unarchived', 'set_approved' => 'approved', 'set_accepted' => 'accepted'];
+            if (!isset($targets[$bulkAction])) {
                 continue;
             }
-            $q['updated_at'] = date('c');
-            $saved = documents_save_quote($q);
-            if ($saved['ok']) { $updated++; }
+            $user = current_user();
+            $transition = documents_quote_apply_admin_status_transition($q, $targets[$bulkAction], [
+                'type' => (string) ($user['role_name'] ?? 'admin'),
+                'id' => (string) ($user['id'] ?? ''),
+                'name' => (string) ($user['full_name'] ?? 'Admin'),
+            ]);
+            if ($transition['ok'] ?? false) {
+                $updated++;
+            }
         }
         $redirectWith('success', 'Bulk action applied on ' . $updated . ' quotation(s).');
     }
@@ -1389,9 +1389,15 @@ foreach (['RES', 'COM', 'IND', 'INST'] as $segCode) {
     $autofillSegments[$segCode] = $resolveSegmentDefaults($segCode);
 }
 
+$editRestrictionMessage = '';
 if ($editing !== null && documents_quote_is_locked($editing)) {
+    $editRestrictionMessage = 'This quotation was accepted and is locked. Create a revision to make changes.';
+    $editing = null;
+} elseif ($editing !== null && documents_quote_normalize_status((string) ($editing['status'] ?? 'draft')) === 'approved') {
+    $editRestrictionMessage = 'This quotation is approved and cannot be edited. Accept it or archive it, or clone it into a new draft.';
     $editing = null;
 } elseif ($editing !== null && documents_quote_normalize_status((string) ($editing['status'] ?? 'draft')) !== 'draft') {
+    $editRestrictionMessage = 'Only draft quotations can be edited.';
     $editing = null;
 }
 
@@ -1501,6 +1507,7 @@ body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px
 <a class="<?= $tab === 'settings' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=settings">Settings</a>
 </nav>
 <?php if ($message !== ''): ?><div class="alert <?= $status === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
+<?php if ($editRestrictionMessage !== ''): ?><div class="alert err"><?= htmlspecialchars($editRestrictionMessage, ENT_QUOTES) ?></div><?php endif; ?>
 <?php if ($prefillMessage !== ''): ?><div class="alert ok"><?= htmlspecialchars($prefillMessage, ENT_QUOTES) ?></div><?php endif; ?>
 <div class="toast" id="uxToast" role="status" aria-live="polite"></div>
 <div id="quotationEditor" class="card workspace-panel <?= $tab === 'editor' ? 'active' : '' ?>">

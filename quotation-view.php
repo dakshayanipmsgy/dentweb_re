@@ -31,62 +31,20 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
  $action=safe_text($_POST['action'] ?? '');
  $quote = documents_get_quote($id) ?? $quote;
 
- if($action==='approve_quote' && $viewerType==='admin'){
-    $quote['status']='approved';
-    $quote['approval']['approved_by_name']=$viewerName;
-    $quote['approval']['approved_at']=date('c');
-    $quote['updated_at']=date('c');
-    documents_save_quote($quote);
-    $redirect('success','Quotation approved.');
- }
-
- if($action==='mark_accepted' && $viewerType==='admin'){
-    if (documents_quote_normalize_status((string)($quote['status'] ?? 'draft')) === 'accepted') {
-        $redirect('success','Already accepted.');
+ if(in_array($action, ['approve_quote','mark_accepted','archive_quote','unarchive_quote'], true) && $viewerType==='admin'){
+    $targets = ['approve_quote'=>'approved','mark_accepted'=>'accepted','archive_quote'=>'archived','unarchive_quote'=>'unarchived'];
+    $messages = [
+        'approve_quote'=>'Quotation approved.',
+        'mark_accepted'=>'Quotation accepted and locked.',
+        'archive_quote'=>'Quotation archived.',
+        'unarchive_quote'=>'Quotation unarchived.',
+    ];
+    $transition = documents_quote_apply_admin_status_transition($quote, $targets[$action], ['type'=>$viewerType,'id'=>$viewerId,'name'=>$viewerName]);
+    if (!($transition['ok'] ?? false)) {
+        $redirect('error', (string)($transition['error'] ?? 'Unable to update quotation.'));
     }
-    if (documents_quote_normalize_status((string)($quote['status'] ?? 'draft')) !== 'approved') {
-        $redirect('error','Only approved quotations can be marked accepted.');
-    }
-    $valid = documents_quote_has_valid_acceptance_data($quote);
-    if (!($valid['ok'] ?? false)) {
-        $redirect('error', (string)($valid['error'] ?? 'Acceptance data missing.'));
-    }
-    $quote['status']='accepted';
-    $quote['accepted_at']=date('c');
-    $quote['accepted_by']=['type'=>$viewerType,'id'=>$viewerId,'name'=>$viewerName];
-    $quote['acceptance']['accepted_by_admin_id']=$viewerId;
-    $quote['acceptance']['accepted_by_admin_name']=$viewerName;
-    $quote['acceptance']['accepted_at']=$quote['accepted_at'];
-    $quote['workflow']=array_merge(documents_quote_workflow_defaults(), is_array($quote['workflow'] ?? null) ? $quote['workflow'] : []);
-    $quote['locked_flag'] = true;
-    $quote['locked_at'] = date('c');
-    $quote['is_current_version'] = true;
-    $syncResult = documents_sync_after_quote_accepted($quote);
-    $quote = $syncResult['quote'];
-    $quote['updated_at']=date('c');
-    documents_save_quote($quote);
-    documents_quote_set_current_for_series($quote);
-    $redirect('success','Quotation marked accepted by customer.');
- }
-
- if($action==='archive_quote' && $viewerType==='admin'){
-    $quote['status']='archived';
-    $quote['archived_flag']=true;
-    $quote['archived_at']=date('c');
-    $quote['archived_by']=['type'=>$viewerType,'id'=>$viewerId,'name'=>$viewerName];
-    $quote['updated_at']=date('c');
-    documents_save_quote($quote);
-    $redirect('success','Quotation archived.');
- }
-
- if($action==='unarchive_quote' && $viewerType==='admin'){
-    $quote['status']=documents_quote_normalize_status((string)($quote['accepted_at'] ?? '')) !== '' ? 'accepted' : 'approved';
-    $quote['archived_flag']=false;
-    $quote['archived_at']='';
-    $quote['archived_by']=['type'=>'','id'=>'','name'=>''];
-    $quote['updated_at']=date('c');
-    documents_save_quote($quote);
-    $redirect('success','Quotation unarchived.');
+    $quote = is_array($transition['quote'] ?? null) ? $transition['quote'] : $quote;
+    $redirect('success', $messages[$action]);
  }
 
  if($action==='share_update'){

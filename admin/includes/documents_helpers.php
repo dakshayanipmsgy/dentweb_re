@@ -1532,6 +1532,18 @@ function documents_set_unarchived(array $record): array
     return $record;
 }
 
+function documents_quote_restore_status_after_unarchive(array $quote): string
+{
+    if (documents_quote_is_locked($quote) || safe_text((string) ($quote['accepted_at'] ?? '')) !== '') {
+        return 'accepted';
+    }
+    $approval = is_array($quote['approval'] ?? null) ? $quote['approval'] : [];
+    if (safe_text((string) ($approval['approved_at'] ?? '')) !== '') {
+        return 'approved';
+    }
+    return 'draft';
+}
+
 function documents_challan_defaults(): array
 {
     return [
@@ -2984,15 +2996,23 @@ function documents_save_quote(array $quote): array
 function documents_quote_apply_admin_status_transition(array $quote, string $targetStatus, array $actor = []): array
 {
     $quote = documents_quote_prepare($quote);
-    $targetStatus = documents_quote_normalize_status($targetStatus);
+    $requestedStatus = strtolower(trim($targetStatus));
+    $targetStatus = in_array($requestedStatus, ['archive', 'archived'], true)
+        ? 'archived'
+        : (in_array($requestedStatus, ['unarchive', 'unarchived'], true) ? 'unarchived' : documents_quote_normalize_status($requestedStatus));
     $currentStatus = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
+    $isArchived = documents_is_archived($quote);
 
-    if (documents_is_archived($quote)) {
-        return ['ok' => false, 'error' => 'Archived quotations cannot change approval status.', 'quote' => $quote];
+    if ($isArchived && $targetStatus !== 'unarchived') {
+        return ['ok' => false, 'error' => 'Archived quotations must be unarchived before another status change.', 'quote' => $quote];
+    }
+    if (!$isArchived && $targetStatus === 'unarchived') {
+        return ['ok' => true, 'error' => '', 'quote' => $quote];
     }
 
     $actorId = safe_text((string) ($actor['id'] ?? ''));
     $actorName = safe_text((string) ($actor['name'] ?? '')) ?: 'Admin';
+    $actorType = safe_text((string) ($actor['type'] ?? 'admin')) ?: 'admin';
     $now = date('c');
 
     if ($targetStatus === 'approved') {
@@ -3002,34 +3022,20 @@ function documents_quote_apply_admin_status_transition(array $quote, string $tar
         if (!in_array($currentStatus, ['draft', 'pending_admin_approval'], true)) {
             return ['ok' => false, 'error' => 'Only draft or pending quotations can be approved.', 'quote' => $quote];
         }
-
         $quote['status'] = 'approved';
-        $quote['approval'] = [
-            'approved_by_id' => $actorId,
-            'approved_by_name' => $actorName,
-            'approved_at' => $now,
-        ];
+        $quote['approval'] = ['approved_by_id' => $actorId, 'approved_by_name' => $actorName, 'approved_at' => $now];
     } elseif ($targetStatus === 'accepted') {
         if (!in_array($currentStatus, ['approved', 'accepted'], true)) {
             return ['ok' => false, 'error' => 'Only approved quotations can be accepted.', 'quote' => $quote];
         }
-
         $acceptedAt = safe_text((string) ($quote['accepted_at'] ?? '')) ?: $now;
         $quote['status'] = 'accepted';
         $quote['accepted_at'] = $acceptedAt;
-        $quote['accepted_by'] = [
-            'type' => 'admin',
-            'id' => $actorId,
-            'name' => $actorName,
-        ];
+        $quote['accepted_by'] = ['type' => $actorType, 'id' => $actorId, 'name' => $actorName];
         $quote['acceptance'] = array_merge(
             ['accepted_by_admin_id' => '', 'accepted_by_admin_name' => '', 'accepted_at' => '', 'accepted_note' => ''],
             is_array($quote['acceptance'] ?? null) ? $quote['acceptance'] : [],
-            [
-                'accepted_by_admin_id' => $actorId,
-                'accepted_by_admin_name' => $actorName,
-                'accepted_at' => $acceptedAt,
-            ]
+            ['accepted_by_admin_id' => $actorId, 'accepted_by_admin_name' => $actorName, 'accepted_at' => $acceptedAt]
         );
         $quote['locked_flag'] = true;
         $quote['locked_at'] = safe_text((string) ($quote['locked_at'] ?? '')) ?: $now;
@@ -3037,19 +3043,23 @@ function documents_quote_apply_admin_status_transition(array $quote, string $tar
         $syncResult = documents_sync_after_quote_accepted($quote);
         $quote = is_array($syncResult['quote'] ?? null) ? $syncResult['quote'] : $quote;
         documents_quote_set_current_for_series($quote);
+    } elseif ($targetStatus === 'archived') {
+        $quote = documents_set_archived($quote, ['type' => $actorType, 'id' => $actorId, 'name' => $actorName]);
+    } elseif ($targetStatus === 'unarchived') {
+        $restoredStatus = documents_quote_restore_status_after_unarchive($quote);
+        $quote = documents_set_unarchived($quote);
+        $quote['status'] = $restoredStatus;
     } else {
         return ['ok' => false, 'error' => 'Unsupported quotation status transition.', 'quote' => $quote];
     }
 
-    $quote['updated_at'] = date('c');
+    $quote['updated_at'] = $now;
     $saved = documents_save_quote($quote);
     if (!($saved['ok'] ?? false)) {
         return ['ok' => false, 'error' => (string) ($saved['error'] ?? 'Unable to update quotation.'), 'quote' => $quote];
     }
-
     return ['ok' => true, 'error' => '', 'quote' => $quote];
 }
-
 
 function documents_get_proforma(string $id): ?array
 {

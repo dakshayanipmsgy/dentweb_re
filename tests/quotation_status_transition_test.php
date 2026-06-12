@@ -92,6 +92,27 @@ try {
 
     $acceptedAgain = documents_quote_apply_admin_status_transition($acceptedQuote, 'accepted', $actor);
     $assert(($acceptedAgain['ok'] ?? false) === true, 'shared transition preserves Bulk Tools accepted-to-accepted behavior');
+
+
+    $archivedAccepted = documents_quote_apply_admin_status_transition($acceptedQuote, 'archived', $actor);
+    $assert(($archivedAccepted['ok'] ?? false) === true, 'shared transition archives an accepted quote');
+    $restoredAccepted = documents_quote_apply_admin_status_transition((array) ($archivedAccepted['quote'] ?? []), 'unarchived', $actor);
+    $assert(($restoredAccepted['quote']['status'] ?? '') === 'accepted', 'unarchive restores accepted status for a previously accepted or locked quote');
+
+    $approvedForArchive = $approvedQuote;
+    $approvedForArchive['id'] = $id . '-APPROVED';
+    $approvedForArchive['quote_no'] = $id . '-APPROVED';
+    $archivedApproved = documents_quote_apply_admin_status_transition($approvedForArchive, 'archived', $actor);
+    $restoredApproved = documents_quote_apply_admin_status_transition((array) ($archivedApproved['quote'] ?? []), 'unarchived', $actor);
+    $assert(($restoredApproved['quote']['status'] ?? '') === 'approved', 'unarchive restores approved status for a previously approved quote');
+
+    $draftForArchive = $quote;
+    $draftForArchive['id'] = $id . '-DRAFT';
+    $draftForArchive['quote_no'] = $id . '-DRAFT';
+    $archivedDraft = documents_quote_apply_admin_status_transition($draftForArchive, 'archived', $actor);
+    $restoredDraft = documents_quote_apply_admin_status_transition((array) ($archivedDraft['quote'] ?? []), 'unarchived', $actor);
+    $assert(($restoredDraft['quote']['status'] ?? '') === 'draft', 'unarchive restores draft status when quote was neither approved nor accepted');
+    $assert(($restoredDraft['quote']['status'] ?? '') !== 'active', 'unarchive never introduces unsupported active quotation status');
 } catch (Throwable $exception) {
     fwrite(STDERR, 'FAIL: ' . $exception->getMessage() . "\n");
     $failed = true;
