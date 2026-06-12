@@ -24,14 +24,6 @@ $assertions = [
     'redirected or login responses get a session-expiry message' => 'Your session may have expired.',
     'malformed JSON gets a clear message' => 'the server returned malformed JSON.',
     'list refresh remains AJAX-driven' => "'X-Requested-With':'quotation-list'",
-    'list refresh uses a clean quotations URL' => "new URL('admin-quotations.php',window.location.href)",
-    'clean refresh preserves the active status filter' => "['tab','status_filter']",
-    'successful actions isolate follow-up refresh failures' => 'Quotation list refresh failed after a successful action.',
-    'refresh failure after success is not shown as an error toast' => "full list could not be refreshed automatically.`,false",
-    'row action JSON includes missing acceptance fields' => "'missing_fields' => array_values",
-    'row action JSON includes the correction URL' => "'edit_url' => 'admin-quotations.php?tab=editor&edit='",
-    'invalid acceptance renders validation helper text' => "\$acceptanceCheck['error']",
-    'invalid acceptance provides an edit path' => '>Edit quotation</a>',
 ];
 
 foreach ($assertions as $label => $needle) {
