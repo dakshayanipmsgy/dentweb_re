@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-$source = file_get_contents(__DIR__ . '/../admin-quotations.php');
+$mainSource = file_get_contents(__DIR__ . '/../admin-quotations.php');
+$listSource = file_get_contents(__DIR__ . '/../admin/partials/quotation-list.php');
+$source = is_string($mainSource) && is_string($listSource) ? $mainSource . "\n" . $listSource : false;
 if (!is_string($source)) {
     fwrite(STDERR, "Unable to read admin-quotations.php\n");
     exit(1);
@@ -23,6 +25,10 @@ $assertions = [
     'redirected or login responses get a session-expiry message' => 'Your session may have expired.',
     'malformed JSON gets a clear message' => 'the server returned malformed JSON.',
     'list refresh remains AJAX-driven' => "'X-Requested-With':'quotation-list'",
+    'list refresh requests the quotation list partial' => "url.searchParams.set('partial','quotation_list')",
+    'partial request exits before editor rendering' => "require __DIR__ . '/admin/partials/quotation-list.php';\n    exit;",
+    'list partial safely normalizes calc' => "is_array(\$q['calc'] ?? null) ? \$q['calc'] : []",
+    'list amount falls back to the stored inclusive total' => "\$calc['grand_total'] ?? \$q['input_total_gst_inclusive'] ?? 0",
     'row approve and accept use the shared status transition' => "documents_quote_apply_admin_status_transition(\$quote, \$targetStatus",
     'Bulk Tools approve and accept use the shared status transition' => 'documents_quote_apply_admin_status_transition(',
     'row Accept is offered only from the shared approved starting state' => "\$quoteStatusNorm === 'approved'",
