@@ -1,0 +1,274 @@
+/* Dakshayani EnergyCare public revamp layer. Loaded through the shared header partial. */
+:root {
+  --energy-green: #0f766e;
+  --energy-dark: #0f172a;
+  --energy-amber: #f59e0b;
+  --energy-soft: #ecfdf5;
+  --energy-line: rgba(15, 23, 42, 0.12);
+}
+
+.energy-home-enhanced .energycare-injected,
+.subpage-modern {
+  font-family: 'Poppins', sans-serif;
+}
+
+.energycare-injected {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.revamp-hero-strip {
+  background: radial-gradient(circle at top left, rgba(15,118,110,.2), transparent 34%), linear-gradient(135deg, #06121f 0%, #0f172a 55%, #123f3b 100%);
+  color: #fff;
+  padding: clamp(3rem, 6vw, 5rem) 0;
+  overflow: hidden;
+}
+
+.revamp-hero-grid,
+.revamp-split {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+  align-items: center;
+}
+
+.revamp-kicker,
+.section-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  border-radius: 999px;
+  padding: .45rem .85rem;
+  background: rgba(15,118,110,.12);
+  color: var(--energy-green);
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  font-size: .78rem;
+}
+
+.revamp-hero-strip .revamp-kicker {
+  background: rgba(255,255,255,.12);
+  color: #fef3c7;
+  border: 1px solid rgba(255,255,255,.18);
+}
+
+.revamp-hero-strip h2 {
+  color: #fff;
+  font-size: clamp(2.2rem, 5vw, 4.7rem);
+  line-height: 1.02;
+  margin: 1rem 0;
+}
+
+.revamp-hero-strip p {
+  color: rgba(255,255,255,.82);
+  font-size: 1.08rem;
+}
+
+.revamp-actions,
+.revamp-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .85rem;
+  margin-top: 1.35rem;
+}
+
+.revamp-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .8rem;
+  margin-top: 1.5rem;
+}
+
+.revamp-metric,
+.revamp-panel,
+.revamp-card,
+.revamp-package,
+.subpage-modern .content-card,
+.subpage-modern .feature-card,
+.subpage-modern .price-card {
+  border: 1px solid var(--energy-line);
+  border-radius: 1.35rem;
+  background: #fff;
+  box-shadow: 0 18px 42px rgba(15,23,42,.08);
+}
+
+.revamp-metric {
+  background: rgba(255,255,255,.08);
+  color: #fff;
+  padding: 1rem;
+  border-color: rgba(255,255,255,.14);
+}
+
+.revamp-metric strong {
+  display: block;
+  font-size: 1.35rem;
+}
+
+.revamp-panel {
+  padding: 1.25rem;
+  background: rgba(255,255,255,.96);
+}
+
+.revamp-panel h3 {
+  color: var(--energy-dark);
+}
+
+.revamp-panel-list {
+  display: grid;
+  gap: .8rem;
+  margin-top: 1rem;
+}
+
+.revamp-panel-item {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr;
+  gap: .8rem;
+  align-items: start;
+  padding: .9rem;
+  border-radius: 1rem;
+  background: #f8fafc;
+}
+
+.revamp-panel-item i,
+.revamp-card i,
+.revamp-package i,
+.subpage-modern .feature-card i {
+  color: var(--energy-green);
+}
+
+.energycare-injected .head {
+  max-width: 900px;
+  margin-inline: auto;
+}
+
+.revamp-card-grid,
+.revamp-package-grid,
+.subpage-modern .feature-grid,
+.subpage-modern .pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.revamp-card,
+.revamp-package,
+.subpage-modern .content-card,
+.subpage-modern .feature-card,
+.subpage-modern .price-card {
+  padding: 1.3rem;
+}
+
+.revamp-card h3,
+.revamp-package h3,
+.subpage-modern h2,
+.subpage-modern h3 {
+  color: var(--energy-dark);
+}
+
+.revamp-card p,
+.revamp-package p,
+.subpage-modern p,
+.subpage-modern li {
+  color: #475569;
+}
+
+.revamp-flow {
+  counter-reset: step;
+  display: grid;
+  gap: 1rem;
+}
+
+.revamp-flow li {
+  list-style: none;
+  position: relative;
+  padding: 1rem 1rem 1rem 3.4rem;
+  border-radius: 1rem;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.revamp-flow li::before {
+  counter-increment: step;
+  content: counter(step);
+  position: absolute;
+  left: 1rem;
+  top: 1rem;
+  width: 1.7rem;
+  height: 1.7rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--energy-green);
+  color: #fff;
+  font-weight: 800;
+}
+
+.revamp-cta-band {
+  background: linear-gradient(135deg, #0f766e, #0f172a);
+  color: #fff;
+}
+
+.revamp-cta-band h2,
+.revamp-cta-band p {
+  color: #fff;
+}
+
+.subpage-modern .page-hero {
+  background: radial-gradient(circle at top right, rgba(245,158,11,.24), transparent 40%), linear-gradient(135deg, #08111f, #0f766e);
+}
+
+.subpage-modern .check-list {
+  padding: 0;
+  margin: 1rem 0 0;
+  display: grid;
+  gap: .7rem;
+}
+
+.subpage-modern .check-list li {
+  list-style: none;
+  display: flex;
+  gap: .65rem;
+  align-items: flex-start;
+}
+
+.subpage-modern .check-list i {
+  margin-top: .2rem;
+  color: var(--energy-green);
+}
+
+.subpage-modern .price-card strong {
+  display: block;
+  color: var(--energy-green);
+  font-size: 1.4rem;
+  margin: .6rem 0;
+}
+
+.nav-quote-link {
+  white-space: nowrap;
+}
+
+@media (max-width: 991px) {
+  .revamp-hero-grid,
+  .revamp-split {
+    grid-template-columns: 1fr;
+  }
+  .revamp-card-grid,
+  .revamp-package-grid,
+  .subpage-modern .feature-grid,
+  .subpage-modern .pricing-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .revamp-metrics,
+  .revamp-card-grid,
+  .revamp-package-grid,
+  .subpage-modern .feature-grid,
+  .subpage-modern .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+  .revamp-hero-strip {
+    padding-top: 2.5rem;
+  }
+}
