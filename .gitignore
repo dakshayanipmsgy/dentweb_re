@@ -3,3 +3,4 @@
 storage/*.sqlite
 storage/*.db
 storage/*.wav
+storage/site/website_settings.json
