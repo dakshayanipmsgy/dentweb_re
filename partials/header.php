@@ -4,6 +4,8 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 $ws = website_settings();
 $global = $ws['global'] ?? [];
 ?>
+<link rel="stylesheet" href="/energycare-revamp.css">
+<script defer src="/home-energycare.js"></script>
 <header class="global-header" data-component="global-header">
   <div class="container header-inner">
     <a href="/index.php" class="brand" aria-label="Dakshayani Enterprises home">
@@ -13,37 +15,40 @@ $global = $ws['global'] ?? [];
 
     <nav class="nav-desktop" aria-label="Primary navigation">
       <a href="/index.php" class="nav-link">Home</a>
-      <a href="/about.html" class="nav-link">About Us</a>
+      <a href="/about.html" class="nav-link">About</a>
       <div class="nav-dropdown">
         <button type="button" class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
-          Solutions
+          Solar &amp; Energy
           <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
         </button>
         <div class="nav-dropdown-menu" role="menu">
-          <a href="/solar-projects.html" class="nav-link" role="menuitem">Solar Projects</a>
-          <a href="/govt-epc.html" class="nav-link" role="menuitem">Govt. EPC &amp; Infrastructure</a>
-          <a href="/pm-surya-ghar.html" class="nav-link" role="menuitem">PM Surya Ghar Subsidy</a>
-          <a href="/meera-gh2.html" class="nav-link" role="menuitem">Meera GH2 Initiative</a>
-          <a href="/e-mobility.html" class="nav-link" role="menuitem">E-Mobility &amp; Charging</a>
+          <a href="/pm-surya-ghar.html" class="nav-link" role="menuitem">PM Surya Ghar</a>
+          <a href="/solar-projects.html" class="nav-link" role="menuitem">Solar EPC Projects</a>
+          <a href="/energycare.html" class="nav-link" role="menuitem">EnergyCare AMC</a>
+          <a href="/powerstore.html" class="nav-link" role="menuitem">PowerStore Materials</a>
+          <a href="/e-mobility.html" class="nav-link" role="menuitem">EV Charging</a>
+          <a href="/govt-epc.html" class="nav-link" role="menuitem">Govt. EPC</a>
         </div>
       </div>
       <div class="nav-dropdown">
         <button type="button" class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
-          Knowledge Hub
+          Growth Hub
           <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
         </button>
         <div class="nav-dropdown-menu" role="menu">
-          <a href="/knowledge-hub.html" class="nav-link" role="menuitem">Knowledge Hub</a>
-          <a href="/innovation-tech.html" class="nav-link" role="menuitem">Innovation &amp; Tech</a>
-          <a href="/blog/index.php" class="nav-link" role="menuitem">Blog &amp; Insights</a>
-          <a href="/calculator.html" class="nav-link" role="menuitem">Solar Calculator</a>
+          <a href="/installer-network.html" class="nav-link" role="menuitem">Installer Network</a>
           <a href="/solar-and-finance.php" class="nav-link" role="menuitem">Solar &amp; Finance</a>
-          <a href="/policies.html" class="nav-link" role="menuitem">Policies &amp; Compliance</a>
+          <a href="/calculator.html" class="nav-link" role="menuitem">Solar Calculator</a>
+          <a href="/blog/index.php" class="nav-link" role="menuitem">Blog &amp; Insights</a>
+          <a href="/knowledge-hub.html" class="nav-link" role="menuitem">Knowledge Hub</a>
+          <a href="/meera-gh2.html" class="nav-link" role="menuitem">Meera GH2</a>
+          <a href="/policies.html" class="nav-link" role="menuitem">Policies</a>
         </div>
       </div>
     </nav>
 
     <div class="nav-actions" role="group" aria-label="Header quick actions">
+      <a href="/contact.html" class="btn btn-primary nav-quote-link">Get Quote</a>
       <a href="/login.php" class="btn btn-secondary nav-login-link">Login Portal</a>
       <span class="nav-theme-badge" data-site-theme-label hidden></span>
     </div>
@@ -69,26 +74,29 @@ $global = $ws['global'] ?? [];
     </div>
     <div class="nav-mobile-section" aria-label="Primary pages">
       <a href="/index.php">Home</a>
-      <a href="/about.html">About Us</a>
+      <a href="/about.html">About</a>
+      <a href="/contact.html">Get Quote / Contact</a>
     </div>
     <div class="nav-mobile-divider" role="presentation"></div>
-    <div class="nav-mobile-section" aria-label="Solutions">
-      <p class="nav-mobile-label">Solutions</p>
-      <a href="/solar-projects.html">Solar Projects</a>
-      <a href="/govt-epc.html">Govt. EPC &amp; Infrastructure</a>
-      <a href="/pm-surya-ghar.html">PM Surya Ghar Subsidy</a>
-      <a href="/meera-gh2.html">Meera GH2 Initiative</a>
-      <a href="/e-mobility.html">E-Mobility &amp; Charging</a>
+    <div class="nav-mobile-section" aria-label="Solar and energy services">
+      <p class="nav-mobile-label">Solar &amp; Energy</p>
+      <a href="/pm-surya-ghar.html">PM Surya Ghar</a>
+      <a href="/solar-projects.html">Solar EPC Projects</a>
+      <a href="/energycare.html">EnergyCare AMC</a>
+      <a href="/powerstore.html">PowerStore Materials</a>
+      <a href="/e-mobility.html">EV Charging</a>
+      <a href="/govt-epc.html">Govt. EPC</a>
     </div>
     <div class="nav-mobile-divider" role="presentation"></div>
-    <div class="nav-mobile-section" aria-label="Knowledge Hub">
-      <p class="nav-mobile-label">Knowledge Hub</p>
-      <a href="/knowledge-hub.html">Knowledge Hub</a>
-      <a href="/innovation-tech.html">Innovation &amp; Tech</a>
-      <a href="/blog/index.php">Blog &amp; Insights</a>
-      <a href="/calculator.html">Solar Calculator</a>
+    <div class="nav-mobile-section" aria-label="Growth hub">
+      <p class="nav-mobile-label">Growth Hub</p>
+      <a href="/installer-network.html">Installer Network</a>
       <a href="/solar-and-finance.php">Solar &amp; Finance</a>
-      <a href="/policies.html">Policies &amp; Compliance</a>
+      <a href="/calculator.html">Solar Calculator</a>
+      <a href="/blog/index.php">Blog &amp; Insights</a>
+      <a href="/knowledge-hub.html">Knowledge Hub</a>
+      <a href="/meera-gh2.html">Meera GH2</a>
+      <a href="/policies.html">Policies</a>
     </div>
     <div class="nav-mobile-divider" role="presentation"></div>
 
@@ -96,9 +104,7 @@ $global = $ws['global'] ?? [];
       <a href="/login.php" class="btn btn-secondary" data-close-mobile>Login Portal</a>
       <p class="nav-mobile-theme" data-site-theme-label hidden></p>
     </div>
-
   </nav>
-
 </header>
 
 <div class="site-search-overlay" data-site-search hidden>
