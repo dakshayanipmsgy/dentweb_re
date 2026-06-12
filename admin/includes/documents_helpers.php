@@ -3633,6 +3633,7 @@ function documents_quote_prepare(array $quote): array
         : (bool) ($quote['show_tax_breakup'] ?? false);
     $quote['gst_mode_snapshot'] = safe_text((string) ($quote['gst_mode_snapshot'] ?? ''));
     $quote['gst_slabs_snapshot'] = is_array($quote['gst_slabs_snapshot'] ?? null) ? $quote['gst_slabs_snapshot'] : [];
+    $quote['calc'] = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
     $quote['tax_breakdown'] = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : [];
     if ($quote['tax_breakdown'] === [] && is_array($quote['calc']['tax_breakdown'] ?? null)) {
         $quote['tax_breakdown'] = (array) $quote['calc']['tax_breakdown'];
