@@ -1741,14 +1741,40 @@ $canAcceptQuote = $isQuotationAdmin && !$quoteArchived && !$quoteLocked && in_ar
     window.clearTimeout(toastTimer);
     toastTimer=window.setTimeout(()=>toast.classList.remove('show'),3000);
   };
+  const responseLooksLikeLogin=(text)=>/<form[^>]+(?:login|sign-in)|<title>[^<]*(?:login|sign in)/i.test(text);
+  const responseLooksLikePhpError=(text)=>/(fatal error|parse error|uncaught (?:error|exception)|<b>warning<\/b>|<b>notice<\/b>)/i.test(text);
+  const responseFailureMessage=(response,text,context)=>{
+    if(response.redirected||responseLooksLikeLogin(text))return 'Your session may have expired. Please reload the page, sign in, and try again.';
+    if(responseLooksLikePhpError(text))return `${context} The server returned a PHP error.`;
+    return `${context} The server returned an unexpected response${response.status?` (HTTP ${response.status})`:''}.`;
+  };
+  const readJsonResponse=async(response)=>{
+    const text=await response.text();
+    const contentType=String(response.headers.get('content-type')||'').toLowerCase();
+    if(response.redirected||!contentType.includes('json'))throw new Error(responseFailureMessage(response,text,'Quotation action failed.'));
+    try{
+      return JSON.parse(text);
+    }catch(error){
+      throw new Error('Quotation action failed because the server returned malformed JSON. Please reload the page and try again.');
+    }
+  };
+  const resolveFormAction=(form)=>{
+    const rawAction=form.getAttribute('action')||window.location.href;
+    try{
+      return new URL(rawAction,window.location.href).href;
+    }catch(error){
+      return window.location.href;
+    }
+  };
   const refreshQuotationList=async()=>{
     const currentList=document.getElementById('quotationList');
     if(!currentList)return;
     const response=await fetch(window.location.href,{credentials:'same-origin',headers:{'X-Requested-With':'quotation-list'}});
-    if(!response.ok)throw new Error('Unable to refresh quotation list.');
-    const parsed=new DOMParser().parseFromString(await response.text(),'text/html');
+    const text=await response.text();
+    if(!response.ok||response.redirected||responseLooksLikeLogin(text)||responseLooksLikePhpError(text))throw new Error(responseFailureMessage(response,text,'Quotation was updated, but the quotation list could not be refreshed.'));
+    const parsed=new DOMParser().parseFromString(text,'text/html');
     const nextList=parsed.getElementById('quotationList');
-    if(!nextList)throw new Error('Quotation list was not found.');
+    if(!nextList)throw new Error('Quotation was updated, but the refreshed quotation list was not found. Please reload the page.');
     currentList.replaceWith(nextList);
   };
 
@@ -1764,9 +1790,9 @@ $canAcceptQuote = $isQuotationAdmin && !$quoteArchived && !$quoteLocked && in_ar
         const formData=new FormData(form);
         if(submitter?.name)formData.set(submitter.name,submitter.value);
         formData.set('ajax','1');
-        const response=await fetch(form.action||window.location.href,{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'},body:formData});
-        const payload=await response.json();
-        if(!payload?.ok)throw new Error(payload?.message||'Quotation action failed.');
+        const response=await fetch(resolveFormAction(form),{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'},body:formData});
+        const payload=await readJsonResponse(response);
+        if(!response.ok||!payload?.ok)throw new Error(payload?.message||`Quotation action failed (HTTP ${response.status}).`);
         showToast(payload.message||'Quotation updated.');
         if(payload.redirect_url){window.location.assign(String(payload.redirect_url));return;}
         const row=form.closest('tr[data-quote-id]');
