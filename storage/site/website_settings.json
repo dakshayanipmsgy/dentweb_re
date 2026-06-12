@@ -1,68 +1,82 @@
 {
-    "global": {
-        "site_tagline": "\u2b50\ufe0f Smart Solar for Every Home in Jharkhand \u2b50\ufe0f Smart Solar for Every Home in Jharkhand \u2b50\ufe0f",
-        "header_callout": "\u2b50\ufe0f PM Surya Ghar Muft Bijli Yojana specialist for Ranchi & Jharkhand \u2b50\ufe0f PM Surya Ghar Muft Bijli Yojana specialist for Ranchi & Jharkhand \u2b50\ufe0f",
-        "tagline_color": "#DA5100",
-        "tagline_font_size": "large",
-        "tagline_font_weight": "bold",
-        "callout_color": "#4E7A27",
-        "callout_font_size": "large",
-        "callout_font_weight": "bold",
-        "subheader_bg_color": "#000000"
+  "global": {
+    "site_tagline": "Solar EPC • EnergyCare AMC • Storage • EV Charging • PowerStore",
+    "header_callout": "Jharkhand-based solar, service and energy growth partner for homes, businesses and institutions",
+    "tagline_color": "#0F766E",
+    "tagline_font_size": "large",
+    "tagline_font_weight": "bold",
+    "callout_color": "#0F172A",
+    "callout_font_size": "normal",
+    "callout_font_weight": "semibold",
+    "subheader_bg_color": "#ECFDF5"
+  },
+  "hero": {
+    "kicker": "Solar • Storage • Service • EV Charging",
+    "title": "Dakshayani EnergyCare for 25 years of reliable solar performance",
+    "subtitle": "We install, maintain, monitor and upgrade solar systems for homes, businesses, institutions and government projects across Jharkhand and Eastern India.",
+    "primary_image": "/images/hero/hero.png",
+    "primary_caption": "Solar EPC execution backed by service, documentation and long-term support.",
+    "primary_button_text": "Book Solar / EnergyCare Consultation",
+    "primary_button_link": "/contact.html",
+    "secondary_button_text": "Explore Solar & Finance",
+    "secondary_button_link": "/solar-and-finance.php",
+    "announcement_badge": "Future-ready energy partner",
+    "announcement_text": "PM Surya Ghar, commercial solar, AMC, hybrid backup, EV charging and solar material support under one brand."
+  },
+  "sections": {
+    "what_our_customers_say_title": "Trusted by households, institutions and project clients",
+    "what_our_customers_say_subtitle": "Dakshayani Enterprises is building a long-term energy service network around installation quality, documentation support and after-sales care.",
+    "seasonal_offer_title": "EnergyCare and Solar Upgrade Offers",
+    "seasonal_offer_text": "Book solar health checks, AMC packages, PM Surya Ghar support, hybrid backup planning and commercial solar consultations.",
+    "cta_strip_title": "Ready to build 25 years of solar savings?",
+    "cta_strip_text": "Share your electricity bill, site photos or existing solar issue and our team will guide you with the next practical step.",
+    "cta_strip_cta_text": "Talk to Dakshayani",
+    "cta_strip_cta_link": "/contact.html"
+  },
+  "testimonials": [
+    {
+      "name": "Residential Solar Customer",
+      "location": "Ranchi",
+      "message": "Dakshayani handled solar installation, paperwork and follow-up in a practical way. The team remained reachable after installation.",
+      "system_size": "3 kW",
+      "type": "PM Surya Ghar"
     },
-    "hero": {
-        "kicker": "Trusted EPC partner in Jharkhand",
-        "title": "Go Solar with Dakshayani Enterprises",
-        "subtitle": "Rooftop solar systems with subsidy, EMI support, and full CMC.",
-        "primary_image": "/images/hero/hero.png",
-        "primary_caption": "Dakshayani engineers on site for a rooftop commissioning.",
-        "primary_button_text": "Book Free Site Visit",
-        "primary_button_link": "/contact.html",
-        "secondary_button_text": "Check Subsidy Eligibility",
-        "secondary_button_link": "/pm-surya-ghar.html",
-        "announcement_badge": "PM Surya Ghar \u2013 Up to 300 units free*",
-        "announcement_text": "Limited window for subsidy applications. Get your documents verified today."
-    },
-    "sections": {
-        "what_our_customers_say_title": "What Our Customers Say",
-        "what_our_customers_say_subtitle": "Homeowners and institutions across Jharkhand trust Dakshayani for hassle-free solar installations.",
-        "seasonal_offer_title": "Seasonal Solar Offers",
-        "seasonal_offer_text": "Festive offers on 3 kW to 10 kW rooftop systems. Extra warranty and free service visits on select packages.",
-        "cta_strip_title": "Ready to lock in 25 years of solar savings?",
-        "cta_strip_text": "Share your latest electricity bill and we will deliver a personalised payback report within 24 hours.",
-        "cta_strip_cta_text": "Email Your Bill",
-        "cta_strip_cta_link": "mailto:connect@dakshayani.co.in"
-    },
-    "testimonials": [
-        {
-            "name": "Rahul Sharma",
-            "location": "Ranchi",
-            "message": "Dakshayani Enterprises handled everything from subsidy paperwork to installation. My bill is now almost zero.",
-            "system_size": "5 kW",
-            "type": "Residential"
-        },
-        {
-            "name": "ITI College Baghmara",
-            "location": "Dhanbad",
-            "message": "Our 20 kW system has significantly reduced diesel generator usage and monthly expenses.",
-            "system_size": "40 kW",
-            "type": "Institutional"
-        }
-    ],
-    "seasonal_offers": [
-        {
-            "label": "Winter Solar Upgrade Offer",
-            "description": "Special pricing for 5 kW+ systems with 5-year CMC included.",
-            "valid_till": "2025-12-31",
-            "cta_text": "Enquire Now",
-            "cta_link": "/contact.html"
-        }
-    ],
-    "theme": {
-        "primary_color": "#76BB40",
-        "secondary_color": "#00A1D8",
-        "accent_color": "#669D34",
-        "button_style": "solid-heavy",
-        "card_style": "strong"
+    {
+      "name": "Institutional Project Client",
+      "location": "Jharkhand",
+      "message": "The team understands EPC execution, documentation and site coordination, which is important for institutional and government-style projects.",
+      "system_size": "20 kW+",
+      "type": "Institutional"
     }
+  ],
+  "seasonal_offers": [
+    {
+      "label": "Solar Health Check",
+      "description": "Inspection of generation, inverter status, wiring, earthing and visible system issues for existing rooftop solar owners.",
+      "valid_till": "2026-12-31",
+      "cta_text": "Book EnergyCare Visit",
+      "cta_link": "/energycare.html"
+    },
+    {
+      "label": "Commercial Solar Planning Desk",
+      "description": "Bill analysis, load study and savings direction for schools, petrol pumps, offices, hospitals and MSMEs.",
+      "valid_till": "2026-12-31",
+      "cta_text": "Start Commercial Planning",
+      "cta_link": "/contact.html"
+    },
+    {
+      "label": "Installer & Material Partner Intake",
+      "description": "Apply for installer network, solar material support, PowerStore sourcing and district-level partnership discussions.",
+      "valid_till": "2026-12-31",
+      "cta_text": "Apply as Partner",
+      "cta_link": "/installer-network.html"
+    }
+  ],
+  "theme": {
+    "primary_color": "#0F766E",
+    "secondary_color": "#0F172A",
+    "accent_color": "#F59E0B",
+    "button_style": "rounded",
+    "card_style": "strong"
+  }
 }
