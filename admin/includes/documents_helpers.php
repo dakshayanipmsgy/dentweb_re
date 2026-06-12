@@ -3085,76 +3085,27 @@ function documents_quote_can_edit(array $quote, string $viewerType, string $view
 function documents_quote_has_valid_acceptance_data(array $quote): array
 {
     $snapshot = documents_quote_resolve_snapshot($quote);
-    $name = documents_first_non_empty_string([
-        $quote['customer_name'] ?? '',
-        $snapshot['name'] ?? '',
-    ]);
-    $mobile = '';
-    foreach ([
-        $quote['customer_mobile'] ?? '',
-        $snapshot['mobile'] ?? '',
-        $quote['source']['lead_mobile'] ?? '',
-    ] as $mobileCandidate) {
-        $normalizedMobile = normalize_customer_mobile((string) $mobileCandidate);
-        if ($normalizedMobile !== '') {
-            $mobile = $normalizedMobile;
-            break;
-        }
-    }
-    $siteAddress = documents_first_non_empty_string([
-        $quote['site_address'] ?? '',
-        $snapshot['address'] ?? '',
-    ]);
+    $name = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
+    $mobile = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+    $siteAddress = safe_text((string) ($quote['site_address'] ?? $snapshot['address'] ?? ''));
     $capacity = safe_text((string) ($quote['capacity_kwp'] ?? ''));
     $amount = (float) ($quote['input_total_gst_inclusive'] ?? 0);
-    $missingFields = [];
 
-    if ($name === '') {
-        $missingFields[] = 'customer_name';
+    if ($name === '' || $mobile === '' || $siteAddress === '') {
+        return ['ok' => false, 'error' => 'Customer name, mobile, and site address are required before acceptance.'];
     }
-    if ($mobile === '') {
-        $missingFields[] = 'customer_mobile';
-    }
-    if ($siteAddress === '') {
-        $missingFields[] = 'site_address';
-    }
-    if ($capacity === '') {
-        $missingFields[] = 'capacity_kwp';
-    }
-    if ($amount <= 0) {
-        $missingFields[] = 'total_amount';
+    if ($capacity === '' || $amount <= 0) {
+        return ['ok' => false, 'error' => 'Capacity and total amount are required before acceptance.'];
     }
 
-    if (array_intersect($missingFields, ['customer_name', 'customer_mobile', 'site_address']) !== []) {
-        return [
-            'ok' => false,
-            'error' => 'Complete customer name, mobile, and site address before acceptance.',
-            'missing_fields' => $missingFields,
-        ];
-    }
-    if ($missingFields !== []) {
-        return [
-            'ok' => false,
-            'error' => 'Complete capacity and total amount before acceptance.',
-            'missing_fields' => $missingFields,
-        ];
-    }
-
-    return ['ok' => true, 'error' => '', 'missing_fields' => []];
+    return ['ok' => true, 'error' => ''];
 }
 
 function documents_upsert_customer_from_quote(array $quote): array
 {
     $snapshot = documents_quote_resolve_snapshot($quote);
-    $mobile = '';
-    foreach ([$quote['customer_mobile'] ?? '', $snapshot['mobile'] ?? ''] as $mobileCandidate) {
-        $normalizedMobile = normalize_customer_mobile((string) $mobileCandidate);
-        if ($normalizedMobile !== '') {
-            $mobile = $normalizedMobile;
-            break;
-        }
-    }
-    $name = documents_first_non_empty_string([$quote['customer_name'] ?? '', $snapshot['name'] ?? '']);
+    $mobile = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+    $name = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
     if ($mobile === '' || $name === '') {
         return ['ok' => false, 'error' => 'Cannot create customer without mobile and name.', 'customer' => null];
     }
