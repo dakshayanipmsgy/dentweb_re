@@ -14,8 +14,287 @@ const PARTIALS = {
 
 // Keep these network-failure fallbacks in sync with partials/header.php and partials/footer.html.
 const INLINE_PARTIALS = {
-  header: "<header class=\"global-header\" data-component=\"global-header\">\n  <div class=\"energy-topbar\">\n    <div class=\"container\"><span>Jharkhand\u2019s long-term energy services company</span><a href=\"tel:+917070278178\"><i class=\"fa-solid fa-phone\"></i> +91 70702 78178</a></div>\n  </div>\n  <div class=\"container header-inner\">\n    <a href=\"/index.php\" class=\"brand\" aria-label=\"Dakshayani Enterprises home\">\n      <img src=\"/images/logo/New dakshayani logo centered small.png\" alt=\"Dakshayani Enterprises\" class=\"brand-logo-em\" />\n      <span class=\"brand-text\">Dakshayani <small>Energy Services</small></span>\n    </a>\n    <nav class=\"nav-desktop\" aria-label=\"Primary navigation\">\n      <a href=\"/index.php\" class=\"nav-link\">Home</a>\n      <div class=\"nav-dropdown\">\n        <button type=\"button\" class=\"nav-link nav-dropdown-toggle\" aria-haspopup=\"true\" aria-expanded=\"false\">Energy Solutions <i class=\"fa-solid fa-chevron-down\" aria-hidden=\"true\"></i></button>\n        <div class=\"nav-dropdown-menu nav-mega-menu\" role=\"menu\">\n          <a href=\"/pm-surya-ghar.html\" class=\"nav-link\" role=\"menuitem\"><strong>Home Solar</strong><span>PM Surya Ghar process support</span></a>\n          <a href=\"/commercial-industrial-solar.html\" class=\"nav-link\" role=\"menuitem\"><strong>Commercial &amp; Industrial</strong><span>Solar EPC for institutions and businesses</span></a>\n          <a href=\"/hybrid-solar-battery.html\" class=\"nav-link\" role=\"menuitem\"><strong>Hybrid &amp; Battery</strong><span>Backup-ready energy systems</span></a>\n          <a href=\"/ev-charging-solar.html\" class=\"nav-link\" role=\"menuitem\"><strong>EV Charging</strong><span>Solar-ready charging infrastructure</span></a>\n          <a href=\"/govt-epc.html\" class=\"nav-link\" role=\"menuitem\"><strong>Government EPC</strong><span>Compliant project delivery</span></a>\n        </div>\n      </div>\n      <div class=\"nav-dropdown\">\n        <button type=\"button\" class=\"nav-link nav-dropdown-toggle\" aria-haspopup=\"true\" aria-expanded=\"false\">Services &amp; Partners <i class=\"fa-solid fa-chevron-down\" aria-hidden=\"true\"></i></button>\n        <div class=\"nav-dropdown-menu\" role=\"menu\">\n          <a href=\"/energycare-amc.html\" class=\"nav-link\" role=\"menuitem\">Dakshayani EnergyCare AMC/O&amp;M</a>\n          <a href=\"/solar-material-supply.html\" class=\"nav-link\" role=\"menuitem\">Solar Material Supply</a>\n          <a href=\"/installer-partner-network.html\" class=\"nav-link\" role=\"menuitem\">Installer / Partner Network</a>\n          <a href=\"/solar-and-finance.php\" class=\"nav-link\" role=\"menuitem\">Solar &amp; Finance</a>\n        </div>\n      </div>\n      <a href=\"/about.html\" class=\"nav-link\">About</a>\n      <a href=\"/knowledge-hub.html\" class=\"nav-link\">Knowledge</a>\n    </nav>\n    <div class=\"nav-actions\" role=\"group\" aria-label=\"Header quick actions\">\n      <a href=\"/contact.php\" class=\"btn btn-primary nav-consult-link\">Talk to an expert</a>\n      <a href=\"/login.php\" class=\"btn btn-secondary nav-login-link\">Login</a>\n    </div>\n    <button type=\"button\" class=\"menu-btn\" aria-label=\"Open navigation menu\" aria-controls=\"mobile-menu\" aria-expanded=\"false\" id=\"mobile-menu-button\"><i class=\"fas fa-bars\" aria-hidden=\"true\"></i><span class=\"sr-only\">Toggle navigation</span></button>\n  </div>\n  <nav id=\"mobile-menu\" class=\"nav-mobile\" aria-label=\"Mobile navigation\">\n    <div class=\"nav-mobile-header\"><strong>Explore Dakshayani</strong><button type=\"button\" class=\"nav-mobile-close\" data-close-mobile aria-label=\"Close menu\"><i class=\"fa-solid fa-xmark\"></i></button></div>\n    <div class=\"nav-mobile-section\"><a href=\"/index.php\">Home</a><a href=\"/about.html\">About Us</a></div>\n    <div class=\"nav-mobile-divider\"></div>\n    <div class=\"nav-mobile-section\"><p class=\"nav-mobile-label\">Energy solutions</p><a href=\"/pm-surya-ghar.html\">Home Solar / PM Surya Ghar</a><a href=\"/commercial-industrial-solar.html\">Commercial &amp; Industrial Solar</a><a href=\"/hybrid-solar-battery.html\">Hybrid Solar &amp; Battery</a><a href=\"/ev-charging-solar.html\">EV Charging</a><a href=\"/govt-epc.html\">Government EPC</a></div>\n    <div class=\"nav-mobile-divider\"></div>\n    <div class=\"nav-mobile-section\"><p class=\"nav-mobile-label\">Lifetime support</p><a href=\"/energycare-amc.html\">EnergyCare AMC / O&amp;M</a><a href=\"/solar-material-supply.html\">Solar Material Supply</a><a href=\"/installer-partner-network.html\">Installer / Partner Network</a><a href=\"/knowledge-hub.html\">Knowledge Hub</a><a href=\"/solar-and-finance.php\">Solar &amp; Finance</a></div>\n    <div class=\"nav-mobile-divider\"></div>\n    <div class=\"nav-mobile-section\"><a href=\"/contact.php\" class=\"btn btn-primary\" data-close-mobile>Talk to an expert</a><a href=\"/login.php\" class=\"btn btn-secondary\" data-close-mobile>Login Portal</a></div>\n  </nav>\n</header>\n",
-  footer: "<div class=\"container footer-content energy-footer-grid\">\n  <div class=\"footer-intro\">\n    <div class=\"footer-brand\"><img src=\"/images/logo/New dakshayani logo centered small.png\" alt=\"Dakshayani Enterprises\" class=\"brand-logo-em\" /><span class=\"brand-text\">Dakshayani Enterprises</span></div>\n    <p>Jharkhand\u2019s reliable solar, storage and EnergyCare company for households, institutions, businesses and government projects.</p>\n    <p class=\"footer-promise\">Solar lagwana easy hai. Solar ko 25 saal chalwana expertise ka kaam hai.</p>\n    <div class=\"footer-social\" aria-label=\"Contact links\"><a href=\"https://wa.me/917070278178\" target=\"_blank\" rel=\"noopener\" aria-label=\"WhatsApp\"><i class=\"fa-brands fa-whatsapp\"></i></a><a href=\"mailto:connect@dakshayani.co.in\" aria-label=\"Email\"><i class=\"fa-solid fa-envelope\"></i></a><a href=\"tel:+917070278178\" aria-label=\"Call\"><i class=\"fa-solid fa-phone\"></i></a></div>\n  </div>\n  <div><h4>Energy Solutions</h4><ul class=\"footer-links\"><li><a href=\"/pm-surya-ghar.html\">Home Solar &amp; PM Surya Ghar</a></li><li><a href=\"/commercial-industrial-solar.html\">Commercial &amp; Industrial Solar</a></li><li><a href=\"/hybrid-solar-battery.html\">Hybrid Solar &amp; Battery</a></li><li><a href=\"/ev-charging-solar.html\">EV Charging</a></li><li><a href=\"/govt-epc.html\">Government EPC</a></li></ul></div>\n  <div><h4>Services &amp; Partners</h4><ul class=\"footer-links\"><li><a href=\"/energycare-amc.html\">EnergyCare AMC / O&amp;M</a></li><li><a href=\"/solar-material-supply.html\">Solar Material Supply</a></li><li><a href=\"/installer-partner-network.html\">Installer / Partner Network</a></li><li><a href=\"/solar-and-finance.php\">Solar &amp; Finance</a></li><li><a href=\"/calculator.html\">Solar Calculator</a></li></ul></div>\n  <div><h4>Company</h4><ul class=\"footer-links\"><li><a href=\"/about.html\">About Dakshayani</a></li><li><a href=\"/knowledge-hub.html\">Knowledge Hub</a></li><li><a href=\"/blog/index.php\">Blog &amp; Insights</a></li><li><a href=\"/policies.html\">Policies &amp; Compliance</a></li><li><a href=\"/careers.html\">Careers</a></li><li><a href=\"/contact.php\">Contact &amp; Support</a></li><li><a href=\"/login.php\">Customer Login</a></li></ul></div>\n</div>\n<div class=\"footer-trust\"><div class=\"container\"><h4>Built around long-term trust</h4><ul class=\"trust-badges\"><li><i class=\"fa-solid fa-file-shield\"></i><span>Documentation &amp; compliance</span></li><li><i class=\"fa-solid fa-solar-panel\"></i><span>PM Surya Ghar process support</span></li><li><i class=\"fa-solid fa-gauge-high\"></i><span>Net-metering support</span></li><li><i class=\"fa-solid fa-screwdriver-wrench\"></i><span>After-sales &amp; EnergyCare</span></li></ul></div></div>\n<div class=\"container footer-bottom\"><p>&copy; <span data-current-year></span> Dakshayani Enterprises. All rights reserved. Office: Maa Tara, Kilburn Colony, Hinoo, Ranchi, Jharkhand-834002.</p></div>\n",
+  header: `
+    <header class="global-header" data-component="global-header">
+      <div class="container header-inner">
+        <a href="/index.php" class="brand" aria-label="Dakshayani Enterprises home">
+          <img src="/images/logo/New dakshayani logo centered small.png" alt="Dakshayani Enterprises" class="brand-logo-em" />
+          <span class="brand-text">Dakshayani Enterprises</span>
+        </a>
+
+        <nav class="nav-desktop" aria-label="Primary navigation">
+          <a href="/index.php" class="nav-link">Home</a>
+          <a href="/about.html" class="nav-link">About Us</a>
+          <div class="nav-dropdown">
+            <button type="button" class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
+              Solutions
+              <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+            </button>
+            <div class="nav-dropdown-menu" role="menu">
+              <a href="/solar-projects.html" class="nav-link" role="menuitem">Solar Projects</a>
+              <a href="/govt-epc.html" class="nav-link" role="menuitem">Govt. EPC &amp; Infrastructure</a>
+              <a href="/pm-surya-ghar.html" class="nav-link" role="menuitem">PM Surya Ghar Subsidy</a>
+              <a href="/meera-gh2.html" class="nav-link" role="menuitem">Meera GH2 Initiative</a>
+              <a href="/e-mobility.html" class="nav-link" role="menuitem">E-Mobility &amp; Charging</a>
+            </div>
+          </div>
+          <div class="nav-dropdown">
+            <button type="button" class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
+              Knowledge Hub
+              <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+            </button>
+            <div class="nav-dropdown-menu" role="menu">
+          <a href="/knowledge-hub.html" class="nav-link" role="menuitem">Knowledge Hub</a>
+          <a href="/innovation-tech.html" class="nav-link" role="menuitem">Innovation &amp; Tech</a>
+          <a href="/blog/index.php" class="nav-link" role="menuitem">Blog &amp; Insights</a>
+          <a href="/calculator.html" class="nav-link" role="menuitem">Solar Calculator</a>
+          <a href="/solar-and-finance.php" class="nav-link" role="menuitem">Solar &amp; Finance</a>
+          <a href="/policies.html" class="nav-link" role="menuitem">Policies &amp; Compliance</a>
+            </div>
+          </div>
+        </nav>
+
+        <div class="nav-actions" role="group" aria-label="Header quick actions">
+          <a href="/login.php" class="btn btn-secondary nav-login-link">Login Portal</a>
+          <span class="nav-theme-badge" data-site-theme-label hidden></span>
+        </div>
+
+        <button
+          type="button"
+          class="menu-btn"
+          aria-label="Open navigation menu"
+          aria-controls="mobile-menu"
+          aria-expanded="false"
+          id="mobile-menu-button"
+        >
+          <i class="fas fa-bars" aria-hidden="true"></i>
+          <span class="sr-only">Toggle navigation</span>
+        </button>
+      </div>
+
+      <nav id="mobile-menu" class="nav-mobile" aria-label="Mobile navigation">
+        <div class="nav-mobile-header">
+           <button type="button" class="nav-mobile-close" data-close-mobile aria-label="Close menu">
+             <i class="fa-solid fa-xmark"></i>
+           </button>
+        </div>
+        <div class="nav-mobile-section" aria-label="Primary pages">
+          <a href="/index.php">Home</a>
+          <a href="/about.html">About Us</a>
+        </div>
+        <div class="nav-mobile-divider" role="presentation"></div>
+        <div class="nav-mobile-section" aria-label="Solutions">
+          <p class="nav-mobile-label">Solutions</p>
+          <a href="/solar-projects.html">Solar Projects</a>
+          <a href="/govt-epc.html">Govt. EPC &amp; Infrastructure</a>
+          <a href="/pm-surya-ghar.html">PM Surya Ghar Subsidy</a>
+          <a href="/meera-gh2.html">Meera GH2 Initiative</a>
+          <a href="/e-mobility.html">E-Mobility &amp; Charging</a>
+        </div>
+        <div class="nav-mobile-divider" role="presentation"></div>
+        <div class="nav-mobile-section" aria-label="Knowledge Hub">
+          <p class="nav-mobile-label">Knowledge Hub</p>
+      <a href="/knowledge-hub.html">Knowledge Hub</a>
+      <a href="/innovation-tech.html">Innovation &amp; Tech</a>
+      <a href="/blog/index.php">Blog &amp; Insights</a>
+      <a href="/calculator.html">Solar Calculator</a>
+      <a href="/solar-and-finance.php">Solar &amp; Finance</a>
+      <a href="/policies.html">Policies &amp; Compliance</a>
+        </div>
+        <div class="nav-mobile-divider" role="presentation"></div>
+        <div class="nav-mobile-section" aria-label="Quick actions">
+          <a href="/login.php" class="btn btn-secondary" data-close-mobile>Login Portal</a>
+          <p class="nav-mobile-theme" data-site-theme-label hidden></p>
+        </div>
+      </nav>
+
+    </header>
+
+    <div class="site-search-overlay" data-site-search hidden>
+      <div class="site-search-backdrop" data-close-search></div>
+      <div class="site-search-dialog" role="dialog" aria-modal="true" aria-labelledby="site-search-title">
+        <form class="site-search-form" data-site-search-form>
+          <div class="site-search-header">
+            <h2 id="site-search-title">Search Dakshayani Knowledge Hub</h2>
+            <button type="button" class="site-search-close" data-close-search aria-label="Close search">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <div class="site-search-input">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            <input type="search" name="q" placeholder="Search blogs, FAQs, case studies…" aria-label="Search site content" required />
+            <select name="segment" aria-label="Filter by segment">
+              <option value="">All segments</option>
+              <option value="residential">Residential</option>
+              <option value="commercial">Commercial</option>
+              <option value="agriculture">Agriculture</option>
+            </select>
+          </div>
+          <div class="site-search-results" data-site-search-results>
+            <p class="site-search-empty">Type to explore Dakshayani insights, project learnings, and FAQs.</p>
+          </div>
+        </form>
+      </div>
+    </div>
+  `.trim(),
+  footer: `
+    <div class="container footer-content">
+      <div>
+        <div class="footer-brand">
+          <img src="/images/logo/New dakshayani logo centered small.png" alt="Dakshayani Enterprises" class="brand-logo-em" />
+          <span class="brand-text">Dakshayani Enterprises</span>
+        </div>
+        <p class="text-sm">
+          Your trusted solar EPC partner in Ranchi, expanding clean energy access across Jharkhand,
+          Chhattisgarh, Odisha, and Uttar Pradesh with Tier-1 technology and transparent service.
+        </p>
+        <div class="footer-social" aria-label="Social links">
+          <a href="https://wa.me/917070278178" target="_blank" rel="noopener" aria-label="WhatsApp">
+            <i class="fa-brands fa-whatsapp"></i>
+          </a>
+          <a href="mailto:connect@dakshayani.co.in" aria-label="Email">
+            <i class="fa-solid fa-envelope"></i>
+          </a>
+          <a href="tel:+917070278178" aria-label="Call">
+            <i class="fa-solid fa-phone"></i>
+          </a>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="font-bold text-lg">Solar &amp; Schemes</h4>
+        <ul class="footer-links">
+          <li><a href="/pm-surya-ghar.html">PM Surya Ghar Yojana</a></li>
+          <li><a href="/financing.html">Financing &amp; Loans</a></li>
+          <li><a href="/solar-projects.html#residential">Residential Solutions</a></li>
+          <li><a href="/solar-projects.html#commercial">Commercial / Industrial</a></li>
+      <li><a href="/calculator.html">Solar Savings Calculator</a></li>
+    </ul>
+  </div>
+
+  <div>
+    <h4 class="font-bold text-lg">Company</h4>
+    <ul class="footer-links">
+      <li><a href="/about.html">About Dakshayani Enterprises</a></li>
+      <li><a href="/meera-gh2.html">Meera GH2 (Hydrogen)</a></li>
+      <li><a href="/blog/index.php">Blog &amp; News</a></li>
+      <li><a href="/policies.html#terms">T&amp;C / Warranty</a></li>
+      <li><a href="/contact.html">Contact &amp; Support</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="container footer-bottom">
+  <p>
+    &copy; <span data-current-year></span> Dakshayani Enterprises. All rights reserved.
+    Office: Maa Tara, Kilburn Colony, Hinoo, Ranchi, Jharkhand-834002.
+  </p>
+</div>
+
+<div class="floating-support" data-floating-actions>
+  <button
+    type="button"
+    class="floating-support__toggle"
+    aria-haspopup="dialog"
+    aria-expanded="false"
+    aria-label="Open Dakshayani support options"
+    data-floating-toggle
+  >
+    <img src="/images/Logopngsmallest.png" alt="Dakshayani Enterprises" />
+  </button>
+
+  <div
+    class="quick-access-panel"
+    role="dialog"
+    aria-modal="false"
+    aria-label="Dakshayani support menu"
+    tabindex="-1"
+    data-floating-menu
+    hidden
+  >
+    <div class="quick-access-header">
+      <h2>Connect with us</h2>
+      <button type="button" class="quick-access-close" aria-label="Close support menu" data-floating-close>
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <div class="quick-access-body">
+      <div class="quick-access-group">
+        <h3>Reach out instantly</h3>
+        <div class="quick-access-actions two-column">
+          <a href="tel:+917070278178" class="quick-access-link" data-close-floating>
+            <i class="fa-solid fa-phone"></i>
+            Call
+          </a>
+          <a href="https://wa.me/917070278178" class="quick-access-link" target="_blank" rel="noopener" data-close-floating>
+            <i class="fa-brands fa-whatsapp"></i>
+            WhatsApp
+          </a>
+          <a href="mailto:connect@dakshayani.co.in" class="quick-access-link" data-close-floating>
+            <i class="fa-solid fa-envelope"></i>
+            Mail
+          </a>
+          <a
+            href="https://www.facebook.com/d.entranchi"
+            class="quick-access-link"
+            target="_blank"
+            rel="noopener"
+            data-close-floating
+          >
+            <i class="fa-brands fa-facebook-f"></i>
+            Facebook
+          </a>
+          <a
+            href="https://www.instagram.com/d.entranchi"
+            class="quick-access-link"
+            target="_blank"
+            rel="noopener"
+            data-close-floating
+          >
+            <i class="fa-brands fa-instagram"></i>
+            Instagram
+          </a>
+        </div>
+      </div>
+
+      <div class="quick-access-group">
+        <h3>Need detailed assistance?</h3>
+        <a href="/contact.html" class="quick-access-link quick-access-link--primary" data-close-floating>
+          <i class="fa-solid fa-comments"></i>
+          Consult / Complaint / Connect
+        </a>
+      </div>
+
+      <div class="quick-access-group">
+        <h3>Language &amp; tools</h3>
+        <div class="quick-access-language">
+          <button type="button" class="quick-access-toggle" data-toggle-language data-close-floating>
+            <i class="fa-solid fa-language"></i>
+            English / हिंदी
+          </button>
+          <div id="google_translate_element" class="translate-widget" aria-hidden="true"></div>
+        </div>
+        <div class="quick-access-actions">
+          <button
+            type="button"
+            class="quick-access-link"
+            data-open-search
+            data-close-floating
+            aria-label="Open Dakshayani site search"
+          >
+            <i class="fa-solid fa-magnifying-glass"></i>
+            Search our website
+          </button>
+        </div>
+        <p class="quick-access-footnote">English ↔ हिंदी translation is powered by Google Translate.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<a href="/solar-and-finance.php" class="floating-solar-finance" aria-label="Open Solar and Finance page"><i class="fa-solid fa-chart-line"></i><span>Solar &amp; Finance</span></a>
+  `.trim(),
 };
 
 const LANGUAGE_STORAGE_KEY = 'dakshayaniLanguagePreference';
@@ -1015,21 +1294,6 @@ function renderHeroGallery(items) {
 
 function applyHeroSettings(hero = {}, theme = {}) {
   const heroSection = document.querySelector('[data-hero-section]');
-  // Keep the public homepage focused on lifecycle energy services even when editable site settings refresh.
-  if (heroSection) {
-    hero = {
-      ...hero,
-      kicker: 'Solar • Storage • EnergyCare • EV Charging',
-      title: 'Jharkhand’s reliable solar, storage and EnergyCare company',
-      subtitle: 'For households, institutions, businesses and government projects—from compliant EPC and PM Surya Ghar support to 25-year care.',
-      announcement_badge: 'Built for the long term',
-      announcement_text: 'Solar lagwana easy hai. Solar ko 25 saal chalwana expertise ka kaam hai.',
-      primary_button_text: 'Plan your energy journey',
-      primary_button_link: '#contact-form',
-      secondary_button_text: 'Explore EnergyCare',
-      secondary_button_link: '/energycare-amc.html',
-    };
-  }
   const kicker = document.querySelector('[data-hero-kicker]');
   const title = document.querySelector('[data-hero-title]');
   const subtitle = document.querySelector('[data-hero-subtitle]');

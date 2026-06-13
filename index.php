@@ -4,18 +4,6 @@ require_once __DIR__ . '/includes/bootstrap.php';
 $ws = website_settings();
 $global = $ws['global'] ?? [];
 $hero = $ws['hero'] ?? [];
-// Public homepage positioning: Dakshayani is a long-term energy services company, not only an installer.
-$hero = array_merge($hero, [
-    'kicker' => 'Solar • Storage • EnergyCare • EV Charging',
-    'title' => "Jharkhand’s reliable solar, storage and EnergyCare company",
-    'subtitle' => 'For households, institutions, businesses and government projects—from compliant EPC and PM Surya Ghar support to 25-year care.',
-    'announcement_badge' => 'Built for the long term',
-    'announcement_text' => 'Solar lagwana easy hai. Solar ko 25 saal chalwana expertise ka kaam hai.',
-    'primary_button_text' => 'Plan your energy journey',
-    'primary_button_link' => '#contact-form',
-    'secondary_button_text' => 'Explore EnergyCare',
-    'secondary_button_link' => '/energycare-amc.html',
-]);
 $sections = $ws['sections'] ?? [];
 $testimonials = $ws['testimonials'] ?? [];
 $offers = website_settings_public_seasonal_offers($ws['seasonal_offers'] ?? []);
@@ -344,22 +332,6 @@ $schemaContext = [
       </div>
     </section>
 
-    <section class="section" id="energy-services">
-      <div class="container">
-        <div class="head"><span class="energy-eyebrow">One partner. Every stage.</span><h2>Energy services built around your next 25 years</h2><p>Choose a solution today and keep one accountable team for compliance, documentation, performance and future upgrades.</p></div>
-        <div class="energy-service-grid">
-          <a class="energy-service-link" href="/pm-surya-ghar.html"><i class="fa-solid fa-house-chimney"></i><h3>Home Solar &amp; PM Surya Ghar</h3><p>Survey, EPC, portal process, documentation, net-metering and subsidy support.</p><span>Explore home solar →</span></a>
-          <a class="energy-service-link" href="/energycare-amc.html"><i class="fa-solid fa-screwdriver-wrench"></i><h3>Dakshayani EnergyCare</h3><p>AMC, O&amp;M, performance reviews and responsive after-sales for long-term confidence.</p><span>Protect your solar →</span></a>
-          <a class="energy-service-link" href="/hybrid-solar-battery.html"><i class="fa-solid fa-battery-full"></i><h3>Hybrid &amp; Battery Backup</h3><p>Reliable, battery-ready systems designed around critical loads and outage patterns.</p><span>Plan dependable power →</span></a>
-          <a class="energy-service-link" href="/ev-charging-solar.html"><i class="fa-solid fa-charging-station"></i><h3>EV Charging + Solar</h3><p>Scalable charging infrastructure with a practical solar and storage pathway.</p><span>Build charging capacity →</span></a>
-          <a class="energy-service-link" href="/solar-material-supply.html"><i class="fa-solid fa-boxes-stacked"></i><h3>Solar Material Supply</h3><p>Project-matched components, documentation and technical supply coordination.</p><span>Source with confidence →</span></a>
-          <a class="energy-service-link" href="/installer-partner-network.html"><i class="fa-solid fa-people-group"></i><h3>Installer / Partner Network</h3><p>A disciplined regional network for quality installation, service and growth.</p><span>Partner with us →</span></a>
-        </div>
-      </div>
-    </section>
-
-    <section class="section energy-manifesto"><div class="container"><span class="energy-eyebrow">The Dakshayani difference</span><h2>“Solar lagwana easy hai. Solar ko 25 saal chalwana expertise ka kaam hai.”</h2><p>We connect engineering, compliance, documentation, PM Surya Ghar process support, net-metering support, after-sales and EnergyCare—so clean energy remains dependable after installation day.</p></div></section>
-
     <div data-home-sections hidden>
       <div data-home-sections-list></div>
     </div>
@@ -676,8 +648,8 @@ $schemaContext = [
 
     <section id="contact-form" class="section contact-section">
       <div class="head container">
-        <h2>Start Your Long-Term Energy Journey</h2>
-        <p>Talk to our team about solar EPC, EnergyCare, battery backup, EV charging, material supply or partnerships.</p>
+        <h2>Your Hassle-Free Solar Future Starts Here</h2>
+        <p>Talk to Vishesh Vardhan’s team about your PM Surya Ghar subsidy slot.</p>
       </div>
 
       <div class="container grid cols-2">
@@ -695,7 +667,7 @@ $schemaContext = [
         </div>
 
         <div class="form-card">
-          <h3 class="text-2xl font-bold">Tell Us What Energy Support You Need</h3>
+          <h3 class="text-2xl font-bold">Get Your Free Solar Consultation</h3>
           <form id="homepage-lead-form" class="mt-4" novalidate>
             <div class="form-group">
               <label class="form-label" for="lead-name">Full Name</label>
@@ -715,12 +687,6 @@ $schemaContext = [
                 <option value="">Select Project Type</option>
                 <option value="Residential">Residential (PM Surya Ghar)</option>
                 <option value="Commercial">Commercial / Industrial</option>
-                <option value="EnergyCare AMC / O&M">EnergyCare AMC / O&amp;M</option>
-                <option value="Hybrid Solar / Battery">Hybrid Solar / Battery Backup</option>
-                <option value="EV Charging">EV Charging</option>
-                <option value="Solar Material Supply">Solar Material Supply</option>
-                <option value="Installer / Partner">Installer / Partner Network</option>
-                <option value="Government EPC">Government EPC</option>
                 <option value="General Inquiry">General Inquiry</option>
               </select>
             </div>
