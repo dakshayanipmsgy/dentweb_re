@@ -4,24 +4,10 @@ require_once __DIR__ . '/includes/bootstrap.php';
 $ws = website_settings();
 $global = $ws['global'] ?? [];
 $hero = $ws['hero'] ?? [];
-// Public homepage positioning: Dakshayani is a long-term energy services company, not only an installer.
-$hero = array_merge($hero, [
-    'kicker' => 'Solar • Storage • EnergyCare • EV Charging',
-    'title' => "Jharkhand’s reliable solar, storage and EnergyCare company",
-    'subtitle' => 'For households, institutions, businesses and government projects—from compliant EPC and PM Surya Ghar support to 25-year care.',
-    'announcement_badge' => 'Built for the long term',
-    'announcement_text' => 'Solar lagwana easy hai. Solar ko 25 saal chalwana expertise ka kaam hai.',
-    'primary_button_text' => 'Plan your energy journey',
-    'primary_button_link' => '#contact-form',
-    'secondary_button_text' => 'Explore EnergyCare',
-    'secondary_button_link' => '/energycare-amc.html',
-]);
 $sections = $ws['sections'] ?? [];
 $testimonials = $ws['testimonials'] ?? [];
 $offers = website_settings_public_seasonal_offers($ws['seasonal_offers'] ?? []);
 $theme = $ws['theme'] ?? [];
-$faqs = array_values(array_filter($ws['faqs'] ?? [], static fn(array $faq): bool => !empty($faq['enabled']) && ($faq['question'] ?? '') !== '' && ($faq['answer'] ?? '') !== ''));
-$projects = array_values(array_filter($ws['featured_projects'] ?? [], static fn(array $project): bool => !empty($project['enabled'])));
 $primaryColor = $theme['primary_color'] ?? '#333333';
 $secondaryColor = $theme['secondary_color'] ?? '#00374a';
 $accentColor = $theme['accent_color'] ?? '#f5ec00';
@@ -165,11 +151,24 @@ $schemaGraph = [
     ],
     [
         '@type' => 'FAQPage',
-        'mainEntity' => array_map(static fn(array $faq): array => [
-            '@type' => 'Question',
-            'name' => $faq['question'],
-            'acceptedAnswer' => ['@type' => 'Answer', 'text' => $faq['answer']],
-        ], $faqs),
+        'mainEntity' => [
+            [
+                '@type' => 'Question',
+                'name' => 'How quickly can Dakshayani file PM Surya Ghar subsidies?',
+                'acceptedAnswer' => [
+                    '@type' => 'Answer',
+                    'text' => 'Our team supports document verification and filing with the relevant PM Surya Ghar/JREDA and DISCOM processes.',
+                ],
+            ],
+            [
+                '@type' => 'Question',
+                'name' => 'Do you offer real-time solar generation monitoring?',
+                'acceptedAnswer' => [
+                    '@type' => 'Answer',
+                    'text' => 'Yes. Customers receive dashboards with Solar API and inverter integrations, plus WhatsApp alerts for uptime.',
+                ],
+            ],
+        ],
     ],
 ];
 
@@ -300,8 +299,8 @@ $schemaContext = [
               <span class="assurance-label">Homes &amp; MSMEs energised</span>
             </div>
             <div class="assurance-item">
-              <span class="assurance-value">Process</span>
-              <span class="assurance-label">Subsidy &amp; finance coordination support</span>
+              <span class="assurance-value">₹78k</span>
+              <span class="assurance-label">PM Surya Ghar subsidy managed</span>
             </div>
             <div class="assurance-item">
               <span class="assurance-value">Dedicated</span>
@@ -332,22 +331,6 @@ $schemaContext = [
         </a>
       </div>
     </section>
-
-    <section class="section" id="energy-services">
-      <div class="container">
-        <div class="head"><span class="energy-eyebrow">One partner. Every stage.</span><h2>Energy services built around your next 25 years</h2><p>Choose a solution today and keep one accountable team for compliance, documentation, performance and future upgrades.</p></div>
-        <div class="energy-service-grid">
-          <a class="energy-service-link" href="/pm-surya-ghar.html"><i class="fa-solid fa-house-chimney"></i><h3>Home Solar &amp; PM Surya Ghar</h3><p>Survey, EPC, portal process, documentation, net-metering and subsidy support.</p><span>Explore home solar →</span></a>
-          <a class="energy-service-link" href="/energycare-amc.html"><i class="fa-solid fa-screwdriver-wrench"></i><h3>Dakshayani EnergyCare</h3><p>AMC, O&amp;M, performance reviews and responsive after-sales for long-term confidence.</p><span>Protect your solar →</span></a>
-          <a class="energy-service-link" href="/hybrid-solar-battery.html"><i class="fa-solid fa-battery-full"></i><h3>Hybrid &amp; Battery Backup</h3><p>Reliable, battery-ready systems designed around critical loads and outage patterns.</p><span>Plan dependable power →</span></a>
-          <a class="energy-service-link" href="/ev-charging-solar.html"><i class="fa-solid fa-charging-station"></i><h3>EV Charging + Solar</h3><p>Scalable charging infrastructure with a practical solar and storage pathway.</p><span>Build charging capacity →</span></a>
-          <a class="energy-service-link" href="/solar-material-supply.html"><i class="fa-solid fa-boxes-stacked"></i><h3>Solar Material Supply</h3><p>Project-matched components, documentation and technical supply coordination.</p><span>Source with confidence →</span></a>
-          <a class="energy-service-link" href="/installer-partner-network.html"><i class="fa-solid fa-people-group"></i><h3>Installer / Partner Network</h3><p>A disciplined regional network for quality installation, service and growth.</p><span>Partner with us →</span></a>
-        </div>
-      </div>
-    </section>
-
-    <section class="section energy-manifesto"><div class="container"><span class="energy-eyebrow">The Dakshayani difference</span><h2>“Solar lagwana easy hai. Solar ko 25 saal chalwana expertise ka kaam hai.”</h2><p>We connect engineering, compliance, documentation, PM Surya Ghar process support, net-metering support, after-sales and EnergyCare—so clean energy remains dependable after installation day.</p></div></section>
 
     <div data-home-sections hidden>
       <div data-home-sections-list></div>
@@ -614,10 +597,6 @@ $schemaContext = [
       </div>
     </section>
 
-    <?php if ($projects): ?>
-    <section class="section" id="featured-projects"><div class="container"><div class="head"><span class="energy-eyebrow">Selected work</span><h2>Featured projects</h2><p>Project details published by the Dakshayani team.</p></div><div class="energy-feature-grid"><?php foreach ($projects as $project): ?><article class="energy-feature-card"><?php if (($project['image'] ?? '') !== ''): ?><img src="<?= htmlspecialchars($project['image']) ?>" alt="<?= htmlspecialchars($project['title']) ?>" loading="lazy"><?php endif; ?><span class="energy-eyebrow"><?= htmlspecialchars($project['category']) ?></span><h3><?= htmlspecialchars($project['title']) ?></h3><p><?= htmlspecialchars($project['location']) ?></p></article><?php endforeach; ?></div></div></section>
-    <?php endif; ?>
-
     <section id="projects" class="section testimonials">
       <div class="container">
         <div class="head">
@@ -641,17 +620,36 @@ $schemaContext = [
           <p class="sub">Clear answers on subsidies, compliance, and metering keep your project moving smoothly.</p>
         </div>
         <div class="faq-list">
-          <?php foreach ($faqs as $index => $faq): ?>
-            <details<?= $index === 0 ? ' open' : '' ?>><summary><?= htmlspecialchars($faq['question']) ?></summary><div class="faq-body"><p><?= htmlspecialchars($faq['answer']) ?></p></div></details>
-          <?php endforeach; ?>
+          <details open>
+            <summary>How does the PM Surya Ghar subsidy process work with Dakshayani?</summary>
+            <div class="faq-body">
+              <p>Our subsidy cell helps raise your application on the PM Surya Ghar portal after signing. We coordinate site photographs, DISCOM feasibility, and documentation uploads. Once inspection is complete, the subsidy is credited directly to your bank account while we reconcile the balance with transparent invoices.</p>
+              <ul>
+                <li>Dedicated case manager for every household or MSME</li>
+                <li>Weekly status updates via WhatsApp and email</li>
+                <li>Support with Aadhaar e-sign, net-metering forms, and bank coordination</li>
+              </ul>
+            </div>
+          </details>
+          <details>
+            <summary>What is the typical timeline for net-metering approvals in Jharkhand?</summary>
+            <div class="faq-body">
+              <p>Approval timelines vary by connection type, load sanction, and DISCOM review. Our engineering desk submits drawings, follows up with the DISCOM office, and schedules meter installation so you can start exporting power without delays.</p>
+              <ul>
+                <li>Pre-filled DISCOM forms and load details submitted by our team</li>
+                <li>Joint inspection with DISCOM engineers for faster closure</li>
+                <li>Commissioning report shared with you and stored in our customer portal</li>
+              </ul>
+            </div>
+          </details>
         </div>
       </div>
     </section>
 
     <section id="contact-form" class="section contact-section">
       <div class="head container">
-        <h2>Start Your Long-Term Energy Journey</h2>
-        <p>Talk to our team about solar EPC, EnergyCare, battery backup, EV charging, material supply or partnerships.</p>
+        <h2>Your Hassle-Free Solar Future Starts Here</h2>
+        <p>Talk to Vishesh Vardhan’s team about your PM Surya Ghar subsidy slot.</p>
       </div>
 
       <div class="container grid cols-2">
@@ -669,7 +667,7 @@ $schemaContext = [
         </div>
 
         <div class="form-card">
-          <h3 class="text-2xl font-bold">Tell Us What Energy Support You Need</h3>
+          <h3 class="text-2xl font-bold">Get Your Free Solar Consultation</h3>
           <form id="homepage-lead-form" class="mt-4" novalidate>
             <div class="form-group">
               <label class="form-label" for="lead-name">Full Name</label>
@@ -689,12 +687,6 @@ $schemaContext = [
                 <option value="">Select Project Type</option>
                 <option value="Residential">Residential (PM Surya Ghar)</option>
                 <option value="Commercial">Commercial / Industrial</option>
-                <option value="EnergyCare AMC / O&M">EnergyCare AMC / O&amp;M</option>
-                <option value="Hybrid Solar / Battery">Hybrid Solar / Battery Backup</option>
-                <option value="EV Charging">EV Charging</option>
-                <option value="Solar Material Supply">Solar Material Supply</option>
-                <option value="Installer / Partner">Installer / Partner Network</option>
-                <option value="Government EPC">Government EPC</option>
                 <option value="General Inquiry">General Inquiry</option>
               </select>
             </div>

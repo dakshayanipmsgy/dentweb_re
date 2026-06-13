@@ -183,15 +183,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $errors = [];
-        $advancedContent = [];
-        $advancedJson = trim((string) ($_POST['advanced_content_json'] ?? ''));
-        if ($advancedJson !== '') {
-            $advancedContent = json_decode($advancedJson, true);
-            if (!is_array($advancedContent) || json_last_error() !== JSON_ERROR_NONE) {
-                $errors[] = 'Advanced CMS JSON is invalid: ' . json_last_error_msg();
-                $advancedContent = [];
-            }
-        }
         if ($global['site_tagline'] === '') {
             $errors[] = 'Site tagline is required.';
         }
@@ -268,11 +259,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $merged['theme'] = array_merge($settings['theme'] ?? [], $theme);
             $merged['testimonials'] = $testimonials;
             $merged['seasonal_offers'] = $seasonalOffers;
-            foreach (['site', 'navigation', 'faqs', 'featured_projects'] as $advancedGroup) {
-                if (array_key_exists($advancedGroup, $advancedContent)) {
-                    $merged[$advancedGroup] = $advancedContent[$advancedGroup];
-                }
-            }
 
             try {
                 website_settings_save($merged);
@@ -300,7 +286,6 @@ $testimonialsJson = htmlspecialchars(json_encode($settings['testimonials'] ?? []
 $offersJson = htmlspecialchars(json_encode($settings['seasonal_offers'] ?? []), ENT_QUOTES, 'UTF-8');
 $themeJson = htmlspecialchars(json_encode($settings['theme'] ?? []), ENT_QUOTES, 'UTF-8');
 $globalJson = htmlspecialchars(json_encode($settings['global'] ?? []), ENT_QUOTES, 'UTF-8');
-$advancedContentJson = htmlspecialchars(json_encode(array_intersect_key($settings, array_flip(['site', 'navigation', 'faqs', 'featured_projects'])), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
 ?>
 <!doctype html>
 <html lang="en">
@@ -794,19 +779,6 @@ $advancedContentJson = htmlspecialchars(json_encode(array_intersect_key($setting
         <div class="flex justify-end">
           <button type="submit" class="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg shadow hover:bg-emerald-700">Save settings</button>
         </div>
-
-        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
-          <div>
-            <h2 class="text-xl font-semibold text-slate-900">Advanced public-site CMS</h2>
-            <p class="text-sm text-slate-600">Manage company contacts, social URLs, ordered navigation, visible FAQs and featured projects. Unsafe URL schemes are rejected when saved; existing settings remain compatible.</p>
-          </div>
-          <label class="block space-y-2">
-            <span class="text-sm font-medium text-slate-700">Structured site content (JSON)</span>
-            <textarea name="advanced_content_json" rows="28" spellcheck="false" class="w-full rounded-lg border-slate-200 font-mono text-xs focus:border-emerald-500 focus:ring-emerald-500"><?= $advancedContentJson ?></textarea>
-          </label>
-          <p class="text-xs text-slate-500">Each navigation, FAQ and project item supports <code>enabled</code> and <code>order</code>. Projects support title, category, location and a public image URL.</p>
-        </section>
-
       </form>
     </div>
 
