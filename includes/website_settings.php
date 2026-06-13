@@ -35,8 +35,8 @@ function website_settings_default(): array
 {
     return [
         'global' => [
-            'site_tagline' => 'Smart Solar for Every Home in Jharkhand',
-            'header_callout' => 'PM Surya Ghar Muft Bijli Yojana specialist for Ranchi & Jharkhand',
+            'site_tagline' => 'Solar, Battery Backup & EnergyCare for Jharkhand',
+            'header_callout' => 'Local EPC, process coordination and long-term after-sales support',
             'tagline_color' => '',
             'tagline_font_size' => 'normal',
             'tagline_font_weight' => 'semibold',
@@ -47,14 +47,14 @@ function website_settings_default(): array
         ],
         'hero' => [
             'kicker' => 'Trusted EPC partner in Jharkhand',
-            'title' => 'Go Solar with Dakshayani Enterprises',
-            'subtitle' => 'Rooftop solar systems with subsidy, EMI support, and full CMC.',
+            'title' => 'Solar, Battery Backup & EnergyCare for Jharkhand',
+            'subtitle' => 'One accountable local team for assessment, EPC, subsidy and finance process support, commissioning and long-term care.',
             'primary_image' => '/images/hero/hero.png',
             'primary_caption' => 'Dakshayani engineers on site for a rooftop commissioning.',
             'primary_button_text' => 'Book Free Site Visit',
-            'primary_button_link' => '/contact',
-            'secondary_button_text' => 'Check Subsidy Eligibility',
-            'secondary_button_link' => '/pm-surya-ghar',
+            'primary_button_link' => '/contact.php',
+            'secondary_button_text' => 'Explore Solar & Finance',
+            'secondary_button_link' => '/solar-and-finance.php',
             'announcement_badge' => 'PM Surya Ghar – Up to 300 units free*',
             'announcement_text' => 'Limited window for subsidy applications. Get your documents verified today.',
         ],
@@ -68,31 +68,50 @@ function website_settings_default(): array
             'cta_strip_cta_text' => 'Email Your Bill',
             'cta_strip_cta_link' => 'mailto:connect@dakshayani.co.in',
         ],
-        'testimonials' => [
-            [
-                'name' => 'Rahul Sharma',
-                'location' => 'Ranchi',
-                'message' => 'Dakshayani Enterprises handled everything from subsidy paperwork to installation. My bill is now almost zero.',
-                'system_size' => '5 kW',
-                'type' => 'Residential',
-            ],
-            [
-                'name' => 'St. Mary School',
-                'location' => 'Hatia',
-                'message' => 'Our 20 kW system has significantly reduced diesel generator usage and monthly expenses.',
-                'system_size' => '20 kW',
-                'type' => 'Institutional',
-            ],
-        ],
+        'testimonials' => [],
         'seasonal_offers' => [
             [
                 'label' => 'Winter Solar Upgrade Offer',
                 'description' => 'Special pricing for 5 kW+ systems with 5-year CMC included.',
                 'valid_till' => '2025-12-31',
                 'cta_text' => 'Enquire Now',
-                'cta_link' => '/contact',
+                'cta_link' => '/contact.php',
             ],
         ],
+        'site' => [
+            'schema_version' => 2,
+            'company_name' => 'Dakshayani Enterprises',
+            'positioning' => 'Jharkhand’s reliable solar, storage and EnergyCare company for households, institutions, businesses and government projects.',
+            'primary_phone' => '+91 70702 78178',
+            'secondary_phone' => '+91 93049 49688',
+            'whatsapp' => '917070278178',
+            'primary_email' => 'connect@dakshayani.co.in',
+            'secondary_email' => 'dakshayanienterprises@gmail.com',
+            'address' => 'Ranchi, Jharkhand, India',
+            'service_areas' => 'Ranchi and across Jharkhand',
+            'social' => ['facebook' => '', 'instagram' => '', 'linkedin' => '', 'youtube' => ''],
+        ],
+        'navigation' => [
+            ['label' => 'Home', 'url' => '/index.php', 'group' => '', 'enabled' => true, 'new_tab' => false, 'order' => 10],
+            ['label' => 'PM Surya Ghar', 'url' => '/pm-surya-ghar.html', 'group' => 'Solar Solutions', 'enabled' => true, 'new_tab' => false, 'order' => 20],
+            ['label' => 'Commercial & Industrial', 'url' => '/commercial-industrial-solar.html', 'group' => 'Solar Solutions', 'enabled' => true, 'new_tab' => false, 'order' => 30],
+            ['label' => 'Government EPC', 'url' => '/govt-epc.html', 'group' => 'Solar Solutions', 'enabled' => true, 'new_tab' => false, 'order' => 40],
+            ['label' => 'Solar & Finance', 'url' => '/solar-and-finance.php', 'group' => 'Solar Solutions', 'enabled' => true, 'new_tab' => false, 'order' => 50],
+            ['label' => 'AMC & O&M', 'url' => '/energycare-amc.html', 'group' => 'EnergyCare', 'enabled' => true, 'new_tab' => false, 'order' => 60],
+            ['label' => 'Service / Complaint', 'url' => '/contact.php', 'group' => 'EnergyCare', 'enabled' => true, 'new_tab' => false, 'order' => 70],
+            ['label' => 'Hybrid + Battery', 'url' => '/hybrid-solar-battery.html', 'group' => 'Future Energy', 'enabled' => true, 'new_tab' => false, 'order' => 80],
+            ['label' => 'EV Charging + Solar', 'url' => '/ev-charging-solar.html', 'group' => 'Future Energy', 'enabled' => true, 'new_tab' => false, 'order' => 90],
+            ['label' => 'Material Supply', 'url' => '/solar-material-supply.html', 'group' => 'Partners & Supply', 'enabled' => true, 'new_tab' => false, 'order' => 100],
+            ['label' => 'Installer Network', 'url' => '/installer-partner-network.html', 'group' => 'Partners & Supply', 'enabled' => true, 'new_tab' => false, 'order' => 110],
+            ['label' => 'Blog', 'url' => '/blog/index.php', 'group' => 'Knowledge', 'enabled' => true, 'new_tab' => false, 'order' => 120],
+            ['label' => 'Calculator', 'url' => '/calculator.html', 'group' => 'Knowledge', 'enabled' => true, 'new_tab' => false, 'order' => 130],
+        ],
+        'faqs' => [
+            ['question' => 'What happens before you recommend a solar system?', 'answer' => 'We review the site, electricity use, connection details and customer priorities before preparing a proposal. Final suitability is subject to site assessment.', 'enabled' => true, 'order' => 10],
+            ['question' => 'Can Dakshayani support subsidy and finance processes?', 'answer' => 'Yes. We support eligible customers with documentation and coordination. Approval, subsidy and finance remain subject to the applicable authority or lender.', 'enabled' => true, 'order' => 20],
+            ['question' => 'Do you support systems after commissioning?', 'answer' => 'Yes. EnergyCare can cover health checks, preventive maintenance, cleaning guidance, repair coordination and upgrade planning.', 'enabled' => true, 'order' => 30],
+        ],
+        'featured_projects' => [],
         'theme' => [
             'primary_color' => '#0f766e',
             'secondary_color' => '#f59e0b',
@@ -119,6 +138,34 @@ function website_settings_normalize_hex(?string $value, string $fallback): strin
     }
 
     return strtoupper($hex);
+}
+
+function website_settings_safe_url(string $value, string $fallback = ''): string
+{
+    $value = trim($value);
+    if ($value === '') return $fallback;
+    if (preg_match('/^(javascript|data|vbscript):/i', $value)) return $fallback;
+    if ($value[0] === '/' || $value[0] === '#' || preg_match('/^(https?:|mailto:|tel:)/i', $value)) return $value;
+    return $fallback;
+}
+
+function website_settings_normalize_repeatable(array $items, array $fields): array
+{
+    $result = [];
+    foreach ($items as $item) {
+        if (!is_array($item)) continue;
+        $clean = [];
+        foreach ($fields as $field => $default) {
+            $value = $item[$field] ?? $default;
+            if (is_bool($default)) $clean[$field] = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+            elseif (is_int($default)) $clean[$field] = (int) $value;
+            elseif (str_contains($field, 'url') || str_contains($field, 'link')) $clean[$field] = website_settings_safe_url((string) $value, (string) $default);
+            else $clean[$field] = trim((string) $value);
+        }
+        $result[] = $clean;
+    }
+    usort($result, static fn(array $a, array $b): int => ($a['order'] ?? 0) <=> ($b['order'] ?? 0));
+    return array_slice($result, 0, 100);
 }
 
 function website_settings_normalize(array $data): array
@@ -158,6 +205,17 @@ function website_settings_normalize(array $data): array
     $normalized['global']['callout_font_weight'] = in_array($normalized['global']['callout_font_weight'] ?? '', website_settings_allowed_font_weights(), true)
         ? $normalized['global']['callout_font_weight']
         : $defaults['global']['callout_font_weight'];
+
+    $normalized['site']['schema_version'] = 2;
+    foreach (['company_name', 'positioning', 'primary_phone', 'secondary_phone', 'whatsapp', 'primary_email', 'secondary_email', 'address', 'service_areas'] as $field) {
+        $normalized['site'][$field] = trim((string) ($normalized['site'][$field] ?? $defaults['site'][$field]));
+    }
+    foreach (array_keys($defaults['site']['social']) as $network) {
+        $normalized['site']['social'][$network] = website_settings_safe_url((string) ($normalized['site']['social'][$network] ?? ''));
+    }
+    $normalized['navigation'] = website_settings_normalize_repeatable(is_array($data['navigation'] ?? null) ? $data['navigation'] : $defaults['navigation'], ['label' => '', 'url' => '', 'group' => '', 'enabled' => true, 'new_tab' => false, 'order' => 0]);
+    $normalized['faqs'] = website_settings_normalize_repeatable(is_array($data['faqs'] ?? null) ? $data['faqs'] : $defaults['faqs'], ['question' => '', 'answer' => '', 'enabled' => true, 'order' => 0]);
+    $normalized['featured_projects'] = website_settings_normalize_repeatable(is_array($data['featured_projects'] ?? null) ? $data['featured_projects'] : $defaults['featured_projects'], ['title' => '', 'category' => '', 'location' => '', 'image' => '', 'enabled' => true, 'order' => 0]);
 
     return $normalized;
 }
@@ -230,7 +288,9 @@ function website_settings_save(array $data): void
         throw new RuntimeException('Failed to encode website settings');
     }
 
-    if (file_put_contents($path, $encoded, LOCK_EX) === false) {
+    $temp = $path . '.tmp.' . bin2hex(random_bytes(4));
+    if (file_put_contents($temp, $encoded, LOCK_EX) === false || !rename($temp, $path)) {
+        @unlink($temp);
         throw new RuntimeException('Unable to write website settings file');
     }
 
