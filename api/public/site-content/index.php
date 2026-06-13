@@ -67,10 +67,6 @@ try {
         'offers' => $offers,
         'seasonal_offers' => $offers,
         'testimonials' => $testimonials,
-        'site' => $settings['site'] ?? [],
-        'navigation' => array_values(array_filter($settings['navigation'] ?? [], static fn(array $item): bool => !empty($item['enabled']))),
-        'faqs' => array_values(array_filter($settings['faqs'] ?? [], static fn(array $item): bool => !empty($item['enabled']))),
-        'featured_projects' => array_values(array_filter($settings['featured_projects'] ?? [], static fn(array $item): bool => !empty($item['enabled']))),
     ];
 
     echo json_encode($response);
