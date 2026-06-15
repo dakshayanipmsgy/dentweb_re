@@ -44,5 +44,3 @@ $shareUrl = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https:
     . '/quotation-public.php?t=' . urlencode((string) ($quote['public_share_token'] ?? ''));
 
 quotation_render($quote, $quoteDefaults, $company, false, $shareUrl, 'public', '');
-
-if ((string)($quote['status']??'') === 'approved'): ?><p style="text-align:center"><a href="customer-document-acceptance.php?type=quotation&amp;token=<?=urlencode($token)?>">Accept Quotation</a></p><?php endif; ?>

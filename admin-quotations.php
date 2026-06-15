@@ -209,7 +209,7 @@ $quotationPublicShareUrl = static function (array $quote): string {
     return $scheme . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/quotation-public.php?t=' . urlencode($token);
 };
 
-$quotationDefaultWhatsappTemplate = 'Namaste {{name}}, your quotation for {{system_size}} kW {{system_type}} solar system for {{city}} is ready. Total price considered is ₹{{price}}. Please review it here: {{quotation_link}}';
+$quotationDefaultWhatsappTemplate = 'Namaste {{name}}, your quotation for {{system_size}} kW {{system_type}} solar system for {{city}} is ready. Total price considered is ₹{{price}}. Please open the quotation link and click Accept Quotation after reviewing it: {{quotation_link}}';
 
 $quotationResolveWhatsappTemplate = static function (array $defaults) use ($quotationDefaultWhatsappTemplate): string {
     $configured = trim((string) ($defaults['global']['quotation_ui']['whatsapp_message_template'] ?? ''));
