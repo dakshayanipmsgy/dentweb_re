@@ -5,6 +5,6 @@ $q=['id'=>'old','status'=>'accepted','accepted_at'=>'now','customer_acceptance'=
 $c=documents_quote_reset_clone_state($q,'new');
 clone_ok($c['status']==='draft'&&!$c['locked_flag'],'clone is independent draft');
 clone_ok(!isset($c['customer_acceptance'],$c['customer_acceptance_request'],$c['acceptance_ref']),'acceptance evidence removed');
-clone_ok($c['public_share_token']!==$q['public_share_token']&&strlen($c['public_share_token'])>=32,'new high entropy public token');
+clone_ok($c['public_share_token']===''&&!$c['public_share_enabled'],'old public token is cleared');
 clone_ok($c['workflow']['invoice_id']===''&&$c['links']['invoice_id']==='','workflow links removed');
 echo "quotation clone reset tests passed\n";

@@ -3748,17 +3748,97 @@ function documents_generate_quote_public_share_token(int $bytes = 24): string
 
 function documents_quote_reset_clone_state(array $quote, string $newId): array
 {
-    foreach (['customer_acceptance','customer_acceptance_request','acceptance_reference','acceptance_ref','acceptance_token','acceptance_token_hash','acceptance_hash','whatsapp_verification','whatsapp_verified_at','whatsapp_verified_by'] as $field) unset($quote[$field]);
+    foreach (['customer_acceptance','customer_acceptance_request','customer_change_request','acceptance_reference','acceptance_ref','acceptance_token','acceptance_token_hash','acceptance_hash','agreement','dispatch_advice','packing_list','challan','invoice','receipt','whatsapp_verification','whatsapp_verified_at','whatsapp_verified_by'] as $field) unset($quote[$field]);
     $quote['status']='draft'; $quote['approval']=['approved_by_id'=>'','approved_by_name'=>'','approved_at'=>''];
     $quote['accepted_at']=''; $quote['accepted_by']=['type'=>'','id'=>'','name'=>''];
     $quote['acceptance']=['accepted_by_admin_id'=>'','accepted_by_admin_name'=>'','accepted_at'=>'','accepted_note'=>''];
     $quote['locked_flag']=false; $quote['locked_at']=null; $quote['workflow']=documents_quote_workflow_defaults();
     $quote['links']=['customer_mobile'=>'','agreement_id'=>'','proforma_id'=>'','invoice_id'=>''];
-    $quote['public_share_token']=documents_generate_quote_public_share_token(); $quote['public_share_enabled']=false;
-    $quote['public_share_created_at']=date('c'); $quote['public_share_revoked_at']=null; $quote['public_share_expires_at']=null;
+    $quote['public_share_token']=''; $quote['public_share_enabled']=false;
+    $quote['public_share_created_at']=''; $quote['public_share_revoked_at']=null; $quote['public_share_expires_at']=null;
     $quote['quote_series_id']=$newId; $quote['version_no']=1; $quote['is_current_version']=true;
     $quote['revised_from_quote_id']=null; $quote['revision_reason']=null; $quote['revision_child_ids']=[];
     return $quote;
+}
+
+function documents_quote_number_exists(string $quoteNo, string $exceptId = ''): bool
+{
+    foreach (documents_list_quotes() as $quote) {
+        if ((string) ($quote['id'] ?? '') !== $exceptId && (string) ($quote['quote_no'] ?? '') === $quoteNo) return true;
+    }
+    return false;
+}
+
+/** @return array{ok:bool,error:string,quote?:array,source?:array} */
+function documents_create_quote_revision(array $source, string $reason, string $changeRequestRef = ''): array
+{
+    $source = documents_quote_prepare($source);
+    $sourceId = safe_text((string) ($source['id'] ?? ''));
+    if ($sourceId === '') return ['ok' => false, 'error' => 'Missing source quotation.'];
+
+    $existingRef = safe_text($changeRequestRef);
+    foreach (documents_list_quotes() as $quote) {
+        if (($existingRef !== '' && (string) ($quote['generated_from_change_request_ref'] ?? '') === $existingRef)
+            || ((string) ($quote['revised_from_quote_id'] ?? '') === $sourceId && (string) ($quote['status'] ?? '') === 'draft' && $existingRef !== '')) {
+            return ['ok' => true, 'error' => '', 'quote' => $quote, 'source' => $source];
+        }
+    }
+
+    $number = [];
+    for ($attempt = 0; $attempt < 5; $attempt++) {
+        $number = documents_generate_quote_number((string) ($source['segment'] ?? 'RES'));
+        if (!($number['ok'] ?? false) || !documents_quote_number_exists((string) ($number['quote_no'] ?? ''))) break;
+    }
+    if (!($number['ok'] ?? false) || documents_quote_number_exists((string) ($number['quote_no'] ?? ''))) {
+        return ['ok' => false, 'error' => (string) ($number['error'] ?? 'Unable to generate a unique quotation number.')];
+    }
+
+    $now = date('c');
+    $newId = 'qtn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+    $draft = documents_quote_reset_clone_state($source, $newId);
+    $draft['id'] = $newId;
+    $draft['quote_no'] = (string) $number['quote_no'];
+    $draft['quote_series_id'] = (string) ($source['quote_series_id'] ?? $sourceId);
+    $draft['version_no'] = (int) ($source['version_no'] ?? 1) + 1;
+    $draft['is_current_version'] = true;
+    $draft['revised_from_quote_id'] = $sourceId;
+    $draft['revised_from_quote_no'] = (string) ($source['quote_no'] ?? '');
+    $draft['revision_reason'] = trim($reason) ?: null;
+    $draft['generated_from_change_request_ref'] = $existingRef;
+    $draft['created_at'] = $now;
+    $draft['updated_at'] = $now;
+
+    $source['is_current_version'] = false;
+    $source['superseded_by_quote_id'] = $newId;
+    $source['superseded_by_quote_no'] = $draft['quote_no'];
+    $source['revision_child_ids'] = array_values(array_unique(array_merge((array) ($source['revision_child_ids'] ?? []), [$newId])));
+    $source['updated_at'] = $now;
+    if (!documents_save_quote($draft)['ok'] || !documents_save_quote($source)['ok']) return ['ok' => false, 'error' => 'Unable to save quotation revision.'];
+    return ['ok' => true, 'error' => '', 'quote' => $draft, 'source' => $source];
+}
+
+/** Repairs the narrowly-defined broken customer revisions created by the legacy flow. */
+function documents_repair_broken_quote_revisions(): array
+{
+    $repaired = [];
+    foreach (documents_list_quotes() as $draft) {
+        $sourceId = safe_text((string) ($draft['revised_from_quote_id'] ?? ''));
+        if ($sourceId === '' || (string) ($draft['status'] ?? '') !== 'draft' || !empty($draft['is_current_version']) || safe_text((string) ($draft['generated_from_change_request_ref'] ?? '')) !== '') continue;
+        $source = documents_get_quote($sourceId);
+        if (!$source || (string) ($draft['quote_no'] ?? '') !== (string) ($source['quote_no'] ?? '') || empty($source['is_current_version'])) continue;
+        $number = documents_generate_quote_number((string) ($draft['segment'] ?? 'RES'));
+        if (!($number['ok'] ?? false) || documents_quote_number_exists((string) ($number['quote_no'] ?? ''))) continue;
+        $draft['quote_no'] = (string) $number['quote_no'];
+        $draft['is_current_version'] = true;
+        $draft['revised_from_quote_no'] = (string) ($source['quote_no'] ?? '');
+        $draft['generated_from_change_request_ref'] = 'LEGACY-REPAIR-' . $sourceId;
+        $source['is_current_version'] = false;
+        $source['superseded_by_quote_id'] = (string) $draft['id'];
+        $source['superseded_by_quote_no'] = (string) $draft['quote_no'];
+        if (documents_save_quote($draft)['ok'] && documents_save_quote($source)['ok']) $repaired[] = (string) $draft['id'];
+    }
+    if ($repaired !== []) documents_log('Repaired broken quotation revisions: ' . implode(', ', $repaired));
+    return $repaired;
 }
 
 function documents_get_quote_by_public_share_token(string $token): ?array

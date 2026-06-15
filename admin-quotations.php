@@ -65,6 +65,7 @@ register_shutdown_function(static function () use ($adminQuotationsWriteErrorLog
 
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
+documents_repair_broken_quote_revisions();
 require_once __DIR__ . '/includes/solar_finance_reports.php';
 
 require_login_any_role(['admin', 'employee']);
