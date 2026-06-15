@@ -3746,6 +3746,21 @@ function documents_generate_quote_public_share_token(int $bytes = 24): string
     return $token;
 }
 
+function documents_quote_reset_clone_state(array $quote, string $newId): array
+{
+    foreach (['customer_acceptance','customer_acceptance_request','acceptance_reference','acceptance_ref','acceptance_token','acceptance_token_hash','acceptance_hash','whatsapp_verification','whatsapp_verified_at','whatsapp_verified_by'] as $field) unset($quote[$field]);
+    $quote['status']='draft'; $quote['approval']=['approved_by_id'=>'','approved_by_name'=>'','approved_at'=>''];
+    $quote['accepted_at']=''; $quote['accepted_by']=['type'=>'','id'=>'','name'=>''];
+    $quote['acceptance']=['accepted_by_admin_id'=>'','accepted_by_admin_name'=>'','accepted_at'=>'','accepted_note'=>''];
+    $quote['locked_flag']=false; $quote['locked_at']=null; $quote['workflow']=documents_quote_workflow_defaults();
+    $quote['links']=['customer_mobile'=>'','agreement_id'=>'','proforma_id'=>'','invoice_id'=>''];
+    $quote['public_share_token']=documents_generate_quote_public_share_token(); $quote['public_share_enabled']=false;
+    $quote['public_share_created_at']=date('c'); $quote['public_share_revoked_at']=null; $quote['public_share_expires_at']=null;
+    $quote['quote_series_id']=$newId; $quote['version_no']=1; $quote['is_current_version']=true;
+    $quote['revised_from_quote_id']=null; $quote['revision_reason']=null; $quote['revision_child_ids']=[];
+    return $quote;
+}
+
 function documents_get_quote_by_public_share_token(string $token): ?array
 {
     $token = safe_text($token);
