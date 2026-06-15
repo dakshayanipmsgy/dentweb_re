@@ -1192,7 +1192,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$backLink = (is_array($user) && (($user['role_name'] ?? '') === 'admin')) ? 'admin-receipts.php&view=' . urlencode((string) ($challan['quote_id'] ?? $challan['linked_quote_id'] ?? '')) : 'employee-challans.php';
+$backLink = (is_array($user) && (($user['role_name'] ?? '') === 'admin')) ? 'admin-documents.php?tab=accepted_customers&view=' . urlencode((string) ($challan['quote_id'] ?? $challan['linked_quote_id'] ?? '')) : 'employee-challans.php';
 $statusParam = safe_text($_GET['status'] ?? '');
 $messageParam = safe_text($_GET['message'] ?? '');
 $editable = (string) ($challan['status'] ?? 'draft') === 'draft';
