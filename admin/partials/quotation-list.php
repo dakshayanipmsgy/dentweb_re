@@ -33,8 +33,10 @@ $quoteLocked = documents_quote_is_locked($q);
 $isQuotationAdmin = (string) (current_user()['role_name'] ?? '') === 'admin';
 $canApproveQuote = $isQuotationAdmin && !$quoteArchived && !$quoteLocked && in_array($quoteStatusNorm, ['draft', 'pending_admin_approval'], true);
 $canAcceptQuote = $isQuotationAdmin && !$quoteArchived && !$quoteLocked && $quoteStatusNorm === 'approved';
+$changeRequest = is_array($q['customer_change_request'] ?? null) ? $q['customer_change_request'] : [];
 ?>
 <div class="list-actions">
+<?php if ($changeRequest !== []): ?><div class="quote-meta"><strong>Change request <?= htmlspecialchars((string)($changeRequest['request_ref'] ?? ''), ENT_QUOTES) ?></strong><br><?= nl2br(htmlspecialchars((string)($changeRequest['requested_changes'] ?? ''), ENT_QUOTES)) ?><br>Requested <?= htmlspecialchars((string)($changeRequest['requested_at'] ?? ''), ENT_QUOTES) ?><br>Draft: <?= htmlspecialchars((string)($changeRequest['generated_draft_revision_id'] ?? ''), ENT_QUOTES) ?> · <a href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode((string)($changeRequest['generated_draft_revision_id'] ?? '')) ?>">Edit Draft Revision</a></div><?php endif; ?>
 <a class="btn" href="quotation-view.php?id=<?= urlencode($quoteId) ?>">Open</a>
 <?php if (documents_quote_can_edit($q, 'admin')): ?><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($quoteId) ?>">Edit</a><?php endif; ?>
 <button class="btn secondary js-wa-share" type="button" data-quote-id="<?= htmlspecialchars($quoteId, ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars($quoteShareMobile, ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars($customerName, ENT_QUOTES) ?>" <?= $canWhatsappShare ? '' : 'disabled title="Missing valid mobile"' ?>>Share</button>

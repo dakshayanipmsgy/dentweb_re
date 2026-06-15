@@ -23,6 +23,8 @@ function customer_acceptance_validate_token(array $document, string $type, strin
 }
 function customer_acceptance_normalize_mobile(string $mobile): string { $n=preg_replace('/\D+/','',$mobile)??''; return substr($n,-10); }
 function customer_acceptance_mask_mobile(string $mobile): string { $n=customer_acceptance_normalize_mobile($mobile); return $n===''?'':('******'.substr($n,-4)); }
+function customer_change_request_reference(): string { return 'CHG-QTN-'.date('Ymd').'-'.strtoupper(bin2hex(random_bytes(3))); }
+function customer_change_request_whatsapp_url(array $request, string $publicLink=''): string { return 'https://wa.me/'.CUSTOMER_ACCEPTANCE_WHATSAPP_TARGET.'?text='.rawurlencode("Quotation change request recorded.\nReference: ".($request['request_ref']??'')."\nQuotation: ".($request['quotation_no']??'')."\nRequested changes: ".($request['requested_changes']??'')."\nDocument link: ".$publicLink); }
 function customer_acceptance_reference(string $type): string { $p=['quotation'=>'QTN','dispatch_advice'=>'DA','challan'=>'CHL'][$type]??'DOC'; return 'ACC-'.$p.'-'.date('Ymd').'-'.strtoupper(bin2hex(random_bytes(3))); }
 function customer_acceptance_confirmation_text(string $type): string { return ['quotation'=>'I have reviewed this quotation and accept the offered scope, price and terms shown in this version.','dispatch_advice'=>'I have reviewed the planned dispatch items listed in this Material Dispatch Advice. I understand this does not mean delivery occurred.','challan'=>'I confirm that I have received the items listed in this Delivery Challan, subject to any remarks entered below.'][$type]??''; }
 function customer_acceptance_record(array &$document,string $type,array $input,array $context=[]): array
