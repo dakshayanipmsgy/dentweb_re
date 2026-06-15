@@ -3528,41 +3528,12 @@ $activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace'
           <?php if ($packInvoices === []): ?><tr><td colspan="3" class="muted">No invoice found.</td></tr><?php endif; ?>
           </tbody></table>
         <?php else: ?>
-          <h2 style="margin-top:0;">Accepted Customers</h2>
-          <form method="get" class="grid" style="margin-bottom:1rem;">
-            <input type="hidden" name="tab" value="accepted_customers" />
-            <div><label>Search (name/mobile)</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div>
-            <div><label>&nbsp;</label><label><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived accepted customers</label></div>
-            <div><label>&nbsp;</label><button class="btn" type="submit">Apply</button></div>
-          </form>
-          <table>
-            <thead><tr><th>Sr No</th><th>Customer Name</th><th>Actions</th><th>Quotation Amount</th><th>Payment Received</th><th>Receivables</th></tr></thead>
-            <tbody>
-              <?php foreach ($acceptedRows as $index => $row): ?>
-                <?php $quote = $row['quote']; ?>
-                <tr>
-                  <td><?= $index + 1 ?></td>
-                  <td><?= htmlspecialchars((string) ($quote['customer_name'] ?? ''), ENT_QUOTES) ?><?php if (!empty($row['is_archived'])): ?> <span class="pill archived">ARCHIVED</span><?php endif; ?><br><span class="muted"><?= htmlspecialchars((string) ($quote['customer_mobile'] ?? ''), ENT_QUOTES) ?></span></td>
-                  <td class="row-actions">
-                    <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => (string) ($quote['id'] ?? ''), 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">View</a>
-                    <?php if ($isAdmin && empty($row['is_archived'])): ?>
-                      <form class="inline-form" method="post">
-                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
-                        <input type="hidden" name="action" value="archive_accepted_customer" />
-                        <input type="hidden" name="quotation_id" value="<?= htmlspecialchars((string) ($quote['id'] ?? ''), ENT_QUOTES) ?>" />
-                        <input type="hidden" name="return_tab" value="accepted_customers" />
-                        <button class="btn warn" type="submit">Archive</button>
-                      </form>
-                    <?php endif; ?>
-                  </td>
-                  <td><?= htmlspecialchars($inr((float) $row['quotation_amount']), ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars($inr((float) $row['payment_received']), ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars($inr((float) $row['receivables']), ENT_QUOTES) ?><?php if (!empty($row['advance'])): ?><br><span class="muted">(Advance)</span><?php endif; ?><?php if (($row['receivables'] ?? 0) > 0): ?> <span class="pill warn">Due</span><?php endif; ?></td>
-                </tr>
-              <?php endforeach; ?>
-              <?php if ($acceptedRows === []): ?><tr><td colspan="6" class="muted">No accepted customers found.</td></tr><?php endif; ?>
-            </tbody>
-          </table>
+          <div class="commercial-toolbar"><div><h2>Accepted Customers &amp; Receipts</h2><p class="muted-helper">Continue every accepted quotation through its complete commercial document lifecycle.</p></div></div>
+          <form method="get" class="filter-grid list-toolbar"><input type="hidden" name="tab" value="accepted_customers" /><div><label>Search customer / mobile</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div><div><label>Archive visibility</label><label class="checkbox-field"><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived</label></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form>
+          <div class="responsive-table"><table><thead><tr><th>Accepted quotation</th><th>Customer</th><th>System</th><th>Amount</th><th>Workflow</th><th>Actions</th></tr></thead><tbody>
+          <?php foreach ($acceptedRows as $row): $quote=$row['quote']; $qid=(string)($quote['id']??''); $workflow=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[],'Receipt'=>$collectByQuote($salesReceipts,$qid,false)!==[]]; ?>
+          <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td class="quote-amount"><?= htmlspecialchars($inr((float)$row['quotation_amount']),ENT_QUOTES) ?><br><span class="muted-helper"><?= htmlspecialchars($inr((float)$row['payment_received']),ENT_QUOTES) ?> received</span></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Open</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php if($isAdmin && empty($row['is_archived'])):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
+          <?php endforeach; if($acceptedRows===[]):?><tr><td colspan="6" class="empty-state">No accepted customers found.</td></tr><?php endif;?></tbody></table></div>
         <?php endif; ?>
       </section>
     <?php endif; ?>
