@@ -215,7 +215,7 @@ if ($mode === 'edit') {
     <div class="preview"><?= $previewHtml ?></div>
   </div>
 </main>
-</body>
+<p><a href="admin-dispatch-advices.php">Open Material Dispatch Advices</a></p></body>
 </html>
     <?php
     exit;
@@ -264,5 +264,5 @@ $previewHtml = quotation_sanitize_html(documents_render_agreement_body_html($agr
 </head>
 <body>
 <div class="a4-page"><?= $previewHtml ?></div>
-</body>
+<p><a href="admin-dispatch-advices.php">Open Material Dispatch Advices</a></p></body>
 </html>

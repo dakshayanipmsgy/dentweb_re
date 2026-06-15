@@ -3249,7 +3249,7 @@ $activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace'
       <div class="banner <?= htmlspecialchars($status, ENT_QUOTES) ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div>
     <?php endif; ?>
 
-    <nav class="commercial-flow-strip" aria-label="Commercial lifecycle"><a href="admin-quotations.php">Quotation</a><span>→</span><a href="admin-agreements.php">Agreement</a><span>→</span><a href="admin-challans.php">Challan</a><span>→</span><a href="admin-invoices.php">Invoice</a><span>→</span><a href="admin-documents.php?tab=accepted_customers">Receipt</a></nav>
+    <nav class="commercial-flow-strip" aria-label="Commercial lifecycle"><a href="admin-quotations.php">Quotation</a><span>→</span><a href="admin-agreements.php">Agreement</a><span>→</span><a href="admin-dispatch-advices.php">Dispatch Advice</a><span>→</span><a href="admin-challans.php">Challan</a><span>→</span><a href="admin-invoices.php">Invoice</a><span>→</span><a href="admin-documents.php?tab=accepted_customers">Receipt</a></nav>
 
     <div data-workspace-root>
     <section class="admin-documents__context" aria-labelledby="workspace-title">
