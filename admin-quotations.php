@@ -1196,7 +1196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cloned = $original;
         $cloned['id'] = $newId;
         $cloned['quote_no'] = (string) ($number['quote_no'] ?? '');
-        $cloned['status'] = 'Draft';
+        $cloned = documents_quote_reset_clone_state($cloned, $newId);
         $cloned['quotation_date'] = date('Y-m-d');
         $cloned['created_at'] = date('c');
         $cloned['updated_at'] = date('c');
