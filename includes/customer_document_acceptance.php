@@ -61,5 +61,33 @@ function customer_acceptance_dispatch_template(array $document,array $e,array $c
     preg_match_all('/\{[a-z_]+\}/',$message,$matches);
     return ['message'=>$message,'unresolved'=>array_values(array_unique($matches[0]))];
 }
+
+function customer_acceptance_dispatch_default_whatsapp_template(): string
+{
+    return "Dispatch Advice customer confirmation for {company_name}
+Customer: {customer_name}
+Dispatch Advice: {dispatch_advice_no}
+Version: {dispatch_advice_version}
+Quotation: {quotation_no}
+Agreement: {agreement_no}
+Planned dispatch date: {dispatch_date}
+Delivery address: {delivery_address}
+Items:
+{item_summary}
+Acceptance reference: {acceptance_ref}
+Confirmation timestamp: {confirmed_at}
+Masked customer mobile: {customer_mobile_mask}
+Public Dispatch Advice link: {public_link}";
+}
+function customer_acceptance_dispatch_whatsapp_payload(array $document, array $company=[]): array
+{
+    $publicLink=customer_acceptance_dispatch_public_link((string)($document['public_token']??''));
+    return customer_acceptance_dispatch_template($document,(array)($document['customer_acceptance']??[]),$company,$publicLink,customer_acceptance_dispatch_default_whatsapp_template());
+}
+function customer_acceptance_dispatch_whatsapp_url(array $document, array $company=[]): string
+{
+    $built=customer_acceptance_dispatch_whatsapp_payload($document,$company);
+    return 'https://wa.me/'.CUSTOMER_ACCEPTANCE_WHATSAPP_TARGET.'?text='.rawurlencode($built['message']);
+}
 function customer_acceptance_mark_whatsapp_opened(array &$document,string $message): void { $now=date('c');$document['customer_acceptance']['whatsapp_opened_at']=$now;$document['customer_acceptance']['whatsapp_message_snapshot']=$message;$document['customer_acceptance']['events'][]=['event'=>'whatsapp_opened','at'=>$now]; }
 function customer_acceptance_mark_whatsapp_verified(array &$document,array $admin): void { if(empty($document['customer_acceptance']['confirmed_at'])) throw new RuntimeException('No customer confirmation exists.'); $document['customer_acceptance']['status']='whatsapp_verified';$document['customer_acceptance']['whatsapp_verified_at']=date('c');$document['customer_acceptance']['whatsapp_verified_by']=$admin;$document['customer_acceptance']['events'][]=['event'=>'whatsapp_manually_verified','at'=>date('c'),'admin'=>$admin]; }
