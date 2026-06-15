@@ -13,8 +13,18 @@ function customer_acceptance_document_hash(string $type, array $document): strin
 function customer_acceptance_issue_token(array &$document, string $type, int $ttlDays = 30): string
 {
     $token = bin2hex(random_bytes(32));
-    $document['customer_acceptance_request'] = ['token_hash'=>hash('sha256',$token),'document_hash'=>customer_acceptance_document_hash($type,$document),'document_version'=>(int)($document['version_no']??$document['revision_no']??1),'expires_at'=>date('c',time()+86400*$ttlDays),'issued_at'=>date('c')];
+    $document['customer_acceptance_request'] = ['token_hash'=>hash('sha256',$token),'document_hash'=>customer_acceptance_document_hash($type,$document),'document_version'=>(int)($document['version_no']??$document['revision_no']??1),'expires_at'=>date('c',time()+86400*$ttlDays),'issued_at'=>date('c'),'incorrect_mobile_attempts'=>0,'locked_at'=>''];
     return $token;
+}
+function customer_acceptance_is_locked(array $document): bool { return !empty($document['customer_acceptance_request']['locked_at']) || (int)($document['customer_acceptance_request']['incorrect_mobile_attempts']??0)>=3; }
+function customer_acceptance_check_submission(array &$document,string $type,array $input,string $token,array $context=[]): array
+{
+    if(customer_acceptance_is_locked($document))return ['ok'=>false,'code'=>'locked','message'=>'Acceptance is locked. Ask an administrator to reissue a fresh confirmation link.'];
+    if(!customer_acceptance_validate_token($document,$type,$token))return ['ok'=>false,'code'=>'invalid_token','message'=>'This confirmation link is no longer valid.'];
+    if(empty($input['confirmed']))return ['ok'=>false,'code'=>'missing_confirmation','message'=>'The confirmation statement must be accepted.'];
+    $mobile=customer_acceptance_normalize_mobile((string)($document['customer_mobile']??$document['customer_snapshot']['mobile']??''));$entered=preg_replace('/\D+/','',(string)($input['mobile_first6']??''))??'';
+    if(strlen($entered)!==6||!hash_equals(substr($mobile,0,6),$entered)){$attempts=(int)($document['customer_acceptance_request']['incorrect_mobile_attempts']??0)+1;$document['customer_acceptance_request']['incorrect_mobile_attempts']=$attempts;if($attempts>=3)$document['customer_acceptance_request']['locked_at']=date('c');return ['ok'=>false,'code'=>$attempts>=3?'locked':'incorrect_mobile','message'=>$attempts>=3?'Acceptance is locked. Ask an administrator to reissue a fresh confirmation link.':'The confirmation details do not match our record.','save'=>true];}
+    try{customer_acceptance_record($document,$type,$input,$context);return ['ok'=>true,'code'=>'accepted'];}catch(Throwable $e){return ['ok'=>false,'code'=>'server_error','message'=>'Unable to record confirmation. Please try again.'];}
 }
 function customer_acceptance_validate_token(array $document, string $type, string $token): bool
 {

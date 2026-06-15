@@ -1,12 +1,7 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__.'/admin/includes/documents_helpers.php';
 require_once __DIR__.'/includes/public_document_security.php';
-require_once __DIR__.'/includes/dispatch_advice_view_renderer.php';
-require_once __DIR__.'/includes/customer_document_acceptance.php';
-protect_customer_document_response(); header('Content-Type: text/html; charset=utf-8');
-$token=(string)($_GET['token']??''); $d=null; foreach(documents_list_dispatch_advices() as $x) if($token!==''&&hash_equals((string)$x['public_token'],$token)){$d=$x;break;}
-if(!$d||!$d['public_share_enabled']||($d['public_expires_at']&&strtotime($d['public_expires_at'])<time())){http_response_code(404);exit('Link unavailable');}
-$error=''; $challan=null;
-if($_SERVER['REQUEST_METHOD']==='POST'&&empty($d['customer_acceptance']['confirmed_at'])){try{customer_acceptance_record($d,'dispatch_advice',$_POST,['ip'=>$_SERVER['REMOTE_ADDR']??'','user_agent'=>$_SERVER['HTTP_USER_AGENT']??'']);$d['accepted_at']=$d['customer_acceptance']['confirmed_at'];$d['status']='customer_accepted';$result=documents_create_draft_challan_from_dispatch_advice($d);$challan=$result['challan']??null;documents_save_dispatch_advice($d);}catch(Throwable $e){$error=$e->getMessage();}}
-?><!doctype html><html><head><meta name="robots" content="noindex,nofollow,noarchive"><meta charset="utf-8"><title>Dispatch Advice acceptance</title><style>body{font:14px Arial;max-width:1000px;margin:25px auto;padding:10px}.accept{padding:18px;background:#f0fdf4;border:1px solid #86efac}.error{color:#991b1b}</style></head><body><?php render_dispatch_advice($d);?><section class="accept"><h2>Customer acceptance</h2><?php if($error):?><p class="error"><?=htmlspecialchars($error)?></p><?php endif;?><?php if(!empty($d['customer_acceptance']['confirmed_at'])):?><p>Accepted on <?=htmlspecialchars($d['customer_acceptance']['confirmed_at'])?>. Reference: <?=htmlspecialchars($d['customer_acceptance']['acceptance_ref']??'')?></p><?php else:?><form method="post"><label>Name <input name="name" required></label><br><label>Last 4 digits of registered mobile <input name="mobile_last4" maxlength="4" required></label><br><label>Remarks <textarea name="remarks"></textarea></label><br><label><input type="checkbox" name="confirmed" value="1" required> <?=htmlspecialchars(customer_acceptance_confirmation_text('dispatch_advice'))?></label><br><button>Accept Dispatch Advice</button></form><?php endif;?></section></body></html>
+protect_customer_document_response();
+$token=(string)($_GET['token']??'');
+header('Location: customer-document-acceptance.php?'.http_build_query(['type'=>'dispatch_advice','token'=>$token]));
+exit;
