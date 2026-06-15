@@ -1318,6 +1318,15 @@ function documents_invoice_defaults(): array
         'status' => 'Draft',
         'invoice_kind' => 'public',
         'linked_quote_id' => '',
+        'quotation_id' => '',
+        'quotation_no' => '',
+        'source_quote_version' => 1,
+        'source_quote_hash' => '',
+        'commercial_items' => [],
+        'linked_dispatch_advice_ids' => [],
+        'linked_challan_ids' => [],
+        'delivery_summary' => [],
+        'delivery_details' => [],
         'customer_mobile' => '',
         'customer_snapshot' => documents_customer_snapshot_defaults(),
         'capacity_kwp' => '',
@@ -1552,6 +1561,14 @@ function documents_challan_defaults(): array
         'dc_number' => '',
         'challan_no' => '',
         'status' => 'draft',
+        'delivery_status' => 'not_dispatched',
+        'approved_at' => '',
+        'approved_by' => [],
+        'dispatched_at' => '',
+        'dispatched_by' => [],
+        'customer_receipt' => [],
+        'admin_delivery_confirmation' => [],
+        'delivery_exception' => [],
         'segment' => 'RES',
         'template_set_id' => '',
         'linked_quote_id' => '',
@@ -3353,9 +3370,26 @@ function documents_create_proforma_from_quote(array $quote): array
 
 function documents_create_invoice_from_quote(array $quote): array
 {
+    $quoteId = safe_text((string) ($quote['id'] ?? ''));
+    if (!documents_dispatch_quote_eligible($quote) || documents_delivered_challans_for_quote($quoteId) === []) {
+        return ['ok' => false, 'error' => 'Invoice requires an accepted current quotation and at least one delivered Challan.'];
+    }
     $links = is_array($quote['links'] ?? null) ? $quote['links'] : [];
     $existingId = safe_text((string) ($links['invoice_id'] ?? ''));
+    if ($existingId === '') {
+        foreach (glob(documents_invoices_dir() . '/*.json') ?: [] as $file) {
+            $candidate = json_load($file, []);
+            if (is_array($candidate) && (string) ($candidate['linked_quote_id'] ?? $candidate['quotation_id'] ?? '') === $quoteId && strtolower((string) ($candidate['status'] ?? 'draft')) === 'draft') {
+                $existingId = (string) ($candidate['id'] ?? '');
+                break;
+            }
+        }
+    }
     if ($existingId !== '' && documents_get_invoice($existingId) !== null) {
+        $updated = documents_update_draft_invoice_delivery((array) documents_get_invoice($existingId), $quoteId);
+        if (!empty($updated['ok'])) {
+            documents_save_invoice($updated['invoice']);
+        }
         return ['ok' => true, 'invoice_id' => $existingId, 'error' => ''];
     }
 
@@ -3373,6 +3407,11 @@ function documents_create_invoice_from_quote(array $quote): array
     $doc['status'] = 'Draft';
     $doc['invoice_kind'] = 'public';
     $doc['linked_quote_id'] = safe_text((string) ($quote['id'] ?? ''));
+    $doc['quotation_id'] = $doc['linked_quote_id'];
+    $doc['quotation_no'] = safe_text((string) ($quote['quote_no'] ?? ''));
+    $doc['source_quote_version'] = max(1, (int) ($quote['version'] ?? $quote['revision_no'] ?? 1));
+    $doc['commercial_items'] = is_array($quote['items'] ?? null) ? $quote['items'] : (array) ($quote['quote_items'] ?? []);
+    $doc['source_quote_hash'] = hash('sha256', json_encode([$doc['commercial_items'], $quote['calc'] ?? [], $quote['input_total_gst_inclusive'] ?? 0], JSON_UNESCAPED_SLASHES) ?: '');
     $doc['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
     $doc['customer_snapshot'] = $snapshot;
     $doc['capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? ''));
@@ -3381,6 +3420,8 @@ function documents_create_invoice_from_quote(array $quote): array
     $doc['calc'] = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
     $doc['created_at'] = date('c');
     $doc['updated_at'] = date('c');
+    $delivery = documents_update_draft_invoice_delivery($doc, $quoteId);
+    $doc = $delivery['invoice'];
 
     $saved = documents_save_invoice($doc);
     if (!$saved['ok']) {
@@ -3620,6 +3661,11 @@ function documents_quote_workflow_defaults(): array
         'agreement_id' => '',
         'proforma_invoice_id' => '',
         'invoice_id' => '',
+        'invoice_ids' => [],
+        'dispatch_advice_id' => '',
+        'dispatch_advice_ids' => [],
+        'challan_id' => '',
+        'challan_ids' => [],
         'receipt_ids' => [],
         'delivery_challan_ids' => [],
         'packing_list_id' => '',
@@ -3910,6 +3956,13 @@ function documents_quote_link_workflow_doc(array &$quote, string $type, string $
         $quote['workflow']['proforma_invoice_id'] = $id;
     } elseif ($type === 'invoice') {
         $quote['workflow']['invoice_id'] = $id;
+        $quote['workflow']['invoice_ids'] = array_values(array_unique(array_merge((array) $quote['workflow']['invoice_ids'], [$id])));
+    } elseif ($type === 'dispatch_advice') {
+        $quote['workflow']['dispatch_advice_id'] = $id;
+        $quote['workflow']['dispatch_advice_ids'] = array_values(array_unique(array_merge((array) $quote['workflow']['dispatch_advice_ids'], [$id])));
+    } elseif ($type === 'challan') {
+        $quote['workflow']['challan_id'] = $id;
+        $quote['workflow']['challan_ids'] = array_values(array_unique(array_merge((array) $quote['workflow']['challan_ids'], [$id])));
     } elseif ($type === 'receipt') {
         $ids = is_array($quote['workflow']['receipt_ids'] ?? null) ? $quote['workflow']['receipt_ids'] : [];
         if (!in_array($id, $ids, true)) {
@@ -3923,6 +3976,67 @@ function documents_quote_link_workflow_doc(array &$quote, string $type, string $
         }
         $quote['workflow']['delivery_challan_ids'] = array_values($ids);
     }
+}
+
+function documents_dispatch_advices_for_quote(string $quoteId): array
+{
+    return array_values(array_filter(documents_list_dispatch_advices(), static fn(array $row): bool =>
+        (string) ($row['quotation_id'] ?? '') === $quoteId && !in_array((string) ($row['status'] ?? ''), ['archived', 'cancelled', 'superseded'], true)
+    ));
+}
+
+function documents_challans_for_quote(string $quoteId): array
+{
+    return array_values(array_filter(documents_list_challans(), static fn(array $row): bool =>
+        (string) ($row['quote_id'] ?? $row['linked_quote_id'] ?? '') === $quoteId && empty($row['archived_flag']) && (string) ($row['status'] ?? '') !== 'archived'
+    ));
+}
+
+function documents_delivered_challans_for_quote(string $quoteId): array
+{
+    $rows = array_values(array_filter(documents_challans_for_quote($quoteId), static fn(array $row): bool =>
+        in_array((string) ($row['delivery_status'] ?? ''), ['admin_delivered', 'completed'], true)
+    ));
+    usort($rows, static fn(array $a, array $b): int => strcmp(
+        (string) ($a['admin_delivery_confirmation']['delivered_at'] ?? $a['delivery_date'] ?? '') . (string) ($a['challan_no'] ?? ''),
+        (string) ($b['admin_delivery_confirmation']['delivered_at'] ?? $b['delivery_date'] ?? '') . (string) ($b['challan_no'] ?? '')
+    ));
+    return $rows;
+}
+
+function documents_quote_delivery_summary(string $quoteId): array
+{
+    $challans = documents_challans_for_quote($quoteId);
+    $completed = documents_delivered_challans_for_quote($quoteId);
+    $customerConfirmed = array_filter($challans, static fn(array $c): bool => !empty($c['customer_receipt']['confirmed_at']) || !empty($c['customer_acceptance']['accepted_at']));
+    $exceptions = array_filter($challans, static fn(array $c): bool => !empty($c['delivery_exception']) || (string) ($c['delivery_status'] ?? '') === 'exception');
+    return [
+        'status' => $exceptions ? 'exception' : (!$completed ? 'not_started' : (count($completed) === count($challans) ? 'delivered' : 'partial')),
+        'dispatch_advice_count' => count(documents_dispatch_advices_for_quote($quoteId)),
+        'challan_count' => count($challans),
+        'completed_challan_count' => count($completed),
+        'customer_confirmed_count' => count($customerConfirmed),
+        'has_exception' => (bool) $exceptions,
+        'last_delivery_at' => $completed ? (string) (end($completed)['admin_delivery_confirmation']['delivered_at'] ?? end($completed)['delivery_date'] ?? '') : '',
+    ];
+}
+
+function documents_update_draft_invoice_delivery(array $invoice, string $quoteId): array
+{
+    if (strtolower((string) ($invoice['status'] ?? 'draft')) !== 'draft') {
+        return ['ok' => false, 'error' => 'Issued/finalized invoices cannot be updated silently.', 'invoice' => $invoice];
+    }
+    $challans = documents_delivered_challans_for_quote($quoteId);
+    $invoice['linked_challan_ids'] = array_values(array_unique(array_map(static fn(array $c): string => (string) $c['id'], $challans)));
+    $invoice['linked_dispatch_advice_ids'] = array_values(array_unique(array_filter(array_map(static fn(array $c): string => (string) ($c['dispatch_advice_id'] ?? ''), $challans))));
+    $invoice['delivery_details'] = array_map(static fn(array $c): array => [
+        'challan_id' => $c['id'], 'challan_no' => $c['challan_no'] ?? $c['dc_number'] ?? '', 'delivery_date' => $c['delivery_date'] ?? '',
+        'dispatch_advice_no' => $c['dispatch_advice_no'] ?? '', 'delivery_status' => $c['delivery_status'] ?? '', 'customer_receipt' => $c['customer_receipt'] ?? [],
+        'delivery_exception' => $c['delivery_exception'] ?? [], 'items' => $c['items'] ?? [],
+    ], $challans);
+    $invoice['delivery_summary'] = documents_quote_delivery_summary($quoteId);
+    $invoice['updated_at'] = date('c');
+    return ['ok' => true, 'error' => '', 'invoice' => $invoice];
 }
 
 function documents_status_label(array $quote, string $viewerType = 'admin'): string
