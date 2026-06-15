@@ -1,7 +1,0 @@
-<?php
-declare(strict_types=1);
-require_once __DIR__ . '/admin/includes/documents_helpers.php';
-$advice = documents_get_dispatch_advice_by_public_token((string) ($_GET['token'] ?? ''));
-if ($advice === null) { http_response_code(404); echo 'Dispatch Advice not found or sharing has been disabled.'; exit; }
-?>
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dispatch Advice</title><link rel="stylesheet" href="layout-styles.css"></head><body><main class="admin-page"><section class="card"><p class="admin-kicker">Dispatch Advice</p><h1><?= htmlspecialchars((string) $advice['advice_no'], ENT_QUOTES) ?></h1><p><strong>Customer:</strong> <?= htmlspecialchars((string) ($advice['customer_snapshot']['name'] ?? ''), ENT_QUOTES) ?></p><p><strong>Planned date:</strong> <?= htmlspecialchars((string) $advice['planned_dispatch_date'], ENT_QUOTES) ?></p><div class="responsive-table"><table><thead><tr><th>Item</th><th>Quantity</th><th>Unit</th></tr></thead><tbody><?php foreach ((array) $advice['items'] as $item): ?><tr><td><?= htmlspecialchars((string) $item['name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ((float) $item['dispatch_ft'] > 0 ? $item['dispatch_ft'] : $item['dispatch_qty']), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) $item['unit'], ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table></div></section></main></body></html>
