@@ -127,6 +127,11 @@ function documents_challans_dir(): string
     return documents_base_dir() . '/challans';
 }
 
+function documents_dispatch_advices_dir(): string
+{
+    return documents_base_dir() . '/dispatch_advices';
+}
+
 function documents_sales_documents_dir(): string
 {
     return documents_base_dir() . '/documents';
@@ -1937,6 +1942,155 @@ function documents_save_challan(array $challan): array
         return ['ok' => false, 'error' => 'Missing challan ID'];
     }
     return json_save(documents_challans_dir() . '/' . $id . '.json', $challan);
+}
+
+function documents_dispatch_advice_defaults(): array
+{
+    return [
+        'id' => '', 'advice_no' => '', 'status' => 'draft', 'quotation_id' => '',
+        'packing_list_id' => '', 'customer_snapshot' => documents_customer_snapshot_defaults(),
+        'site_address_snapshot' => '', 'planned_dispatch_date' => '', 'items' => [],
+        'delivery_challan_ids' => [], 'created_by' => ['role' => '', 'id' => '', 'name' => ''],
+        'created_at' => '', 'updated_at' => '', 'archived_flag' => false,
+        'public_share_enabled' => false, 'public_share_token_hash' => '',
+    ];
+}
+
+function documents_normalize_dispatch_advice_items(array $items): array
+{
+    $rows = [];
+    foreach ($items as $item) {
+        if (!is_array($item)) { continue; }
+        $row = array_merge(documents_challan_item_defaults(), $item);
+        $row['line_id'] = safe_text((string) $row['line_id']);
+        $row['component_id'] = safe_text((string) $row['component_id']);
+        $row['name'] = safe_text((string) $row['name']);
+        $row['unit'] = safe_text((string) $row['unit']) ?: 'Nos';
+        $row['dispatch_qty'] = max(0, (float) $row['dispatch_qty']);
+        $row['dispatch_ft'] = max(0, (float) $row['dispatch_ft']);
+        $row['dispatch_wp'] = max(0, (float) $row['dispatch_wp']);
+        if ($row['line_id'] !== '' && ($row['dispatch_qty'] > 0 || $row['dispatch_ft'] > 0 || $row['dispatch_wp'] > 0)) {
+            $rows[] = $row;
+        }
+    }
+    return $rows;
+}
+
+function documents_dispatch_advice_items_from_packing_list(array $packingList): array
+{
+    $items = [];
+    foreach ((array) ($packingList['required_items'] ?? []) as $line) {
+        if (!is_array($line)) { continue; }
+        $mode = (string) ($line['mode'] ?? 'fixed_qty');
+        $qty = max(0, (float) ($line['pending_qty'] ?? 0));
+        $ft = max(0, (float) ($line['pending_ft'] ?? 0));
+        $wp = $mode === 'rule_fulfillment' ? max(0, (float) ($line['target_wp'] ?? 0) - (float) ($line['dispatched_wp'] ?? 0)) : 0;
+        if ($qty <= 0 && $ft <= 0 && $wp <= 0) { continue; }
+        $items[] = [
+            'line_id' => (string) ($line['line_id'] ?? ''), 'component_id' => (string) ($line['component_id'] ?? ''),
+            'name' => (string) ($line['component_name_snapshot'] ?? ''), 'unit' => (string) ($line['unit'] ?? 'Nos'),
+            'mode' => $mode, 'dispatch_qty' => $qty, 'dispatch_ft' => $ft, 'dispatch_wp' => $wp,
+            'variant_id' => '', 'variant_name_snapshot' => '', 'manual_note' => '',
+        ];
+    }
+    return documents_normalize_dispatch_advice_items($items);
+}
+
+function documents_get_dispatch_advice(string $id): ?array
+{
+    $path = documents_dispatch_advices_dir() . '/' . safe_filename($id) . '.json';
+    $row = json_load($path, null);
+    if (!is_array($row)) { return null; }
+    $row = array_merge(documents_dispatch_advice_defaults(), $row);
+    $row['items'] = documents_normalize_dispatch_advice_items((array) $row['items']);
+    return $row;
+}
+
+function documents_list_dispatch_advices(): array
+{
+    documents_ensure_dir(documents_dispatch_advices_dir());
+    $rows = [];
+    foreach (glob(documents_dispatch_advices_dir() . '/*.json') ?: [] as $path) {
+        $row = documents_get_dispatch_advice(pathinfo($path, PATHINFO_FILENAME));
+        if ($row !== null) { $rows[] = $row; }
+    }
+    usort($rows, static fn(array $a, array $b): int => strcmp((string) $b['created_at'], (string) $a['created_at']));
+    return $rows;
+}
+
+function documents_save_dispatch_advice(array $advice): array
+{
+    $id = safe_filename((string) ($advice['id'] ?? ''));
+    if ($id === '') { return ['ok' => false, 'error' => 'Missing dispatch advice ID']; }
+    documents_ensure_dir(documents_dispatch_advices_dir());
+    $existing = documents_get_dispatch_advice($id);
+    $advice = array_merge(documents_dispatch_advice_defaults(), $existing ?? [], $advice);
+    $advice['items'] = documents_normalize_dispatch_advice_items((array) $advice['items']);
+    $advice['updated_at'] = date('c');
+    return json_save(documents_dispatch_advices_dir() . '/' . $id . '.json', $advice);
+}
+
+function documents_enable_dispatch_advice_public_share(array $advice): array
+{
+    $token = bin2hex(random_bytes(24));
+    $advice['public_share_enabled'] = true;
+    $advice['public_share_token_hash'] = hash('sha256', $token);
+    $saved = documents_save_dispatch_advice($advice);
+    return ['ok' => (bool) ($saved['ok'] ?? false), 'token' => ($saved['ok'] ?? false) ? $token : '', 'error' => (string) ($saved['error'] ?? '')];
+}
+
+function documents_get_dispatch_advice_by_public_token(string $token): ?array
+{
+    if (!preg_match('/^[a-f0-9]{48}$/', $token)) { return null; }
+    $hash = hash('sha256', $token);
+    foreach (documents_list_dispatch_advices() as $advice) {
+        if (!empty($advice['public_share_enabled']) && hash_equals((string) ($advice['public_share_token_hash'] ?? ''), $hash)) {
+            return $advice;
+        }
+    }
+    return null;
+}
+
+function documents_create_delivery_challan_from_dispatch_advice(array $advice, array $actor): array
+{
+    $quote = documents_get_quote((string) ($advice['quotation_id'] ?? ''));
+    if ($quote === null) { return ['ok' => false, 'error' => 'Linked quotation not found']; }
+    $items = documents_normalize_dispatch_advice_items((array) ($advice['items'] ?? []));
+    $packing = documents_get_packing_list_for_quote((string) $quote['id'], false);
+    if ($packing !== null) {
+        $pending = [];
+        foreach (documents_dispatch_advice_items_from_packing_list($packing) as $row) { $pending[(string) $row['line_id']] = $row; }
+        foreach ($items as &$item) {
+            $limit = $pending[(string) $item['line_id']] ?? [];
+            $item['dispatch_qty'] = min((float) $item['dispatch_qty'], (float) ($limit['dispatch_qty'] ?? 0));
+            $item['dispatch_ft'] = min((float) $item['dispatch_ft'], (float) ($limit['dispatch_ft'] ?? 0));
+            $item['dispatch_wp'] = min((float) $item['dispatch_wp'], (float) ($limit['dispatch_wp'] ?? 0));
+        }
+        unset($item);
+        $items = documents_normalize_dispatch_advice_items($items);
+    }
+    if ($items === []) { return ['ok' => false, 'error' => 'Dispatch advice has no items']; }
+    $number = documents_generate_challan_number((string) ($quote['segment'] ?? 'RES'));
+    if (!($number['ok'] ?? false)) { return $number; }
+    $snapshot = documents_quote_resolve_snapshot($quote);
+    $challan = array_merge(documents_challan_defaults(), [
+        'id' => 'dc_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)), 'challan_no' => (string) $number['challan_no'],
+        'dc_number' => (string) $number['challan_no'], 'linked_quote_id' => (string) $quote['id'],
+        'quote_id' => (string) $quote['id'], 'packing_list_id' => (string) ($advice['packing_list_id'] ?? ''),
+        'dispatch_advice_id' => (string) $advice['id'], 'customer_snapshot' => $snapshot,
+        'site_address' => (string) ($advice['site_address_snapshot'] ?? ''), 'delivery_address' => (string) ($advice['site_address_snapshot'] ?? ''),
+        'delivery_date' => date('Y-m-d'), 'items' => $items, 'created_by' => $actor,
+        'created_by_type' => (string) ($actor['role'] ?? ''), 'created_by_id' => (string) ($actor['id'] ?? ''),
+        'created_by_name' => (string) ($actor['name'] ?? ''), 'created_at' => date('c'), 'updated_at' => date('c'),
+    ]);
+    $saved = documents_save_challan($challan);
+    if (!($saved['ok'] ?? false)) { return $saved; }
+    $advice['delivery_challan_ids'] = array_values(array_unique(array_merge((array) $advice['delivery_challan_ids'], [$challan['id']])));
+    $advice['status'] = 'converted';
+    documents_save_dispatch_advice($advice);
+    documents_quote_link_workflow_doc($quote, 'delivery_challan', (string) $challan['id']);
+    documents_save_quote($quote);
+    return ['ok' => true, 'challan' => $challan];
 }
 
 
