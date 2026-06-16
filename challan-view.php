@@ -502,7 +502,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $isDraft = (string) ($challan['status'] ?? 'draft') === 'draft';
     if (in_array($action, ['save_draft', 'finalize', 'archive'], true)) {
         if (!$isDraft && in_array($action, ['save_draft', 'finalize'], true)) {
-            $redirectWith('error', 'Only draft DC can be edited/finalized.');
+            $redirectWith('error', 'Only draft DC can be edited/issued.');
         }
 
         if (in_array($action, ['save_draft', 'finalize'], true)) {
@@ -796,7 +796,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             unset($line);
             if ($action === 'finalize' && $lineErrorsFound) {
-                $redirectWith('error', 'Resolve line errors before finalizing. Save draft to keep your edits.');
+                $redirectWith('error', 'Resolve line errors before issuing. Save draft to keep your edits.');
             }
 
             $challan['items'] = array_map(static function (array $line): array {
@@ -851,7 +851,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'source_location_id' => (string) ($line['source_location_id'] ?? ''),
                     'ref_type' => 'delivery_challan',
                     'ref_id' => (string) ($challan['id'] ?? ''),
-                    'reason' => 'DC Finalized',
+                    'reason' => 'DC issued/dispatched',
                     'notes' => (string) ($line['notes'] ?? ''),
                     'created_at' => date('c'),
                     'created_by' => ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName],
@@ -961,7 +961,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'lot_id' => 'NEG-' . date('YmdHis') . '-' . bin2hex(random_bytes(2)),
                             'remaining_length_ft' => -round($shortFt, 4),
                             'location_id' => '',
-                            'note' => 'Negative stock via DC finalize',
+                            'note' => 'Negative stock via DC issue',
                         ];
                     }
                     $tx['length_ft'] = $needFt;
@@ -1023,7 +1023,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 documents_inventory_sync_verification_log($transactions, true);
             }
             $challan['inventory_txn_ids'] = $txnIds;
-            $challan['status'] = 'final';
+            $challan['status'] = 'issued';
+            $challan['delivery_status'] = 'dispatched';
+            $challan['issued_at'] = date('c');
+            $challan['dispatched_at'] = date('c');
+            $challan['issued_by'] = ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName];
+            $challan['dispatched_by'] = ['role' => $viewerType, 'id' => $viewerId, 'name' => $viewerName];
+            $challan['public_share_enabled'] = true;
+            if (safe_text((string)($challan['public_token'] ?? '')) === '') { $challan['public_token'] = bin2hex(random_bytes(24)); }
         }
 
         if ($action === 'save_draft') {
@@ -1031,7 +1038,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($action === 'archive') {
             $challanStatus = (string) ($challan['status'] ?? 'draft');
-            if ($challanStatus === 'final') {
+            if ($challanStatus === 'issued' || $challanStatus === 'final') {
                 $stock = documents_inventory_load_stock();
                 $allTransactions = documents_inventory_load_transactions();
                 $transactionsById = [];
@@ -1188,7 +1195,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             documents_log('Challan update failed for ' . (string) ($challan['id'] ?? '') . ': ' . (string) ($saved['error'] ?? 'Unknown error'));
             $redirectWith('error', 'Unable to save delivery challan.');
         }
-        $redirectWith('success', $action === 'finalize' ? 'DC finalized successfully.' : ($action === 'save_draft' ? 'DC draft saved.' : 'DC archived.'));
+        $redirectWith('success', $action === 'finalize' ? 'DC issued and marked dispatched successfully.' : ($action === 'save_draft' ? 'DC draft saved.' : 'DC archived.'));
     }
 }
 
@@ -1345,7 +1352,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 </div>
 <?php endif; ?>
 
-<div class="row-actions" style="margin-top:12px"><?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="finalize">Finalize DC</button><?php endif; ?><?php if ((string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php endif; ?></div>
+<div class="row-actions" style="margin-top:12px"><?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="finalize">Approve &amp; Mark Dispatched</button><?php endif; ?><?php if ((string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php endif; ?></div>
 </form>
 </main>
 <script>
