@@ -1567,17 +1567,7 @@ function documents_challan_defaults(): array
         'dispatched_at' => '',
         'dispatched_by' => [],
         'customer_receipt' => [],
-        'customer_receipt_status' => '',
         'admin_delivery_confirmation' => [],
-        'delivery_completion' => [],
-        'public_share_enabled' => false,
-        'public_token' => '',
-        'share_audit' => [],
-        'dispatch_advice_id' => '',
-        'dispatch_advice_no' => '',
-        'dispatch_advice_acceptance_ref' => '',
-        'dispatch_advice_item_snapshot' => [],
-        'challan_difference_reason' => '',
         'delivery_exception' => [],
         'segment' => 'RES',
         'template_set_id' => '',
@@ -1848,18 +1838,8 @@ function documents_normalize_challan_items(array $items): array
 
 function documents_challan_has_valid_items(array $challan): bool
 {
-    return documents_migrate_challan_items_to_lines($challan) !== [] || documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []) !== [];
+    return documents_migrate_challan_items_to_lines($challan) !== [];
 }
-
-function documents_normalize_challan_status(string $status): string
-{
-    $s = strtolower(safe_text($status));
-    if (in_array($s, ['issued', 'issue', 'final', 'finalized', 'approved'], true)) { return 'issued'; }
-    if (in_array($s, ['archived', 'archive'], true)) { return 'archived'; }
-    if (in_array($s, ['cancelled', 'canceled', 'cancel'], true)) { return 'cancelled'; }
-    return 'draft';
-}
-
 
 function documents_generate_challan_number(string $segment): array
 {
@@ -1910,8 +1890,10 @@ function documents_get_challan(string $id): ?array
         $challan['created_by'] = ['role' => (string) ($challan['created_by_type'] ?? ''), 'id' => (string) ($challan['created_by_id'] ?? ''), 'name' => (string) ($challan['created_by_name'] ?? '')];
     }
     $challan['inventory_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['inventory_txn_ids'] ?? null) ? $challan['inventory_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
-    $challan['status'] = documents_normalize_challan_status((string) ($challan['status'] ?? 'draft'));
-    $challan['public_share_enabled'] = !empty($challan['public_share_enabled']);
+    $challan['status'] = in_array(strtolower((string) ($challan['status'] ?? 'draft')), ['draft', 'final', 'archived'], true) ? strtolower((string) $challan['status']) : 'draft';
+    if ((string) ($row['status'] ?? '') === 'Draft') { $challan['status'] = 'draft'; }
+    if ((string) ($row['status'] ?? '') === 'Issued') { $challan['status'] = 'final'; }
+    if ((string) ($row['status'] ?? '') === 'Archived') { $challan['status'] = 'archived'; }
     $challan['lines'] = documents_migrate_challan_items_to_lines($challan);
     $challan['items'] = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
     if ($resolvedDcNumber !== '' && (
@@ -1949,8 +1931,10 @@ function documents_list_challans(): array
             $challan['created_by'] = ['role' => (string) ($challan['created_by_type'] ?? ''), 'id' => (string) ($challan['created_by_id'] ?? ''), 'name' => (string) ($challan['created_by_name'] ?? '')];
         }
         $challan['inventory_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['inventory_txn_ids'] ?? null) ? $challan['inventory_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
-        $challan['status'] = documents_normalize_challan_status((string) ($challan['status'] ?? 'draft'));
-        $challan['public_share_enabled'] = !empty($challan['public_share_enabled']);
+        $challan['status'] = in_array(strtolower((string) ($challan['status'] ?? 'draft')), ['draft', 'final', 'archived'], true) ? strtolower((string) $challan['status']) : 'draft';
+        if ((string) ($row['status'] ?? '') === 'Draft') { $challan['status'] = 'draft'; }
+        if ((string) ($row['status'] ?? '') === 'Issued') { $challan['status'] = 'final'; }
+        if ((string) ($row['status'] ?? '') === 'Archived') { $challan['status'] = 'archived'; }
         $challan['lines'] = documents_migrate_challan_items_to_lines($challan);
         $challan['items'] = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
         $rows[] = $challan;
@@ -1969,7 +1953,6 @@ function documents_save_challan(array $challan): array
     if ($id === '') {
         return ['ok' => false, 'error' => 'Missing challan ID'];
     }
-    $challan['status'] = documents_normalize_challan_status((string) ($challan['status'] ?? 'draft'));
     return json_save(documents_challans_dir() . '/' . $id . '.json', $challan);
 }
 
@@ -6452,11 +6435,7 @@ function documents_dispatch_advices_for_tab(string $tab,array $rows=[]): array {
 function documents_save_dispatch_advice(array $d): array {documents_ensure_dir(documents_dispatch_advices_dir());return json_save(documents_dispatch_advices_dir().'/'.safe_filename((string)$d['id']).'.json',$d);}
 function documents_generate_dispatch_advice_number(string $segment): string {$segments=['RES','COM','IND','INST','PROD'];if(!in_array($segment,$segments,true))$segment='RES';$path=documents_dispatch_advice_settings_path();$s=json_load($path,['counters'=>[],'whatsapp_template'=>'']);$fy=current_fy_string(4);$key=$segment.'_'.$fy;$n=max(1,(int)($s['counters'][$key]??1));$s['counters'][$key]=$n+1;$s['updated_at']=date('c');json_save($path,$s);return 'DE/DA/'.$segment.'/'.$fy.'/'.str_pad((string)$n,4,'0',STR_PAD_LEFT);}
 function documents_latest_finalized_dispatch_advice(string $quoteId): ?array {foreach(documents_list_dispatch_advices() as $d)if((string)$d['quotation_id']===$quoteId&&in_array($d['status'],['finalized','shared','customer_accepted'],true))return $d;return null;}
-function documents_challan_public_url(array $challan): string { $token=safe_text((string)($challan['public_token']??'')); if($token==='')return ''; $scheme=(isset($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')?'https://':'http://'; return $scheme.($_SERVER['HTTP_HOST']??'localhost').'/challan-public.php?token='.rawurlencode($token); }
-function documents_get_challan_by_public_token(string $token): ?array { $token=trim($token); if($token==='')return null; foreach(documents_list_challans() as $c){$public=(string)($c['public_token']??''); if($public!==''&&hash_equals($public,$token))return $c;} return null; }
-function documents_challan_public_items(array $challan): array { $items=documents_normalize_challan_items(is_array($challan['items']??null)?$challan['items']:[]); if($items!==[]) return array_map(static fn($i)=>['name'=>$i['name'],'description'=>$i['description'],'brand_model'=>(string)($i['brand_model']??$i['variant_name_snapshot']??''),'qty'=>$i['qty'],'unit'=>$i['unit'],'remarks'=>$i['remarks'],'line_id'=>(string)($i['line_id']??'')],$items); $out=[]; foreach(documents_migrate_challan_items_to_lines($challan) as $l){$name=(string)($l['component_name_snapshot']??''); if((string)($l['variant_name_snapshot']??'')!=='')$name.=' - '.(string)$l['variant_name_snapshot']; $out[]=['name'=>$name,'description'=>(string)($l['notes']??''),'brand_model'=>'','qty'=>!empty($l['is_cuttable_snapshot'])?(float)($l['length_ft']??0):(float)($l['qty']??0),'unit'=>(string)($l['unit_snapshot']??''),'remarks'=>(string)($l['notes']??''),'line_id'=>(string)($l['line_id']??'')]; } return $out; }
-function documents_challan_item_diff(array $advice,array $challan): array { $canon=static fn(array $rows): array=>array_values(array_map(static fn($r): string=>strtolower(trim((string)($r['name']??''))).'|'.(float)($r['qty']??0).'|'.strtolower(trim((string)($r['unit']??''))),$rows)); $a=documents_normalize_dispatch_advice_items((array)($advice['items']??$challan['dispatch_advice_item_snapshot']??[])); $c=documents_challan_public_items($challan); return ['differs'=>$canon($a)!==$canon($c),'advice_items'=>$a,'challan_items'=>$c]; }
-function documents_dispatch_advice_items_differ(array $advice,array $challan): bool { return documents_challan_item_diff($advice,$challan)['differs']; }
+function documents_dispatch_advice_items_differ(array $advice,array $challan): bool {$canon=fn($rows)=>array_map(fn($r)=>strtolower(trim((string)($r['name']??''))).'|'.(float)($r['qty']??$r['dispatch_qty']??0).'|'.strtolower(trim((string)($r['unit']??''))),documents_normalize_dispatch_advice_items((array)$rows));return $canon($advice['items']??[])!==$canon($challan['items']??$challan['lines']??[]);}
 function documents_challan_for_dispatch_advice(string $id): ?array { foreach(documents_list_challans() as $c)if((string)($c['dispatch_advice_id']??'')===$id)return $c;return null; }
-function documents_create_draft_challan_from_dispatch_advice(array &$d): array { $existing=documents_challan_for_dispatch_advice((string)$d['id']);if($existing){$d['generated_challan_id']=$existing['id'];return ['ok'=>true,'challan'=>$existing,'created'=>false];}$num=documents_generate_challan_number((string)$d['segment']);if(empty($num['ok']))return $num;$c=documents_challan_defaults();$items=documents_normalize_dispatch_advice_items((array)$d['items']);$c['id']='dc_'.date('YmdHis').'_'.bin2hex(random_bytes(3));$c['challan_no']=$c['dc_number']=$num['challan_no'];$c['status']='draft';$c['dispatch_advice_id']=$d['id'];$c['dispatch_advice_no']=$d['dispatch_advice_no'];$c['dispatch_advice_acceptance_ref']=$d['customer_acceptance']['acceptance_ref']??'';$c['dispatch_advice_item_snapshot']=$items;$c['linked_quote_id']=$c['quote_id']=$d['quotation_id'];$c['linked_quote_no']=$d['quotation_no'];$c['agreement_id']=$d['agreement_id'];$c['agreement_no']=$d['agreement_no']??'';$c['customer_snapshot']=array_merge(documents_customer_snapshot_defaults(),['name'=>$d['customer_name'],'mobile'=>$d['customer_mobile'],'address'=>$d['delivery_address']]);$c['customer_mobile']=$d['customer_mobile'];$c['customer_name_snapshot']=$d['customer_name'];$c['delivery_address']=$d['delivery_address'];$c['site_address']=$d['delivery_address'];$c['delivery_date']=$d['planned_dispatch_date'];$c['items']=array_map(static fn($i)=>array_merge($i,['source_dispatch_advice_id'=>$d['id'],'source_dispatch_advice_line_id'=>$i['line_id']]),$items);$c['created_at']=$c['updated_at']=date('c');$r=documents_save_challan($c);if(empty($r['ok']))return $r;$d['generated_challan_id']=$c['id'];$d['generated_challan_at']=date('c');documents_save_dispatch_advice($d);return ['ok'=>true,'challan'=>$c,'created'=>true]; }
+function documents_create_draft_challan_from_dispatch_advice(array &$d): array { $existing=documents_challan_for_dispatch_advice((string)$d['id']);if($existing){$d['generated_challan_id']=$existing['id'];return ['ok'=>true,'challan'=>$existing,'created'=>false];}$num=documents_generate_challan_number((string)$d['segment']);if(empty($num['ok']))return $num;$c=documents_challan_defaults();$c['id']='dc_'.date('YmdHis').'_'.bin2hex(random_bytes(3));$c['challan_no']=$c['dc_number']=$num['challan_no'];$c['dispatch_advice_id']=$d['id'];$c['dispatch_advice_no']=$d['dispatch_advice_no'];$c['dispatch_advice_acceptance_ref']=$d['customer_acceptance']['acceptance_ref']??'';$c['linked_quote_id']=$c['quote_id']=$d['quotation_id'];$c['linked_quote_no']=$d['quotation_no'];$c['agreement_id']=$d['agreement_id'];$c['customer_snapshot']=array_merge(documents_customer_snapshot_defaults(),['name'=>$d['customer_name'],'mobile'=>$d['customer_mobile'],'address'=>$d['delivery_address']]);$c['delivery_address']=$d['delivery_address'];$c['delivery_date']=$d['planned_dispatch_date'];$c['items']=array_map(static fn($i)=>array_merge($i,['source_dispatch_advice_id'=>$d['id'],'source_dispatch_advice_line_id'=>$i['line_id']]),documents_normalize_dispatch_advice_items($d['items']));$c['created_at']=$c['updated_at']=date('c');$r=documents_save_challan($c);if(empty($r['ok']))return $r;$d['generated_challan_id']=$c['id'];$d['generated_challan_at']=date('c');documents_save_dispatch_advice($d);return ['ok'=>true,'challan'=>$c,'created'=>true]; }
 function documents_validate_dispatch_advice(array $d): array { $q=documents_get_quote((string)$d['quotation_id']);if(!$q||!documents_dispatch_quote_eligible($q))return ['ok'=>false,'error'=>'Dispatch Advice requires an accepted, current, non-archived quotation.'];if(safe_text((string)$d['customer_name'])===''||normalize_customer_mobile((string)$d['customer_mobile'])===''||safe_text((string)$d['delivery_address'])==='')return ['ok'=>false,'error'=>'Customer name, valid mobile, and delivery address are required.'];if(empty($d['planned_dispatch_date'])&&empty($d['date_to_be_confirmed']))return ['ok'=>false,'error'=>'Choose a dispatch date or mark date to be confirmed.'];if(!documents_normalize_dispatch_advice_items((array)$d['items']))return ['ok'=>false,'error'=>'Select at least one item with quantity and unit.'];return ['ok'=>true,'error'=>'']; }
