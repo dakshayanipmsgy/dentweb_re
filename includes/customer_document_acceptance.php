@@ -10,10 +10,43 @@ function customer_acceptance_document_hash(string $type, array $document): strin
     foreach ($omit as $key) unset($document[$key]);
     return hash('sha256', json_encode(['type'=>$type, 'document'=>$document], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE));
 }
+function customer_acceptance_document_no(string $type, array $document): string
+{
+    return (string)($document['quote_no']??$document['dispatch_advice_no']??$document['challan_no']??$document['dc_number']??'');
+}
+function customer_acceptance_document_version(array $document): int
+{
+    return (int)($document['version_no']??$document['revision_no']??1);
+}
+function customer_acceptance_public_token(array $document): string
+{
+    return (string)($document['public_share_token']??$document['public_token']??'');
+}
 function customer_acceptance_issue_token(array &$document, string $type, int $ttlDays = 30): string
 {
     $token = bin2hex(random_bytes(32));
-    $document['customer_acceptance_request'] = ['token_hash'=>hash('sha256',$token),'document_hash'=>customer_acceptance_document_hash($type,$document),'document_version'=>(int)($document['version_no']??$document['revision_no']??1),'expires_at'=>date('c',time()+86400*$ttlDays),'issued_at'=>date('c'),'incorrect_mobile_attempts'=>0,'locked_at'=>''];
+    $previous = (array)($document['customer_acceptance_request'] ?? []);
+    $events = (array)($previous['events'] ?? []);
+    if ($previous !== []) {
+        $events[] = ['event'=>'request_invalidated','at'=>date('c'),'previous_token_hash'=>(string)($previous['token_hash']??'')];
+    }
+    $hash = hash('sha256', $token);
+    $events[] = ['event'=>'request_issued','at'=>date('c'),'token_hash'=>$hash];
+    $publicToken = customer_acceptance_public_token($document);
+    $document['customer_acceptance_request'] = [
+        'token_hash'=>$hash,
+        'document_type'=>$type,
+        'document_id'=>(string)($document['id']??''),
+        'document_no'=>customer_acceptance_document_no($type,$document),
+        'document_version'=>customer_acceptance_document_version($document),
+        'document_hash'=>customer_acceptance_document_hash($type,$document),
+        'public_token_hash'=>hash('sha256',$publicToken),
+        'expires_at'=>date('c',time()+86400*$ttlDays),
+        'issued_at'=>date('c'),
+        'incorrect_mobile_attempts'=>0,
+        'locked_at'=>'',
+        'events'=>$events,
+    ];
     return $token;
 }
 function customer_acceptance_is_locked(array $document): bool { return !empty($document['customer_acceptance_request']['locked_at']) || (int)($document['customer_acceptance_request']['incorrect_mobile_attempts']??0)>=3; }
@@ -23,13 +56,14 @@ function customer_acceptance_check_submission(array &$document,string $type,arra
     if(!customer_acceptance_validate_token($document,$type,$token))return ['ok'=>false,'code'=>'invalid_token','message'=>'This confirmation link is no longer valid.'];
     if(empty($input['confirmed']))return ['ok'=>false,'code'=>'missing_confirmation','message'=>'The confirmation statement must be accepted.'];
     $mobile=customer_acceptance_normalize_mobile((string)($document['customer_mobile']??$document['customer_snapshot']['mobile']??''));$entered=preg_replace('/\D+/','',(string)($input['mobile_first6']??''))??'';
-    if(strlen($entered)!==6||!hash_equals(substr($mobile,0,6),$entered)){$attempts=(int)($document['customer_acceptance_request']['incorrect_mobile_attempts']??0)+1;$document['customer_acceptance_request']['incorrect_mobile_attempts']=$attempts;if($attempts>=3)$document['customer_acceptance_request']['locked_at']=date('c');return ['ok'=>false,'code'=>$attempts>=3?'locked':'incorrect_mobile','message'=>$attempts>=3?'Acceptance is locked. Ask an administrator to reissue a fresh confirmation link.':'The confirmation details do not match our record.','save'=>true];}
+    if(strlen($entered)!==6)return ['ok'=>false,'code'=>'invalid_format','message'=>'Enter exactly the first 6 digits of the registered mobile.'];
+    if(!hash_equals(substr($mobile,0,6),$entered)){$attempts=(int)($document['customer_acceptance_request']['incorrect_mobile_attempts']??0)+1;$document['customer_acceptance_request']['incorrect_mobile_attempts']=$attempts;$remaining=max(0,3-$attempts);$document['customer_acceptance_request']['events'][]=['event'=>'incorrect_mobile_prefix','at'=>date('c'),'attempts'=>$attempts];if($attempts>=3)$document['customer_acceptance_request']['locked_at']=date('c');return ['ok'=>false,'code'=>$attempts>=3?'locked':'incorrect_mobile','message'=>$attempts>=3?'Acceptance is locked. Ask an administrator to reissue a fresh confirmation link.':'The confirmation details do not match our record. '.$remaining.' attempt'.($remaining===1?'':'s').' remaining.','save'=>true];}
     try{customer_acceptance_record($document,$type,$input,$context);return ['ok'=>true,'code'=>'accepted'];}catch(Throwable $e){return ['ok'=>false,'code'=>'server_error','message'=>'Unable to record confirmation. Please try again.'];}
 }
 function customer_acceptance_validate_token(array $document, string $type, string $token): bool
 {
     $r=(array)($document['customer_acceptance_request']??[]); $hash=(string)($r['token_hash']??'');
-    return $token!=='' && $hash!=='' && hash_equals($hash,hash('sha256',$token)) && (empty($r['expires_at'])||strtotime((string)$r['expires_at'])>=time()) && hash_equals((string)($r['document_hash']??''),customer_acceptance_document_hash($type,$document));
+    return $token!=='' && $hash!=='' && hash_equals($hash,hash('sha256',$token)) && (empty($r['expires_at'])||strtotime((string)$r['expires_at'])>=time()) && hash_equals((string)($r['document_hash']??''),customer_acceptance_document_hash($type,$document)) && (string)($r['document_type']??$type)===$type && (string)($r['document_id']??($document['id']??''))===(string)($document['id']??'') && (string)($r['document_no']??customer_acceptance_document_no($type,$document))===customer_acceptance_document_no($type,$document) && (int)($r['document_version']??customer_acceptance_document_version($document))===customer_acceptance_document_version($document) && hash_equals((string)($r['public_token_hash']??hash('sha256',customer_acceptance_public_token($document))),hash('sha256',customer_acceptance_public_token($document)));
 }
 function customer_acceptance_normalize_mobile(string $mobile): string { $n=preg_replace('/\D+/','',$mobile)??''; return substr($n,-10); }
 function customer_acceptance_mask_mobile(string $mobile): string { $n=customer_acceptance_normalize_mobile($mobile); return $n===''?'':('******'.substr($n,-4)); }
