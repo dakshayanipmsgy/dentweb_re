@@ -115,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $challan['id'] = 'dc_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
     $challan['challan_no'] = (string) $number['challan_no'];
-    $challan['status'] = $action === 'issue' ? 'Issued' : 'Draft';
+    $challan['status'] = $action === 'issue' ? 'issued' : 'draft';
     $challan['segment'] = $segment;
     $challan['template_set_id'] = $templateSetId;
     $challan['linked_quote_id'] = $linkedQuote !== null ? (string) ($linkedQuote['id'] ?? '') : '';
