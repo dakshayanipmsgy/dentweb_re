@@ -1,15 +1,23 @@
 <?php
 declare(strict_types=1);
-
-function dispatch_advice_safe(string $value): string { return htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); }
+require_once __DIR__ . '/material_document_renderer.php';
+function dispatch_advice_safe(string $value): string { return material_document_safe($value); }
 function render_dispatch_advice(array $d, array $company = [], bool $public = false): void
 {
-    $name = trim((string)($company['brand_name'] ?? $company['company_name'] ?? '')) ?: 'Dakshayani Enterprises';
-    $address = implode(', ', array_filter([(string)($company['address_line'] ?? ''), (string)($company['city'] ?? ''), (string)($company['state'] ?? ''), (string)($company['pin'] ?? '')]));
-    $mobile = $public && function_exists('customer_acceptance_mask_mobile') ? customer_acceptance_mask_mobile((string)($d['customer_mobile'] ?? '')) : (string)($d['customer_mobile'] ?? '');
-    ?><article class="document dispatch-advice-document">
-    <header class="document-header"><div><?php if(trim((string)($company['logo_path']??''))!==''):?><img class="company-logo" src="<?=dispatch_advice_safe((string)$company['logo_path'])?>" alt="<?=dispatch_advice_safe($name)?> logo"><?php endif;?><h1><?=dispatch_advice_safe($name)?></h1><?php if($address!==''):?><p><?=dispatch_advice_safe($address)?></p><?php endif;?><p><?=dispatch_advice_safe((string)($company['phone_primary']??''))?><?php if(!empty($company['email_primary'])):?> · <?=dispatch_advice_safe((string)$company['email_primary'])?><?php endif;?></p><p><?php if(!empty($company['gstin'])):?>GSTIN: <?=dispatch_advice_safe((string)$company['gstin'])?><?php endif;?><?php if(!empty($company['website'])):?> · <?=dispatch_advice_safe((string)$company['website'])?><?php endif;?></p></div><div class="document-title"><h2>Material Dispatch Advice</h2><strong><?=dispatch_advice_safe((string)$d['dispatch_advice_no'])?></strong><p>Version <?=dispatch_advice_safe((string)($d['revision_no']??1))?></p></div></header>
-    <div class="meta"><p><b>Date</b><br><?=dispatch_advice_safe((string)($d['planned_dispatch_date']??''))?><br><b>Status</b><br><?=dispatch_advice_safe(ucfirst((string)$d['status']))?></p><p><b>Quotation</b><br><?=dispatch_advice_safe((string)$d['quotation_no'])?><br><b>Agreement</b><br><?=dispatch_advice_safe((string)$d['agreement_no'])?></p><p><b>Customer</b><br><?=dispatch_advice_safe((string)$d['customer_name'])?><br><?=dispatch_advice_safe($mobile)?></p><p><b>Delivery address</b><br><?=nl2br(dispatch_advice_safe((string)$d['delivery_address']))?></p></div>
-    <table><thead><tr><th>#</th><th>Item / description</th><th>Brand / model</th><th>Qty</th><th>Remarks</th></tr></thead><tbody><?php foreach((array)$d['items'] as $i=>$r):?><tr><td><?=$i+1?></td><td><strong><?=dispatch_advice_safe((string)$r['name'])?></strong><br><?=dispatch_advice_safe((string)$r['description'])?></td><td><?=dispatch_advice_safe((string)$r['brand_model'])?></td><td><?=dispatch_advice_safe((string)$r['qty'])?> <?=dispatch_advice_safe((string)$r['unit'])?></td><td><?=dispatch_advice_safe((string)$r['remarks'])?></td></tr><?php endforeach;?></tbody></table>
-    <?php if(trim((string)($d['customer_note']??''))!==''):?><h3>Customer note</h3><p><?=nl2br(dispatch_advice_safe((string)$d['customer_note']))?></p><?php endif;?><p class="disclaimer"><strong>Important:</strong> <?=dispatch_advice_safe((string)$d['disclaimer'])?></p><footer>For Dakshayani Enterprises — Authorised Signatory</footer></article><?php
+    render_material_document($d, $company, documents_normalize_dispatch_advice_items((array)($d['items'] ?? [])), [
+        'title' => 'Material Dispatch Advice',
+        'number' => (string)($d['dispatch_advice_no'] ?? ''),
+        'version' => (string)($d['revision_no'] ?? 1),
+        'date' => (string)($d['planned_dispatch_date'] ?? ''),
+        'status' => ucfirst((string)($d['status'] ?? '')),
+        'quotation_no' => (string)($d['quotation_no'] ?? ''),
+        'agreement_no' => (string)($d['agreement_no'] ?? ''),
+        'customer_name' => (string)($d['customer_name'] ?? ''),
+        'customer_mobile' => $public ? customer_acceptance_mask_mobile((string)($d['customer_mobile'] ?? '')) : (string)($d['customer_mobile'] ?? ''),
+        'delivery_address' => (string)($d['delivery_address'] ?? ''),
+        'note_title' => 'Customer note',
+        'note' => (string)($d['customer_note'] ?? ''),
+        'disclaimer' => (string)($d['disclaimer'] ?? ''),
+        'footer' => 'For Dakshayani Enterprises — Authorised Signatory',
+    ]);
 }
