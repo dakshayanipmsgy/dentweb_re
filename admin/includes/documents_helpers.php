@@ -1825,6 +1825,16 @@ function documents_migrate_challan_items_to_lines(array $challan): array
     return documents_normalize_challan_lines($migrated);
 }
 
+function documents_challan_pick_first(array $row, array $keys, string $default = ''): string
+{
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $row) && trim((string) $row[$key]) !== '') {
+            return safe_text((string) $row[$key]);
+        }
+    }
+    return $default;
+}
+
 function documents_normalize_challan_items(array $items): array
 {
     $rows = [];
@@ -1833,31 +1843,83 @@ function documents_normalize_challan_items(array $items): array
             continue;
         }
         $row = array_merge(documents_challan_item_defaults(), $item);
-        $row['name'] = safe_text((string) ($row['name'] ?? ''));
-        $row['description'] = safe_text((string) ($row['description'] ?? ''));
-        $row['unit'] = safe_text((string) ($row['unit'] ?? 'Nos')) ?: 'Nos';
-        $row['qty'] = max(0, (float) ($row['qty'] ?? 0));
-        $row['remarks'] = safe_text((string) ($row['remarks'] ?? ''));
-        $row['brand_model'] = safe_text((string) ($row['brand_model'] ?? ''));
-        $row['source_dispatch_advice_id'] = safe_text((string) ($row['source_dispatch_advice_id'] ?? ''));
-        $row['source_dispatch_advice_line_id'] = safe_text((string) ($row['source_dispatch_advice_line_id'] ?? ''));
-        $row['component_id'] = safe_text((string) ($row['component_id'] ?? ''));
-        $row['line_id'] = safe_text((string) ($row['line_id'] ?? ''));
-        $row['mode'] = safe_text((string) ($row['mode'] ?? 'fixed_qty'));
-        $row['variant_id'] = safe_text((string) ($row['variant_id'] ?? ''));
-        $row['variant_name_snapshot'] = safe_text((string) ($row['variant_name_snapshot'] ?? ''));
+        $row['line_id'] = documents_challan_pick_first($item, ['line_id', 'id'], 'chl_' . bin2hex(random_bytes(4)));
+        $row['name'] = documents_challan_pick_first($item, ['name', 'item_name', 'component_name_snapshot', 'component_name']);
+        $row['description'] = documents_challan_pick_first($item, ['description', 'notes', 'item_description', 'manual_note']);
+        $row['brand_model'] = documents_challan_pick_first($item, ['brand_model', 'variant_name_snapshot', 'model', 'brand']);
+        $row['unit'] = documents_challan_pick_first($item, ['unit', 'unit_snapshot'], 'Nos') ?: 'Nos';
+        $row['qty'] = max(0, (float) ($item['qty'] ?? $item['quantity'] ?? $item['dispatch_qty'] ?? $item['pieces'] ?? 0));
+        if ($row['qty'] <= 0 && isset($item['length_ft'])) {
+            $row['qty'] = max(0, (float) $item['length_ft']);
+        }
+        $row['remarks'] = documents_challan_pick_first($item, ['remarks', 'planned_note', 'note']);
+        $row['source_dispatch_advice_id'] = documents_challan_pick_first($item, ['source_dispatch_advice_id', 'dispatch_advice_id']);
+        $row['source_dispatch_advice_line_id'] = documents_challan_pick_first($item, ['source_dispatch_advice_line_id', 'dispatch_advice_line_id', 'source_line_id']);
+        foreach (['component_id','mode','variant_id','variant_name_snapshot','manual_note'] as $key) {
+            $row[$key] = safe_text((string) ($row[$key] ?? ''));
+        }
         $row['wattage_wp'] = max(0, (float) ($row['wattage_wp'] ?? 0));
         $row['dispatch_wp'] = max(0, (float) ($row['dispatch_wp'] ?? 0));
-        $row['manual_note'] = safe_text((string) ($row['manual_note'] ?? ''));
-        $row['dispatch_qty'] = max(0, (float) ($row['dispatch_qty'] ?? 0));
+        $row['dispatch_qty'] = max(0, (float) ($item['dispatch_qty'] ?? $row['qty'] ?? 0));
         $row['dispatch_ft'] = max(0, (float) ($row['dispatch_ft'] ?? 0));
-        if ($row['name'] === '' && $row['description'] === '' && $row['qty'] <= 0 && $row['dispatch_qty'] <= 0 && $row['dispatch_ft'] <= 0) {
+        if ($row['name'] === '' && $row['description'] === '' && $row['brand_model'] === '' && $row['qty'] <= 0) {
             continue;
         }
         $rows[] = $row;
     }
-
     return $rows;
+}
+
+function documents_challan_customer_items(array $challan): array
+{
+    $items = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
+    if ($items !== []) {
+        return $items;
+    }
+    return documents_normalize_challan_items(is_array($challan['lines'] ?? null) ? $challan['lines'] : []);
+}
+
+function documents_challan_items_from_dispatch_advice(array $d): array
+{
+    return array_map(static fn($i): array => [
+        'line_id' => 'chl_' . bin2hex(random_bytes(4)),
+        'name' => $i['name'] ?? '',
+        'description' => $i['description'] ?? '',
+        'brand_model' => $i['brand_model'] ?? '',
+        'qty' => $i['qty'] ?? 0,
+        'unit' => $i['unit'] ?? 'Nos',
+        'remarks' => $i['remarks'] ?? '',
+        'source_dispatch_advice_id' => $d['id'] ?? '',
+        'source_dispatch_advice_line_id' => $i['line_id'] ?? '',
+    ], documents_normalize_dispatch_advice_items((array) ($d['items'] ?? [])));
+}
+
+function documents_challan_backfill_items_from_dispatch_advice(array &$challan, bool $save = false): array
+{
+    if (documents_challan_customer_items($challan) !== []) {
+        $challan['items'] = documents_challan_customer_items($challan);
+        return ['ok' => true, 'changed' => false, 'items' => $challan['items'], 'message' => 'Existing Challan item snapshot preserved.'];
+    }
+    $dispatchAdviceId = safe_text((string) ($challan['dispatch_advice_id'] ?? ''));
+    if ($dispatchAdviceId === '') {
+        return ['ok' => false, 'changed' => false, 'items' => [], 'message' => 'No linked Dispatch Advice.'];
+    }
+    $dispatchAdvice = documents_get_dispatch_advice($dispatchAdviceId);
+    if (!$dispatchAdvice) {
+        return ['ok' => false, 'changed' => false, 'items' => [], 'message' => 'Linked Dispatch Advice not found.'];
+    }
+    $items = documents_challan_items_from_dispatch_advice($dispatchAdvice);
+    if ($items === []) {
+        return ['ok' => false, 'changed' => false, 'items' => [], 'message' => 'Linked Dispatch Advice has no material items.'];
+    }
+    $challan['items'] = documents_normalize_challan_items($items);
+    $challan['material_snapshot_locked'] = true;
+    $challan['repair_audit'][] = ['event' => 'items_backfilled_from_dispatch_advice', 'dispatch_advice_id' => $dispatchAdviceId, 'item_count' => count($challan['items']), 'at' => date('c')];
+    $challan['updated_at'] = date('c');
+    if ($save) {
+        documents_save_challan($challan);
+    }
+    return ['ok' => true, 'changed' => true, 'items' => $challan['items'], 'message' => 'Challan items backfilled from linked Dispatch Advice.'];
 }
 
 function documents_challan_has_valid_items(array $challan): bool
@@ -1927,7 +1989,8 @@ function documents_get_challan(string $id): ?array
     if ((string) ($row['status'] ?? '') === 'Issued') { $challan['status'] = 'final'; }
     if ((string) ($row['status'] ?? '') === 'Archived') { $challan['status'] = 'archived'; }
     $challan['lines'] = documents_migrate_challan_items_to_lines($challan);
-    $challan['items'] = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
+    documents_challan_backfill_items_from_dispatch_advice($challan, true);
+    $challan['items'] = documents_challan_customer_items($challan);
     if ($resolvedDcNumber !== '' && (
         safe_text((string) ($row['dc_number'] ?? '')) === ''
         || safe_text((string) ($row['challan_no'] ?? '')) === ''
@@ -6471,9 +6534,9 @@ function documents_dispatch_advice_items_differ(array $advice,array $challan): b
 function documents_challan_for_dispatch_advice(string $id): ?array { foreach(documents_list_challans() as $c)if((string)($c['dispatch_advice_id']??'')===$id)return $c;return null; }
 function documents_dispatch_advice_has_current_acceptance(array $d): bool { $e=(array)($d['customer_acceptance']??[]); if(empty($e['confirmed_at'])&&empty($d['accepted_at'])&&empty($d['acknowledged_at']))return false; if((string)($e['document_id']??($d['id']??''))!==''&&(string)($e['document_id']??'')!==''&&(string)$e['document_id']!==(string)($d['id']??''))return false; if((string)($e['document_no']??'')!==''&&(string)$e['document_no']!==(string)($d['dispatch_advice_no']??''))return false; if((int)($e['document_version']??($d['revision_no']??1))!==(int)($d['revision_no']??1))return false; return true; }
 function documents_dispatch_advice_challan_eligible(array $d): bool { $status=strtolower((string)($d['status']??'')); if(in_array($status,['draft','archived','cancelled','superseded'],true)||!empty($d['archived_flag'])||!empty($d['supersedes_id']))return false; $q=documents_get_quote((string)($d['quotation_id']??'')); return documents_dispatch_advice_has_current_acceptance($d)&&$q&&documents_dispatch_quote_eligible($q); }
-function documents_challan_workflow_status(array $dispatchAdvice, ?array $challan): string { if(!$challan)return 'Pending'; if(!empty($challan['customer_acceptance']['confirmed_at'])||!empty($challan['customer_receipt']['confirmed_at'])||!empty($challan['delivered_at']))return 'Delivered'; if((string)($challan['dispatch_status']??'')==='dispatched'||!empty($challan['dispatched_at']))return 'Dispatched'; return 'Created'; }
+function documents_challan_workflow_status(array $dispatchAdvice, ?array $challan): string { if(!$challan)return 'Pending'; if(in_array(strtolower((string)($challan['status']??'')),['archived','cancelled'],true)||!empty($challan['archived_flag']))return 'Archived_Cancelled'; if(!empty($challan['customer_acceptance']['confirmed_at'])||!empty($challan['customer_receipt']['confirmed_at'])||!empty($challan['delivered_at']))return 'Delivered'; if((string)($challan['dispatch_status']??'')==='dispatched'||!empty($challan['dispatched_at']))return 'Dispatched'; return 'Created'; }
 function documents_create_draft_challan_from_dispatch_advice(array &$d): array { return documents_create_challan_from_accepted_dispatch_advice($d, ['role'=>'system','name'=>'System']); }
-function documents_create_challan_from_accepted_dispatch_advice(array &$d,array $actor=[]): array { $existing=documents_challan_for_dispatch_advice((string)$d['id']);if($existing){$d['generated_challan_id']=$existing['id'];return ['ok'=>true,'challan'=>$existing,'created'=>false];} if(!documents_dispatch_advice_challan_eligible($d))return ['ok'=>false,'error'=>'Dispatch Advice is not eligible for Challan creation.']; $num=documents_generate_challan_number((string)$d['segment']);if(empty($num['ok']))return $num;$c=documents_challan_defaults();$c['id']='dc_'.date('YmdHis').'_'.bin2hex(random_bytes(3));$c['challan_no']=$c['dc_number']=$num['challan_no'];$c['status']='draft';$c['workflow_status']='created';$c['dispatch_status']='not_dispatched';$c['dispatch_advice_id']=$d['id'];$c['dispatch_advice_no']=$d['dispatch_advice_no'];$c['dispatch_advice_acceptance_ref']=$d['customer_acceptance']['acceptance_ref']??'';$c['linked_quote_id']=$c['quote_id']=$d['quotation_id'];$c['linked_quote_no']=$d['quotation_no'];$c['agreement_id']=$d['agreement_id'];$c['customer_snapshot']=array_merge(documents_customer_snapshot_defaults(),['name'=>$d['customer_name'],'mobile'=>$d['customer_mobile'],'address'=>$d['delivery_address']]);$c['customer_mobile']=$d['customer_mobile'];$c['customer_name_snapshot']=$d['customer_name'];$c['delivery_address']=$d['delivery_address'];$c['site_address']=$d['delivery_address'];$c['delivery_date']=$d['planned_dispatch_date'];$c['items']=array_map(static fn($i)=>['line_id'=>'chl_'.bin2hex(random_bytes(4)),'name'=>$i['name']??'','description'=>$i['description']??'','brand_model'=>$i['brand_model']??'','qty'=>$i['qty']??0,'unit'=>$i['unit']??'Nos','remarks'=>$i['remarks']??'','source_dispatch_advice_id'=>$d['id'],'source_dispatch_advice_line_id'=>$i['line_id']??''],documents_normalize_dispatch_advice_items((array)$d['items']));$c['material_snapshot_locked']=true;$c['created_by']=$actor;$c['created_at']=$c['updated_at']=date('c');$r=documents_save_challan($c);if(empty($r['ok']))return $r;$d['generated_challan_id']=$c['id'];$d['generated_challan_at']=date('c');documents_save_dispatch_advice($d);return ['ok'=>true,'challan'=>$c,'created'=>true]; }
+function documents_create_challan_from_accepted_dispatch_advice(array &$d,array $actor=[]): array { $existing=documents_challan_for_dispatch_advice((string)$d['id']);if($existing){$d['generated_challan_id']=$existing['id'];return ['ok'=>true,'challan'=>$existing,'created'=>false];} if(!documents_dispatch_advice_challan_eligible($d))return ['ok'=>false,'error'=>'Dispatch Advice is not eligible for Challan creation.']; $num=documents_generate_challan_number((string)$d['segment']);if(empty($num['ok']))return $num;$c=documents_challan_defaults();$c['id']='dc_'.date('YmdHis').'_'.bin2hex(random_bytes(3));$c['challan_no']=$c['dc_number']=$num['challan_no'];$c['status']='draft';$c['workflow_status']='created';$c['dispatch_status']='not_dispatched';$c['dispatch_advice_id']=$d['id'];$c['dispatch_advice_no']=$d['dispatch_advice_no'];$c['dispatch_advice_acceptance_ref']=$d['customer_acceptance']['acceptance_ref']??'';$c['linked_quote_id']=$c['quote_id']=$d['quotation_id'];$c['linked_quote_no']=$d['quotation_no'];$c['agreement_id']=$d['agreement_id'];$c['customer_snapshot']=array_merge(documents_customer_snapshot_defaults(),['name'=>$d['customer_name'],'mobile'=>$d['customer_mobile'],'address'=>$d['delivery_address']]);$c['customer_mobile']=$d['customer_mobile'];$c['customer_name_snapshot']=$d['customer_name'];$c['delivery_address']=$d['delivery_address'];$c['site_address']=$d['delivery_address'];$c['delivery_date']=$d['planned_dispatch_date'];$c['items']=documents_challan_items_from_dispatch_advice($d);$c['material_snapshot_locked']=true;$c['created_by']=$actor;$c['created_at']=$c['updated_at']=date('c');$r=documents_save_challan($c);if(empty($r['ok']))return $r;$d['generated_challan_id']=$c['id'];$d['generated_challan_at']=date('c');documents_save_dispatch_advice($d);return ['ok'=>true,'challan'=>$c,'created'=>true]; }
 function documents_challan_materials_match_dispatch_advice(array $d,array $c): bool { $a=array_map(static fn($i)=>[(string)($i['line_id']??''),(string)($i['name']??''),(string)($i['description']??''),(string)($i['brand_model']??''),(float)($i['qty']??0),(string)($i['unit']??''),(string)($i['remarks']??'')],documents_normalize_dispatch_advice_items((array)($d['items']??[]))); $b=array_map(static fn($i)=>[(string)($i['source_dispatch_advice_line_id']??''),(string)($i['name']??''),(string)($i['description']??''),(string)($i['brand_model']??''),(float)($i['qty']??0),(string)($i['unit']??''),(string)($i['remarks']??'')],documents_normalize_challan_items((array)($c['items']??[]))); return $a===$b; }
 function documents_mark_challan_dispatched(array $c,array $actor,array $input): array { if((string)($c['dispatch_status']??'')==='dispatched')return ['ok'=>true,'challan'=>$c,'changed'=>false]; $d=documents_get_dispatch_advice((string)($c['dispatch_advice_id']??'')); if(!$d||!documents_dispatch_advice_challan_eligible($d))return ['ok'=>false,'error'=>'Linked accepted Dispatch Advice is required.']; if(!documents_challan_materials_match_dispatch_advice($d,$c))return ['ok'=>false,'error'=>'Challan materials differ from the accepted Dispatch Advice. Create a revised Dispatch Advice first.']; $date=safe_text((string)($input['delivery_date']??$input['dispatch_date']??$c['delivery_date']??'')); if($date==='')return ['ok'=>false,'error'=>'Dispatch date is required.']; if(!documents_challan_has_valid_items($c))return ['ok'=>false,'error'=>'At least one material line is required.']; foreach(['vehicle_no','driver_name','driver_mobile','eway_bill_ref','delivery_notes','dispatch_time'] as $k)$c[$k]=safe_text((string)($input[$k]??$c[$k]??'')); $c['delivery_date']=$date;$c['dispatch_status']='dispatched';$c['workflow_status']='dispatched';$c['status']='final';$c['dispatched_at']=date('c');$c['dispatched_by']=$actor;$c['material_snapshot_locked']=true;$c['public_share_enabled']=true;if(safe_text((string)($c['public_token']??''))==='')$c['public_token']=bin2hex(random_bytes(32));$c['updated_at']=date('c');$r=documents_save_challan($c);return empty($r['ok'])?$r:['ok'=>true,'challan'=>$c,'changed'=>true]; }
 function documents_get_challan_by_public_token(string $token): ?array { $token=trim($token); if($token==='')return null; foreach(documents_list_challans() as $c){$public=(string)($c['public_token']??''); if($public!==''&&hash_equals($public,$token))return $c;} return null; }
@@ -6481,3 +6544,39 @@ function documents_challan_public_url(array $c): string { $token=safe_text((stri
 function documents_challan_share_message(array $c,array $d=[],array $company=[]): string { $companyName=(string)($company['brand_name']??$company['company_name']??'Dakshayani Enterprises'); return "Namaste ".($c['customer_snapshot']['name']??'Customer')." Sir/Madam,\n\nYour Delivery Challan ".($c['challan_no']??'')." for quotation ".($c['linked_quote_no']??'')." has been prepared by {$companyName}.\n\nDispatch Advice reference: ".($c['dispatch_advice_no']??'')."\nDispatch date: ".($c['delivery_date']??'')."\nDelivery location: ".($c['delivery_address']??'')."\nNumber of listed items: ".count((array)($c['items']??[]))."\n\nPlease review the dispatched materials using this secure link:\n".documents_challan_public_url($c)."\nAfter receiving the materials, please click Confirm Delivery on the page and complete the registered-mobile verification.\n\nIf any item is missing or damaged, mention it in the remarks before confirming.\n\nRegards,\n{$companyName}\n".($company['phone_primary']??''); }
 
 function documents_validate_dispatch_advice(array $d): array { $q=documents_get_quote((string)$d['quotation_id']);if(!$q||!documents_dispatch_quote_eligible($q))return ['ok'=>false,'error'=>'Dispatch Advice requires an accepted, current, non-archived quotation.'];if(safe_text((string)$d['customer_name'])===''||normalize_customer_mobile((string)$d['customer_mobile'])===''||safe_text((string)$d['delivery_address'])==='')return ['ok'=>false,'error'=>'Customer name, valid mobile, and delivery address are required.'];if(empty($d['planned_dispatch_date'])&&empty($d['date_to_be_confirmed']))return ['ok'=>false,'error'=>'Choose a dispatch date or mark date to be confirmed.'];if(!documents_normalize_dispatch_advice_items((array)$d['items']))return ['ok'=>false,'error'=>'Select at least one item with quantity and unit.'];return ['ok'=>true,'error'=>'']; }
+
+function documents_dispatch_advice_apply_admin_transition(array $d, string $action, array $actor = [], array $context = []): array
+{
+    $action = strtolower($action);
+    $status = strtolower((string)($d['status'] ?? 'draft'));
+    if ($action === 'archive') {
+        if ($status === 'archived') return ['ok'=>true,'changed'=>false,'document'=>$d,'message'=>'Already archived.'];
+        if ($status === 'cancelled') return ['ok'=>false,'changed'=>false,'document'=>$d,'message'=>'Cancelled Dispatch Advice is already in the archive bucket.'];
+        $d['pre_archive_status'] = $status;
+        $d['status'] = 'archived'; $d['archived_flag'] = true; $d['archived_at'] = date('c');
+    } elseif ($action === 'cancel') {
+        if ($status === 'cancelled') return ['ok'=>true,'changed'=>false,'document'=>$d,'message'=>'Already cancelled.'];
+        $reason = safe_text((string)($context['reason'] ?? ''));
+        if ($reason === '') return ['ok'=>false,'changed'=>false,'document'=>$d,'message'=>'Cancellation reason is required.'];
+        $challan = documents_challan_for_dispatch_advice((string)($d['id'] ?? ''));
+        if ($challan && documents_challan_workflow_status($d, $challan) !== 'Created') return ['ok'=>false,'changed'=>false,'document'=>$d,'message'=>'Cannot bulk cancel after Challan dispatch/delivery.'];
+        $d['pre_cancel_status'] = $status; $d['status'] = 'cancelled'; $d['cancel_reason'] = $reason; $d['cancelled_at'] = date('c');
+    } elseif ($action === 'restore') {
+        if (!in_array($status, ['archived','cancelled'], true) && empty($d['archived_flag'])) return ['ok'=>false,'changed'=>false,'document'=>$d,'message'=>'Only archived/cancelled records can be restored.'];
+        $prior = safe_text((string)($d['pre_cancel_status'] ?? $d['pre_archive_status'] ?? ''));
+        if ($prior === '' || in_array($prior, ['archived','cancelled','superseded'], true)) return ['ok'=>false,'changed'=>false,'document'=>$d,'message'=>'No safe prior status is available.'];
+        $d['status'] = $prior; $d['archived_flag'] = false; $d['restored_at'] = date('c');
+    } else return ['ok'=>false,'changed'=>false,'document'=>$d,'message'=>'Unsupported action.'];
+    $d['updated_at'] = date('c'); $d['status_audit'][] = ['event'=>$action,'at'=>date('c'),'actor'=>$actor,'reason'=>$context['reason'] ?? ''];
+    documents_save_dispatch_advice($d); return ['ok'=>true,'changed'=>true,'document'=>$d,'message'=>'Updated.'];
+}
+
+function documents_challan_apply_admin_transition(array $c, string $action, array $actor = [], array $context = []): array
+{
+    $action = strtolower($action); $status = strtolower((string)($c['status'] ?? 'draft')); $wf = documents_challan_workflow_status([], $c);
+    if ($action === 'archive') { if ($status === 'archived') return ['ok'=>true,'changed'=>false,'document'=>$c,'message'=>'Already archived.']; $c['pre_archive_status']=$status; $c['status']='archived'; $c['archived_flag']=true; $c['archived_at']=date('c'); }
+    elseif ($action === 'cancel') { $reason=safe_text((string)($context['reason']??'')); if($reason==='') return ['ok'=>false,'changed'=>false,'document'=>$c,'message'=>'Cancellation reason is required.']; if(in_array($wf,['Dispatched','Delivered'],true)) return ['ok'=>false,'changed'=>false,'document'=>$c,'message'=>'Cannot bulk cancel dispatched/delivered Challans.']; $c['pre_cancel_status']=$status; $c['status']='cancelled'; $c['cancel_reason']=$reason; $c['cancelled_at']=date('c'); }
+    elseif ($action === 'restore') { if(!in_array($status,['archived','cancelled'],true)&&empty($c['archived_flag'])) return ['ok'=>false,'changed'=>false,'document'=>$c,'message'=>'Only archived/cancelled Challans can be restored.']; $prior=safe_text((string)($c['pre_cancel_status']??$c['pre_archive_status']??'')); if($prior===''||in_array($prior,['archived','cancelled'],true)) return ['ok'=>false,'changed'=>false,'document'=>$c,'message'=>'No safe prior status is available.']; if(!empty($c['delivered_at']) && $prior==='draft') $prior='final'; $c['status']=$prior; $c['archived_flag']=false; $c['restored_at']=date('c'); }
+    else return ['ok'=>false,'changed'=>false,'document'=>$c,'message'=>'Unsupported action.'];
+    $c['updated_at']=date('c'); $c['status_audit'][]=['event'=>$action,'at'=>date('c'),'actor'=>$actor,'reason'=>$context['reason']??'']; documents_save_challan($c); return ['ok'=>true,'changed'=>true,'document'=>$c,'message'=>'Updated.'];
+}

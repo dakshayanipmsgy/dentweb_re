@@ -8,6 +8,7 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/employee_portal.php';
 require_once __DIR__ . '/includes/employee_admin.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
+require_once __DIR__ . '/includes/material_document_renderer.php';
 
 documents_ensure_structure();
 $employeeStore = new EmployeeFsStore();
@@ -34,6 +35,27 @@ if ($viewerType === 'employee' && ((string) ($challan['created_by']['role'] ?? $
 }
 
 $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
+if (safe_text((string)($challan['dispatch_advice_id'] ?? '')) !== '') {
+    documents_challan_backfill_items_from_dispatch_advice($challan, true);
+    $items = documents_challan_customer_items($challan);
+    $transport = trim((string)($challan['vehicle_no'] ?? '') . ' ' . (string)($challan['driver_name'] ?? ''));
+    ?><!doctype html><html lang="en"><head><meta name="robots" content="noindex,nofollow,noarchive,nosnippet"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delivery Challan <?=material_document_safe((string)($challan['challan_no'] ?? $challan['dc_number'] ?? ''))?></title><style><?=material_document_print_styles()?></style></head><body><?php
+    render_material_document($challan, $company, $items, [
+        'title' => 'Delivery Challan',
+        'number' => (string)($challan['challan_no'] ?? $challan['dc_number'] ?? ''),
+        'date' => (string)($challan['delivery_date'] ?? ''),
+        'status' => (string)($challan['workflow_status'] ?? $challan['status'] ?? ''),
+        'quotation_no' => (string)($challan['linked_quote_no'] ?? $challan['quote_id'] ?? ''),
+        'dispatch_advice_no' => (string)($challan['dispatch_advice_no'] ?? ''),
+        'customer_name' => (string)($challan['customer_snapshot']['name'] ?? $challan['customer_name_snapshot'] ?? ''),
+        'customer_mobile' => (string)($challan['customer_snapshot']['mobile'] ?? $challan['customer_mobile'] ?? ''),
+        'delivery_address' => (string)($challan['delivery_address'] ?? $challan['site_address_snapshot'] ?? ''),
+        'transport' => $transport,
+        'disclaimer' => 'This Delivery Challan records the materials dispatched for delivery. Please verify the listed materials and report any shortage, damage, or quantity difference before confirming receipt.',
+        'footer' => 'For Dakshayani Enterprises — Authorised Signatory',
+    ]);
+    ?></body></html><?php exit;
+}
 $lines = documents_normalize_challan_lines((array) ($challan['lines'] ?? []));
 $quotationLines = [];
 $extraLines = [];
