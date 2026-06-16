@@ -46,8 +46,9 @@ if ($viewerType === 'employee' && ((string) ($challan['created_by']['role'] ?? $
     exit;
 }
 
-if (safe_text((string)($challan['dispatch_advice_id'] ?? '')) !== '') {
-    $dispatchAdvice = documents_get_dispatch_advice((string)$challan['dispatch_advice_id']);
+$sourceRepair = documents_repair_challan_dispatch_advice_link($challan, true);
+if (!empty($sourceRepair['ok'])) {
+    $dispatchAdvice = is_array($sourceRepair['advice'] ?? null) ? $sourceRepair['advice'] : documents_get_dispatch_advice((string)$challan['dispatch_advice_id']);
     $workflow = documents_challan_workflow_status($dispatchAdvice ?? [], $challan);
     $go = static function(string $status,string $message) use ($id): void { header('Location: challan-view.php?id='.urlencode($id).'&status='.urlencode($status).'&message='.urlencode($message)); exit; };
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -72,6 +73,9 @@ if (safe_text((string)($challan['dispatch_advice_id'] ?? '')) !== '') {
         }
     }
     $repair=documents_challan_backfill_items_from_dispatch_advice($challan, true);
+    $challan = documents_get_challan((string)($challan['id'] ?? '')) ?? $challan;
+    $dispatchAdvice = documents_get_dispatch_advice((string)$challan['dispatch_advice_id']) ?? $dispatchAdvice;
+    $workflow = documents_challan_workflow_status($dispatchAdvice ?? [], $challan);
     $items=documents_challan_customer_items($challan);
     $linkedAdviceItemCount=count(documents_normalize_dispatch_advice_items((array)($dispatchAdvice['items'] ?? [])));
     function cvh($v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
