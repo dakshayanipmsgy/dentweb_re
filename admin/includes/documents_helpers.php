@@ -1553,48 +1553,6 @@ function documents_quote_restore_status_after_unarchive(array $quote): string
     return 'draft';
 }
 
-
-function documents_normalize_challan_status(string $status): string
-{
-    $status = strtolower(trim($status));
-    if ($status === 'final' || $status === 'issued') { return 'issued'; }
-    if ($status === 'archived') { return 'archived'; }
-    if ($status === 'cancelled' || $status === 'canceled') { return 'cancelled'; }
-    return 'draft';
-}
-
-function documents_normalize_challan_delivery_status(string $status, array $challan = []): string
-{
-    $status = strtolower(trim($status));
-    if (in_array($status, ['not_dispatched','dispatched','customer_received','exception','completed'], true)) { return $status; }
-    if (!empty($challan['admin_delivery_confirmation']['completed_at'])) { return 'completed'; }
-    if (!empty($challan['customer_acceptance']['confirmed_at'])) { return !empty($challan['customer_acceptance']['review_required']) ? 'exception' : 'customer_received'; }
-    if (documents_normalize_challan_status((string)($challan['status'] ?? '')) === 'issued' || !empty($challan['inventory_txn_ids'])) { return 'dispatched'; }
-    return 'not_dispatched';
-}
-
-function documents_get_challan_by_public_token(string $token): ?array
-{
-    $token = safe_text($token);
-    if ($token === '') { return null; }
-    foreach (documents_list_challans() as $challan) {
-        if (!empty($challan['public_share_enabled']) && hash_equals((string)($challan['public_token'] ?? ''), $token)) {
-            $status = documents_normalize_challan_status((string)($challan['status'] ?? ''));
-            if (in_array($status, ['archived','cancelled'], true)) { return null; }
-            $expires = (string)($challan['public_expires_at'] ?? '');
-            if ($expires !== '' && strtotime($expires) < time()) { return null; }
-            return $challan;
-        }
-    }
-    return null;
-}
-
-function documents_challan_public_url(array $challan): string
-{
-    $origin = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost');
-    return $origin . '/challan-public.php?token=' . rawurlencode((string)($challan['public_token'] ?? ''));
-}
-
 function documents_challan_defaults(): array
 {
     return [
@@ -1608,14 +1566,7 @@ function documents_challan_defaults(): array
         'approved_by' => [],
         'dispatched_at' => '',
         'dispatched_by' => [],
-        'customer_receipt_status' => '',
         'customer_receipt' => [],
-        'customer_acceptance' => [],
-        'customer_acceptance_request' => [],
-        'public_share_enabled' => false,
-        'public_token' => '',
-        'public_expires_at' => '',
-        'share_audit' => [],
         'admin_delivery_confirmation' => [],
         'delivery_exception' => [],
         'segment' => 'RES',
@@ -1939,10 +1890,10 @@ function documents_get_challan(string $id): ?array
         $challan['created_by'] = ['role' => (string) ($challan['created_by_type'] ?? ''), 'id' => (string) ($challan['created_by_id'] ?? ''), 'name' => (string) ($challan['created_by_name'] ?? '')];
     }
     $challan['inventory_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['inventory_txn_ids'] ?? null) ? $challan['inventory_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
-    $challan['status'] = documents_normalize_challan_status((string) ($challan['status'] ?? 'draft'));
-    $challan['delivery_status'] = documents_normalize_challan_delivery_status((string) ($challan['delivery_status'] ?? ''), $challan);
-    $challan['customer_receipt_status'] = safe_text((string) ($challan['customer_receipt_status'] ?? ''));
-    if ($challan['customer_receipt_status'] === '' && !empty($challan['customer_acceptance']['confirmed_at'])) { $challan['customer_receipt_status'] = !empty($challan['customer_acceptance']['review_required']) ? 'issue_reported' : 'confirmed'; }
+    $challan['status'] = in_array(strtolower((string) ($challan['status'] ?? 'draft')), ['draft', 'final', 'archived'], true) ? strtolower((string) $challan['status']) : 'draft';
+    if ((string) ($row['status'] ?? '') === 'Draft') { $challan['status'] = 'draft'; }
+    if ((string) ($row['status'] ?? '') === 'Issued') { $challan['status'] = 'final'; }
+    if ((string) ($row['status'] ?? '') === 'Archived') { $challan['status'] = 'archived'; }
     $challan['lines'] = documents_migrate_challan_items_to_lines($challan);
     $challan['items'] = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
     if ($resolvedDcNumber !== '' && (
@@ -1980,10 +1931,10 @@ function documents_list_challans(): array
             $challan['created_by'] = ['role' => (string) ($challan['created_by_type'] ?? ''), 'id' => (string) ($challan['created_by_id'] ?? ''), 'name' => (string) ($challan['created_by_name'] ?? '')];
         }
         $challan['inventory_txn_ids'] = array_values(array_filter(array_map(static fn($txnId): string => safe_text((string) $txnId), is_array($challan['inventory_txn_ids'] ?? null) ? $challan['inventory_txn_ids'] : []), static fn(string $txnId): bool => $txnId !== ''));
-        $challan['status'] = documents_normalize_challan_status((string) ($challan['status'] ?? 'draft'));
-        $challan['delivery_status'] = documents_normalize_challan_delivery_status((string) ($challan['delivery_status'] ?? ''), $challan);
-        $challan['customer_receipt_status'] = safe_text((string) ($challan['customer_receipt_status'] ?? ''));
-        if ($challan['customer_receipt_status'] === '' && !empty($challan['customer_acceptance']['confirmed_at'])) { $challan['customer_receipt_status'] = !empty($challan['customer_acceptance']['review_required']) ? 'issue_reported' : 'confirmed'; }
+        $challan['status'] = in_array(strtolower((string) ($challan['status'] ?? 'draft')), ['draft', 'final', 'archived'], true) ? strtolower((string) $challan['status']) : 'draft';
+        if ((string) ($row['status'] ?? '') === 'Draft') { $challan['status'] = 'draft'; }
+        if ((string) ($row['status'] ?? '') === 'Issued') { $challan['status'] = 'final'; }
+        if ((string) ($row['status'] ?? '') === 'Archived') { $challan['status'] = 'archived'; }
         $challan['lines'] = documents_migrate_challan_items_to_lines($challan);
         $challan['items'] = documents_normalize_challan_items(is_array($challan['items'] ?? null) ? $challan['items'] : []);
         $rows[] = $challan;
