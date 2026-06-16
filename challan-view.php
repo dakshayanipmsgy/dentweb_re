@@ -46,6 +46,43 @@ if ($viewerType === 'employee' && ((string) ($challan['created_by']['role'] ?? $
     exit;
 }
 
+if (safe_text((string)($challan['dispatch_advice_id'] ?? '')) !== '') {
+    $dispatchAdvice = documents_get_dispatch_advice((string)$challan['dispatch_advice_id']);
+    $workflow = documents_challan_workflow_status($dispatchAdvice ?? [], $challan);
+    $go = static function(string $status,string $message) use ($id): void { header('Location: challan-view.php?id='.urlencode($id).'&status='.urlencode($status).'&message='.urlencode($message)); exit; };
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (!verify_csrf_token($_POST['csrf_token'] ?? null)) $go('error','Security validation failed.');
+        $action=safe_text($_POST['action'] ?? '');
+        if ($action === 'save_operational' || $action === 'mark_dispatched') {
+            foreach(['delivery_date','dispatch_time','vehicle_no','driver_name','driver_mobile','eway_bill_ref','delivery_notes'] as $k) $challan[$k]=safe_text((string)($_POST[$k] ?? $challan[$k] ?? ''));
+            $challan['updated_at']=date('c');
+            if ($action === 'save_operational') { documents_save_challan($challan); $go('success','Dispatch details saved.'); }
+            $r=documents_mark_challan_dispatched($challan,['role'=>$viewerType,'id'=>$viewerId,'name'=>$viewerName],$_POST);
+            if(empty($r['ok'])) $go('error',(string)($r['error'] ?? 'Unable to mark dispatched.'));
+            $go('success','Challan marked dispatched.');
+        }
+        if ($action === 'share_whatsapp') {
+            if (documents_challan_workflow_status($dispatchAdvice ?? [], $challan) !== 'Dispatched') $go('error','Mark dispatched before sharing.');
+            $challan['public_share_enabled']=true; if(safe_text((string)($challan['public_token']??''))==='')$challan['public_token']=bin2hex(random_bytes(32));
+            $msg=documents_challan_share_message($challan,$dispatchAdvice ?? [],load_company_profile());
+            $challan['share_audit'][]=['event'=>'share_initiated','channel'=>'whatsapp','at'=>date('c'),'actor'=>['role'=>$viewerType,'id'=>$viewerId,'name'=>$viewerName],'message_snapshot'=>$msg];
+            documents_save_challan($challan);
+            $mobile=normalize_customer_mobile((string)($challan['customer_snapshot']['mobile'] ?? $challan['customer_mobile'] ?? ''));
+            header('Location: https://wa.me/91'.$mobile.'?text='.rawurlencode($msg)); exit;
+        }
+    }
+    $items=documents_normalize_challan_items((array)($challan['items'] ?? []));
+    function cvh($v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+    ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow,noarchive"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Challan <?=cvh($challan['challan_no']??'')?></title><link rel="stylesheet" href="assets/css/admin-unified.css"></head><body class="admin-shell commercial-admin"><main class="commercial-shell">
+    <header class="card commercial-header"><div><p class="admin-kicker">Delivery Challan</p><h1><?=cvh($challan['challan_no']??$challan['dc_number']??'Challan')?></h1><p>Linked Dispatch Advice <?=cvh($challan['dispatch_advice_no']??'')?> · Quotation <?=cvh($challan['linked_quote_no']??'')?></p></div><nav class="commercial-header__actions"><a class="btn secondary" href="admin-challans.php">Challan Workspace</a><a class="btn secondary" href="challan-print.php?id=<?=urlencode((string)$challan['id'])?>" target="_blank">Print</a></nav></header>
+    <?php if(isset($_GET['message'])):?><div class="card" style="background:<?=cvh(($_GET['status']??'')==='error'?'#fef2f2':'#ecfdf5')?>"><?=cvh($_GET['message'])?></div><?php endif;?>
+    <section class="form-section-card"><h2>Status <span class="status-badge"><?=cvh($workflow)?></span></h2><div class="form-grid"><div><label>Dispatch Advice</label><input value="<?=cvh($challan['dispatch_advice_no']??'')?>" readonly></div><div><label>Quotation</label><input value="<?=cvh($challan['linked_quote_no']??'')?>" readonly></div><div><label>Customer</label><input value="<?=cvh($challan['customer_snapshot']['name']??'')?>" readonly></div><div><label>Registered mobile</label><input value="<?=cvh(customer_acceptance_mask_mobile((string)($challan['customer_snapshot']['mobile']??'')))?>" readonly></div><div class="full-span"><label>Delivery address</label><textarea readonly><?=cvh($challan['delivery_address']??'')?></textarea></div></div></section>
+    <form method="post"><input type="hidden" name="csrf_token" value="<?=cvh($_SESSION['csrf_token']??'')?>"><section class="form-section-card"><h3>Accepted material snapshot (read-only)</h3><div class="responsive-table"><table><thead><tr><th>#</th><th>Name</th><th>Description</th><th>Brand/model</th><th>Qty</th><th>Unit</th><th>Remarks</th></tr></thead><tbody><?php foreach($items as $i=>$it):?><tr><td><?=($i+1)?></td><td><?=cvh($it['name']??'')?></td><td><?=cvh($it['description']??'')?></td><td><?=cvh($it['brand_model']??'')?></td><td><?=cvh($it['qty']??'')?></td><td><?=cvh($it['unit']??'')?></td><td><?=cvh($it['remarks']??'')?></td></tr><?php endforeach;?></tbody></table></div></section>
+    <section class="form-section-card"><h3>Dispatch details</h3><div class="form-grid"><div><label>Dispatch date</label><input type="date" name="delivery_date" value="<?=cvh($challan['delivery_date']??'')?>" <?=$workflow==='Delivered'?'readonly':''?>></div><div><label>Dispatch time</label><input type="time" name="dispatch_time" value="<?=cvh($challan['dispatch_time']??'')?>"></div><div><label>Vehicle number</label><input name="vehicle_no" value="<?=cvh($challan['vehicle_no']??'')?>"></div><div><label>Driver / transporter</label><input name="driver_name" value="<?=cvh($challan['driver_name']??'')?>"></div><div><label>Mobile</label><input name="driver_mobile" value="<?=cvh($challan['driver_mobile']??'')?>"></div><div><label>E-way bill / reference</label><input name="eway_bill_ref" value="<?=cvh($challan['eway_bill_ref']??'')?>"></div><div class="full-span"><label>Delivery notes</label><textarea name="delivery_notes"><?=cvh($challan['delivery_notes']??'')?></textarea></div></div></section>
+    <footer class="sticky-action-footer"><span class="muted-helper">Materials are locked to the accepted Dispatch Advice.</span><?php if($workflow==='Created'):?><button class="btn secondary" name="action" value="save_operational">Save</button><button class="btn" name="action" value="mark_dispatched">Mark Dispatched</button><?php elseif($workflow==='Dispatched'):?><button class="btn secondary" name="action" value="save_operational">Save operational details</button><button class="btn" name="action" value="share_whatsapp" formtarget="_blank">Share</button><a class="btn secondary" href="challan-public.php?token=<?=urlencode((string)($challan['public_token']??''))?>" target="_blank">Copy/open public link</a><?php else:?><span>Customer receipt confirmed <?=cvh($challan['customer_acceptance']['confirmed_at']??$challan['delivered_at']??'')?></span><?php endif;?></footer></form>
+    </main></body></html><?php exit;
+}
+
 $quote = documents_get_quote((string) ($challan['quote_id'] ?: $challan['linked_quote_id']));
 $challan['lines'] = documents_migrate_challan_items_to_lines($challan);
 $packingList = null;
