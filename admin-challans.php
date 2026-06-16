@@ -48,28 +48,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'share_whatsapp') {
         $challan = documents_get_challan(safe_text($_POST['challan_id'] ?? ''));
         if (!$challan || (string)($challan['status'] ?? '') !== 'issued') { $redirectWith('error', 'Issue this Challan before sharing.'); }
-        $advice = safe_text((string)($challan['dispatch_advice_id'] ?? '')) !== '' ? documents_get_dispatch_advice((string)$challan['dispatch_advice_id']) : null;
-        $quote = safe_text((string)($challan['linked_quote_id'] ?: $challan['quote_id'] ?? '')) !== '' ? documents_get_quote((string)($challan['linked_quote_id'] ?: $challan['quote_id'])) : null;
-        $mobile = normalize_customer_mobile((string)($challan['customer_mobile'] ?: ($challan['customer_snapshot']['mobile'] ?? '') ?: ($advice['customer_mobile'] ?? '') ?: ($quote['customer_mobile'] ?? '')));
+        $mobile = normalize_customer_mobile((string)($challan['customer_mobile'] ?: ($challan['customer_snapshot']['mobile'] ?? '')));
         if ($mobile === '') { $redirectWith('error', 'Customer mobile is missing or invalid.'); }
         $challan['customer_mobile'] = $mobile;
         $challan['public_share_enabled'] = true;
-        if (safe_text((string)($challan['public_token'] ?? '')) === '') { $challan['public_token'] = bin2hex(random_bytes(32)); }
+        if (safe_text((string)($challan['public_token'] ?? '')) === '') { $challan['public_token'] = bin2hex(random_bytes(24)); }
         $url = documents_challan_public_url($challan);
-        $company = load_company_profile();
-        $items = documents_challan_public_items($challan);
-        $customer = (array)($challan['customer_snapshot'] ?? []);
-        $customerName = (string)($customer['name'] ?? $challan['customer_name_snapshot'] ?? 'Customer');
-        $summaryParts = []; foreach ($items as $item) { $summaryParts[] = trim((string)($item['name'] ?? '') . ' — ' . (string)($item['qty'] ?? '') . ' ' . (string)($item['unit'] ?? '')); }
-        $message = 'Namaste '.$customerName.' Sir/Madam,'."\n\n".
-            'Your Delivery Challan '.(string)($challan['challan_no'] ?? $challan['dc_number'] ?? '').' for quotation '.(string)($challan['linked_quote_no'] ?? $quote['quote_no'] ?? '').' is ready.'."\n\n".
-            'Delivery date: '.(string)($challan['delivery_date'] ?? '')."\n".
-            'Delivery location: '.(string)($challan['delivery_address'] ?? '')."\n".
-            'Number of listed items: '.count($items)."\n".
-            'Please review the materials listed in the secure Challan link below:'."\n".$url."\n\n".
-            'After checking the delivered items, please click “Confirm Receipt” on the page and complete the registered-mobile verification.'."\n\n".
-            'If any item, quantity, shortage or damage needs to be reported, please mention it in the receipt remarks before confirming.'."\n\n".
-            'Regards,'."\n".(string)($company['brand_name'] ?? $company['company_name'] ?? 'Dakshayani Enterprises')."\n".(string)($company['phone_primary'] ?? '');
+        $message = 'Namaste '.(string)($challan['customer_snapshot']['name'] ?? $challan['customer_name_snapshot'] ?? '').', your Delivery Challan '.(string)($challan['challan_no'] ?? $challan['dc_number'] ?? '').' is ready for receipt confirmation: '.$url;
         $challan['share_audit'][] = ['event'=>'share_initiated','channel'=>'whatsapp','at'=>date('c'),'to_mobile_mask'=>customer_acceptance_mask_mobile($mobile),'public_url_snapshot'=>$url,'message_snapshot'=>$message,'actor'=>current_user()];
         $challan['share_audit'][] = ['event'=>'whatsapp_opened','channel'=>'whatsapp','at'=>date('c'),'actor'=>current_user()];
         $challan['updated_at'] = date('c');
