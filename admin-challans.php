@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
+require_once __DIR__ . '/includes/commercial_lifecycle.php';
 
 require_admin();
 documents_ensure_structure();
@@ -229,7 +230,7 @@ $quotes = array_values(array_filter($allQuotes, static function (array $q) use (
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Challans</title><link rel="stylesheet" href="assets/css/admin-unified.css"></head>
 <body class="admin-shell commercial-admin"><main class="commercial-shell">
 <header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Delivery Challans</h1><p>Prepare and track dispatch while retaining the linked quotation and customer context.</p></div><nav class="commercial-header__actions" aria-label="Page actions"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php">Document Center</a><a class="btn commercial-header__primary" href="admin-challans.php?tab=create">+ New Challan</a></nav></header>
-<nav class="commercial-flow-strip" aria-label="Commercial lifecycle"><a href="admin-quotations.php">Quotation</a><span>→</span><a href="admin-agreements.php">Agreement</a><span>→</span><a class="active" href="admin-challans.php">Challan</a><span>→</span><a href="admin-invoices.php">Invoice</a><span>→</span><a href="admin-documents.php?tab=accepted_customers">Receipt</a></nav>
+<?= render_commercial_lifecycle('challan') ?>
 <div data-workspace-root><nav class="workspace-tabs" data-workspace-tabs="fetch" aria-label="Challan workspace"><a data-workspace-tab class="<?= $tab === 'challans' ? 'active' : '' ?>" href="?tab=challans">Challans</a><a data-workspace-tab class="<?= $tab === 'create' ? 'active' : '' ?>" href="?tab=create">Create Challan</a></nav>
 <?php if (isset($_GET['message'])): ?><div class="card" style="background:<?= safe_text($_GET['status'] ?? '') === 'error' ? '#fef2f2' : '#ecfdf5' ?>"><?= htmlspecialchars((string) ($_GET['message'] ?? ''), ENT_QUOTES) ?></div><?php endif; ?>
 <?php if ($tab === 'create'): ?><form method="post" id="create-challan">
