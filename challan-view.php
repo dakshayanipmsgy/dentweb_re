@@ -500,9 +500,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = safe_text($_POST['action'] ?? '');
     $isDraft = (string) ($challan['status'] ?? 'draft') === 'draft';
-    if (in_array($action, ['save_draft', 'finalize', 'archive'], true)) {
+    if (in_array($action, ['save_draft', 'finalize', 'archive', 'complete_delivery'], true)) {
         if (!$isDraft && in_array($action, ['save_draft', 'finalize'], true)) {
             $redirectWith('error', 'Only draft DC can be edited/finalized.');
+        }
+
+        if ($action === 'complete_delivery') {
+            $receipt = (array)($challan['customer_receipt'] ?: ($challan['customer_acceptance'] ?? []));
+            if (empty($receipt['confirmed_at'])) { $redirectWith('error', 'Customer receipt confirmation is required before delivery completion.'); }
+            $discrepancyResolved = !empty($_POST['discrepancy_resolved']) || empty($receipt['review_required']);
+            if (!$discrepancyResolved) { $redirectWith('error', 'Resolve the reported discrepancy before delivery completion.'); }
+            $challan['delivery_completion'] = ['status'=>'completed','customer_receipt_confirmed_at'=>(string)$receipt['confirmed_at'],'receipt_result'=>(string)($receipt['receipt_result'] ?? ''),'discrepancy_resolved'=>$discrepancyResolved,'admin_completed_at'=>date('c'),'admin_completed_by'=>['role'=>$viewerType,'id'=>$viewerId,'name'=>$viewerName]];
+            $challan['delivery_status'] = 'completed';
+            $challan['updated_at'] = date('c');
+            $saved = documents_save_challan($challan);
+            if (!$saved['ok']) { documents_log('Challan completion failed for ' . (string) ($challan['id'] ?? '') . ': ' . (string) ($saved['error'] ?? 'Unknown error')); $redirectWith('error', 'Unable to complete delivery.'); }
+            $redirectWith('success', 'Delivery completed.');
         }
 
         if (in_array($action, ['save_draft', 'finalize'], true)) {
@@ -821,6 +834,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($action === 'finalize') {
+            if (safe_text((string)($challan['dispatch_advice_id'] ?? '')) !== '') {
+                $advice = documents_get_dispatch_advice((string)$challan['dispatch_advice_id']);
+                $diff = $advice ? documents_challan_item_diff($advice, $challan) : ['differs'=>false];
+                $reason = safe_text($_POST['challan_difference_reason'] ?? '');
+                if (!empty($diff['differs']) && $reason === '') {
+                    $redirectWith('error', 'Challan differs from accepted Dispatch Advice; enter an admin reason before issuing.');
+                }
+                $challan['challan_difference_reason'] = $reason;
+                $challan['challan_difference'] = $diff;
+            }
             $stock = documents_inventory_load_stock();
             $txnIds = [];
             $dispatchRows = [];
@@ -1023,7 +1046,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 documents_inventory_sync_verification_log($transactions, true);
             }
             $challan['inventory_txn_ids'] = $txnIds;
-            $challan['status'] = 'final';
+            $challan['status'] = 'issued';
         }
 
         if ($action === 'save_draft') {
@@ -1031,7 +1054,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($action === 'archive') {
             $challanStatus = (string) ($challan['status'] ?? 'draft');
-            if ($challanStatus === 'final') {
+            if ($challanStatus === 'issued') {
                 $stock = documents_inventory_load_stock();
                 $allTransactions = documents_inventory_load_transactions();
                 $transactionsById = [];
@@ -1188,7 +1211,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             documents_log('Challan update failed for ' . (string) ($challan['id'] ?? '') . ': ' . (string) ($saved['error'] ?? 'Unknown error'));
             $redirectWith('error', 'Unable to save delivery challan.');
         }
-        $redirectWith('success', $action === 'finalize' ? 'DC finalized successfully.' : ($action === 'save_draft' ? 'DC draft saved.' : 'DC archived.'));
+        $redirectWith('success', $action === 'finalize' ? 'DC issued successfully.' : ($action === 'save_draft' ? 'DC draft saved.' : 'DC archived.'));
     }
 }
 
@@ -1205,9 +1228,10 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 </style></head>
 <body><main class="wrap">
 <div class="card"><h1 style="margin:0 0 8px">Delivery Challan</h1>
-<p><strong><?= htmlspecialchars((string) ($challan['dc_number'] ?: $challan['challan_no']), ENT_QUOTES) ?></strong> · Status: <?= htmlspecialchars(strtoupper((string) ($challan['status'] ?? 'draft')), ENT_QUOTES) ?></p>
+<p><strong><?= htmlspecialchars((string) ($challan['dc_number'] ?: $challan['challan_no']), ENT_QUOTES) ?></strong> · Status: <?= htmlspecialchars((string) ($challan['status'] ?? 'draft'), ENT_QUOTES) ?></p>
 <div class="row-actions"><a class="btn secondary" href="<?= htmlspecialchars($backLink, ENT_QUOTES) ?>">Back</a><a class="btn secondary" href="challan-print.php?id=<?= urlencode((string) ($challan['id'] ?? '')) ?>" target="_blank" rel="noopener">View as HTML</a></div>
 </div>
+<?php if (!empty($challan['customer_receipt']['confirmed_at']) || !empty($challan['customer_acceptance']['confirmed_at'])): $receipt=(array)($challan['customer_receipt'] ?: ($challan['customer_acceptance'] ?? [])); ?><div class="card"><h3>Customer receipt</h3><p>Result: <?= htmlspecialchars((string)($receipt['receipt_result'] ?? ''), ENT_QUOTES) ?> · Ref <?= htmlspecialchars((string)($receipt['acceptance_ref'] ?? ''), ENT_QUOTES) ?> · <?= htmlspecialchars((string)($receipt['confirmed_at'] ?? ''), ENT_QUOTES) ?></p><p><?= htmlspecialchars((string)($receipt['customer_remarks'] ?? ''), ENT_QUOTES) ?></p><?php if (empty($challan['delivery_completion']['admin_completed_at'])): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>"><label><input type="checkbox" name="discrepancy_resolved" value="1" <?= empty($receipt['review_required'])?'checked':'' ?>> Discrepancy resolved / no discrepancy</label><button class="btn" name="action" value="complete_delivery">Complete delivery</button></form><?php else: ?><p>Completed at <?= htmlspecialchars((string)$challan['delivery_completion']['admin_completed_at'], ENT_QUOTES) ?> by <?= htmlspecialchars((string)($challan['delivery_completion']['admin_completed_by']['name'] ?? ''), ENT_QUOTES) ?></p><?php endif; ?></div><?php endif; ?>
 <?php if ($statusParam !== '' && $messageParam !== ''): ?><div class="card"><strong><?= htmlspecialchars(strtoupper($statusParam), ENT_QUOTES) ?>:</strong> <?= htmlspecialchars($messageParam, ENT_QUOTES) ?></div><?php endif; ?>
 
 <form method="post" class="card">
@@ -1345,7 +1369,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 </div>
 <?php endif; ?>
 
-<div class="row-actions" style="margin-top:12px"><?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="finalize">Finalize DC</button><?php endif; ?><?php if ((string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php endif; ?></div>
+<div class="row-actions" style="margin-top:12px"><?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><?php if(!empty($challan['dispatch_advice_id'])): ?><div style="margin:8px 0"><label>Admin reason if Challan differs from accepted Dispatch Advice</label><textarea name="challan_difference_reason"><?= htmlspecialchars((string)($challan['challan_difference_reason'] ?? ''), ENT_QUOTES) ?></textarea></div><?php endif; ?><button class="btn" type="submit" name="action" value="finalize">Issue DC</button><?php endif; ?><?php if ((string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php endif; ?></div>
 </form>
 </main>
 <script>
