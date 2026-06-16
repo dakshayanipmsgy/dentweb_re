@@ -65,6 +65,7 @@ register_shutdown_function(static function () use ($adminQuotationsWriteErrorLog
 
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
+require_once __DIR__ . '/includes/commercial_lifecycle.php';
 documents_repair_broken_quote_revisions();
 require_once __DIR__ . '/includes/solar_finance_reports.php';
 
@@ -1499,7 +1500,7 @@ body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px
 </style></head>
 <body class="admin-shell commercial-admin"><main class="wrap commercial-shell">
 <header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Quotations</h1><p class="muted">Build the customer offer, then continue it through agreement, delivery, invoice, and receipt.</p></div><nav class="commercial-header__actions" aria-label="Page actions"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php">Document Center</a><a class="btn commercial-header__primary" href="admin-quotations.php?tab=editor">+ New Quotation</a></nav></header>
-<nav class="commercial-flow-strip" aria-label="Commercial lifecycle"><a class="active" href="admin-quotations.php">Quotation</a><span>→</span><a href="admin-agreements.php">Agreement</a><span>→</span><a href="admin-dispatch-advices.php">Dispatch Advice</a><span>→</span><a href="admin-challans.php">Challan</a><span>→</span><a href="admin-invoices.php">Invoice</a><span>→</span><a href="admin-documents.php?tab=accepted_customers">Receipt</a></nav>
+<?= render_commercial_lifecycle('quotation') ?>
 <div data-workspace-root>
 <nav class="quotation-tabs workspace-tabs" data-workspace-tabs="fetch" aria-label="Quotation workspace">
 <a class="<?= $tab === 'quotations' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=quotations">Quotations</a>

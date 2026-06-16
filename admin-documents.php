@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
+require_once __DIR__ . '/includes/commercial_lifecycle.php';
 
 require_login_any_role(['admin', 'employee']);
 
@@ -3249,7 +3250,7 @@ $activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace'
       <div class="banner <?= htmlspecialchars($status, ENT_QUOTES) ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div>
     <?php endif; ?>
 
-    <nav class="commercial-flow-strip" aria-label="Commercial lifecycle"><a href="admin-quotations.php">Quotation</a><span>→</span><a href="admin-agreements.php">Agreement</a><span>→</span><a href="admin-dispatch-advices.php">Dispatch Advice</a><span>→</span><a href="admin-challans.php">Challan</a><span>→</span><a href="admin-invoices.php">Invoice</a><span>→</span><a href="admin-documents.php?tab=accepted_customers">Receipt</a></nav>
+    <?= render_commercial_lifecycle('receipt') ?>
 
     <div data-workspace-root>
     <section class="admin-documents__context" aria-labelledby="workspace-title">
