@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
-require_once __DIR__ . '/includes/customer_document_acceptance.php';
 
 require_admin();
 documents_ensure_structure();
@@ -45,49 +44,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $action = safe_text($_POST['action'] ?? '');
-    if (!in_array($action, ['save_draft', 'issue', 'add_suggested_items', 'share_whatsapp', 'mark_complete'], true)) {
+    if (!in_array($action, ['save_draft', 'issue', 'add_suggested_items'], true)) {
         $redirectWith('error', 'Invalid action.');
     }
 
     $challanId = safe_text($_POST['challan_id'] ?? '');
     $existing = $challanId !== '' ? documents_get_challan($challanId) : null;
-    if ($action === 'share_whatsapp' && $existing !== null) {
-        if ((string)($existing['status'] ?? '') !== 'issued') { $redirectWith('error', 'Issue the Challan before sharing.'); }
-        $mobile = customer_acceptance_normalize_mobile((string)($existing['customer_mobile'] ?: ($existing['customer_snapshot']['mobile'] ?? '')));
-        if ($mobile === '') { $redirectWith('error', 'Customer mobile is missing.'); }
-        $existing['customer_mobile'] = $mobile;
-        $existing['public_share_enabled'] = true;
-        if (safe_text((string)($existing['public_token'] ?? '')) === '') { $existing['public_token'] = bin2hex(random_bytes(24)); }
-        $url = documents_challan_public_url($existing);
-        $company = load_company_profile();
-        $msg = 'Namaste ' . (string)($existing['customer_snapshot']['name'] ?? 'Customer') . " Sir/Madam,\n" .
-            'Your Delivery Challan ' . (string)($existing['challan_no'] ?? $existing['dc_number'] ?? '') . ' for quotation ' . (string)($existing['linked_quote_no'] ?? '') . " is ready.\n\n" .
-            'Dispatch Advice reference: ' . (string)($existing['dispatch_advice_no'] ?? '') . "\n" .
-            'Dispatch date: ' . (string)($existing['delivery_date'] ?? '') . "\n" .
-            'Delivery location: ' . (string)($existing['delivery_address'] ?? '') . "\n" .
-            'Number of listed items: ' . count((array)($existing['items'] ?? [])) . "\n\n" .
-            "Please review the delivered item details using this secure link:\n" . $url . "\n\n" .
-            "After receiving and checking the materials, please click “Confirm Items Received” and complete the registered-mobile verification.\n" .
-            "If any item is missing, damaged or different, please mention it in the confirmation remarks before submitting.\n\n" .
-            "Regards,\n" . ((string)($company['brand_name'] ?? $company['company_name'] ?? 'Dakshayani Enterprises')) . "\n" . (string)($company['phone_primary'] ?? '');
-        $existing['share_audit'][] = ['event'=>'share_initiated','channel'=>'whatsapp','at'=>date('c'),'to_mobile_mask'=>customer_acceptance_mask_mobile($mobile),'public_url_snapshot'=>$url,'message_snapshot'=>$msg,'actor'=>current_user()];
-        $existing['share_audit'][] = ['event'=>'whatsapp_opened','channel'=>'whatsapp','at'=>date('c'),'actor'=>current_user()];
-        $existing['updated_at'] = date('c');
-        documents_save_challan($existing);
-        header('Location: https://wa.me/91' . $mobile . '?text=' . rawurlencode($msg));
-        exit;
-    }
-    if ($action === 'mark_complete' && $existing !== null) {
-        $reason = safe_text($_POST['completion_reason'] ?? '');
-        $resolution = safe_text($_POST['resolution_notes'] ?? '');
-        if ((string)($existing['delivery_status'] ?? '') === 'exception' && $resolution === '') { $redirectWith('error', 'Resolution notes are required for delivery exceptions.'); }
-        if (empty($existing['customer_acceptance']['confirmed_at']) && $reason === '') { $redirectWith('error', 'Override reason is required without customer receipt confirmation.'); }
-        $existing['delivery_status'] = 'completed';
-        $existing['admin_delivery_confirmation'] = ['completed_at'=>date('c'),'completed_by'=>current_user(),'recipient_name'=>safe_text($_POST['recipient_name'] ?? ''),'override_reason'=>$reason,'resolution_notes'=>$resolution];
-        $existing['updated_at'] = date('c');
-        documents_save_challan($existing);
-        $redirectWith('success', 'Delivery marked complete.');
-    }
     $isCreate = $existing === null;
     $challan = $existing ?? documents_challan_defaults();
 
@@ -218,9 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $challan['created_at'] = date('c');
     }
 
-    $challan['status'] = $action === 'issue' ? 'issued' : 'draft';
-    $challan['delivery_status'] = $action === 'issue' ? 'dispatched' : 'not_dispatched';
-    if ($action === 'issue') { $challan['issued_at'] = date('c'); $challan['dispatched_at'] = date('c'); $challan['public_share_enabled'] = true; if (safe_text((string)($challan['public_token'] ?? '')) === '') { $challan['public_token'] = bin2hex(random_bytes(24)); } }
+    $challan['status'] = $action === 'issue' ? 'Issued' : 'Draft';
     $challan['updated_at'] = date('c');
 
     $saved = documents_save_challan($challan);
@@ -283,5 +243,5 @@ $quotes = array_values(array_filter($allQuotes, static function (array $q) use (
 <section class="form-section-card"><h3>6. Items</h3><p class="muted-helper">At least one valid item is required before issue.</p><div class="responsive-table"><table><thead><tr><th>Name</th><th>Description</th><th>Unit</th><th>Qty</th><th>Remarks</th></tr></thead><tbody><?php for ($i=0; $i<5; $i++): ?><tr><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><select name="item_unit[]"><?php foreach ($units as $u): ?><option value="<?= htmlspecialchars($u, ENT_QUOTES) ?>"><?= htmlspecialchars($u, ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="item_qty[]"></td><td><input name="item_remarks[]"></td></tr><?php endfor; ?></tbody></table></div></section>
 <footer class="sticky-action-footer"><span class="muted-helper">Save a draft anytime; issue only when items are ready.</span><button class="btn secondary" type="submit" name="action" value="add_suggested_items">Add Suggested Items</button><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="issue">Save &amp; Issue</button></footer>
 </form><?php endif; ?>
-<?php if ($tab === 'challans'): ?><section class="card"><div class="commercial-toolbar"><div><h2>Challan List</h2><p class="muted-helper">Scan current dispatch records and open secondary output actions only when needed.</p></div></div><form id="filterForm" method="get" class="filter-grid"><div><label>Status</label><select name="status_filter"><option value="">All</option><?php foreach (['draft','issued','archived','cancelled'] as $st): ?><option value="<?= htmlspecialchars($st, ENT_QUOTES) ?>" <?= $filters['status']===$st?'selected':'' ?>><?= htmlspecialchars($st, ENT_QUOTES) ?></option><?php endforeach; ?></select></div><div><label>Search challan / customer / mobile</label><input name="q" value="<?= htmlspecialchars((string) $filters['query'], ENT_QUOTES) ?>"></div><div><label>Quote Search</label><input name="quote_q" value="<?= htmlspecialchars((string) $filters['quote'], ENT_QUOTES) ?>"></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form><div class="responsive-table"><table><thead><tr><th>Challan</th><th>Document status</th><th>Delivery status</th><th>Receipt</th><th>Customer</th><th>Delivery Date</th><th>Actions</th></tr></thead><tbody><?php foreach ($rows as $r): ?><tr><td><strong><?= htmlspecialchars((string) $r['challan_no'], ENT_QUOTES) ?></strong><br><span class="muted-helper"><?= htmlspecialchars((string)($r['dispatch_advice_no'] ?? ''), ENT_QUOTES) ?></span></td><td><span class="status-badge status-badge--<?= strtolower(htmlspecialchars((string) $r['status'], ENT_QUOTES)) ?>"><?= htmlspecialchars((string) $r['status'], ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string) ($r['delivery_status'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($r['customer_receipt_status'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($r['customer_snapshot']['name'] ?? ''), ENT_QUOTES) ?><br><span class="muted-helper"><?= htmlspecialchars((string) ($r['customer_snapshot']['mobile'] ?? ''), ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string) $r['delivery_date'], ENT_QUOTES) ?></td><td><div class="row-action-group"><a class="btn" href="challan-view.php?id=<?= urlencode((string) $r['id']) ?>">Open</a><form method="post" style="display:inline"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="challan_id" value="<?= htmlspecialchars((string)$r['id'], ENT_QUOTES) ?>"><button class="btn secondary" name="action" value="share_whatsapp">Share</button></form><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="challan-print.php?id=<?= urlencode((string) $r['id']) ?>" target="_blank" rel="noopener">Print HTML</a><?php if (!empty($r['public_token'])): ?><a class="btn secondary" href="challan-public.php?token=<?= urlencode((string)($r['public_token'] ?? '')) ?>" target="_blank" rel="noopener">Copy/open public link</a><?php endif; ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="challan_id" value="<?= htmlspecialchars((string)$r['id'], ENT_QUOTES) ?>"><input name="recipient_name" placeholder="Recipient"><input name="completion_reason" placeholder="Override reason"><input name="resolution_notes" placeholder="Resolution notes"><button class="btn secondary" name="action" value="mark_complete">Mark Delivery Complete</button></form></div></details></div></td></tr><?php endforeach; if ($rows === []): ?><tr><td colspan="7" class="empty-state">No challans found.</td></tr><?php endif; ?></tbody></table></div></section><?php endif; ?>
+<?php if ($tab === 'challans'): ?><section class="card"><div class="commercial-toolbar"><div><h2>Challan List</h2><p class="muted-helper">Scan current dispatch records and open secondary output actions only when needed.</p></div></div><form id="filterForm" method="get" class="filter-grid"><div><label>Status</label><select name="status_filter"><option value="">All</option><?php foreach (['Draft','Issued','Archived'] as $st): ?><option value="<?= $st ?>" <?= $filters['status']===$st?'selected':'' ?>><?= $st ?></option><?php endforeach; ?></select></div><div><label>Search challan / customer / mobile</label><input name="q" value="<?= htmlspecialchars((string) $filters['query'], ENT_QUOTES) ?>"></div><div><label>Quote Search</label><input name="quote_q" value="<?= htmlspecialchars((string) $filters['quote'], ENT_QUOTES) ?>"></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form><div class="responsive-table"><table><thead><tr><th>Challan</th><th>Status</th><th>Customer</th><th>Delivery Date</th><th>Created By</th><th>Actions</th></tr></thead><tbody><?php foreach ($rows as $r): ?><tr><td><strong><?= htmlspecialchars((string) $r['challan_no'], ENT_QUOTES) ?></strong></td><td><span class="status-badge status-badge--<?= strtolower(htmlspecialchars((string) $r['status'], ENT_QUOTES)) ?>"><?= htmlspecialchars((string) $r['status'], ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string) ($r['customer_snapshot']['name'] ?? ''), ENT_QUOTES) ?><br><span class="muted-helper"><?= htmlspecialchars((string) ($r['customer_snapshot']['mobile'] ?? ''), ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string) $r['delivery_date'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) $r['created_by_name'], ENT_QUOTES) ?></td><td><div class="row-action-group"><a class="btn" href="challan-view.php?id=<?= urlencode((string) $r['id']) ?>">View</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="challan-print.php?id=<?= urlencode((string) $r['id']) ?>" target="_blank" rel="noopener">Print</a></div></details></div></td></tr><?php endforeach; if ($rows === []): ?><tr><td colspan="6" class="empty-state">No challans found.</td></tr><?php endif; ?></tbody></table></div></section><?php endif; ?>
 </div><script src="assets/js/admin-workspace-tabs.js"></script></main></body></html>

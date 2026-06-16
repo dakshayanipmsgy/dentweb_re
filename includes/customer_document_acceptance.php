@@ -36,7 +36,7 @@ function customer_acceptance_mask_mobile(string $mobile): string { $n=customer_a
 function customer_change_request_reference(): string { return 'CHG-QTN-'.date('Ymd').'-'.strtoupper(bin2hex(random_bytes(3))); }
 function customer_change_request_whatsapp_url(array $request, string $publicLink=''): string { return 'https://wa.me/'.CUSTOMER_ACCEPTANCE_WHATSAPP_TARGET.'?text='.rawurlencode("Quotation change request recorded.\nReference: ".($request['request_ref']??'')."\nQuotation: ".($request['quotation_no']??'')."\nRequested changes: ".($request['requested_changes']??'')."\nDocument link: ".$publicLink); }
 function customer_acceptance_reference(string $type): string { $p=['quotation'=>'QTN','dispatch_advice'=>'DA','challan'=>'CHL'][$type]??'DOC'; return 'ACC-'.$p.'-'.date('Ymd').'-'.strtoupper(bin2hex(random_bytes(3))); }
-function customer_acceptance_confirmation_text(string $type): string { return ['quotation'=>'I have reviewed this quotation and accept the offered scope, price and terms shown in this version.','dispatch_advice'=>'I have reviewed the items listed in this Material Dispatch Advice and confirm that these are the items planned for dispatch. I understand that this is not proof of delivery.','challan'=>'I confirm that I have received the items listed in this Delivery Challan.'][$type]??''; }
+function customer_acceptance_confirmation_text(string $type): string { return ['quotation'=>'I have reviewed this quotation and accept the offered scope, price and terms shown in this version.','dispatch_advice'=>'I have reviewed the items listed in this Material Dispatch Advice and confirm that these are the items planned for dispatch. I understand that this is not proof of delivery.','challan'=>'I confirm that I have received the items listed in this Delivery Challan, subject to any remarks entered below.'][$type]??''; }
 function customer_acceptance_record(array &$document,string $type,array $input,array $context=[]): array
 {
     if (!empty($document['customer_acceptance']['confirmed_at'])) return $document['customer_acceptance'];
@@ -45,8 +45,7 @@ function customer_acceptance_record(array &$document,string $type,array $input,a
     if(!$portal && !hash_equals(substr($mobile,0,6),preg_replace('/\D+/','',(string)($input['mobile_first6']??''))??'')) throw new RuntimeException('The confirmation details do not match our record.');
     if(empty($input['confirmed'])) throw new RuntimeException('The confirmation statement must be accepted.');
     $document['customer_mobile']=$mobile; $now=date('c'); $ref=customer_acceptance_reference($type); $remarks=trim((string)($input['remarks']??''));
-    $receiptChoice=(string)($input['receipt_choice']??'clean'); if($type==='challan'&&$receiptChoice==='issue'&&$remarks==='') throw new RuntimeException('Remarks are required when reporting shortage, damage or discrepancy.');
-    $document['customer_acceptance']=['status'=>'whatsapp_pending','acceptance_ref'=>$ref,'document_type'=>$type,'document_id'=>(string)($document['id']??''),'document_no'=>(string)($document['quote_no']??$document['dispatch_advice_no']??$document['challan_no']??$document['dc_number']??''),'document_version'=>(int)($document['version_no']??$document['revision_no']??1),'document_hash'=>customer_acceptance_document_hash($type,$document),'customer_id'=>(string)($document['customer_id']??$document['customer_snapshot']['id']??''),'customer_name_snapshot'=>$name,'customer_mobile_snapshot'=>customer_acceptance_mask_mobile($mobile),'identity_method'=>$portal?'customer_portal':'secure_link','portal_user_id'=>(string)($context['portal_customer_id']??''),'confirmed_name'=>$name,'confirmed_mobile_last4'=>substr($mobile,-4),'confirmed_at'=>$now,'ip_hash'=>hash_hmac('sha256',(string)($context['ip']??''),(string)($context['salt']??'acceptance')),'user_agent_hash'=>hash('sha256',(string)($context['user_agent']??'')),'token_id_hash'=>(string)($document['customer_acceptance_request']['token_hash']??''),'public_token_hash'=>hash('sha256',(string)($document['public_share_token']??$document['public_token']??'')),'confirmation_text_snapshot'=>customer_acceptance_confirmation_text($type),'terms_version'=>CUSTOMER_ACCEPTANCE_TERMS_VERSION,'customer_remarks'=>$remarks,'receipt_choice'=>$receiptChoice,'review_required'=>$type==='challan'&&$receiptChoice==='issue','whatsapp_target'=>CUSTOMER_ACCEPTANCE_WHATSAPP_TARGET,'whatsapp_message_snapshot'=>'','whatsapp_opened_at'=>'','whatsapp_verified_at'=>'','whatsapp_verified_by'=>[],'events'=>[['event'=>'customer_confirmed','at'=>$now,'method'=>$portal?'customer_portal':'secure_link']]];
+    $document['customer_acceptance']=['status'=>'whatsapp_pending','acceptance_ref'=>$ref,'document_type'=>$type,'document_id'=>(string)($document['id']??''),'document_no'=>(string)($document['quote_no']??$document['dispatch_advice_no']??$document['challan_no']??$document['dc_number']??''),'document_version'=>(int)($document['version_no']??$document['revision_no']??1),'document_hash'=>customer_acceptance_document_hash($type,$document),'customer_id'=>(string)($document['customer_id']??$document['customer_snapshot']['id']??''),'customer_name_snapshot'=>$name,'customer_mobile_snapshot'=>customer_acceptance_mask_mobile($mobile),'identity_method'=>$portal?'customer_portal':'secure_link','portal_user_id'=>(string)($context['portal_customer_id']??''),'confirmed_name'=>$name,'confirmed_mobile_last4'=>substr($mobile,-4),'confirmed_at'=>$now,'ip_hash'=>hash_hmac('sha256',(string)($context['ip']??''),(string)($context['salt']??'acceptance')),'user_agent_hash'=>hash('sha256',(string)($context['user_agent']??'')),'token_id_hash'=>(string)($document['customer_acceptance_request']['token_hash']??''),'public_token_hash'=>hash('sha256',(string)($document['public_share_token']??$document['public_token']??'')),'confirmation_text_snapshot'=>customer_acceptance_confirmation_text($type),'terms_version'=>CUSTOMER_ACCEPTANCE_TERMS_VERSION,'customer_remarks'=>$remarks,'review_required'=>$type==='challan'&&$remarks!=='','whatsapp_target'=>CUSTOMER_ACCEPTANCE_WHATSAPP_TARGET,'whatsapp_message_snapshot'=>'','whatsapp_opened_at'=>'','whatsapp_verified_at'=>'','whatsapp_verified_by'=>[],'events'=>[['event'=>'customer_confirmed','at'=>$now,'method'=>$portal?'customer_portal':'secure_link']]];
     return $document['customer_acceptance'];
 }
 function customer_acceptance_current_origin(): string { return ((isset($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')?'https://':'http://').($_SERVER['HTTP_HOST']??'localhost'); }
@@ -92,31 +91,3 @@ function customer_acceptance_dispatch_whatsapp_url(array $document, array $compa
 }
 function customer_acceptance_mark_whatsapp_opened(array &$document,string $message): void { $now=date('c');$document['customer_acceptance']['whatsapp_opened_at']=$now;$document['customer_acceptance']['whatsapp_message_snapshot']=$message;$document['customer_acceptance']['events'][]=['event'=>'whatsapp_opened','at'=>$now]; }
 function customer_acceptance_mark_whatsapp_verified(array &$document,array $admin): void { if(empty($document['customer_acceptance']['confirmed_at'])) throw new RuntimeException('No customer confirmation exists.'); $document['customer_acceptance']['status']='whatsapp_verified';$document['customer_acceptance']['whatsapp_verified_at']=date('c');$document['customer_acceptance']['whatsapp_verified_by']=$admin;$document['customer_acceptance']['events'][]=['event'=>'whatsapp_manually_verified','at'=>date('c'),'admin'=>$admin]; }
-
-function customer_acceptance_challan_public_link(string $token): string { return customer_acceptance_current_origin().'/challan-public.php?token='.rawurlencode($token); }
-function customer_acceptance_challan_item_summary(array $document): string { return customer_acceptance_dispatch_item_summary($document); }
-function customer_acceptance_challan_whatsapp_url(array $document, array $company=[]): string
-{
-    $e=(array)($document['customer_acceptance']??[]); $publicLink=customer_acceptance_challan_public_link((string)($document['public_token']??''));
-    $msg="Namaste Dakshayani Enterprises,
-I, ".($e['customer_name_snapshot']??'').", confirm that I have received the items listed in Delivery Challan ".($document['challan_no']??$document['dc_number']??'').".
-
-Quotation reference: ".($document['linked_quote_no']??$document['quotation_no']??'')."
-Dispatch Advice reference: ".($document['dispatch_advice_no']??'')."
-Delivery date: ".($document['delivery_date']??'')."
-Number of listed items: ".count((array)($document['items']??[]))."
-
-Items received:
-".customer_acceptance_challan_item_summary($document)."
-
-Receipt confirmation reference: ".($e['acceptance_ref']??'')."
-Confirmed on: ".($e['confirmed_at']??'')."
-Registered mobile: ".($e['customer_mobile_snapshot']??'')."
-Remarks: ".(($e['customer_remarks']??'')?:'None')."
-Secure Challan link:
-".$publicLink."
-
-Regards,
-".($e['customer_name_snapshot']??'');
-    return 'https://wa.me/'.CUSTOMER_ACCEPTANCE_WHATSAPP_TARGET.'?text='.rawurlencode($msg);
-}
