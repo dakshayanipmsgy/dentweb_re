@@ -80,14 +80,44 @@
         });
     });
 
+    const numberPrecisionFor = (input, noDecimals) => {
+        if (noDecimals) return 0;
+        const step = String(input?.step || '0.01');
+        const dot = step.indexOf('.');
+        return dot >= 0 ? Math.min(6, Math.max(0, step.length - dot - 1)) : 0;
+    };
+
+    const setNumberValue = (input, value, precision = 2) => {
+        if (!input || !Number.isFinite(value)) return;
+        const min = input.min !== '' ? Number(input.min) : null;
+        const max = input.max !== '' ? Number(input.max) : null;
+        let normalized = value;
+        if (Number.isFinite(min)) normalized = Math.max(min, normalized);
+        if (Number.isFinite(max)) normalized = Math.min(max, normalized);
+        const factor = 10 ** precision;
+        normalized = Math.round(normalized * factor) / factor;
+        if (Object.is(normalized, -0) || Math.abs(normalized) < 1 / factor / 2) normalized = 0;
+        input.value = String(normalized);
+        input.setCustomValidity('');
+        if (input.validity?.stepMismatch) {
+            const step = Number(input.step || 1);
+            const base = Number.isFinite(min) ? min : 0;
+            if (Number.isFinite(step) && step > 0) {
+                normalized = base + Math.round((normalized - base) / step) * step;
+                normalized = Math.round(normalized * factor) / factor;
+                input.value = String(Object.is(normalized, -0) ? 0 : normalized);
+                input.setCustomValidity('');
+            }
+        }
+    };
+
     const setIfAllowed = (input, value, options) => {
         if (!input) return;
         const force = !!(options && options.force);
         const noDecimals = !!(options && options.noDecimals);
         if (!force && input.dataset.touched === '1' && !fieldEmpty(input)) return;
         if (!force && input === monthlyBillInput && monthlyBillTouchedFlag?.value === '1') return;
-        const rounded = noDecimals ? Math.round(value) : (Math.round(value * 100) / 100);
-        input.value = String(rounded);
+        setNumberValue(input, value, numberPrecisionFor(input, noDecimals));
         if (force) input.dataset.touched = '';
     };
 
@@ -169,7 +199,7 @@
 
     const syncSelectedPrimarySystemPrice = () => {
         if (!totalInput) return;
-        totalInput.value = String(Math.max(0, Math.round(selectedPrimaryScenarioPrice() * 100) / 100));
+        setNumberValue(totalInput, selectedPrimaryScenarioPrice(), 2);
     };
 
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -341,10 +371,10 @@
         const marginPct = useAbove2 ? parseNum(above2MarginPctInput?.value) : parseNum(up2MarginPctInput?.value);
 
         if (legacyLoanEnabledInput) legacyLoanEnabledInput.value = isLoan ? '1' : '0';
-        if (legacyLoanAmountInput) legacyLoanAmountInput.value = String(isLoan ? loanAmount : 0);
-        if (legacyLoanInterestInput) legacyLoanInterestInput.value = String(isLoan ? interest : 0);
-        if (legacyLoanTenureInput) legacyLoanTenureInput.value = String(isLoan ? tenure : 0);
-        if (legacyLoanMarginInput) legacyLoanMarginInput.value = String(isLoan ? marginPct : 0);
+        if (legacyLoanAmountInput) setNumberValue(legacyLoanAmountInput, isLoan ? loanAmount : 0, 2);
+        if (legacyLoanInterestInput) setNumberValue(legacyLoanInterestInput, isLoan ? interest : 0, 2);
+        if (legacyLoanTenureInput) setNumberValue(legacyLoanTenureInput, isLoan ? tenure : 0, 2);
+        if (legacyLoanMarginInput) setNumberValue(legacyLoanMarginInput, isLoan ? marginPct : 0, 2);
     };
 
     const bindRecalc = (input, handler) => { if (input) input.addEventListener('input', handler); };
