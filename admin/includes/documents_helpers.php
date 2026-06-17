@@ -3771,6 +3771,91 @@ function documents_quote_workflow_defaults(): array
     ];
 }
 
+
+function quotation_number_input_value($value, int $precision = 2): string
+{
+    if ($value === null || $value === '') {
+        return '';
+    }
+    if (is_string($value)) {
+        $value = str_replace(',', '', trim($value));
+        if ($value === '') {
+            return '';
+        }
+    }
+    if (!is_numeric($value)) {
+        return '';
+    }
+    $number = (float) $value;
+    if (!is_finite($number)) {
+        return '';
+    }
+    $precision = max(0, min(6, $precision));
+    $number = round($number, $precision);
+    if (abs($number) < (0.5 / (10 ** max(0, $precision)))) {
+        $number = 0.0;
+    }
+    $formatted = number_format($number, $precision, '.', '');
+    return rtrim(rtrim($formatted, '0'), '.') ?: '0';
+}
+
+function documents_quote_normalize_editable_finance_values(array $quote): array
+{
+    $moneyKeys = ['price','gross_payable','net_investment_after_subsidy','monthly_outflow','payback','margin_money_rs','loan_amount_rs','effective_loan_principal_rs','emi_rs','residual_bill_rs','initial_investment_after_subsidy_credit_rs','remaining_subsidy_after_margin_adjustment_rs','net_own_investment_after_subsidy','subsidy'];
+    $pctKeys = ['margin_ratio_pct','loan_ratio_pct','interest_pct'];
+    $tenureKeys = ['tenure_years'];
+    $normalize = static function ($value, int $precision, ?float $min = 0.0, ?float $max = null) {
+        $text = quotation_number_input_value($value, $precision);
+        if ($text === '') {
+            return 0.0;
+        }
+        $number = (float) $text;
+        if ($min !== null) {
+            $number = max($min, $number);
+        }
+        if ($max !== null) {
+            $number = min($max, $number);
+        }
+        return round($number, $precision);
+    };
+    if (isset($quote['scenario_prices']) && is_array($quote['scenario_prices'])) {
+        foreach ($quote['scenario_prices'] as $key => $row) {
+            if (is_array($row) && array_key_exists('price', $row)) {
+                $quote['scenario_prices'][$key]['price'] = $normalize($row['price'], 2, 0.0, null);
+            }
+        }
+    }
+    if (isset($quote['finance_scenarios']) && is_array($quote['finance_scenarios'])) {
+        foreach ($quote['finance_scenarios'] as $scenarioKey => $scenario) {
+            if (!is_array($scenario)) continue;
+            foreach ($moneyKeys as $key) if (array_key_exists($key, $scenario)) $scenario[$key] = $normalize($scenario[$key], 2, 0.0, null);
+            foreach ($pctKeys as $key) if (array_key_exists($key, $scenario)) $scenario[$key] = $normalize($scenario[$key], 2, 0.0, 100.0);
+            foreach ($tenureKeys as $key) if (array_key_exists($key, $scenario)) $scenario[$key] = $normalize($scenario[$key], 2, 0.0, null);
+            if (str_contains((string) $scenarioKey, 'loan_upto_2_lacs')) {
+                $price = (float) ($scenario['price'] ?? ($quote['scenario_prices']['loan_upto_2_lacs']['price'] ?? 0));
+                $loan = min((float) ($scenario['loan_amount_rs'] ?? 0), 200000.0, max(0.0, $price));
+                $margin = max(0.0, $price - $loan);
+                $scenario['loan_amount_rs'] = round($loan, 2);
+                $scenario['margin_money_rs'] = round($margin, 2);
+                $scenario['margin_ratio_pct'] = $price > 0 ? round(($margin / $price) * 100, 2) : 0.0;
+                $scenario['loan_ratio_pct'] = round(max(0.0, 100.0 - (float) $scenario['margin_ratio_pct']), 2);
+            }
+            $quote['finance_scenarios'][$scenarioKey] = $scenario;
+        }
+    }
+    if (isset($quote['finance_inputs']) && is_array($quote['finance_inputs'])) {
+        foreach (['monthly_bill_rs','unit_rate_rs_per_kwh','annual_generation_per_kw','subsidy_expected_rs','transportation_rs','discount_rs'] as $key) {
+            if (array_key_exists($key, $quote['finance_inputs'])) $quote['finance_inputs'][$key] = quotation_number_input_value($quote['finance_inputs'][$key], 2);
+        }
+        if (isset($quote['finance_inputs']['loan']) && is_array($quote['finance_inputs']['loan'])) {
+            foreach (['interest_pct','tenure_years','margin_pct','loan_amount'] as $key) {
+                if (array_key_exists($key, $quote['finance_inputs']['loan'])) $quote['finance_inputs']['loan'][$key] = quotation_number_input_value($quote['finance_inputs']['loan'][$key], 2);
+            }
+        }
+    }
+    return $quote;
+}
+
 function documents_quote_prepare(array $quote): array
 {
     $original = $quote;
@@ -3811,6 +3896,7 @@ function documents_quote_prepare(array $quote): array
     $quote['revised_from_quote_id'] = safe_text((string) ($quote['revised_from_quote_id'] ?? '')) ?: null;
     $revisionReason = trim((string) ($quote['revision_reason'] ?? ''));
     $quote['revision_reason'] = $revisionReason === '' ? null : $revisionReason;
+    $quote = documents_quote_normalize_editable_finance_values($quote);
     $quote['revision_child_ids'] = array_values(array_filter(array_map(static fn($v): string => safe_text((string) $v), is_array($quote['revision_child_ids'] ?? null) ? $quote['revision_child_ids'] : []), static fn(string $v): bool => $v !== ''));
     $legacyShare = is_array($quote['share'] ?? null) ? $quote['share'] : [];
     $quote['public_share_enabled'] = (bool) ($quote['public_share_enabled'] ?? $legacyShare['public_enabled'] ?? false);
@@ -3857,7 +3943,7 @@ function documents_quote_reset_clone_state(array $quote, string $newId): array
     $quote['public_share_created_at']=''; $quote['public_share_revoked_at']=null; $quote['public_share_expires_at']=null;
     $quote['quote_series_id']=$newId; $quote['version_no']=1; $quote['is_current_version']=true;
     $quote['revised_from_quote_id']=null; $quote['revision_reason']=null; $quote['revision_child_ids']=[];
-    return $quote;
+    return documents_quote_normalize_editable_finance_values($quote);
 }
 
 function documents_quote_number_exists(string $quoteNo, string $exceptId = ''): bool
