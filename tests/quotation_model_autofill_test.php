@@ -17,7 +17,7 @@ $assertions = [
     'Autofilled kit quantity is one' => "if (qtyField) qtyField.value = '1'",
     'Autofilled kit unit is set' => "if (unitField) unitField.value = 'set'",
     'Existing matching kit rows are retained' => 'if (existingTarget)',
-    'Only explicitly managed autofill rows are reused' => "candidate.dataset.modelKitManaged === 'true'",
+    'Persistent managed autofill rows are reused' => "quote_item_managed_system_kit[]",
     'DCR and Non-DCR are changed only from model selection' => 'modelSelect?.addEventListener(\'change\', applyModel)',
 ];
 

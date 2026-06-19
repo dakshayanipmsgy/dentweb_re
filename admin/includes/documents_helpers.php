@@ -4898,7 +4898,9 @@ function documents_quote_structured_item_defaults(): array
         'name_snapshot' => '',
         'description_snapshot' => '',
         'master_description_snapshot' => '',
+        'auto_description' => '',
         'custom_description' => '',
+        'description_mode' => 'auto',
         'hsn_snapshot' => '',
         'qty' => 0,
         'unit' => '',
@@ -4906,6 +4908,137 @@ function documents_quote_structured_item_defaults(): array
         'variant_snapshot' => [],
         'meta' => [],
     ];
+}
+
+function documents_quote_normalize_system_type(string $value): string
+{
+    $normalized = strtolower(trim(str_replace(['-', ' '], '_', $value)));
+    if (in_array($normalized, ['hybrid', 'hyb'], true)) {
+        return 'hybrid';
+    }
+    if (in_array($normalized, ['ongrid', 'on_grid', 'on__grid'], true)) {
+        return 'ongrid';
+    }
+    return $normalized !== '' ? $normalized : 'ongrid';
+}
+
+function documents_quote_system_type_label(string $value): string
+{
+    return documents_quote_normalize_system_type($value) === 'hybrid' ? 'Hybrid' : 'Ongrid';
+}
+
+function documents_quote_known_system_kit_name(string $systemType, string $hybridVariant = ''): string
+{
+    if (documents_quote_normalize_system_type($systemType) !== 'hybrid') {
+        return 'Ongrid Solar Power Generation System';
+    }
+    return strtoupper($hybridVariant) === 'TL'
+        ? 'Hybrid Solar Power Generation System TLess'
+        : 'Hybrid Solar Power Generation System TBased';
+}
+
+function documents_quote_find_system_kit_by_name(string $name): ?array
+{
+    $wanted = strtolower(trim(preg_replace('/\s+/', ' ', $name) ?? $name));
+    foreach (documents_inventory_kits(false) as $kit) {
+        $kitName = strtolower(trim(preg_replace('/\s+/', ' ', (string) ($kit['name'] ?? '')) ?? ''));
+        if ($kitName === $wanted) {
+            return $kit;
+        }
+    }
+    return null;
+}
+
+function documents_quote_is_known_system_kit_item(array $item): bool
+{
+    if (!empty($item['meta']['managed_system_kit'])) {
+        return true;
+    }
+    $name = strtolower(trim(preg_replace('/\s+/', ' ', (string) ($item['name_snapshot'] ?? '')) ?? ''));
+    return in_array($name, [
+        'ongrid solar power generation system',
+        'hybrid solar power generation system tbased',
+        'hybrid solar power generation system tless',
+    ], true);
+}
+
+function documents_quote_hybrid_variant_from_snapshot(array $snapshot): string
+{
+    $haystack = strtoupper((string) ($snapshot['model_number'] ?? '') . ' ' . (string) ($snapshot['inverter_code'] ?? '') . ' ' . (string) ($snapshot['variant'] ?? ''));
+    if (preg_match('/(^|[-_\s])TL($|[-_\s])/', $haystack)) {
+        return 'TL';
+    }
+    return 'TB';
+}
+
+function documents_quote_reconcile_system_configuration(array $quote): array
+{
+    $systemType = documents_quote_normalize_system_type((string) ($quote['system_type'] ?? 'ongrid'));
+    $quote['system_type'] = $systemType;
+    $snapshot = is_array($quote['rate_chart_snapshot'] ?? null) ? $quote['rate_chart_snapshot'] : [];
+    $snapshot['system_type'] = $systemType;
+    if ($systemType !== 'hybrid') {
+        foreach (['hybrid_inverter_kva', 'hybrid_phase', 'hybrid_battery_count', 'battery_code', 'inverter_code'] as $field) {
+            $snapshot[$field] = in_array($field, ['hybrid_inverter_kva', 'hybrid_battery_count'], true) ? 0 : '';
+        }
+    }
+    $quote['rate_chart_snapshot'] = $snapshot;
+    $variant = $systemType === 'hybrid' ? documents_quote_hybrid_variant_from_snapshot($snapshot) : '';
+    $requiredName = documents_quote_known_system_kit_name($systemType, $variant);
+    $requiredKit = documents_quote_find_system_kit_by_name($requiredName);
+    if (!is_array($requiredKit)) {
+        $quote['system_reconcile_error'] = 'Matching Items Master kit not found: ' . $requiredName;
+        return $quote;
+    }
+
+    $items = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
+    $managedIndex = null;
+    foreach ($items as $idx => $item) {
+        if (!documents_quote_is_known_system_kit_item($item)) {
+            continue;
+        }
+        if ($managedIndex === null) {
+            $managedIndex = $idx;
+            continue;
+        }
+        unset($items[$idx]);
+    }
+    $autoDescription = safe_multiline_text((string) ($snapshot['auto_description'] ?? ''));
+    if ($systemType === 'hybrid' && function_exists('solar_finance_build_hybrid_configuration_summary')) {
+        $autoDescription = solar_finance_build_hybrid_configuration_summary($snapshot);
+    }
+    $base = [
+        'type' => 'kit',
+        'kit_id' => (string) ($requiredKit['id'] ?? ''),
+        'component_id' => '',
+        'qty' => 1,
+        'unit' => 'set',
+        'variant_id' => '',
+        'variant_snapshot' => [],
+        'name_snapshot' => (string) ($requiredKit['name'] ?? $requiredName),
+        'description_snapshot' => safe_multiline_text((string) ($requiredKit['description'] ?? '')),
+        'master_description_snapshot' => safe_multiline_text((string) ($requiredKit['description'] ?? '')),
+        'auto_description' => $autoDescription,
+        'custom_description' => '',
+        'description_mode' => 'auto',
+        'hsn_snapshot' => safe_text((string) ($requiredKit['hsn'] ?? '')),
+        'meta' => [
+            'managed_system_kit' => true,
+            'system_type' => $systemType,
+            'model_number' => safe_text((string) ($snapshot['model_number'] ?? '')),
+            'hybrid_variant' => $variant,
+        ],
+    ];
+    if ($managedIndex !== null && isset($items[$managedIndex])) {
+        $old = $items[$managedIndex];
+        $base['custom_description'] = safe_multiline_text((string) ($old['custom_description'] ?? ''));
+        $base['description_mode'] = (string) ($old['description_mode'] ?? '') === 'manual' || $base['custom_description'] !== '' ? 'manual' : 'auto';
+        $items[$managedIndex] = $base;
+    } else {
+        array_unshift($items, $base);
+    }
+    $quote['quote_items'] = documents_normalize_quote_structured_items(array_values($items));
+    return $quote;
 }
 
 function documents_inventory_tax_profiles(bool $includeArchived = true): array
@@ -6214,12 +6347,20 @@ function documents_normalize_quote_structured_items(array $rows): array
         }
         $item['master_description_snapshot'] = $masterDescriptionSnapshot;
         $item['description_snapshot'] = $masterDescriptionSnapshot;
+        $item['auto_description'] = safe_multiline_text((string) ($item['auto_description'] ?? ''));
         $item['custom_description'] = safe_multiline_text((string) ($item['custom_description'] ?? ''));
+        $item['description_mode'] = (string) ($item['description_mode'] ?? '') === 'manual' ? 'manual' : 'auto';
         $item['hsn_snapshot'] = safe_text((string) ($item['hsn_snapshot'] ?? ''));
         $item['unit'] = safe_text((string) ($item['unit'] ?? ''));
         $item['variant_id'] = safe_text((string) ($item['variant_id'] ?? ''));
         $item['variant_snapshot'] = is_array($item['variant_snapshot'] ?? null) ? $item['variant_snapshot'] : [];
         $item['meta'] = is_array($item['meta'] ?? null) ? $item['meta'] : [];
+        if (!empty($item['meta']['managed_system_kit'])) {
+            $item['meta']['managed_system_kit'] = true;
+            $item['meta']['system_type'] = documents_quote_normalize_system_type((string) ($item['meta']['system_type'] ?? ''));
+            $item['meta']['model_number'] = safe_text((string) ($item['meta']['model_number'] ?? ''));
+            $item['meta']['hybrid_variant'] = safe_text((string) ($item['meta']['hybrid_variant'] ?? ''));
+        }
         if ($item['qty'] <= 0) {
             continue;
         }
