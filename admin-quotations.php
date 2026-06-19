@@ -579,7 +579,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'sub_division_name' => $quote['sub_division_name'],
         ]);
 
-        $quote['system_type'] = safe_text((string) $requestValue('system_type', $quote['system_type'] ?? 'Ongrid'));
+        $quote['system_type'] = documents_quote_normalize_system_type((string) $requestValue('system_type', $quote['system_type'] ?? 'ongrid'));
         if ($shouldUseSplitCapacity) {
             $mainSolar = (float) $submittedMainSolarKwp;
             $complimentarySolar = $submittedComplimentaryRaw !== '' ? (float) $submittedComplimentaryRaw : 0.0;
@@ -621,6 +621,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $structuredUnits = is_array($_POST['quote_item_unit'] ?? null) ? $_POST['quote_item_unit'] : [];
         $structuredVariantIds = is_array($_POST['quote_item_variant_id'] ?? null) ? $_POST['quote_item_variant_id'] : [];
         $structuredCustomDescriptions = is_array($_POST['quote_item_custom_description'] ?? null) ? $_POST['quote_item_custom_description'] : [];
+        $structuredAutoDescriptions = is_array($_POST['quote_item_auto_description'] ?? null) ? $_POST['quote_item_auto_description'] : [];
+        $structuredDescriptionModes = is_array($_POST['quote_item_description_mode'] ?? null) ? $_POST['quote_item_description_mode'] : [];
         $structuredItems = [];
         $itemSummaryRows = [];
         $structuredCount = count($structuredTypes);
@@ -663,7 +665,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'name_snapshot' => $lineName,
                     'description_snapshot' => $lineDescription,
                     'master_description_snapshot' => $lineDescription,
+                    'auto_description' => safe_multiline_text((string) ($structuredAutoDescriptions[$i] ?? '')),
                     'custom_description' => safe_multiline_text((string) ($structuredCustomDescriptions[$i] ?? '')),
+                    'description_mode' => (string) ($structuredDescriptionModes[$i] ?? '') === 'manual' ? 'manual' : 'auto',
                     'hsn_snapshot' => $lineHsn,
                     'meta' => [],
                 ];
@@ -721,7 +725,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'name_snapshot' => $lineName,
                 'description_snapshot' => $lineDescription,
                 'master_description_snapshot' => $lineDescription,
+                'auto_description' => safe_multiline_text((string) ($structuredAutoDescriptions[$i] ?? '')),
                 'custom_description' => safe_multiline_text((string) ($structuredCustomDescriptions[$i] ?? '')),
+                'description_mode' => (string) ($structuredDescriptionModes[$i] ?? '') === 'manual' ? 'manual' : 'auto',
                 'hsn_snapshot' => $lineHsn,
                 'meta' => [],
             ];
@@ -811,7 +817,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $selectedModelNumber = safe_text((string) $requestValue('selected_model_number', $savedRateChartSnapshot['model_number'] ?? ''));
         $selectedRateChartRow = [];
         if ($selectedModelNumber !== '') {
-            $rateChartType = strtolower($quote['system_type']) === 'hybrid' ? 'hybrid' : 'on_grid';
+            $rateChartType = documents_quote_normalize_system_type((string) $quote['system_type']) === 'hybrid' ? 'hybrid' : 'on_grid';
             foreach ((array) ($quoteDefaults['rate_chart'][$rateChartType] ?? []) as $rateChartRow) {
                 if (is_array($rateChartRow) && safe_text((string) ($rateChartRow['model_number'] ?? '')) === $selectedModelNumber) {
                     $selectedRateChartRow = $rateChartRow;
@@ -820,11 +826,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         if ($selectedRateChartRow === [] && $selectedModelNumber !== '') {
-            $selectedRateChartRow = $savedRateChartSnapshot;
+            $selectedModelNumber = '';
         }
         $selectedScenarioModelNumbers = is_array($selectedRateChartRow['scenario_model_numbers'] ?? null) ? $selectedRateChartRow['scenario_model_numbers'] : [];
         $quote['rate_chart_snapshot'] = array_merge($savedRateChartSnapshot, [
-            'system_type' => safe_text((string) $requestValue('system_type', $savedRateChartSnapshot['system_type'] ?? $quote['system_type'] ?? '')),
+            'system_type' => documents_quote_normalize_system_type((string) $requestValue('system_type', $savedRateChartSnapshot['system_type'] ?? $quote['system_type'] ?? '')),
             'model_number' => safe_text((string) ($selectedRateChartRow['model_number'] ?? $selectedModelNumber)),
             'scenario_model_numbers' => [
                 'self_funded' => safe_text((string) ($selectedScenarioModelNumbers['self_funded'] ?? '')),
@@ -846,6 +852,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'loan_above_2_lacs_price' => $priceLoanAbove2,
             'captured_at' => date('c'),
         ]);
+        $quote = documents_quote_reconcile_system_configuration($quote);
+        if (safe_text((string) ($quote['system_reconcile_error'] ?? '')) !== '') {
+            $redirectWith('error', (string) $quote['system_reconcile_error']);
+        }
         $quote = solar_finance_sync_hybrid_summary_into_quote_items($quote);
         $priceForPrimary = 0.0;
         if ($primaryScenario === 'self_funded') {
@@ -1567,7 +1577,7 @@ body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px
 <div><label>Consumer Account No. (JBVNL)</label><input name="consumer_account_no" value="<?= htmlspecialchars((string)(($editing['consumer_account_no'] !== '') ? $editing['consumer_account_no'] : ($quoteSnapshot['consumer_account_no'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Meter Number</label><input name="meter_number" value="<?= htmlspecialchars((string)(($editing['meter_number'] !== '') ? $editing['meter_number'] : ($quoteSnapshot['meter_number'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Meter Serial Number</label><input name="meter_serial_number" value="<?= htmlspecialchars((string)(($editing['meter_serial_number'] !== '') ? $editing['meter_serial_number'] : ($quoteSnapshot['meter_serial_number'] ?? '')), ENT_QUOTES) ?>"></div>
-<div><label>System Type</label><select name="system_type"><?php foreach (['Ongrid','Hybrid','Offgrid','Product'] as $t): ?><option value="<?= $t ?>" <?= $editing['system_type']===$t?'selected':'' ?>><?= $t ?></option><?php endforeach; ?></select></div>
+<div><label>System Type</label><select name="system_type"><?php foreach (['ongrid'=>'Ongrid','hybrid'=>'Hybrid','offgrid'=>'Offgrid','product'=>'Product'] as $value=>$label): ?><option value="<?= $value ?>" <?= documents_quote_normalize_system_type((string)$editing['system_type'])===$value?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select></div>
 <div id="rateChartModelField"><label>Rate Chart Model</label><select id="rateChartModelSelect"><option value="">-- select model --</option></select><input type="hidden" name="selected_model_number" value="<?= htmlspecialchars((string)($editing['rate_chart_snapshot']['model_number'] ?? ''), ENT_QUOTES) ?>"><div class="muted">Models come from the selected System Type rate chart. Solar split, matching kit, and prices fill on selection; all fields remain editable.</div><div class="muted" id="modelKitAutofillStatus" aria-live="polite"></div></div>
 <?php $hasMainSolarOnQuote = safe_text((string)($editing['main_solar_kwp'] ?? '')) !== ''; ?>
 <div id="splitCapacityFields" style="display:<?= ($editing['id'] === '' || $hasMainSolarOnQuote) ? 'block' : 'none' ?>;grid-column:span 2">
@@ -1600,7 +1610,7 @@ body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
-<div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Add kits/components from Items Master. Name/description snapshots are captured automatically.</div><table id="structuredItemsTable"><thead><tr><th>Kit / Component Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Quotation-specific description / note</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?></div><?php $masterPreview = (string)($sItem['master_description_snapshot'] ?? ($sItem['description_snapshot'] ?? '')); if (trim($masterPreview) !== ''): ?><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars($masterPreview, ENT_QUOTES) ?></div><?php endif; ?><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"><?= htmlspecialchars((string)($sItem['custom_description'] ?? ''), ENT_QUOTES) ?></textarea></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">These are the common inputs used to calculate savings, residual bill, monthly outflow, cumulative expense, and payback.</div></div>
+<div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Add kits/components from Items Master. Name/description snapshots are captured automatically.</div><table id="structuredItemsTable"><thead><tr><th>Kit / Component Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Quotation-specific description / note</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?></div><?php $masterPreview = (string)($sItem['master_description_snapshot'] ?? ($sItem['description_snapshot'] ?? '')); if (trim($masterPreview) !== ''): ?><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars($masterPreview, ENT_QUOTES) ?></div><?php endif; ?><div class="muted" style="font-size:11px;margin-bottom:4px">Automatic configuration</div><textarea name="quote_item_auto_description[]" rows="2" readonly><?= htmlspecialchars((string)($sItem['auto_description'] ?? ''), ENT_QUOTES) ?></textarea><div class="muted" style="font-size:11px;margin:4px 0">Quotation-specific note / manual override</div><input type="hidden" name="quote_item_description_mode[]" value="<?= htmlspecialchars((string)($sItem['description_mode'] ?? ((string)($sItem['custom_description'] ?? '') !== '' ? 'manual' : 'auto')), ENT_QUOTES) ?>"><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"><?= htmlspecialchars((string)($sItem['custom_description'] ?? ''), ENT_QUOTES) ?></textarea><button type="button" class="btn secondary reset-auto-description">Reset to automatic configuration</button></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">These are the common inputs used to calculate savings, residual bill, monthly outflow, cumulative expense, and payback.</div></div>
 <div style="grid-column:1/-1"><h3>Section 6 — Scenario Prices</h3><div class="muted">Scenario pricing only (self funded, loan up to ₹2 lacs, loan above ₹2 lacs, hybrid configuration, and primary finance scenario).</div></div>
 <div><label>Primary Finance Scenario</label><select name="primary_finance_scenario"><option value="self_funded" <?= (($editing['primary_finance_scenario'] ?? '')==='self_funded')?'selected':'' ?>>Self Funded</option><option value="loan_upto_2_lacs_subsidy_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_upto_2_lacs_subsidy_to_loan')?'selected':'' ?>>Loan up to ₹2 lacs (subsidy to loan)</option><option value="loan_upto_2_lacs_subsidy_not_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_upto_2_lacs_subsidy_not_to_loan')?'selected':'' ?>>Loan up to ₹2 lacs (subsidy self kept)</option><option value="loan_above_2_lacs_subsidy_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_above_2_lacs_subsidy_to_loan')?'selected':'' ?>>Loan above ₹2 lacs (subsidy to loan)</option><option value="loan_above_2_lacs_subsidy_not_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_above_2_lacs_subsidy_not_to_loan')?'selected':'' ?>>Loan above ₹2 lacs (subsidy self kept)</option></select></div>
 <div><label>Self Funded Price ₹</label><input type="number" min="0" step="0.01" name="scenario_price_self_funded" value="<?= htmlspecialchars(quotation_number_input_value($editing['scenario_prices']['self_funded']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
@@ -1934,7 +1944,7 @@ const createStructuredItemRow = () => {
     const tb = document.querySelector('#structuredItemsTable tbody');
     if (!tb) return null;
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit">Kit</option><option value="component" selected>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="1"></td><td><input name="quote_item_unit[]" value=""></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"></div><div class="muted" style="font-size:11px;margin-bottom:4px"></div><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"></textarea></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td>';
+    tr.innerHTML = '<td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit">Kit</option><option value="component" selected>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="1"></td><td><input name="quote_item_unit[]" value=""></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"></div><div class="muted" style="font-size:11px;margin-bottom:4px"></div><div class="muted" style="font-size:11px;margin-bottom:4px">Automatic configuration</div><textarea name="quote_item_auto_description[]" rows="2" readonly></textarea><div class="muted" style="font-size:11px;margin:4px 0">Quotation-specific note / manual override</div><input type="hidden" name="quote_item_description_mode[]" value="auto"><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"></textarea><button type="button" class="btn secondary reset-auto-description">Reset to automatic configuration</button></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td>';
     tb.appendChild(tr);
     syncStructuredItemRow(tr);
     return tr;
@@ -2190,7 +2200,10 @@ window.quoteFormAutofillConfig = {
             return;
         }
 
-        let itemRow = rows.find((candidate) => candidate.dataset.modelKitManaged === 'true') || null;
+        let itemRow = rows.find((candidate) => candidate.querySelector('input[name="quote_item_managed_system_kit[]"]')?.value === '1') || null;
+        if (!itemRow) {
+            itemRow = rows.find((candidate) => ['Ongrid Solar Power Generation System', 'Hybrid Solar Power Generation System TBased', 'Hybrid Solar Power Generation System TLess'].includes(String(quoteKitMeta[candidate.querySelector('.quote-item-kit')?.value || '']?.name || ''))) || null;
+        }
         if (!itemRow) itemRow = createStructuredItemRow();
         if (!itemRow) return;
 
@@ -2204,6 +2217,8 @@ window.quoteFormAutofillConfig = {
         if (qtyField) qtyField.value = '1';
         if (unitField) unitField.value = 'set';
         itemRow.dataset.modelKitManaged = 'true';
+        itemRow.querySelector('input[name="quote_item_managed_system_kit[]"]')?.remove();
+        itemRow.insertAdjacentHTML('beforeend', '<input type="hidden" name="quote_item_managed_system_kit[]" value="1">');
         syncStructuredItemRow(itemRow);
         if (modelKitAutofillStatus) modelKitAutofillStatus.textContent = `Added kit: ${targetName}. Existing item rows were preserved.`;
     };
@@ -2343,18 +2358,35 @@ window.quoteFormAutofillConfig = {
         const rows = Array.from(document.querySelectorAll('#structuredItemsTable tbody tr'));
         const kitRows = rows.filter((row) => String(row.querySelector('select[name="quote_item_type[]"]')?.value || '') === 'kit');
         if (kitRows.length !== 1) return;
-        const textarea = kitRows[0].querySelector('textarea[name="quote_item_custom_description[]"]');
-        if (!textarea) return;
-        const lines = String(textarea.value || '').split(/\r?\n/).filter((line) => !/^Hybrid configuration:/i.test(line.trim()));
-        lines.push(summary);
-        textarea.value = lines.filter((line, index) => line.trim() !== '' || index < lines.length - 1).join('\n').trim();
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        const autoTextarea = kitRows[0].querySelector('textarea[name="quote_item_auto_description[]"]');
+        const mode = kitRows[0].querySelector('input[name="quote_item_description_mode[]"]');
+        if (!autoTextarea) return;
+        autoTextarea.value = summary;
+        if (mode && mode.value !== 'manual') mode.value = 'auto';
+        autoTextarea.dispatchEvent(new Event('input', { bubbles: true }));
     };
     [systemType, inverter, phase, battery].forEach((el) => {
         el?.addEventListener('input', updateHybridItemDescriptionPreview);
         el?.addEventListener('change', updateHybridItemDescriptionPreview);
     });
     updateHybridItemDescriptionPreview();
+    document.addEventListener('input', (event) => {
+        const textarea = event.target?.matches?.('textarea[name="quote_item_custom_description[]"]') ? event.target : null;
+        if (!textarea) return;
+        const row = textarea.closest('tr');
+        const mode = row?.querySelector('input[name="quote_item_description_mode[]"]');
+        if (mode) mode.value = String(textarea.value || '').trim() === '' ? 'auto' : 'manual';
+    });
+    document.addEventListener('click', (event) => {
+        const button = event.target?.closest?.('.reset-auto-description');
+        if (!button) return;
+        const row = button.closest('tr');
+        const textarea = row?.querySelector('textarea[name="quote_item_custom_description[]"]');
+        const mode = row?.querySelector('input[name="quote_item_description_mode[]"]');
+        if (textarea) textarea.value = '';
+        if (mode) mode.value = 'auto';
+        updateHybridItemDescriptionPreview();
+    });
 })();
 
 </script><script src="assets/js/quote-form-autofill.js"></script><script src="assets/js/admin-workspace-tabs.js"></script></main></body></html>

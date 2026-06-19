@@ -300,8 +300,9 @@ function solar_finance_build_hybrid_configuration_summary(array $snapshot): stri
 
 function solar_finance_sync_hybrid_summary_into_quote_items(array $quote): array
 {
-    $systemType = strtolower(trim((string) ($quote['system_type'] ?? '')));
+    $systemType = documents_quote_normalize_system_type((string) ($quote['system_type'] ?? ''));
     if ($systemType !== 'hybrid') {
+        $quote['quote_items'] = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
         return $quote;
     }
     $summary = solar_finance_build_hybrid_configuration_summary(is_array($quote['rate_chart_snapshot'] ?? null) ? $quote['rate_chart_snapshot'] : []);
@@ -313,10 +314,10 @@ function solar_finance_sync_hybrid_summary_into_quote_items(array $quote): array
         if (!is_array($item) || (string) ($item['type'] ?? '') !== 'kit') {
             continue;
         }
-        $existing = trim((string) ($item['custom_description'] ?? ''));
-        $existing = preg_replace('/(^|\R)Hybrid configuration:[^\R]*/i', '', $existing) ?? '';
-        $existing = trim(preg_replace('/\R{2,}/', "\n", $existing) ?? '');
-        $item['custom_description'] = $existing === '' ? $summary : ($existing . "\n" . $summary);
+        $item['auto_description'] = $summary;
+        if ((string) ($item['description_mode'] ?? 'auto') !== 'manual') {
+            $item['description_mode'] = 'auto';
+        }
         break;
     }
     unset($item);
