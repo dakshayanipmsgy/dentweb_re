@@ -3884,6 +3884,21 @@ function documents_quote_normalize_editable_finance_values(array $quote): array
 }
 
 
+
+function documents_quote_panel_size_profiles(): array
+{
+    return [
+        'portrait' => ['w' => 2, 'h' => 4, 'aspect' => 0.52],
+        'landscape' => ['w' => 4, 'h' => 2, 'aspect' => 1.92],
+    ];
+}
+
+function documents_quote_panel_size_profile(string $orientation): array
+{
+    $profiles = documents_quote_panel_size_profiles();
+    return $profiles[$orientation === 'landscape' ? 'landscape' : 'portrait'];
+}
+
 function documents_quote_panel_orientation_defaults(): array
 {
     return [
@@ -3908,7 +3923,9 @@ function documents_quote_panel_orientation_defaults(): array
         'custom_panels' => [],
         'obstructions' => [],
         'uploaded_diagram_path' => '',
-        'grid' => ['columns' => 36, 'rows' => 24, 'cell_unit' => 'grid', 'editor_cell_px' => 18, 'major_line_every' => 5, 'customer_grid_visible' => false],
+        'grid' => ['columns' => 36, 'rows' => 24, 'cell_unit' => 'grid', 'editor_cell_px' => 18, 'major_line_every' => 5, 'customer_grid_visible' => false, 'panel_size_profile' => 'standard_module'],
+        'panel_size_profile' => 'standard_module',
+        'panel_aspect_ratio' => 1.92,
         'objects' => [],
     ];
 }
@@ -3988,6 +4005,7 @@ function documents_quote_normalize_panel_orientation(array $raw): array
         'editor_cell_px' => documents_quote_int_range($gridRaw['editor_cell_px'] ?? 18, 14, 28, 18),
         'major_line_every' => documents_quote_int_range($gridRaw['major_line_every'] ?? 5, 2, 10, 5),
         'customer_grid_visible' => !empty($gridRaw['customer_grid_visible']),
+        'panel_size_profile' => 'standard_module',
     ];
     $objects = [];
     $boxes = [];
@@ -3996,10 +4014,13 @@ function documents_quote_normalize_panel_orientation(array $raw): array
         if (!is_array($object)) continue;
         $type = safe_text((string)($object['type'] ?? ''));
         if (!in_array($type, ['panel','text','obstruction','arrow'], true)) continue;
-        $defaultW = $type === 'panel' && (($object['orientation'] ?? '') === 'landscape') ? 4 : ($type === 'panel' ? 2 : 6);
-        $defaultH = $type === 'panel' && (($object['orientation'] ?? '') === 'landscape') ? 2 : ($type === 'panel' ? 4 : 2);
-        $w = documents_quote_int_range($object['w'] ?? $defaultW, 1, $grid['columns'], $defaultW);
-        $h = documents_quote_int_range($object['h'] ?? $defaultH, 1, $grid['rows'], $defaultH);
+        $orientationHint = safe_text((string)($object['orientation'] ?? ''));
+        if (!in_array($orientationHint, ['portrait','landscape'], true)) $orientationHint = ((int)($object['w'] ?? 0) > (int)($object['h'] ?? 0)) ? 'landscape' : 'portrait';
+        $profile = $type === 'panel' ? documents_quote_panel_size_profile($orientationHint) : ['w' => 6, 'h' => 2, 'aspect' => 1];
+        $defaultW = $type === 'panel' ? (int)$profile['w'] : 6;
+        $defaultH = $type === 'panel' ? (int)$profile['h'] : 2;
+        $w = $type === 'panel' ? $defaultW : documents_quote_int_range($object['w'] ?? $defaultW, 1, $grid['columns'], $defaultW);
+        $h = $type === 'panel' ? $defaultH : documents_quote_int_range($object['h'] ?? $defaultH, 1, $grid['rows'], $defaultH);
         $x = documents_quote_int_range($object['x'] ?? 0, 0, max(0, $grid['columns'] - $w), 0);
         $y = documents_quote_int_range($object['y'] ?? 0, 0, max(0, $grid['rows'] - $h), 0);
         $blocks = in_array($type, ['panel','text','obstruction'], true);
@@ -4013,9 +4034,9 @@ function documents_quote_normalize_panel_orientation(array $raw): array
         $idPrefix = $type === 'panel' ? 'panel' : ($type === 'text' ? 'text' : $type);
         $clean = ['id' => safe_text((string)($object['id'] ?? ($idPrefix . '_' . (count($objects) + 1)))), 'type' => $type, 'x' => $x, 'y' => $y, 'w' => $w, 'h' => $h];
         if ($type === 'panel') {
-            $orientation = safe_text((string)($object['orientation'] ?? ($w >= $h ? 'landscape' : 'portrait')));
-            if (!in_array($orientation, ['portrait','landscape'], true)) $orientation = 'portrait';
-            $clean += ['orientation' => $orientation, 'rotation_deg' => $orientation === 'landscape' ? 90 : 0, 'label' => mb_substr(safe_text((string)($object['label'] ?? (string)(count($objects) + 1))), 0, 20), 'group' => mb_substr(safe_text((string)($object['group'] ?? '')), 0, 20), 'facing_direction' => documents_quote_clean_orientation_direction((string)($object['facing_direction'] ?? ''), $o['default_facing_direction'])];
+            $orientation = $orientationHint;
+            $panelProfile = documents_quote_panel_size_profile($orientation);
+            $clean += ['orientation' => $orientation, 'rotation_deg' => $orientation === 'landscape' ? 90 : 0, 'visual_aspect_ratio' => (float)$panelProfile['aspect'], 'label' => mb_substr(safe_text((string)($object['label'] ?? (string)(count($objects) + 1))), 0, 20), 'group' => mb_substr(safe_text((string)($object['group'] ?? '')), 0, 20), 'facing_direction' => documents_quote_clean_orientation_direction((string)($object['facing_direction'] ?? ''), $o['default_facing_direction'])];
         } elseif ($type === 'text') {
             $clean['text'] = mb_substr(safe_multiline_text(strip_tags((string)($object['text'] ?? $object['label'] ?? 'Note'))), 0, 120);
         } elseif ($type === 'obstruction') {
@@ -4096,15 +4117,15 @@ function documents_quote_render_panel_orientation_diagram(array $orientation): s
         foreach ((array)$o['objects'] as $obj) { $minX = min($minX, (int)($obj['x'] ?? 0)); $minY = min($minY, (int)($obj['y'] ?? 0)); $maxX = max($maxX, (int)($obj['x'] ?? 0) + max(1, (int)($obj['w'] ?? 1))); $maxY = max($maxY, (int)($obj['y'] ?? 0) + max(1, (int)($obj['h'] ?? 1))); }
         $pad = 2; $viewMinX = max(0, $minX - $pad); $viewMinY = max(0, $minY - $pad); $viewMaxX = min($cols, $maxX + $pad); $viewMaxY = min($rows, $maxY + $pad);
         if ($viewMaxX <= $viewMinX || $viewMaxY <= $viewMinY) { $viewMinX = 0; $viewMinY = 0; $viewMaxX = $cols; $viewMaxY = $rows; }
-        $viewCols = max(1, $viewMaxX - $viewMinX); $viewRows = max(1, $viewMaxY - $viewMinY); $cw = 500 / $viewCols; $ch = 240 / $viewRows; $svg = '';
+        $viewCols = max(1, $viewMaxX - $viewMinX); $viewRows = max(1, $viewMaxY - $viewMinY); $cw = 500 / $viewCols; $ch = 240 / $viewRows; $cell = min($cw, $ch); $offsetX = 30 + (500 - ($viewCols * $cell)) / 2; $offsetY = 45 + (240 - ($viewRows * $cell)) / 2; $svg = '';
         foreach ((array)$o['objects'] as $obj) {
-            $x = 30 + (((int)$obj['x'] - $viewMinX) * $cw); $y = 45 + (((int)$obj['y'] - $viewMinY) * $ch); $w = max(1,(int)$obj['w']) * $cw; $h = max(1,(int)$obj['h']) * $ch;
-            if (($obj['type'] ?? '') === 'panel') $svg .= '<g><rect x="'.$x.'" y="'.$y.'" width="'.$w.'" height="'.$h.'" rx="4" fill="#0f766e" stroke="#064e3b" stroke-width="1.4"/><text x="'.($x+$w/2).'" y="'.($y+$h/2+4).'" text-anchor="middle" font-size="13" font-weight="700" fill="#ecfeff">'.$esc($obj['label'] ?? '').'</text></g>';
+            $x = $offsetX + (((int)$obj['x'] - $viewMinX) * $cell); $y = $offsetY + (((int)$obj['y'] - $viewMinY) * $cell); $w = max(1,(int)$obj['w']) * $cell; $h = max(1,(int)$obj['h']) * $cell;
+            if (($obj['type'] ?? '') === 'panel') { $aspect = max(0.2, min(5.0, (float)($obj['visual_aspect_ratio'] ?? documents_quote_panel_size_profile((string)($obj['orientation'] ?? 'portrait'))['aspect']))); $availW = max(1, $w - 2); $availH = max(1, $h - 2); $vw = $availW; $vh = $vw / $aspect; if ($vh > $availH) { $vh = $availH; $vw = $vh * $aspect; } $vx = $x + ($w - $vw) / 2; $vy = $y + ($h - $vh) / 2; $svg .= '<g><rect x="'.$vx.'" y="'.$vy.'" width="'.$vw.'" height="'.$vh.'" rx="4" fill="#0f766e" stroke="#064e3b" stroke-width="1.4"/><text x="'.($vx+$vw/2).'" y="'.($vy+$vh/2+4).'" text-anchor="middle" font-size="13" font-weight="700" fill="#ecfeff">'.$esc($obj['label'] ?? '').'</text></g>'; }
             elseif (($obj['type'] ?? '') === 'text') $svg .= '<foreignObject x="'.$x.'" y="'.$y.'" width="'.$w.'" height="'.$h.'"><div xmlns="http://www.w3.org/1999/xhtml" style="font:700 12px Arial;color:#334155;overflow:hidden;line-height:1.2">'.$esc($obj['text'] ?? '').'</div></foreignObject>';
             elseif (($obj['type'] ?? '') === 'obstruction') $svg .= '<g><rect x="'.$x.'" y="'.$y.'" width="'.$w.'" height="'.$h.'" rx="4" fill="#fee2e2" stroke="#dc2626" stroke-dasharray="5 4"/><text x="'.($x+5).'" y="'.($y+16).'" font-size="11" fill="#991b1b">'.$esc($obj['label'] ?? 'Keep-out').'</text></g>';
             elseif (($obj['type'] ?? '') === 'arrow') $svg .= '<g><line x1="'.($x+$w/2).'" y1="'.($y+$h).'" x2="'.($x+$w/2).'" y2="'.$y.'" stroke="#dc2626" stroke-width="3"/><polygon points="'.($x+$w/2).','.($y-7).' '.($x+$w/2-7).','.($y+7).' '.($x+$w/2+7).','.($y+7).'" fill="#dc2626"/><text x="'.($x+$w/2-6).'" y="'.($y-12).'" font-size="14" font-weight="700" fill="#dc2626">N</text></g>';
         }
-        return '<div class="panel-orientation-diagram"><svg viewBox="0 0 560 330" role="img" aria-label="Solar panel grid layout diagram" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="'.$cw.'" height="'.$ch.'" patternUnits="userSpaceOnUse"><path d="M '.$cw.' 0 L 0 0 0 '.$ch.'" fill="none" stroke="#e2e8f0" stroke-width="1"/></pattern></defs><rect x="30" y="45" width="500" height="240" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>'.(!empty($grid['customer_grid_visible']) ? '<rect x="30" y="45" width="500" height="240" fill="url(#grid)" opacity=".22"/>' : '').''.$svg.'<text x="42" y="315" font-size="11" fill="#475569">Grid layout: '.$esc($o['site_area_label']).' · facing '.$esc($o['default_facing_direction']).'</text></svg></div>';
+        return '<div class="panel-orientation-diagram"><svg viewBox="0 0 560 330" role="img" aria-label="Solar panel grid layout diagram" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="'.$cell.'" height="'.$cell.'" patternUnits="userSpaceOnUse"><path d="M '.$cell.' 0 L 0 0 0 '.$cell.'" fill="none" stroke="#e2e8f0" stroke-width="1"/></pattern></defs><rect x="30" y="45" width="500" height="240" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>'.(!empty($grid['customer_grid_visible']) ? '<rect x="30" y="45" width="500" height="240" fill="url(#grid)" opacity=".22"/>' : '').''.$svg.'<text x="42" y="315" font-size="11" fill="#475569">Grid layout: '.$esc($o['site_area_label']).' · facing '.$esc($o['default_facing_direction']).'</text></svg></div>';
     }
     $groups = (array) ($o['groups'] ?? []);
     $sx = static fn($v): int => 40 + (int)round(max(0, min(100, (float)$v)) * 4.8);

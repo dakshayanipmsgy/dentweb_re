@@ -18,6 +18,9 @@ $raw = [
 
 $normalized = documents_quote_normalize_panel_orientation($raw);
 $html = documents_quote_render_panel_orientation_diagram($normalized);
+preg_match_all('/<rect x="[^"]+" y="[^"]+" width="([0-9.]+)" height="([0-9.]+)" rx="4" fill="#0f766e"/', $html, $panelRects, PREG_SET_ORDER);
+$portraitRatio = isset($panelRects[0]) && (float)$panelRects[0][2] > 0 ? (float)$panelRects[0][1] / (float)$panelRects[0][2] : 0;
+$landscapeRatio = isset($panelRects[1]) && (float)$panelRects[1][2] > 0 ? (float)$panelRects[1][1] / (float)$panelRects[1][2] : 0;
 $defaults = documents_quote_normalize_panel_orientation(['enabled' => true]);
 $clamped = documents_quote_normalize_panel_orientation([
     'enabled' => true,
@@ -31,11 +34,15 @@ $assertions = [
     'grid layout mode is preserved when objects exist' => ($normalized['layout_mode'] ?? '') === 'grid_editor',
     'grid dimensions are saved as grid units' => ($normalized['grid']['columns'] ?? 0) === 60 && ($normalized['grid']['rows'] ?? 0) === 40 && ($normalized['grid']['cell_unit'] ?? '') === 'grid',
     'editor display options are normalized' => ($normalized['grid']['editor_cell_px'] ?? 0) === 16 && ($normalized['grid']['major_line_every'] ?? 0) === 5 && ($normalized['grid']['customer_grid_visible'] ?? true) === false,
+    'panel profiles normalize portrait dimensions and aspect metadata' => ($normalized['objects'][0]['w'] ?? 0) === 2 && ($normalized['objects'][0]['h'] ?? 0) === 4 && abs(($normalized['objects'][0]['visual_aspect_ratio'] ?? 0) - 0.52) < 0.001,
+    'panel profiles normalize landscape dimensions and aspect metadata' => ($normalized['objects'][2]['w'] ?? 0) === 4 && ($normalized['objects'][2]['h'] ?? 0) === 2 && abs(($normalized['objects'][2]['visual_aspect_ratio'] ?? 0) - 1.92) < 0.001,
     'overlapping panel is rejected server-side' => count($normalized['objects'] ?? []) === 3,
     'out-of-bounds panel is constrained inside resized grid' => (($normalized['objects'][2]['x'] ?? 99) + ($normalized['objects'][2]['w'] ?? 99)) <= 60 && (($normalized['objects'][2]['y'] ?? 99) + ($normalized['objects'][2]['h'] ?? 99)) <= 40,
     'invalid grid dimensions are clamped safely' => ($clamped['grid']['columns'] ?? 0) === 100 && ($clamped['grid']['rows'] ?? 0) === 8 && ($clamped['grid']['editor_cell_px'] ?? 0) === 28 && ($clamped['grid']['major_line_every'] ?? 0) === 10,
     'text label is sanitized' => !str_contains((string)($normalized['objects'][1]['text'] ?? ''), '<script>'),
     'public renderer uses clean cropped grid SVG without editor grid by default' => str_contains($html, 'Solar panel grid layout diagram') && str_contains($html, 'Main roof') && !str_contains($html, '<script>') && !str_contains($html, 'fill="url(#grid)"'),
+    'public renderer uses canonical portrait module aspect ratio' => abs($portraitRatio - 0.52) < 0.01,
+    'public renderer uses canonical landscape module aspect ratio' => abs($landscapeRatio - 1.92) < 0.01,
 ];
 
 foreach ($assertions as $label => $passed) {
