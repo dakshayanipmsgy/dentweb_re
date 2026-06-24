@@ -1153,6 +1153,7 @@ function documents_quote_defaults(): array
         'revision_child_ids' => [],
         'locked_flag' => false,
         'locked_at' => null,
+        'customer_visible_change_history' => [],
     ];
 }
 
@@ -3135,17 +3136,19 @@ function documents_quote_apply_admin_status_transition(array $quote, string $tar
         if (documents_quote_is_locked($quote) || $currentStatus === 'accepted') {
             return ['ok' => false, 'error' => 'Accepted or locked quotations cannot be approved.', 'quote' => $quote];
         }
-        if (!in_array($currentStatus, ['draft', 'pending_admin_approval'], true)) {
-            return ['ok' => false, 'error' => 'Only draft or pending quotations can be approved.', 'quote' => $quote];
+        if (!in_array($currentStatus, ['draft', 'pending_admin_approval', 'update_requested'], true)) {
+            return ['ok' => false, 'error' => 'Only draft, pending, or update-requested quotations can be approved.', 'quote' => $quote];
         }
         $quote['status'] = 'approved';
+        $quote = documents_quote_append_customer_visible_history($quote, 'approved', 'Revised quotation approved and ready for review.', ['actor_name' => $actorName]);
         $quote['approval'] = ['approved_by_id' => $actorId, 'approved_by_name' => $actorName, 'approved_at' => $now];
     } elseif ($targetStatus === 'accepted') {
-        if (!in_array($currentStatus, ['approved', 'accepted'], true)) {
+        if (!in_array($currentStatus, ['approved', 'accepted', 'update_requested'], true)) {
             return ['ok' => false, 'error' => 'Only approved quotations can be accepted.', 'quote' => $quote];
         }
         $acceptedAt = safe_text((string) ($quote['accepted_at'] ?? '')) ?: $now;
         $quote['status'] = 'accepted';
+        $quote = documents_quote_append_customer_visible_history($quote, 'accepted', 'Quotation accepted and locked for processing.', ['actor_name' => $actorName]);
         $quote['accepted_at'] = $acceptedAt;
         $quote['accepted_by'] = ['type' => $actorType, 'id' => $actorId, 'name' => $actorName];
         $quote['acceptance'] = array_merge(
@@ -3742,7 +3745,7 @@ function documents_quote_normalize_status(string $status): string
     if ($normalized === 'pending admin approval') {
         return 'pending_admin_approval';
     }
-    if (in_array($normalized, ['draft', 'pending_admin_approval', 'approved', 'accepted', 'archived'], true)) {
+    if (in_array($normalized, ['draft', 'pending_admin_approval', 'approved', 'accepted', 'update_requested', 'archived'], true)) {
         return $normalized;
     }
     if ($normalized === 'approved') {
@@ -3752,6 +3755,29 @@ function documents_quote_normalize_status(string $status): string
         return 'accepted';
     }
     return 'draft';
+}
+
+
+function documents_quote_append_customer_visible_history(array $quote, string $event, string $message, array $meta = []): array
+{
+    $history = is_array($quote['customer_visible_change_history'] ?? null) ? $quote['customer_visible_change_history'] : [];
+    $history[] = array_merge([
+        'event' => safe_text($event),
+        'message' => safe_text($message),
+        'recorded_at' => date('c'),
+        'visible_to_customer' => true,
+    ], $meta);
+    $quote['customer_visible_change_history'] = array_values(array_filter($history, static fn($entry): bool => is_array($entry)));
+    return $quote;
+}
+
+function documents_quote_customer_visible_history(array $quote): array
+{
+    $history = is_array($quote['customer_visible_change_history'] ?? null) ? $quote['customer_visible_change_history'] : [];
+    usort($history, static function ($a, $b): int {
+        return strcmp((string) ($b['recorded_at'] ?? ''), (string) ($a['recorded_at'] ?? ''));
+    });
+    return array_values(array_filter($history, static fn($entry): bool => is_array($entry) && !empty($entry['visible_to_customer'])));
 }
 
 function documents_quote_workflow_defaults(): array
@@ -3990,9 +4016,12 @@ function documents_create_quote_revision(array $source, string $reason, string $
     $draft['revised_from_quote_no'] = (string) ($source['quote_no'] ?? '');
     $draft['revision_reason'] = trim($reason) ?: null;
     $draft['generated_from_change_request_ref'] = $existingRef;
+    $draft = documents_quote_append_customer_visible_history($draft, 'revision_created', 'A revised quotation draft was created for your requested changes.', ['request_ref' => $existingRef]);
     $draft['created_at'] = $now;
     $draft['updated_at'] = $now;
 
+    $source['status'] = 'update_requested';
+    $source = documents_quote_append_customer_visible_history($source, 'update_requested', 'Customer requested changes. A revised quotation is being prepared.', ['request_ref' => $existingRef]);
     $source['is_current_version'] = false;
     $source['superseded_by_quote_id'] = $newId;
     $source['superseded_by_quote_no'] = $draft['quote_no'];
@@ -4332,6 +4361,7 @@ function documents_status_label(array $quote, string $viewerType = 'admin'): str
         'pending_admin_approval' => 'Pending Admin Approval',
         'approved' => 'Approved',
         'accepted' => 'Accepted',
+        'update_requested' => 'Update Requested',
         'archived' => 'Archived',
     ];
     return $labels[$status] ?? ucfirst($status);
