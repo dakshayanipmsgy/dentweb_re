@@ -3908,6 +3908,8 @@ function documents_quote_panel_orientation_defaults(): array
         'custom_panels' => [],
         'obstructions' => [],
         'uploaded_diagram_path' => '',
+        'grid' => ['columns' => 24, 'rows' => 16, 'cell_unit' => 'grid'],
+        'objects' => [],
     ];
 }
 
@@ -3972,9 +3974,58 @@ function documents_quote_normalize_panel_orientation(array $raw): array
     $o['row_layout'] = array_key_exists($layout, $layouts) ? $layout : 'portrait_rows';
     $o['shade_note'] = safe_multiline_text(strip_tags((string) ($o['shade_note'] ?? '')));
     $o['customer_note'] = safe_multiline_text(strip_tags((string) ($o['customer_note'] ?? ''))) ?: $defaults['customer_note'];
-    $o['layout_mode'] = 'generated';
+    $o['layout_mode'] = safe_text((string)($o['layout_mode'] ?? 'generated'));
+    if (!in_array($o['layout_mode'], ['generated','grid_editor'], true)) $o['layout_mode'] = 'generated';
     $o['diagram_style'] = 'freeform_roof';
     $o['uploaded_diagram_path'] = safe_text((string) ($o['uploaded_diagram_path'] ?? ''));
+
+
+    $gridRaw = is_array($raw['grid'] ?? null) ? $raw['grid'] : [];
+    $grid = [
+        'columns' => documents_quote_int_range($gridRaw['columns'] ?? 24, 4, 60, 24),
+        'rows' => documents_quote_int_range($gridRaw['rows'] ?? 16, 4, 60, 16),
+        'cell_unit' => 'grid',
+    ];
+    $objects = [];
+    $boxes = [];
+    $sourceObjects = is_array($raw['objects'] ?? null) ? $raw['objects'] : [];
+    foreach (array_slice($sourceObjects, 0, 200) as $object) {
+        if (!is_array($object)) continue;
+        $type = safe_text((string)($object['type'] ?? ''));
+        if (!in_array($type, ['panel','text','obstruction','arrow'], true)) continue;
+        $defaultW = $type === 'panel' && (($object['orientation'] ?? '') === 'landscape') ? 4 : ($type === 'panel' ? 2 : 6);
+        $defaultH = $type === 'panel' && (($object['orientation'] ?? '') === 'landscape') ? 2 : ($type === 'panel' ? 4 : 2);
+        $w = documents_quote_int_range($object['w'] ?? $defaultW, 1, $grid['columns'], $defaultW);
+        $h = documents_quote_int_range($object['h'] ?? $defaultH, 1, $grid['rows'], $defaultH);
+        $x = documents_quote_int_range($object['x'] ?? 0, 0, max(0, $grid['columns'] - $w), 0);
+        $y = documents_quote_int_range($object['y'] ?? 0, 0, max(0, $grid['rows'] - $h), 0);
+        $blocks = in_array($type, ['panel','text','obstruction'], true);
+        if ($blocks) {
+            foreach ($boxes as $box) {
+                if ($x < $box['x'] + $box['w'] && $x + $w > $box['x'] && $y < $box['y'] + $box['h'] && $y + $h > $box['y']) {
+                    continue 2;
+                }
+            }
+        }
+        $idPrefix = $type === 'panel' ? 'panel' : ($type === 'text' ? 'text' : $type);
+        $clean = ['id' => safe_text((string)($object['id'] ?? ($idPrefix . '_' . (count($objects) + 1)))), 'type' => $type, 'x' => $x, 'y' => $y, 'w' => $w, 'h' => $h];
+        if ($type === 'panel') {
+            $orientation = safe_text((string)($object['orientation'] ?? ($w >= $h ? 'landscape' : 'portrait')));
+            if (!in_array($orientation, ['portrait','landscape'], true)) $orientation = 'portrait';
+            $clean += ['orientation' => $orientation, 'rotation_deg' => $orientation === 'landscape' ? 90 : 0, 'label' => mb_substr(safe_text((string)($object['label'] ?? (string)(count($objects) + 1))), 0, 20), 'group' => mb_substr(safe_text((string)($object['group'] ?? '')), 0, 20), 'facing_direction' => documents_quote_clean_orientation_direction((string)($object['facing_direction'] ?? ''), $o['default_facing_direction'])];
+        } elseif ($type === 'text') {
+            $clean['text'] = mb_substr(safe_multiline_text(strip_tags((string)($object['text'] ?? $object['label'] ?? 'Note'))), 0, 120);
+        } elseif ($type === 'obstruction') {
+            $clean['label'] = mb_substr(safe_text((string)($object['label'] ?? 'Keep-out')), 0, 80);
+        } else {
+            $clean['label'] = mb_substr(safe_text((string)($object['label'] ?? 'North')), 0, 40);
+        }
+        if ($blocks) $boxes[] = ['x'=>$x,'y'=>$y,'w'=>$w,'h'=>$h];
+        $objects[] = $clean;
+    }
+    $o['grid'] = $grid;
+    $o['objects'] = $objects;
+    if ($objects !== []) $o['layout_mode'] = 'grid_editor';
 
     $sourceGroups = (array)($raw['groups'] ?? $raw['layout_groups'] ?? []);
     $groups = [];
@@ -4034,8 +4085,21 @@ function documents_quote_panel_orientation_is_enabled(array $quote): bool
 function documents_quote_render_panel_orientation_diagram(array $orientation): string
 {
     $o = documents_quote_normalize_panel_orientation($orientation);
-    $groups = (array) ($o['groups'] ?? []);
     $esc = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+    if (($o['layout_mode'] ?? '') === 'grid_editor' && !empty($o['objects'])) {
+        $grid = is_array($o['grid'] ?? null) ? $o['grid'] : ['columns'=>24,'rows'=>16];
+        $cols = max(4, (int)($grid['columns'] ?? 24)); $rows = max(4, (int)($grid['rows'] ?? 16));
+        $cw = 500 / $cols; $ch = 240 / $rows; $svg = '';
+        foreach ((array)$o['objects'] as $obj) {
+            $x = 30 + ((int)$obj['x'] * $cw); $y = 45 + ((int)$obj['y'] * $ch); $w = max(1,(int)$obj['w']) * $cw; $h = max(1,(int)$obj['h']) * $ch;
+            if (($obj['type'] ?? '') === 'panel') $svg .= '<g><rect x="'.$x.'" y="'.$y.'" width="'.$w.'" height="'.$h.'" rx="4" fill="#0f766e" stroke="#064e3b" stroke-width="1.4"/><text x="'.($x+$w/2).'" y="'.($y+$h/2+4).'" text-anchor="middle" font-size="13" font-weight="700" fill="#ecfeff">'.$esc($obj['label'] ?? '').'</text></g>';
+            elseif (($obj['type'] ?? '') === 'text') $svg .= '<foreignObject x="'.$x.'" y="'.$y.'" width="'.$w.'" height="'.$h.'"><div xmlns="http://www.w3.org/1999/xhtml" style="font:700 12px Arial;color:#334155;overflow:hidden;line-height:1.2">'.$esc($obj['text'] ?? '').'</div></foreignObject>';
+            elseif (($obj['type'] ?? '') === 'obstruction') $svg .= '<g><rect x="'.$x.'" y="'.$y.'" width="'.$w.'" height="'.$h.'" rx="4" fill="#fee2e2" stroke="#dc2626" stroke-dasharray="5 4"/><text x="'.($x+5).'" y="'.($y+16).'" font-size="11" fill="#991b1b">'.$esc($obj['label'] ?? 'Keep-out').'</text></g>';
+            elseif (($obj['type'] ?? '') === 'arrow') $svg .= '<g><line x1="'.($x+$w/2).'" y1="'.($y+$h).'" x2="'.($x+$w/2).'" y2="'.$y.'" stroke="#dc2626" stroke-width="3"/><polygon points="'.($x+$w/2).','.($y-7).' '.($x+$w/2-7).','.($y+7).' '.($x+$w/2+7).','.($y+7).'" fill="#dc2626"/><text x="'.($x+$w/2-6).'" y="'.($y-12).'" font-size="14" font-weight="700" fill="#dc2626">N</text></g>';
+        }
+        return '<div class="panel-orientation-diagram"><svg viewBox="0 0 560 330" role="img" aria-label="Solar panel grid layout diagram" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="'.$cw.'" height="'.$ch.'" patternUnits="userSpaceOnUse"><path d="M '.$cw.' 0 L 0 0 0 '.$ch.'" fill="none" stroke="#e2e8f0" stroke-width="1"/></pattern></defs><rect x="30" y="45" width="500" height="240" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/><rect x="30" y="45" width="500" height="240" fill="url(#grid)" opacity=".75"/>'.$svg.'<text x="42" y="315" font-size="11" fill="#475569">Grid layout: '.$esc($o['site_area_label']).' · facing '.$esc($o['default_facing_direction']).'</text></svg></div>';
+    }
+    $groups = (array) ($o['groups'] ?? []);
     $sx = static fn($v): int => 40 + (int)round(max(0, min(100, (float)$v)) * 4.8);
     $sy = static fn($v): int => 55 + (int)round(max(0, min(100, (float)$v)) * 2.25);
     $panelSvg = '';
