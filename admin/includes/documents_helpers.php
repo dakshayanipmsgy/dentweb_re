@@ -3889,23 +3889,24 @@ function documents_quote_panel_orientation_defaults(): array
     return [
         'enabled' => false,
         'layout_mode' => 'generated',
+        'diagram_style' => 'freeform_roof',
         'site_area_type' => 'terrace',
         'site_area_label' => 'Main roof',
+        'roof_label' => 'Main roof',
+        'north_direction' => 'up',
         'default_facing_direction' => 'South',
         'default_tilt_deg' => '15',
         'row_layout' => 'portrait_rows',
         'shade_note' => '',
-        'customer_note' => 'The solar panels are proposed to be installed as per the orientation/layout shown below. Minor adjustment may be made during installation for safety, roof structure, shadow avoidance, and service access, without changing the approved system capacity or commercial scope unless separately agreed.',
-        'diagram_style' => 'simple_roof',
+        'customer_note' => 'The panel layout shown below is the proposed arrangement for customer understanding and approval. Minor placement adjustments may be made during installation for safety, roof condition, shade avoidance, cable routing, and service access. Any major change affecting system capacity, price, or commercial scope will require confirmation or a revised quotation.',
         'groups' => [[
-            'label' => 'Group A',
-            'roof_section' => 'Main roof',
-            'panel_count' => 0,
-            'facing_direction' => 'South',
-            'tilt_deg' => '15',
-            'row_layout' => 'portrait_rows',
-            'remarks' => '',
+            'group_id' => 'A', 'label' => 'Group A', 'roof_section' => 'Main roof',
+            'x' => 10, 'y' => 10, 'rows' => 1, 'columns' => 4, 'panel_count' => 4,
+            'panel_orientation' => 'portrait', 'panel_rotation_deg' => 0,
+            'facing_direction' => 'South', 'tilt_deg' => '15', 'row_gap' => 8, 'column_gap' => 6, 'remarks' => '',
         ]],
+        'custom_panels' => [],
+        'obstructions' => [],
         'uploaded_diagram_path' => '',
     ];
 }
@@ -3942,6 +3943,17 @@ function documents_quote_clean_orientation_tilt($raw): string
     return rtrim(rtrim(number_format($n, 2, '.', ''), '0'), '.');
 }
 
+function documents_quote_int_range($raw, int $min, int $max, int $fallback): int
+{
+    if (!is_numeric($raw)) return $fallback;
+    return max($min, min($max, (int) round((float) $raw)));
+}
+
+function documents_quote_panel_orientation_from_layout(string $rowLayout): string
+{
+    return $rowLayout === 'landscape_rows' ? 'landscape' : 'portrait';
+}
+
 function documents_quote_normalize_panel_orientation(array $raw): array
 {
     $defaults = documents_quote_panel_orientation_defaults();
@@ -3950,7 +3962,9 @@ function documents_quote_normalize_panel_orientation(array $raw): array
     $areas = documents_quote_panel_orientation_allowed_area_types();
     $areaType = safe_text((string) ($o['site_area_type'] ?? 'terrace'));
     $o['site_area_type'] = array_key_exists($areaType, $areas) ? $areaType : 'other';
-    $o['site_area_label'] = safe_text((string) ($o['site_area_label'] ?? '')) ?: $areas[$o['site_area_type']];
+    $o['site_area_label'] = safe_text((string) ($o['site_area_label'] ?? $o['roof_label'] ?? '')) ?: $areas[$o['site_area_type']];
+    $o['roof_label'] = safe_text((string) ($o['roof_label'] ?? $o['site_area_label']));
+    $o['north_direction'] = in_array(($o['north_direction'] ?? 'up'), ['up','right','down','left'], true) ? (string)$o['north_direction'] : 'up';
     $o['default_facing_direction'] = documents_quote_clean_orientation_direction((string) ($o['default_facing_direction'] ?? ''), 'South');
     $o['default_tilt_deg'] = documents_quote_clean_orientation_tilt($o['default_tilt_deg'] ?? '');
     $layouts = documents_quote_panel_orientation_allowed_layouts();
@@ -3959,34 +3973,54 @@ function documents_quote_normalize_panel_orientation(array $raw): array
     $o['shade_note'] = safe_multiline_text(strip_tags((string) ($o['shade_note'] ?? '')));
     $o['customer_note'] = safe_multiline_text(strip_tags((string) ($o['customer_note'] ?? ''))) ?: $defaults['customer_note'];
     $o['layout_mode'] = 'generated';
-    $o['diagram_style'] = 'simple_roof';
+    $o['diagram_style'] = 'freeform_roof';
     $o['uploaded_diagram_path'] = safe_text((string) ($o['uploaded_diagram_path'] ?? ''));
+
+    $sourceGroups = (array)($raw['groups'] ?? $raw['layout_groups'] ?? []);
     $groups = [];
-    foreach ((array) ($raw['groups'] ?? []) as $group) {
+    foreach ($sourceGroups as $group) {
         if (!is_array($group)) continue;
         $label = safe_text((string) ($group['label'] ?? ''));
         $roof = safe_text((string) ($group['roof_section'] ?? ''));
-        $count = max(0, (int) ($group['panel_count'] ?? 0));
-        $direction = documents_quote_clean_orientation_direction((string) ($group['facing_direction'] ?? ''), $o['default_facing_direction']);
-        $tilt = documents_quote_clean_orientation_tilt($group['tilt_deg'] ?? $o['default_tilt_deg']);
         $rowLayout = safe_text((string) ($group['row_layout'] ?? $o['row_layout']));
         if (!array_key_exists($rowLayout, $layouts)) $rowLayout = $o['row_layout'];
+        $orientation = safe_text((string)($group['panel_orientation'] ?? documents_quote_panel_orientation_from_layout($rowLayout)));
+        if (!in_array($orientation, ['portrait','landscape'], true)) $orientation = 'portrait';
+        $rows = documents_quote_int_range($group['rows'] ?? 0, 1, 12, 1);
+        $columns = documents_quote_int_range($group['columns'] ?? 0, 1, 24, max(1, (int)($group['panel_count'] ?? 4)));
+        $count = max(0, (int)($group['panel_count'] ?? ($rows * $columns)));
+        if ($count > 0 && empty($group['rows']) && empty($group['columns'])) { $columns = min(12, $count); $rows = (int)ceil($count / $columns); }
         $remarks = safe_multiline_text(strip_tags((string) ($group['remarks'] ?? '')));
         if ($label === '' && $roof === '' && $count === 0 && $remarks === '') continue;
         $groups[] = [
+            'group_id' => safe_text((string)($group['group_id'] ?? chr(65 + min(count($groups), 25)))),
             'label' => $label ?: 'Group ' . chr(65 + min(count($groups), 25)),
             'roof_section' => $roof ?: $o['site_area_label'],
-            'panel_count' => $count,
-            'facing_direction' => $direction,
-            'tilt_deg' => $tilt,
-            'row_layout' => $rowLayout,
-            'remarks' => $remarks,
+            'x' => documents_quote_int_range($group['x'] ?? (10 + count($groups) * 18), 0, 100, 10),
+            'y' => documents_quote_int_range($group['y'] ?? (10 + count($groups) * 14), 0, 100, 10),
+            'rows' => $rows, 'columns' => $columns, 'panel_count' => $count ?: ($rows * $columns),
+            'panel_orientation' => $orientation,
+            'panel_rotation_deg' => documents_quote_int_range($group['panel_rotation_deg'] ?? 0, -180, 180, 0),
+            'facing_direction' => documents_quote_clean_orientation_direction((string) ($group['facing_direction'] ?? ''), $o['default_facing_direction']),
+            'tilt_deg' => documents_quote_clean_orientation_tilt($group['tilt_deg'] ?? $o['default_tilt_deg']),
+            'row_gap' => documents_quote_int_range($group['row_gap'] ?? 8, 0, 40, 8),
+            'column_gap' => documents_quote_int_range($group['column_gap'] ?? 6, 0, 40, 6),
+            'row_layout' => $rowLayout, 'remarks' => $remarks,
         ];
     }
-    if ($groups === []) {
-        $groups[] = ['label'=>'Group A','roof_section'=>$o['site_area_label'],'panel_count'=>0,'facing_direction'=>$o['default_facing_direction'],'tilt_deg'=>$o['default_tilt_deg'],'row_layout'=>$o['row_layout'],'remarks'=>''];
+    if ($groups === []) $groups = $defaults['groups'];
+    $o['groups'] = array_slice($groups, 0, 24);
+    $o['layout_groups'] = $o['groups'];
+    $obs = [];
+    foreach ((array)($raw['obstructions'] ?? []) as $ob) {
+        if (!is_array($ob)) continue;
+        $label = safe_text((string)($ob['label'] ?? ''));
+        $remarks = safe_multiline_text(strip_tags((string)($ob['remarks'] ?? '')));
+        if ($label === '' && $remarks === '') continue;
+        $obs[] = ['label'=>$label ?: 'Keep-out area','x'=>documents_quote_int_range($ob['x'] ?? 70,0,100,70),'y'=>documents_quote_int_range($ob['y'] ?? 15,0,100,15),'width'=>documents_quote_int_range($ob['width'] ?? 12,1,100,12),'height'=>documents_quote_int_range($ob['height'] ?? 12,1,100,12),'remarks'=>$remarks];
     }
-    $o['groups'] = array_slice($groups, 0, 12);
+    $o['obstructions'] = array_slice($obs, 0, 12);
+    $o['custom_panels'] = is_array($raw['custom_panels'] ?? null) ? array_slice((array)$raw['custom_panels'], 0, 100) : [];
     return $o;
 }
 
@@ -4002,19 +4036,32 @@ function documents_quote_render_panel_orientation_diagram(array $orientation): s
     $o = documents_quote_normalize_panel_orientation($orientation);
     $groups = (array) ($o['groups'] ?? []);
     $esc = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+    $sx = static fn($v): int => 40 + (int)round(max(0, min(100, (float)$v)) * 4.8);
+    $sy = static fn($v): int => 55 + (int)round(max(0, min(100, (float)$v)) * 2.25);
     $panelSvg = '';
-    $count = max(1, count($groups));
     foreach ($groups as $i => $g) {
-        $col = $i % 3; $row = intdiv($i, 3);
-        $x = 55 + $col * 155; $y = 80 + $row * 78;
-        $label = $esc(($g['label'] ?? ('Group '.($i+1))) . ' — ' . ($g['facing_direction'] ?? ''));
-        $tilt = trim((string) ($g['tilt_deg'] ?? '')) !== '' ? ' · approx. ' . $esc($g['tilt_deg']) . '° tilt' : '';
+        $baseX = $sx($g['x'] ?? 10); $baseY = $sy($g['y'] ?? 10);
+        $rows = max(1, (int)($g['rows'] ?? 1)); $cols = max(1, (int)($g['columns'] ?? 1));
+        $maxPanels = max(1, min($rows * $cols, (int)($g['panel_count'] ?? ($rows*$cols))));
+        $portrait = ($g['panel_orientation'] ?? 'portrait') !== 'landscape';
+        $pw = $portrait ? 16 : 26; $ph = $portrait ? 26 : 16;
+        $cg = max(1, (int)($g['column_gap'] ?? 6)); $rg = max(1, (int)($g['row_gap'] ?? 8));
         $blocks = '';
-        $panels = max(1, min(12, (int) ($g['panel_count'] ?? 0) ?: 6));
-        for ($p = 0; $p < $panels; $p++) { $px = $x + ($p % 4) * 22; $py = $y + intdiv($p, 4) * 16; $blocks .= '<rect x="'.$px.'" y="'.$py.'" width="18" height="12" rx="2" fill="#0f766e" opacity=".86"/>'; }
-        $panelSvg .= '<g>'.$blocks.'<text x="'.$x.'" y="'.($y+58).'" font-size="11" fill="#0f172a">'.$label.'</text><text x="'.$x.'" y="'.($y+72).'" font-size="10" fill="#475569">'.$esc($g['roof_section'] ?? '').$tilt.'</text></g>';
+        for ($pnl = 0; $pnl < $maxPanels; $pnl++) {
+            $c = $pnl % $cols; $r = intdiv($pnl, $cols);
+            $px = $baseX + $c * ($pw + $cg); $py = $baseY + $r * ($ph + $rg);
+            $blocks .= '<rect x="'.$px.'" y="'.$py.'" width="'.$pw.'" height="'.$ph.'" rx="2" fill="#0f766e" stroke="#064e3b" stroke-width="1" opacity=".9"/>';
+            if ($pw >= 20) $blocks .= '<line x1="'.($px+$pw/2).'" y1="'.($py+2).'" x2="'.($px+$pw/2).'" y2="'.($py+$ph-2).'" stroke="#ccfbf1" stroke-width=".7"/>';
+        }
+        $labelY = $baseY + $rows * ($ph + $rg) + 13;
+        $panelSvg .= '<g><title>'.$esc(($g['label'] ?? '').' '.$maxPanels.' panels').'</title>'.$blocks.'<text x="'.$baseX.'" y="'.$labelY.'" font-size="11" font-weight="700" fill="#0f172a">'.$esc($g['label'] ?? ('Group '.($i+1))).'</text><text x="'.$baseX.'" y="'.($labelY+13).'" font-size="10" fill="#475569">'.$esc(($g['roof_section'] ?? '').' · '.($g['facing_direction'] ?? '').(trim((string)($g['tilt_deg'] ?? ''))!==''?' · '.$g['tilt_deg'].'°':'')).'</text></g>';
     }
-    return '<div class="panel-orientation-diagram"><svg viewBox="0 0 560 330" role="img" aria-label="Solar panel orientation layout diagram" xmlns="http://www.w3.org/2000/svg"><rect x="25" y="45" width="510" height="245" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/><text x="42" y="70" font-size="13" fill="#475569">Roof / terrace layout: '.$esc($o['site_area_label']).'</text><g><line x1="500" y1="82" x2="500" y2="36" stroke="#dc2626" stroke-width="3"/><polygon points="500,28 493,42 507,42" fill="#dc2626"/><text x="489" y="22" font-size="18" font-weight="700" fill="#dc2626">N</text></g>'.$panelSvg.'<line x1="260" y1="275" x2="260" y2="235" stroke="#f59e0b" stroke-width="3" marker-end="url(#arrow)"/><defs><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b"/></marker></defs><text x="278" y="255" font-size="12" fill="#92400e">Panel facing: '.$esc($o['default_facing_direction']).'</text><text x="42" y="315" font-size="11" fill="#475569">Legend: green blocks = proposed panel groups; red arrow = North; yellow arrow = typical panel facing direction.</text></svg></div>';
+    $obSvg = '';
+    foreach ((array)($o['obstructions'] ?? []) as $ob) {
+        $x=$sx($ob['x']??70); $y=$sy($ob['y']??15); $w=max(8,(int)round(((float)($ob['width']??12))*4.8)); $h=max(8,(int)round(((float)($ob['height']??12))*2.25));
+        $obSvg .= '<g><rect x="'.$x.'" y="'.$y.'" width="'.$w.'" height="'.$h.'" rx="4" fill="#fee2e2" stroke="#dc2626" stroke-dasharray="5 4"/><text x="'.($x+4).'" y="'.($y+15).'" font-size="10" fill="#991b1b">'.$esc($ob['label'] ?? 'Keep-out').'</text></g>';
+    }
+    return '<div class="panel-orientation-diagram"><svg viewBox="0 0 560 330" role="img" aria-label="Solar panel orientation layout diagram" xmlns="http://www.w3.org/2000/svg"><rect x="25" y="45" width="510" height="245" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/><text x="42" y="70" font-size="13" fill="#475569">Roof / terrace layout: '.$esc($o['site_area_label']).'</text><g><line x1="500" y1="82" x2="500" y2="36" stroke="#dc2626" stroke-width="3"/><polygon points="500,28 493,42 507,42" fill="#dc2626"/><text x="489" y="22" font-size="18" font-weight="700" fill="#dc2626">N</text></g>'.$panelSvg.$obSvg.'<defs><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b"/></marker></defs><line x1="260" y1="275" x2="260" y2="235" stroke="#f59e0b" stroke-width="3" marker-end="url(#arrow)"/><text x="278" y="255" font-size="12" fill="#92400e">Typical facing: '.$esc($o['default_facing_direction']).'</text><text x="42" y="315" font-size="11" fill="#475569">Legend: green rectangles = panels; dashed red = obstruction/keep-out; red arrow = North; yellow arrow = typical panel facing.</text></svg></div>';
 }
 
 function documents_quote_prepare(array $quote): array
