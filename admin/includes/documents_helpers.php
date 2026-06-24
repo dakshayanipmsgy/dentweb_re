@@ -2178,90 +2178,6 @@ function documents_calc_pricing_from_items(array $items, string $pricingMode, st
     return $calc;
 }
 
-
-function documents_quote_primary_scenario_key(array $quote): string
-{
-    $primary = safe_text((string) ($quote['primary_finance_scenario'] ?? $quote['finance_inputs']['primary_scenario'] ?? $quote['primary_scenario'] ?? 'self_funded'));
-    if ($primary === '') {
-        $primary = 'self_funded';
-    }
-    $map = [
-        'loan_upto_2_lacs' => 'loan_upto_2_lacs_subsidy_to_loan',
-        'loan_above_2_lacs' => 'loan_above_2_lacs_subsidy_to_loan',
-    ];
-    return $map[$primary] ?? $primary;
-}
-
-function documents_quote_current_primary_price(array $quote): float
-{
-    $primary = documents_quote_primary_scenario_key($quote);
-    $scenarioPrices = is_array($quote['scenario_prices'] ?? null) ? $quote['scenario_prices'] : [];
-    $financeScenarios = is_array($quote['finance_scenarios'] ?? null) ? $quote['finance_scenarios'] : [];
-    $scenarioPriceKey = str_starts_with($primary, 'loan_upto_2_lacs') ? 'loan_upto_2_lacs' : (str_starts_with($primary, 'loan_above_2_lacs') ? 'loan_above_2_lacs' : $primary);
-    foreach ([
-        $financeScenarios[$primary]['price'] ?? null,
-        $financeScenarios[$primary]['gross_payable'] ?? null,
-        $scenarioPrices[$scenarioPriceKey]['price'] ?? null,
-        $scenarioPrices[$primary]['price'] ?? null,
-        $quote['input_total_gst_inclusive'] ?? null,
-    ] as $value) {
-        if ($value !== null && is_numeric($value) && (float) $value > 0) {
-            return documents_money_round((float) $value);
-        }
-    }
-    return 0.0;
-}
-
-function documents_quote_calc_signature(array $quote): string
-{
-    $payload = [
-        'input_total_gst_inclusive' => documents_money_round((float) ($quote['input_total_gst_inclusive'] ?? 0)),
-        'primary_finance_scenario' => documents_quote_primary_scenario_key($quote),
-        'primary_price' => documents_quote_current_primary_price($quote),
-        'scenario_prices' => is_array($quote['scenario_prices'] ?? null) ? $quote['scenario_prices'] : [],
-        'finance_inputs' => is_array($quote['finance_inputs'] ?? null) ? $quote['finance_inputs'] : [],
-        'finance_scenarios' => is_array($quote['finance_scenarios'] ?? null) ? $quote['finance_scenarios'] : [],
-        'transportation_rs' => (string) ($quote['finance_inputs']['transportation_rs'] ?? $quote['calc']['transportation_rs'] ?? 0),
-        'subsidy_expected_rs' => (string) ($quote['finance_inputs']['subsidy_expected_rs'] ?? $quote['calc']['subsidy_expected_rs'] ?? 0),
-        'discount_rs' => (string) ($quote['discount_rs'] ?? $quote['finance_inputs']['discount_rs'] ?? 0),
-        'discount_note' => (string) ($quote['discount_note'] ?? $quote['finance_inputs']['discount_note'] ?? ''),
-        'tax_profile_id' => (string) ($quote['tax_profile_id'] ?? ''),
-        'tax_type' => (string) ($quote['tax_type'] ?? ''),
-        'pricing_mode' => (string) ($quote['pricing_mode'] ?? ''),
-        'show_tax_breakup' => (bool) ($quote['show_tax_breakup'] ?? true),
-    ];
-    return hash('sha256', json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION) ?: '');
-}
-
-function documents_quote_calc_is_fresh(array $quote): bool
-{
-    $calc = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
-    if ($calc === []) {
-        return false;
-    }
-    $signature = safe_text((string) ($quote['calc_signature'] ?? $calc['signature'] ?? ''));
-    if ($signature === '' || !hash_equals($signature, documents_quote_calc_signature($quote))) {
-        return false;
-    }
-    $currentPrice = documents_quote_current_primary_price($quote);
-    if ($currentPrice > 0 && abs((float) ($calc['final_price_incl_gst'] ?? $calc['grand_total'] ?? 0) - $currentPrice) > 0.5) {
-        return false;
-    }
-    return true;
-}
-
-function documents_quote_refresh_calc(array $quote, array $settings = []): array
-{
-    $price = documents_quote_current_primary_price($quote);
-    $transport = (float) ($quote['finance_inputs']['transportation_rs'] ?? $quote['calc']['transportation_rs'] ?? 0);
-    $subsidy = (float) ($quote['finance_inputs']['subsidy_expected_rs'] ?? $quote['calc']['subsidy_expected_rs'] ?? 0);
-    $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, $transport, $subsidy, $price, $settings);
-    $quote['tax_breakdown'] = is_array($quote['calc']['tax_breakdown'] ?? null) ? (array) $quote['calc']['tax_breakdown'] : [];
-    $quote['calc_signature'] = documents_quote_calc_signature($quote);
-    $quote['calc']['signature'] = $quote['calc_signature'];
-    return $quote;
-}
-
 function documents_resolve_tax_profile_for_quote(array $quote, array $settings = []): array
 {
     $selectedId = safe_text((string) ($quote['tax_profile_id'] ?? ''));
@@ -3181,12 +3097,8 @@ function documents_save_quote(array $quote): array
     $defaultHsn = safe_text((string) (documents_get_quote_defaults_settings()['defaults']['hsn_solar'] ?? '8541')) ?: '8541';
     $quote = documents_quote_prepare($quote);
     $quote['items'] = documents_normalize_quote_items(is_array($quote['items'] ?? null) ? $quote['items'] : [], (string) ($quote['system_type'] ?? 'Ongrid'), (float) ($quote['capacity_kwp'] ?? 0), $defaultHsn);
-    $settings = documents_get_quote_defaults_settings();
-    if (!documents_quote_calc_is_fresh($quote)) {
-        $quote = documents_quote_refresh_calc($quote, $settings);
-    } else {
-        $quote['calc_signature'] = documents_quote_calc_signature($quote);
-        $quote['calc']['signature'] = $quote['calc_signature'];
+    if (safe_text((string) ($quote['special_requests_text'] ?? '')) === '' && safe_text((string) ($quote['special_requests_inclusive'] ?? '')) !== '') {
+        $quote['special_requests_text'] = (string) $quote['special_requests_inclusive'];
     }
     return json_save($path, $quote);
 }
@@ -3962,11 +3874,6 @@ function documents_quote_prepare(array $quote): array
     $quote['gst_mode_snapshot'] = safe_text((string) ($quote['gst_mode_snapshot'] ?? ''));
     $quote['gst_slabs_snapshot'] = is_array($quote['gst_slabs_snapshot'] ?? null) ? $quote['gst_slabs_snapshot'] : [];
     $quote['calc'] = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
-    $quote['special_requests_text'] = (string) ($quote['special_requests_text'] ?? '');
-    if (safe_text($quote['special_requests_text']) === '' && safe_text((string) ($quote['special_requests_inclusive'] ?? '')) !== '') {
-        $quote['special_requests_text'] = (string) $quote['special_requests_inclusive'];
-    }
-    $quote['special_requests_inclusive'] = $quote['special_requests_text'];
     $quote['tax_breakdown'] = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : [];
     if ($quote['tax_breakdown'] === [] && is_array($quote['calc']['tax_breakdown'] ?? null)) {
         $quote['tax_breakdown'] = (array) $quote['calc']['tax_breakdown'];
@@ -4101,32 +4008,9 @@ function documents_repair_broken_quote_revisions(): array
     $repaired = [];
     foreach (documents_list_quotes() as $draft) {
         $sourceId = safe_text((string) ($draft['revised_from_quote_id'] ?? ''));
-        if ($sourceId === '' || (string) ($draft['status'] ?? '') !== 'draft') continue;
-        $changed = false;
+        if ($sourceId === '' || (string) ($draft['status'] ?? '') !== 'draft' || !empty($draft['is_current_version']) || safe_text((string) ($draft['generated_from_change_request_ref'] ?? '')) !== '') continue;
         $source = documents_get_quote($sourceId);
-        if (safe_text((string) ($draft['special_requests_text'] ?? '')) !== ''
-            && (string) ($draft['special_requests_inclusive'] ?? '') !== (string) $draft['special_requests_text']) {
-            $draft['special_requests_inclusive'] = (string) $draft['special_requests_text'];
-            $changed = true;
-        }
-        if (!documents_quote_calc_is_fresh($draft)) {
-            $draft = documents_quote_refresh_calc($draft, documents_get_quote_defaults_settings());
-            $changed = true;
-        }
-        if (!empty($draft['is_current_version']) && $source && !empty($source['is_current_version'])) {
-            $source['is_current_version'] = false;
-            $source['superseded_by_quote_id'] = (string) ($draft['id'] ?? '');
-            $source['superseded_by_quote_no'] = (string) ($draft['quote_no'] ?? '');
-            documents_save_quote($source);
-        }
-        if (!empty($draft['is_current_version']) || safe_text((string) ($draft['generated_from_change_request_ref'] ?? '')) !== '') {
-            if ($changed && documents_save_quote($draft)['ok']) $repaired[] = (string) $draft['id'];
-            continue;
-        }
-        if (!$source || (string) ($draft['quote_no'] ?? '') !== (string) ($source['quote_no'] ?? '') || empty($source['is_current_version'])) {
-            if ($changed && documents_save_quote($draft)['ok']) $repaired[] = (string) $draft['id'];
-            continue;
-        }
+        if (!$source || (string) ($draft['quote_no'] ?? '') !== (string) ($source['quote_no'] ?? '') || empty($source['is_current_version'])) continue;
         $number = documents_generate_quote_number((string) ($draft['segment'] ?? 'RES'));
         if (!($number['ok'] ?? false) || documents_quote_number_exists((string) ($number['quote_no'] ?? ''))) continue;
         $draft['quote_no'] = (string) $number['quote_no'];
