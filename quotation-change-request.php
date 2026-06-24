@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once __DIR__.'/includes/public_document_security.php'; protect_customer_document_response();
 require_once __DIR__.'/admin/includes/documents_helpers.php'; require_once __DIR__.'/includes/customer_document_acceptance.php';
 $share=safe_text((string)($_GET['token']??''));$doc=$share!==''?documents_get_quote_by_public_share_token($share):null;$status=documents_quote_normalize_status((string)($doc['status']??''));
-if(!$doc||empty($doc['public_share_enabled'])||!in_array($status,['approved','accepted'],true)||documents_is_archived($doc)){http_response_code(404);exit('Link unavailable');}
+if(!$doc||empty($doc['public_share_enabled'])||!in_array($status,['approved','accepted','update_requested'],true)||documents_is_archived($doc)){http_response_code(404);exit('Link unavailable');}
 $rateFile=__DIR__.'/storage/customer-change-request-rate-limits.json';$rateKey=hash('sha256',(string)$doc['id'].'|'.($_SERVER['REMOTE_ADDR']??''));$rates=is_file($rateFile)?(json_decode((string)file_get_contents($rateFile),true)?:[]):[];$attempts=array_values(array_filter((array)($rates[$rateKey]??[]),static fn($t)=>$t>time()-900));$error='';$request=(array)($doc['customer_change_request']??[]);
 if($_SERVER['REQUEST_METHOD']==='POST'&&$request===[]){try{
  if(count($attempts)>=5)throw new RuntimeException();$mobile=customer_acceptance_normalize_mobile((string)($doc['customer_mobile']??$doc['customer_snapshot']['mobile']??''));$first6=preg_replace('/\D+/','',(string)($_POST['mobile_first6']??''))??'';$changes=trim((string)($_POST['requested_changes']??''));
