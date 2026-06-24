@@ -112,8 +112,13 @@ function quotation_render(array $quote, array $quoteDefaults, array $company, bo
 
     $segment = (string) ($quote['segment'] ?? 'RES');
     $segmentDefaults = is_array($quoteDefaults['segments'][$segment] ?? null) ? $quoteDefaults['segments'][$segment] : [];
-    $transport = (float) ($quote['calc']['transportation_rs'] ?? $quote['finance_inputs']['transportation_rs'] ?? 0);
-    $subsidy = (float) ($quote['calc']['subsidy_expected_rs'] ?? $quote['finance_inputs']['subsidy_expected_rs'] ?? 0);
+    $transport = (float) ($quote['finance_inputs']['transportation_rs'] ?? $quote['calc']['transportation_rs'] ?? 0);
+    $subsidy = (float) ($quote['finance_inputs']['subsidy_expected_rs'] ?? $quote['calc']['subsidy_expected_rs'] ?? 0);
+    if (!function_exists('documents_quote_calc_is_fresh') || !documents_quote_calc_is_fresh($quote)) {
+        $quote = function_exists('documents_quote_refresh_calc')
+            ? documents_quote_refresh_calc($quote, $quoteDefaults)
+            : $quote;
+    }
     $calc = is_array($quote['calc'] ?? null) && !empty($quote['calc'])
         ? (array) $quote['calc']
         : documents_calc_quote_pricing_with_tax_profile($quote, $transport, $subsidy, (float) ($quote['input_total_gst_inclusive'] ?? 0), $quoteDefaults);
