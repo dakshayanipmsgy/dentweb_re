@@ -869,6 +869,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $priceForPrimary = $legacySystemTotalInclGstRs;
         }
         $quote['calc'] = documents_calc_quote_pricing_with_tax_profile($quote, $transportationRs, $subsidyExpectedRs, $priceForPrimary, $quoteDefaults);
+        $quote['calc_signature'] = documents_quote_calc_signature($quote);
+        $quote['calc']['signature'] = $quote['calc_signature'];
         $quote['tax_breakdown'] = is_array($quote['calc']['tax_breakdown'] ?? null) ? (array) $quote['calc']['tax_breakdown'] : ['basic_total' => 0, 'gst_total' => 0, 'gross_incl_gst' => 0, 'slabs' => []];
         $quote['gst_mode_snapshot'] = (string) ($quote['tax_breakdown']['mode'] ?? 'single');
         $quote['gst_slabs_snapshot'] = is_array($quote['tax_breakdown']['slabs'] ?? null) ? $quote['tax_breakdown']['slabs'] : [];
