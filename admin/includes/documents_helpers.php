@@ -1088,6 +1088,7 @@ function documents_quote_defaults(): array
             'next_steps' => '',
         ],
         'template_attachments' => documents_template_attachment_defaults(),
+        'panel_orientation' => documents_quote_panel_orientation_defaults(),
         'finance_inputs' => [
             'monthly_bill_rs' => '',
             'unit_rate_rs_per_kwh' => '',
@@ -3882,6 +3883,140 @@ function documents_quote_normalize_editable_finance_values(array $quote): array
     return $quote;
 }
 
+
+function documents_quote_panel_orientation_defaults(): array
+{
+    return [
+        'enabled' => false,
+        'layout_mode' => 'generated',
+        'site_area_type' => 'terrace',
+        'site_area_label' => 'Main roof',
+        'default_facing_direction' => 'South',
+        'default_tilt_deg' => '15',
+        'row_layout' => 'portrait_rows',
+        'shade_note' => '',
+        'customer_note' => 'The solar panels are proposed to be installed as per the orientation/layout shown below. Minor adjustment may be made during installation for safety, roof structure, shadow avoidance, and service access, without changing the approved system capacity or commercial scope unless separately agreed.',
+        'diagram_style' => 'simple_roof',
+        'groups' => [[
+            'label' => 'Group A',
+            'roof_section' => 'Main roof',
+            'panel_count' => 0,
+            'facing_direction' => 'South',
+            'tilt_deg' => '15',
+            'row_layout' => 'portrait_rows',
+            'remarks' => '',
+        ]],
+        'uploaded_diagram_path' => '',
+    ];
+}
+
+function documents_quote_panel_orientation_allowed_directions(): array
+{
+    return ['South','South-East','South-West','East','West','North-East','North-West','North','Mixed / multiple directions','To be finalized after site marking'];
+}
+
+function documents_quote_panel_orientation_allowed_layouts(): array
+{
+    return ['portrait_rows'=>'Portrait rows','landscape_rows'=>'Landscape rows','mixed_portrait_landscape'=>'Mixed portrait/landscape','follows_roof_structure'=>'Row direction follows roof structure','to_be_finalized'=>'To be finalized during installation'];
+}
+
+function documents_quote_panel_orientation_allowed_area_types(): array
+{
+    return ['main_roof'=>'Main roof','terrace'=>'Terrace','shed_roof'=>'Shed roof','ground_mounted'=>'Ground-mounted area','multiple_roof_sections'=>'Multiple roof sections','other'=>'Other'];
+}
+
+function documents_quote_clean_orientation_direction(string $raw, string $fallback = 'South'): string
+{
+    $value = safe_text($raw);
+    if ($value === '') return $fallback;
+    if (in_array($value, documents_quote_panel_orientation_allowed_directions(), true)) return $value;
+    return mb_substr($value, 0, 80);
+}
+
+function documents_quote_clean_orientation_tilt($raw): string
+{
+    $value = trim((string) $raw);
+    if ($value === '') return '';
+    if (!is_numeric($value)) return '';
+    $n = max(0, min(45, (float) $value));
+    return rtrim(rtrim(number_format($n, 2, '.', ''), '0'), '.');
+}
+
+function documents_quote_normalize_panel_orientation(array $raw): array
+{
+    $defaults = documents_quote_panel_orientation_defaults();
+    $o = array_merge($defaults, $raw);
+    $o['enabled'] = !empty($raw['enabled']);
+    $areas = documents_quote_panel_orientation_allowed_area_types();
+    $areaType = safe_text((string) ($o['site_area_type'] ?? 'terrace'));
+    $o['site_area_type'] = array_key_exists($areaType, $areas) ? $areaType : 'other';
+    $o['site_area_label'] = safe_text((string) ($o['site_area_label'] ?? '')) ?: $areas[$o['site_area_type']];
+    $o['default_facing_direction'] = documents_quote_clean_orientation_direction((string) ($o['default_facing_direction'] ?? ''), 'South');
+    $o['default_tilt_deg'] = documents_quote_clean_orientation_tilt($o['default_tilt_deg'] ?? '');
+    $layouts = documents_quote_panel_orientation_allowed_layouts();
+    $layout = safe_text((string) ($o['row_layout'] ?? 'portrait_rows'));
+    $o['row_layout'] = array_key_exists($layout, $layouts) ? $layout : 'portrait_rows';
+    $o['shade_note'] = safe_multiline_text(strip_tags((string) ($o['shade_note'] ?? '')));
+    $o['customer_note'] = safe_multiline_text(strip_tags((string) ($o['customer_note'] ?? ''))) ?: $defaults['customer_note'];
+    $o['layout_mode'] = 'generated';
+    $o['diagram_style'] = 'simple_roof';
+    $o['uploaded_diagram_path'] = safe_text((string) ($o['uploaded_diagram_path'] ?? ''));
+    $groups = [];
+    foreach ((array) ($raw['groups'] ?? []) as $group) {
+        if (!is_array($group)) continue;
+        $label = safe_text((string) ($group['label'] ?? ''));
+        $roof = safe_text((string) ($group['roof_section'] ?? ''));
+        $count = max(0, (int) ($group['panel_count'] ?? 0));
+        $direction = documents_quote_clean_orientation_direction((string) ($group['facing_direction'] ?? ''), $o['default_facing_direction']);
+        $tilt = documents_quote_clean_orientation_tilt($group['tilt_deg'] ?? $o['default_tilt_deg']);
+        $rowLayout = safe_text((string) ($group['row_layout'] ?? $o['row_layout']));
+        if (!array_key_exists($rowLayout, $layouts)) $rowLayout = $o['row_layout'];
+        $remarks = safe_multiline_text(strip_tags((string) ($group['remarks'] ?? '')));
+        if ($label === '' && $roof === '' && $count === 0 && $remarks === '') continue;
+        $groups[] = [
+            'label' => $label ?: 'Group ' . chr(65 + min(count($groups), 25)),
+            'roof_section' => $roof ?: $o['site_area_label'],
+            'panel_count' => $count,
+            'facing_direction' => $direction,
+            'tilt_deg' => $tilt,
+            'row_layout' => $rowLayout,
+            'remarks' => $remarks,
+        ];
+    }
+    if ($groups === []) {
+        $groups[] = ['label'=>'Group A','roof_section'=>$o['site_area_label'],'panel_count'=>0,'facing_direction'=>$o['default_facing_direction'],'tilt_deg'=>$o['default_tilt_deg'],'row_layout'=>$o['row_layout'],'remarks'=>''];
+    }
+    $o['groups'] = array_slice($groups, 0, 12);
+    return $o;
+}
+
+function documents_quote_panel_orientation_is_enabled(array $quote): bool
+{
+    if (!is_array($quote['panel_orientation'] ?? null)) return false;
+    $o = documents_quote_normalize_panel_orientation((array) $quote['panel_orientation']);
+    return !empty($o['enabled']);
+}
+
+function documents_quote_render_panel_orientation_diagram(array $orientation): string
+{
+    $o = documents_quote_normalize_panel_orientation($orientation);
+    $groups = (array) ($o['groups'] ?? []);
+    $esc = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+    $panelSvg = '';
+    $count = max(1, count($groups));
+    foreach ($groups as $i => $g) {
+        $col = $i % 3; $row = intdiv($i, 3);
+        $x = 55 + $col * 155; $y = 80 + $row * 78;
+        $label = $esc(($g['label'] ?? ('Group '.($i+1))) . ' — ' . ($g['facing_direction'] ?? ''));
+        $tilt = trim((string) ($g['tilt_deg'] ?? '')) !== '' ? ' · approx. ' . $esc($g['tilt_deg']) . '° tilt' : '';
+        $blocks = '';
+        $panels = max(1, min(12, (int) ($g['panel_count'] ?? 0) ?: 6));
+        for ($p = 0; $p < $panels; $p++) { $px = $x + ($p % 4) * 22; $py = $y + intdiv($p, 4) * 16; $blocks .= '<rect x="'.$px.'" y="'.$py.'" width="18" height="12" rx="2" fill="#0f766e" opacity=".86"/>'; }
+        $panelSvg .= '<g>'.$blocks.'<text x="'.$x.'" y="'.($y+58).'" font-size="11" fill="#0f172a">'.$label.'</text><text x="'.$x.'" y="'.($y+72).'" font-size="10" fill="#475569">'.$esc($g['roof_section'] ?? '').$tilt.'</text></g>';
+    }
+    return '<div class="panel-orientation-diagram"><svg viewBox="0 0 560 330" role="img" aria-label="Solar panel orientation layout diagram" xmlns="http://www.w3.org/2000/svg"><rect x="25" y="45" width="510" height="245" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/><text x="42" y="70" font-size="13" fill="#475569">Roof / terrace layout: '.$esc($o['site_area_label']).'</text><g><line x1="500" y1="82" x2="500" y2="36" stroke="#dc2626" stroke-width="3"/><polygon points="500,28 493,42 507,42" fill="#dc2626"/><text x="489" y="22" font-size="18" font-weight="700" fill="#dc2626">N</text></g>'.$panelSvg.'<line x1="260" y1="275" x2="260" y2="235" stroke="#f59e0b" stroke-width="3" marker-end="url(#arrow)"/><defs><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b"/></marker></defs><text x="278" y="255" font-size="12" fill="#92400e">Panel facing: '.$esc($o['default_facing_direction']).'</text><text x="42" y="315" font-size="11" fill="#475569">Legend: green blocks = proposed panel groups; red arrow = North; yellow arrow = typical panel facing direction.</text></svg></div>';
+}
+
 function documents_quote_prepare(array $quote): array
 {
     $original = $quote;
@@ -3922,6 +4057,7 @@ function documents_quote_prepare(array $quote): array
     $quote['revised_from_quote_id'] = safe_text((string) ($quote['revised_from_quote_id'] ?? '')) ?: null;
     $revisionReason = trim((string) ($quote['revision_reason'] ?? ''));
     $quote['revision_reason'] = $revisionReason === '' ? null : $revisionReason;
+    $quote['panel_orientation'] = documents_quote_normalize_panel_orientation(is_array($quote['panel_orientation'] ?? null) ? $quote['panel_orientation'] : []);
     $quote = documents_quote_normalize_editable_finance_values($quote);
     $quote['revision_child_ids'] = array_values(array_filter(array_map(static fn($v): string => safe_text((string) $v), is_array($quote['revision_child_ids'] ?? null) ? $quote['revision_child_ids'] : []), static fn(string $v): bool => $v !== ''));
     $legacyShare = is_array($quote['share'] ?? null) ? $quote['share'] : [];
