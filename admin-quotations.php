@@ -72,6 +72,7 @@ require_once __DIR__ . '/includes/solar_finance_reports.php';
 require_login_any_role(['admin', 'employee']);
 documents_ensure_structure();
 documents_seed_template_sets_if_empty();
+documents_repair_cloned_quote_history_leaks();
 
 $templatesRaw = json_load(documents_templates_dir() . '/template_sets.json', []);
 if (!is_array($templatesRaw)) {
@@ -1120,6 +1121,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'reopen_approved_quote') {
+        if ((string) (current_user()['role_name'] ?? '') !== 'admin') {
+            $redirectWith('error', 'Only administrators can reopen approved quotations for editing.');
+        }
+        $quoteId = safe_text($_POST['quote_id'] ?? '');
+        $reason = safe_text($_POST['approved_edit_reason'] ?? '');
+        if (mb_strlen($reason) < 5) {
+            $redirectWith('error', 'Reason for editing approved quotation must be at least 5 characters.');
+        }
+        $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
+        if ($quote === null) {
+            $redirectWith('error', 'Quotation not found.');
+        }
+        $quote = documents_quote_prepare($quote);
+        if (!documents_quote_can_reopen_approved_for_edit($quote)) {
+            $redirectWith('error', 'Only approved, non-accepted, unlocked quotations can be reopened for editing.');
+        }
+        $user = current_user();
+        $actorName = safe_text((string) ($user['full_name'] ?? 'Admin')) ?: 'Admin';
+        $now = date('c');
+        $previousApproval = is_array($quote['approval'] ?? null) ? $quote['approval'] : [];
+        $quote['previous_approval_history'] = is_array($quote['previous_approval_history'] ?? null) ? $quote['previous_approval_history'] : [];
+        $quote['previous_approval_history'][] = array_merge($previousApproval, [
+            'reopened_at' => $now,
+            'reopened_by_id' => (string) ($user['id'] ?? ''),
+            'reopened_by_name' => $actorName,
+            'reopen_reason' => $reason,
+        ]);
+        $quote['approval'] = ['approved_by_id' => '', 'approved_by_name' => '', 'approved_at' => ''];
+        $quote['approved_edit'] = [
+            'status' => 'reopened_for_editing',
+            'reason' => $reason,
+            'reopened_at' => $now,
+            'reopened_by_id' => (string) ($user['id'] ?? ''),
+            'reopened_by_name' => $actorName,
+        ];
+        $quote['status'] = 'draft';
+        $quote['public_share_enabled'] = !empty($quote['public_share_enabled']);
+        $quote['public_share_revoked_at'] = $quote['public_share_enabled'] ? null : $now;
+        $quote = documents_quote_admin_history_add($quote, 'approved_edit_reopened', 'Approved quotation reopened for editing.', [
+            'reason' => $reason,
+            'actor_name' => $actorName,
+        ]);
+        $quote = documents_quote_append_customer_visible_history($quote, 'approved_edit_reopened', 'Quotation updated after internal review.', [
+            'visible_to_customer' => false,
+            'actor_name' => $actorName,
+        ]);
+        $quote['updated_at'] = $now;
+        $saved = documents_save_quote($quote);
+        if (!($saved['ok'] ?? false)) {
+            $redirectWith('error', 'Unable to reopen approved quotation for editing.');
+        }
+        header('Location: admin-quotations.php?' . http_build_query(['tab' => 'editor', 'edit' => $quoteId, 'status' => 'success', 'message' => 'Approved quotation reopened for editing. Please re-approve after saving changes.']));
+        exit;
+    }
+
     if ($action === 'create_revision') {
         $originalId = safe_text($_POST['quote_id'] ?? '');
         $revisionReason = trim((string) ($_POST['revision_reason'] ?? ''));
@@ -1328,6 +1385,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cloned['created_by_type'] = (string) ($user['role_name'] ?? 'admin');
         $cloned['created_by_id'] = (string) ($user['id'] ?? '');
         $cloned['created_by_name'] = (string) ($user['full_name'] ?? 'Admin');
+        $cloned['cloned_by'] = [
+            'type' => (string) ($user['role_name'] ?? 'admin'),
+            'id' => (string) ($user['id'] ?? ''),
+            'name' => (string) ($user['full_name'] ?? 'Admin'),
+        ];
         $cloned['public_share_token'] = documents_generate_quote_public_share_token();
         $cloned['public_share_enabled'] = false;
         $cloned['public_share_created_at'] = date('c');
@@ -1519,7 +1581,7 @@ if ($editing !== null && documents_quote_is_locked($editing)) {
     $editRestrictionMessage = 'This quotation was accepted and is locked. Create a revision to make changes.';
     $editing = null;
 } elseif ($editing !== null && documents_quote_normalize_status((string) ($editing['status'] ?? 'draft')) === 'approved') {
-    $editRestrictionMessage = 'This quotation is approved and cannot be edited. Accept it or archive it, or clone it into a new draft.';
+    $editRestrictionMessage = 'This quotation is approved. Use Edit Approved Quotation from the quotation list and provide a reason before editing.';
     $editing = null;
 } elseif ($editing !== null && documents_quote_normalize_status((string) ($editing['status'] ?? 'draft')) !== 'draft') {
     $editRestrictionMessage = 'Only draft quotations can be edited.';
