@@ -459,6 +459,7 @@ function documents_quote_defaults_settings(): array
             'IND' => ['unit_rate_rs_per_kwh' => 11, 'subsidy' => ['enabled' => false], 'loan_defaults' => ['enabled' => true, 'tenure_years' => 7]],
             'INST' => ['unit_rate_rs_per_kwh' => 9, 'subsidy' => ['enabled' => false,], 'loan_defaults' => ['enabled' => true, 'tenure_years' => 7]],
         ],
+        'important_points' => documents_quote_important_points_defaults(),
         'rate_chart' => [
             'on_grid' => [
                 ['solar_size_kwp' => 2, 'self_funded_price' => 0, 'loan_upto_2_lacs_price' => 0, 'loan_above_2_lacs_price' => 0],
@@ -485,6 +486,77 @@ function documents_quote_defaults_settings(): array
             ],
         ],
     ];
+}
+
+
+function documents_quote_important_points_defaults(): array
+{
+    return [
+        'enabled' => true,
+        'title' => 'Important Points',
+        'intro' => 'Please review the following before approving this quotation.',
+        'points' => [
+            ['id'=>'system_inclusions_annexure','text'=>'All items shall be supplied as per the “System Inclusions” mentioned in the Annexure, unless specifically mentioned otherwise in this quotation.','active'=>true,'sort_order'=>10],
+            ['id'=>'annexure_conditions_prevail','text'=>'The conditions mentioned in the Annexure shall apply and prevail unless this quotation specifically states otherwise.','active'=>true,'sort_order'=>20],
+            ['id'=>'no_verbal_commitments','text'=>'Verbal commitments or informal discussions shall not be considered part of the agreed scope. Please ask us to mention every requirement, clarification, or commitment in this quotation before approval.','active'=>true,'sort_order'=>30],
+        ],
+    ];
+}
+
+function documents_quote_normalize_important_points_settings(array $raw): array
+{
+    $defaults = documents_quote_important_points_defaults();
+    $settings = array_merge($defaults, $raw);
+    $settings['enabled'] = (bool) ($settings['enabled'] ?? true);
+    $settings['title'] = substr(safe_text((string) ($settings['title'] ?? $defaults['title'])), 0, 120) ?: $defaults['title'];
+    $settings['intro'] = substr(safe_multiline_text((string) ($settings['intro'] ?? '')), 0, 500);
+    $points = [];
+    foreach ((array) ($settings['points'] ?? []) as $idx => $point) {
+        if (!is_array($point)) { continue; }
+        $text = substr(safe_multiline_text((string) ($point['text'] ?? '')), 0, 1000);
+        if (trim($text) === '') { continue; }
+        $id = safe_filename((string) ($point['id'] ?? '')) ?: ('important_point_' . ($idx + 1) . '_' . substr(hash('sha1', $text), 0, 8));
+        $points[] = ['id'=>$id, 'text'=>$text, 'active'=>!empty($point['active']), 'sort_order'=>(int) ($point['sort_order'] ?? (($idx + 1) * 10))];
+        if (count($points) >= 20) { break; }
+    }
+    if ($points === []) { $points = $defaults['points']; }
+    usort($points, static fn(array $a, array $b): int => ((int)$a['sort_order'] <=> (int)$b['sort_order']) ?: strcmp((string)$a['id'], (string)$b['id']));
+    $settings['points'] = array_values($points);
+    return $settings;
+}
+
+function documents_quote_resolve_important_points(array $quote, array $quoteDefaults): array
+{
+    $snapshot = is_array($quote['important_points_snapshot'] ?? null) ? $quote['important_points_snapshot'] : [];
+    if ($snapshot !== []) { return documents_quote_normalize_important_points_settings($snapshot); }
+    return documents_quote_normalize_important_points_settings(is_array($quoteDefaults['important_points'] ?? null) ? $quoteDefaults['important_points'] : []);
+}
+
+function documents_quote_active_important_points(array $settings): array
+{
+    if (empty($settings['enabled'])) { return []; }
+    return array_values(array_filter((array) ($settings['points'] ?? []), static fn($p): bool => is_array($p) && !empty($p['active']) && trim((string)($p['text'] ?? '')) !== ''));
+}
+
+function documents_quote_render_important_points(array $settings): string
+{
+    $points = documents_quote_active_important_points($settings);
+    if ($points === []) { return ''; }
+    $title = htmlspecialchars((string) ($settings['title'] ?? 'Important Points'), ENT_QUOTES, 'UTF-8');
+    $intro = trim((string) ($settings['intro'] ?? ''));
+    $html = '<section class="card important-points-card"><div class="section-kicker">Customer attention notes</div><div class="h sec">'.$title.'</div>';
+    if ($intro !== '') { $html .= '<p class="important-points-intro">'.nl2br(htmlspecialchars($intro, ENT_QUOTES, 'UTF-8')).'</p>'; }
+    $html .= '<ol class="important-points-list">';
+    foreach ($points as $point) { $html .= '<li>'.nl2br(htmlspecialchars((string)$point['text'], ENT_QUOTES, 'UTF-8')).'</li>'; }
+    return $html . '</ol></section>';
+}
+
+function documents_quote_ensure_important_points_snapshot(array $quote, ?array $quoteDefaults = null): array
+{
+    $existing = is_array($quote['important_points_snapshot'] ?? null) ? $quote['important_points_snapshot'] : [];
+    if ($existing !== []) { $quote['important_points_snapshot'] = documents_quote_normalize_important_points_settings($existing); return $quote; }
+    $quote['important_points_snapshot'] = documents_quote_normalize_important_points_settings(is_array(($quoteDefaults ?? documents_get_quote_defaults_settings())['important_points'] ?? null) ? ($quoteDefaults ?? documents_get_quote_defaults_settings())['important_points'] : []);
+    return $quote;
 }
 
 function documents_get_quote_defaults_settings(): array
@@ -3143,12 +3215,14 @@ function documents_quote_apply_admin_status_transition(array $quote, string $tar
         $quote['status'] = 'approved';
         $quote = documents_quote_append_customer_visible_history($quote, 'approved', 'Revised quotation approved and ready for review.', ['actor_name' => $actorName]);
         $quote['approval'] = ['approved_by_id' => $actorId, 'approved_by_name' => $actorName, 'approved_at' => $now];
+        $quote = documents_quote_ensure_important_points_snapshot($quote);
     } elseif ($targetStatus === 'accepted') {
         if (!in_array($currentStatus, ['approved', 'accepted', 'update_requested'], true)) {
             return ['ok' => false, 'error' => 'Only approved quotations can be accepted.', 'quote' => $quote];
         }
         $acceptedAt = safe_text((string) ($quote['accepted_at'] ?? '')) ?: $now;
         $quote['status'] = 'accepted';
+        $quote = documents_quote_ensure_important_points_snapshot($quote);
         $quote = documents_quote_append_customer_visible_history($quote, 'accepted', 'Quotation accepted and locked for processing.', ['actor_name' => $actorName]);
         $quote['accepted_at'] = $acceptedAt;
         $quote['accepted_by'] = ['type' => $actorType, 'id' => $actorId, 'name' => $actorName];
@@ -4197,6 +4271,7 @@ function documents_quote_prepare(array $quote): array
     $revisionReason = trim((string) ($quote['revision_reason'] ?? ''));
     $quote['revision_reason'] = $revisionReason === '' ? null : $revisionReason;
     $quote['panel_orientation'] = documents_quote_normalize_panel_orientation(is_array($quote['panel_orientation'] ?? null) ? $quote['panel_orientation'] : []);
+    $quote['important_points_snapshot'] = is_array($quote['important_points_snapshot'] ?? null) ? documents_quote_normalize_important_points_settings($quote['important_points_snapshot']) : [];
     $quote = documents_quote_normalize_editable_finance_values($quote);
     $quote['revision_child_ids'] = array_values(array_filter(array_map(static fn($v): string => safe_text((string) $v), is_array($quote['revision_child_ids'] ?? null) ? $quote['revision_child_ids'] : []), static fn(string $v): bool => $v !== ''));
     $legacyShare = is_array($quote['share'] ?? null) ? $quote['share'] : [];
