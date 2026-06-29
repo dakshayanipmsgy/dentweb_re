@@ -3215,6 +3215,12 @@ function documents_quote_apply_admin_status_transition(array $quote, string $tar
         $quote['status'] = 'approved';
         $quote = documents_quote_append_customer_visible_history($quote, 'approved', 'Revised quotation approved and ready for review.', ['actor_name' => $actorName]);
         $quote['approval'] = ['approved_by_id' => $actorId, 'approved_by_name' => $actorName, 'approved_at' => $now];
+        if (is_array($quote['approved_edit'] ?? null)) {
+            $quote['approved_edit']['status'] = 'reapproved';
+            $quote['approved_edit']['reapproved_at'] = $now;
+            $quote['approved_edit']['reapproved_by_id'] = $actorId;
+            $quote['approved_edit']['reapproved_by_name'] = $actorName;
+        }
         $quote = documents_quote_ensure_important_points_snapshot($quote);
     } elseif ($targetStatus === 'accepted') {
         if (!in_array($currentStatus, ['approved', 'accepted', 'update_requested'], true)) {
@@ -3359,6 +3365,35 @@ function documents_quote_can_edit(array $quote, string $viewerType, string $view
         return ((string) ($quote['created_by_type'] ?? '') === 'employee') && ((string) ($quote['created_by_id'] ?? '') === $viewerId);
     }
     return false;
+}
+
+function documents_quote_admin_history_add(array $quote, string $event, string $message, array $meta = []): array
+{
+    $history = is_array($quote['admin_change_history'] ?? null) ? $quote['admin_change_history'] : [];
+    $history[] = array_merge([
+        'event' => safe_text($event),
+        'message' => safe_text($message),
+        'recorded_at' => date('c'),
+        'visible_to_customer' => false,
+    ], $meta);
+    $quote['admin_change_history'] = array_values(array_filter($history, static fn($entry): bool => is_array($entry)));
+    return $quote;
+}
+
+function documents_quote_can_reopen_approved_for_edit(array $quote): bool
+{
+    $quote = documents_quote_prepare($quote);
+    $status = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
+    $acceptance = is_array($quote['customer_acceptance'] ?? null) ? $quote['customer_acceptance'] : [];
+    $acceptedAt = safe_text((string) ($quote['accepted_at'] ?? ''));
+    $customerAcceptedAt = safe_text((string) ($acceptance['confirmed_at'] ?? $acceptance['accepted_at'] ?? ''));
+    return $status === 'approved'
+        && !documents_quote_is_locked($quote)
+        && !documents_is_archived($quote)
+        && $acceptedAt === ''
+        && $customerAcceptedAt === ''
+        && empty($quote['superseded_by_quote_id'])
+        && empty($quote['superseded_by_quote_no']);
 }
 
 function documents_quote_has_valid_acceptance_data(array $quote): array
@@ -4309,10 +4344,24 @@ function documents_generate_quote_public_share_token(int $bytes = 24): string
 
 function documents_quote_reset_clone_state(array $quote, string $newId): array
 {
-    foreach (['customer_acceptance','customer_acceptance_request','customer_change_request','acceptance_reference','acceptance_ref','acceptance_token','acceptance_token_hash','acceptance_hash','agreement','dispatch_advice','packing_list','challan','invoice','receipt','whatsapp_verification','whatsapp_verified_at','whatsapp_verified_by'] as $field) unset($quote[$field]);
+    $sourceId = safe_text((string) ($quote['id'] ?? ''));
+    $sourceNo = safe_text((string) ($quote['quote_no'] ?? ''));
+    foreach (['customer_acceptance','customer_acceptance_request','customer_change_request','acceptance_reference','acceptance_ref','acceptance_token','acceptance_token_hash','acceptance_hash','agreement','dispatch_advice','packing_list','challan','invoice','receipt','whatsapp_verification','whatsapp_verified_at','whatsapp_verified_by','change_request_history','revision_history','customer_visible_history','public_history','history','audit_timeline','revised_from_quote_no','revision_parent_id','revision_root_id','generated_draft_revision_id','generated_draft_revision_no','superseded_by_quote_id','superseded_by_quote_no','approved_at','approved_by'] as $field) unset($quote[$field]);
     $quote['status']='draft'; $quote['approval']=['approved_by_id'=>'','approved_by_name'=>'','approved_at'=>''];
     $quote['accepted_at']=''; $quote['accepted_by']=['type'=>'','id'=>'','name'=>''];
     $quote['acceptance']=['accepted_by_admin_id'=>'','accepted_by_admin_name'=>'','accepted_at'=>'','accepted_note'=>''];
+    $quote['customer_visible_change_history']=[];
+    $quote['admin_change_history']=[[
+        'event'=>'clone_created',
+        'message'=>'Quotation created as a new draft from an existing quotation.',
+        'recorded_at'=>date('c'),
+        'visible_to_customer'=>false,
+        'source_quote_id'=>$sourceId,
+        'source_quote_no'=>$sourceNo,
+    ]];
+    $quote['cloned_from_quote_id']=$sourceId;
+    $quote['cloned_from_quote_no']=$sourceNo;
+    $quote['cloned_at']=date('c');
     $quote['locked_flag']=false; $quote['locked_at']=null; $quote['workflow']=documents_quote_workflow_defaults();
     $quote['links']=['customer_mobile'=>'','agreement_id'=>'','proforma_id'=>'','invoice_id'=>''];
     $quote['public_share_token']=''; $quote['public_share_enabled']=false;
@@ -4320,6 +4369,41 @@ function documents_quote_reset_clone_state(array $quote, string $newId): array
     $quote['quote_series_id']=$newId; $quote['version_no']=1; $quote['is_current_version']=true;
     $quote['revised_from_quote_id']=null; $quote['revision_reason']=null; $quote['revision_child_ids']=[];
     return documents_quote_normalize_editable_finance_values($quote);
+}
+
+function documents_repair_cloned_quote_history_leaks(): int
+{
+    $repaired = 0;
+    foreach (documents_list_quotes() as $quote) {
+        $quote = documents_quote_prepare($quote);
+        if (safe_text((string) ($quote['cloned_from_quote_id'] ?? '')) === '' && safe_text((string) ($quote['cloned_from_quote_no'] ?? '')) === '') {
+            continue;
+        }
+        if (documents_quote_is_locked($quote) || documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')) === 'accepted') {
+            continue;
+        }
+        $history = is_array($quote['customer_visible_change_history'] ?? null) ? $quote['customer_visible_change_history'] : [];
+        if ($history === []) {
+            continue;
+        }
+        $quote['customer_visible_change_history'] = [];
+        foreach (['customer_visible_history','public_history','change_request_history','revision_history','history','audit_timeline'] as $field) {
+            if (array_key_exists($field, $quote)) {
+                unset($quote[$field]);
+            }
+        }
+        $quote = documents_quote_admin_history_add($quote, 'clone_history_repaired', 'Removed source quotation customer-visible history from cloned quotation.', [
+            'repaired_at' => date('c'),
+            'source_quote_id' => safe_text((string) ($quote['cloned_from_quote_id'] ?? '')),
+            'source_quote_no' => safe_text((string) ($quote['cloned_from_quote_no'] ?? '')),
+        ]);
+        $quote['updated_at'] = date('c');
+        $saved = documents_save_quote($quote);
+        if (($saved['ok'] ?? false)) {
+            $repaired++;
+        }
+    }
+    return $repaired;
 }
 
 function documents_quote_number_exists(string $quoteNo, string $exceptId = ''): bool
