@@ -4294,9 +4294,6 @@ function documents_quote_prepare(array $quote): array
         $quote['locked_at'] = safe_text((string) ($quote['locked_at'] ?? '')) ?: null;
     }
     $quote['archived_flag'] = documents_is_archived($quote);
-    if (documents_quote_is_manual_clone($quote)) {
-        $quote = documents_quote_repair_clone_history($quote);
-    }
     return $quote;
 }
 
@@ -4310,89 +4307,19 @@ function documents_generate_quote_public_share_token(int $bytes = 24): string
     return $token;
 }
 
-function documents_quote_clone_history_fields(): array
-{
-    return [
-        'customer_change_request', 'revision_history', 'change_history', 'customer_visible_history',
-        'customer_visible_change_history', 'history_events', 'revision_events', 'change_request_events',
-        'requested_changes', 'request_ref', 'generated_draft_revision_id', 'generated_draft_revision_no',
-        'generated_from_change_request_ref', 'revised_from_quote_id', 'revised_from_quote_no',
-        'revision_parent_id', 'revision_parent_no', 'revision_source_id', 'revision_source_no',
-        'source_change_request_ref', 'superseded_by_quote_id', 'superseded_by_quote_no',
-        'supersedes_quote_id', 'supersedes_quote_no', 'revision_reason', 'revision_child_ids',
-        'customer_acceptance', 'customer_acceptance_request', 'acceptance_reference', 'acceptance_ref',
-        'acceptance_token', 'acceptance_token_hash', 'acceptance_hash', 'acceptance_evidence',
-        'acceptance_history', 'accepted_evidence', 'approval_history', 'share_audit',
-        'whatsapp_share_audit', 'whatsapp_verification', 'whatsapp_verified_at', 'whatsapp_verified_by',
-        'agreement', 'dispatch_advice', 'packing_list', 'challan', 'invoice', 'receipt',
-    ];
-}
-
-function documents_quote_reset_clone_history(array $quote): array
-{
-    foreach (documents_quote_clone_history_fields() as $field) {
-        unset($quote[$field]);
-    }
-    $quote['customer_visible_change_history'] = [];
-    $quote['revision_history'] = [];
-    $quote['change_history'] = [];
-    $quote['history_events'] = [];
-    $quote['revision_events'] = [];
-    $quote['change_request_events'] = [];
-    $quote['revision_child_ids'] = [];
-    $quote['revised_from_quote_id'] = null;
-    $quote['revised_from_quote_no'] = '';
-    $quote['revision_reason'] = null;
-    $quote['generated_from_change_request_ref'] = '';
-    $quote['superseded_by_quote_id'] = '';
-    $quote['superseded_by_quote_no'] = '';
-    $quote['supersedes_quote_id'] = '';
-    $quote['supersedes_quote_no'] = '';
-    return $quote;
-}
-
 function documents_quote_reset_clone_state(array $quote, string $newId): array
 {
-    $quote = documents_quote_reset_clone_history($quote);
+    foreach (['customer_acceptance','customer_acceptance_request','customer_change_request','acceptance_reference','acceptance_ref','acceptance_token','acceptance_token_hash','acceptance_hash','agreement','dispatch_advice','packing_list','challan','invoice','receipt','whatsapp_verification','whatsapp_verified_at','whatsapp_verified_by'] as $field) unset($quote[$field]);
     $quote['status']='draft'; $quote['approval']=['approved_by_id'=>'','approved_by_name'=>'','approved_at'=>''];
     $quote['accepted_at']=''; $quote['accepted_by']=['type'=>'','id'=>'','name'=>''];
     $quote['acceptance']=['accepted_by_admin_id'=>'','accepted_by_admin_name'=>'','accepted_at'=>'','accepted_note'=>''];
-    $quote['locked_flag']=false; $quote['locked_at']=null; $quote['archived_flag']=false; $quote['archived_at']=''; $quote['archived_by']=['type'=>'','id'=>'','name'=>''];
-    $quote['workflow']=documents_quote_workflow_defaults();
+    $quote['locked_flag']=false; $quote['locked_at']=null; $quote['workflow']=documents_quote_workflow_defaults();
     $quote['links']=['customer_mobile'=>'','agreement_id'=>'','proforma_id'=>'','invoice_id'=>''];
     $quote['public_share_token']=''; $quote['public_share_enabled']=false;
     $quote['public_share_created_at']=''; $quote['public_share_revoked_at']=null; $quote['public_share_expires_at']=null;
     $quote['quote_series_id']=$newId; $quote['version_no']=1; $quote['is_current_version']=true;
+    $quote['revised_from_quote_id']=null; $quote['revision_reason']=null; $quote['revision_child_ids']=[];
     return documents_quote_normalize_editable_finance_values($quote);
-}
-
-function documents_quote_is_manual_clone(array $quote): bool
-{
-    return safe_text((string) ($quote['cloned_from_quote_id'] ?? '')) !== '' || safe_text((string) ($quote['cloned_from_quote_no'] ?? '')) !== '';
-}
-
-function documents_quote_repair_clone_history(array $quote): array
-{
-    if (!documents_quote_is_manual_clone($quote)) {
-        return $quote;
-    }
-    $source = [
-        'cloned_from_quote_id' => safe_text((string) ($quote['cloned_from_quote_id'] ?? '')),
-        'cloned_from_quote_no' => safe_text((string) ($quote['cloned_from_quote_no'] ?? '')),
-        'cloned_at' => safe_text((string) ($quote['cloned_at'] ?? '')),
-    ];
-    $quote = documents_quote_reset_clone_history($quote);
-    foreach ($source as $key => $value) {
-        if ($value !== '') {
-            $quote[$key] = $value;
-        }
-    }
-    $quote['status'] = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
-    if ($quote['status'] === 'update_requested') {
-        $quote['status'] = 'draft';
-    }
-    $quote['is_current_version'] = true;
-    return $quote;
 }
 
 function documents_quote_number_exists(string $quoteNo, string $exceptId = ''): bool
