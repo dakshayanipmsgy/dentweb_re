@@ -1359,9 +1359,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cloned['revised_from_quote_id'] = null;
         $cloned['revision_reason'] = null;
         $cloned['revision_child_ids'] = [];
-        $cloned['cloned_from_quote_id'] = (string) ($original['id'] ?? '');
-        $cloned['cloned_from_quote_no'] = (string) ($original['quote_no'] ?? '');
-        $cloned['cloned_at'] = date('c');
 
         $saved = documents_save_quote($cloned);
         if (!($saved['ok'] ?? false)) {
