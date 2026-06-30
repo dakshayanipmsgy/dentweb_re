@@ -265,6 +265,7 @@ function complaint_detail_safe(string $value): string
     .detail-actions button, .detail-actions a { padding: 0.65rem 1.1rem; border-radius: 10px; text-decoration: none; font-weight: 700; border: 1px solid transparent; }
     .detail-actions button { background: #1f4b99; color: #ffffff; cursor: pointer; border-color: #1f4b99; }
     .detail-actions a { background: #f3f4f6; color: #111827; border-color: #e5e7eb; }
+    .detail-action-note { margin: 0.65rem 0 0; color: #4b5563; font-size: 0.92rem; line-height: 1.45; }
     .admin-alert { margin: 0.5rem 0; }
   </style>
 </head>
@@ -298,14 +299,15 @@ function complaint_detail_safe(string $value): string
       <div class="detail-card">
         <h2 style="margin-top:0;">Complaint #<?= complaint_detail_safe((string) ($complaint['id'] ?? '—')) ?></h2>
         <div class="detail-actions">
-          <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=notify_whatsapp">Send WhatsApp</a>
-          <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=notify_sms">Send SMS</a>
+          <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=notify_whatsapp">Send Update to Customer on WhatsApp</a>
+          <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=notify_sms">Send Update to Customer by SMS</a>
           <?php if (strtolower((string) ($complaint['status'] ?? 'open')) !== 'closed'): ?>
             <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=close" onclick="return confirm('Mark this complaint as closed?');">Mark Closed</a>
           <?php endif; ?>
-          <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=whatsapp">Create WhatsApp Message</a>
-          <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=email">Create Email Message</a>
+          <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=whatsapp">Forward Complaint on WhatsApp</a>
+          <a href="complaint-detail.php?id=<?= complaint_detail_safe((string) ($complaint['id'] ?? '')) ?>&action=email">Forward Complaint by Email</a>
         </div>
+        <p class="detail-action-note">Customer update actions send a resolution/update message to the registered customer number. Forward complaint actions create a complaint summary that you can send to any authority or recipient you choose.</p>
         <div class="detail-grid">
           <div>
             <small>Customer mobile</small>
