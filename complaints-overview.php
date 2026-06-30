@@ -301,22 +301,29 @@ function complaints_overview_render_summary(array $counts): string
     <?php return (string) ob_get_clean();
 }
 
+function complaints_overview_mobile_digits(array $complaint, array $customer): string
+{
+    $mobile = preg_replace('/\D+/', '', (string) ($complaint['customer_mobile'] ?? ($customer['mobile'] ?? '')));
+    return is_string($mobile) ? $mobile : '';
+}
+
 function complaints_overview_render_table(array $filtered, array $customerByMobile): string
 {
     ob_start();
     if (count($filtered) === 0): ?>
       <div class="empty-state">No complaints match your filters.</div>
     <?php else: ?>
-      <div class="complaints-table-wrap">
+      <div class="complaints-table-wrap" tabindex="0" aria-label="Complaints table with horizontal scrolling">
       <table class="complaints-table admin-table">
-        <thead><tr><th>ID</th><th>Customer Name</th><th>Customer mobile</th><th>Division</th><th>Sub Division</th><th>Title</th><th>Category</th><th>Assignee</th><th>Status</th><th>Forwarded</th><th>Customer Notified</th><th>Created</th><th>Action</th></tr></thead>
+        <thead><tr><th>ID</th><th>Customer</th><th>Mobile</th><th>Division</th><th>Sub Division</th><th>Complaint</th><th>Category</th><th>Assignee</th><th>Status</th><th>Age</th><th>Forwarded</th><th>Notified</th><th>Created</th><th>Actions</th></tr></thead>
         <tbody>
         <?php foreach ($filtered as $complaint):
             $created = complaints_overview_safe((string) ($complaint['created_at'] ?? ''));
             $title = trim((string) ($complaint['title'] ?? 'Complaint'));
             $mobile = (string) ($complaint['customer_mobile'] ?? '');
             $customer = $customerByMobile[$mobile] ?? [];
-            $customerName = (string) ($customer['name'] ?? '');
+            $customerName = complaints_overview_value_or_dash((string) ($customer['name'] ?? ''));
+            $mobileLabel = complaints_overview_value_or_dash($mobile);
             $divisionName = complaints_overview_value_or_dash((string) ($customer['division_name'] ?? ''));
             $subDivisionName = complaints_overview_value_or_dash((string) ($customer['sub_division_name'] ?? ''));
             $forwardedVia = complaint_normalize_forwarded_via($complaint['forwarded_via'] ?? 'none');
@@ -330,7 +337,7 @@ function complaints_overview_render_table(array $filtered, array $customerByMobi
             $customerNotifiedLabel = complaint_customer_notified_label($customerNotified);
             $statusRaw = (string) ($complaint['status'] ?? 'open');
             $status = strtolower(trim($statusRaw));
-            $statusLabel = ucfirst($statusRaw);
+            $statusLabel = complaints_overview_value_or_dash(ucfirst($statusRaw));
             $rowClass = '';
             $ageLabel = 'Fresh';
             if (!in_array($status, ['closed', 'resolved'], true)) {
@@ -349,28 +356,30 @@ function complaints_overview_render_table(array $filtered, array $customerByMobi
           <tr class="<?= complaints_overview_safe($rowClass) ?>">
             <td><?= complaints_overview_safe((string) ($complaint['id'] ?? '—')) ?></td>
             <td><?= complaints_overview_safe($customerName) ?></td>
-            <td><?= complaints_overview_safe((string) ($complaint['customer_mobile'] ?? 'Unknown')) ?></td>
+            <td><?= complaints_overview_safe($mobileLabel) ?></td>
             <td><?= complaints_overview_safe($divisionName) ?></td>
             <td><?= complaints_overview_safe($subDivisionName) ?></td>
             <td><?= complaints_overview_safe($title !== '' ? $title : 'Complaint') ?></td>
-            <td><?= complaints_overview_safe((string) ($complaint['problem_category'] ?? '')) ?></td>
-            <td><?= complaints_overview_safe(complaint_display_assignee($complaint['assignee'] ?? '')) ?></td>
+            <td><?= complaints_overview_safe(complaints_overview_value_or_dash((string) ($complaint['problem_category'] ?? ''))) ?></td>
+            <td><?= complaints_overview_safe(complaints_overview_value_or_dash(complaint_display_assignee($complaint['assignee'] ?? ''))) ?></td>
             <td><span class="status-pill <?= complaints_overview_safe($status) ?>"><?= complaints_overview_safe($statusLabel) ?></span></td>
             <td>
-              <span class="admin-chip admin-chip--muted"><?= complaints_overview_safe($forwardedLabel) ?></span>
               <?php if (!in_array($status, ['closed', 'resolved'], true)): ?>
                 <span class="urgency-pill admin-chip"><?= complaints_overview_safe($ageLabel) ?></span>
+              <?php else: ?>
+                <span class="admin-chip admin-chip--muted">Complete</span>
               <?php endif; ?>
             </td>
+            <td><span class="admin-chip <?= $forwardedVia === 'none' ? 'admin-chip--muted' : '' ?>"><?= complaints_overview_safe($forwardedLabel) ?></span></td>
             <td><span class="admin-chip <?= $customerNotified === 'none' ? 'admin-chip--muted' : '' ?>"><?= complaints_overview_safe($customerNotifiedLabel) ?></span></td>
             <td><?= $created ?></td>
             <td>
-              <div style="display:flex; flex-wrap:wrap; gap:.35rem; align-items:center;">
-                <a href="complaint-detail.php?id=<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" class="js-complaint-open" data-complaint-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>">View / Edit</a>
-                <a href="#" class="js-complaint-notify" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" data-channel="whatsapp">Send WhatsApp</a>
-                <a href="#" class="js-complaint-notify" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" data-channel="sms">Send SMS</a>
+              <div class="complaint-actions" aria-label="Complaint actions">
+                <a href="complaint-detail.php?id=<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" class="action-link action-link--primary js-complaint-open" data-complaint-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>">View / Edit</a>
+                <a href="#" class="action-link js-complaint-notify" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" data-channel="whatsapp">WhatsApp</a>
+                <a href="#" class="action-link js-complaint-notify" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" data-channel="sms">SMS</a>
                 <?php if ($status !== 'closed'): ?>
-                  <a href="#" class="js-complaint-close" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>">Close</a>
+                  <a href="#" class="action-link action-link--danger js-complaint-close" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>">Close</a>
                 <?php endif; ?>
               </div>
             </td>
@@ -425,6 +434,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
 
     if ($quickType === 'notify_whatsapp' || $quickType === 'notify_sms') {
         $channel = $quickType === 'notify_whatsapp' ? 'whatsapp' : 'sms';
+        $mobile = complaints_overview_mobile_digits($complaint, $customer);
+        if (strlen($mobile) < 10) {
+            echo json_encode(['ok' => false, 'error' => 'Customer mobile number is missing or invalid. Update the complaint/customer mobile before notifying.']);
+            exit;
+        }
+
         $nextNotified = complaint_add_customer_notification_channel($complaint['customer_notified_via'] ?? 'none', $channel);
         $notificationCount = max(0, (int) ($complaint['customer_notification_count'] ?? 0)) + 1;
 
@@ -436,19 +451,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
         ]);
 
         $message = complaint_customer_resolution_message($complaint, $customer);
-        $mobile = preg_replace('/\D+/', '', (string) ($complaint['customer_mobile'] ?? ($customer['mobile'] ?? '')));
-        $mobile = is_string($mobile) ? $mobile : '';
         if ($channel === 'whatsapp') {
-            $phone = $mobile === '' ? '' : ('91' . substr($mobile, -10));
-            $url = $phone === ''
-                ? ('https://wa.me/?text=' . rawurlencode($message))
-                : ('https://wa.me/' . rawurlencode($phone) . '?text=' . rawurlencode($message));
+            $phone = '91' . substr($mobile, -10);
+            $url = 'https://wa.me/' . rawurlencode($phone) . '?text=' . rawurlencode($message);
         } else {
-            $url = $mobile === ''
-                ? ('sms:?&body=' . rawurlencode($message))
-                : ('sms:' . rawurlencode(substr($mobile, -10)) . '?&body=' . rawurlencode($message));
+            $url = 'sms:' . rawurlencode(substr($mobile, -10)) . '?&body=' . rawurlencode($message);
         }
-        echo json_encode(['ok' => true, 'open_url' => $url]);
+        echo json_encode(['ok' => true, 'message' => 'Customer notification logged. Opening ' . strtoupper($channel) . ' composer.', 'open_url' => $url]);
         exit;
     }
 
@@ -606,9 +615,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
     .complaints-header { display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
     .complaints-title { margin:0; font-size:2rem; color:#111827; }
     .complaints-subtitle { margin:.35rem 0 0; color:#4b5563; }
+    .complaints-workspace { display:grid; grid-template-columns:1fr; gap:1rem; }
+    .complaints-toolbar { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1rem; box-shadow:0 10px 24px rgba(0,0,0,.04); }
+    .complaints-section-title { margin:0 0 .25rem; font-size:1.15rem; color:#111827; }
+    .complaints-section-note { margin:0; color:#64748b; font-size:.95rem; }
     .complaints-filters { position:sticky; top:0; z-index:5; background:#f8fafc; padding:.8rem; border:1px solid #e5e7eb; border-radius:12px; display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:.75rem; margin:1rem 0; }
-    .complaints-filters select,.complaints-filters button { width:100%; padding:.6rem .7rem; border:1px solid #d1d5db; border-radius:10px; font:inherit; }
+    .complaints-filters label { display:block; margin:0 0 .25rem; font-size:.82rem; font-weight:700; color:#475569; }
+    .complaints-filters select,.complaints-filters button,.filter-reset { width:100%; padding:.6rem .7rem; border:1px solid #d1d5db; border-radius:10px; font:inherit; min-height:42px; }
     .complaints-filters button { background:#1f4b99; color:#fff; font-weight:700; cursor:pointer; border-color:#1f4b99; }
+    .filter-reset { display:inline-flex; align-items:center; justify-content:center; text-decoration:none; background:#fff; color:#1f4b99; font-weight:700; box-sizing:border-box; }
+    .active-filter-context { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; color:#475569; font-size:.92rem; margin-top:.75rem; }
+    .active-filter-context strong { color:#111827; }
+    .notice-region { min-height:0; }
+    .admin-alert { margin:.75rem 0 0; border-radius:10px; padding:.75rem .9rem; border:1px solid transparent; }
+    .admin-alert--success { background:#ecfdf5; border-color:#bbf7d0; color:#166534; }
+    .admin-alert--error { background:#fef2f2; border-color:#fecaca; color:#991b1b; }
     .complaints-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:.75rem; margin:1rem 0; }
     .summary-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1rem 1.25rem; box-shadow:0 10px 24px rgba(0,0,0,.04); }
     .summary-card h3 { margin:0; font-size:.95rem; color:#4b5563; font-weight:600; }
@@ -622,18 +643,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
     .complaints-table th:nth-child(4),.complaints-table td:nth-child(4) { min-width:150px; }
     .complaints-table th:nth-child(5),.complaints-table td:nth-child(5) { min-width:170px; }
     .complaints-table th:nth-child(6),.complaints-table td:nth-child(6) { min-width:240px; }
-    .complaints-table th:nth-child(3),
-    .complaints-table th:nth-child(9),
-    .complaints-table th:nth-child(10),
-    .complaints-table th:nth-child(11),
-    .complaints-table th:nth-child(12),
-    .complaints-table th:nth-child(13),
-    .complaints-table td:nth-child(3),
-    .complaints-table td:nth-child(9),
-    .complaints-table td:nth-child(10),
-    .complaints-table td:nth-child(11),
-    .complaints-table td:nth-child(12),
-    .complaints-table td:nth-child(13) { white-space:nowrap; }
+    .complaints-table th:nth-child(3),.complaints-table th:nth-child(9),.complaints-table th:nth-child(10),.complaints-table th:nth-child(11),.complaints-table th:nth-child(12),.complaints-table th:nth-child(13),.complaints-table th:nth-child(14),.complaints-table td:nth-child(3),.complaints-table td:nth-child(9),.complaints-table td:nth-child(10),.complaints-table td:nth-child(11),.complaints-table td:nth-child(12),.complaints-table td:nth-child(13),.complaints-table td:nth-child(14) { white-space:nowrap; }
+    .complaint-actions { display:grid; grid-template-columns:1fr; gap:.35rem; min-width:128px; }
+    .action-link { display:inline-flex; justify-content:center; padding:.38rem .55rem; border:1px solid #bfdbfe; border-radius:999px; background:#eff6ff; }
+    .action-link--primary { background:#1f4b99; border-color:#1f4b99; color:#fff !important; }
+    .action-link--danger { background:#fef2f2; border-color:#fecaca; color:#991b1b !important; }
     .empty-state { margin:1rem 0 0; padding:1rem 1.25rem; border-radius:12px; border:1px dashed #cbd5e1; background:#f8fafc; color:#475569; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     .complaint-age-0-1 { background-color:#f0fff4; } .complaint-age-2-3 { background-color:#fffbea; } .complaint-age-4-7 { background-color:#fff4e6; } .complaint-age-8-14 { background-color:#ffe5e5; } .complaint-age-15plus { background-color:#ffd6d6; }
@@ -644,8 +658,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
     .ux-drawer-head { display:flex; justify-content:space-between; align-items:center; padding:.9rem 1rem; border-bottom:1px solid #e5e7eb; }
     .ux-drawer iframe { width:100%; height:100%; border:none; }
     .loading { opacity:.6; pointer-events:none; }
-    .complaints-export { margin:1rem 0; border:1px solid #dbe7ff; border-radius:12px; padding:1rem; background:#f8fbff; }
-    .complaints-export h2 { margin:0 0 .65rem; font-size:1.1rem; color:#1f4b99; }
+    .complaints-export { margin:1rem 0; border:1px solid #dbe7ff; border-radius:12px; background:#f8fbff; overflow:hidden; }
+    .complaints-export summary { cursor:pointer; padding:1rem; color:#1f4b99; font-weight:800; }
+    .complaints-export-body { padding:0 1rem 1rem; }
     .complaints-export-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.75rem; }
     .complaints-export select,.complaints-export button { width:100%; padding:.6rem .7rem; border:1px solid #d1d5db; border-radius:10px; font:inherit; }
     .complaints-export select { min-height:120px; background:#fff; }
@@ -673,26 +688,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
 
     <div id="complaintsSummaryRoot"><?= complaints_overview_render_summary($counts) ?></div>
 
-    <form method="get" class="complaints-filters" id="complaintFilters">
-      <div>
-        <label class="sr-only" for="status">Status</label>
-        <select id="status" name="status">
-          <?php foreach ($statusOptions as $value => $label): ?><option value="<?= complaints_overview_safe($value) ?>" <?= $statusFilter === $value ? 'selected' : '' ?>><?= complaints_overview_safe($label) ?></option><?php endforeach; ?>
-        </select>
+    <section class="complaints-toolbar" aria-labelledby="dailyWorkTitle">
+      <h2 class="complaints-section-title" id="dailyWorkTitle">Daily complaint work</h2>
+      <p class="complaints-section-note">Filter the active workload, open View/Edit in the side drawer, notify customers, or close resolved complaints.</p>
+      <form method="get" class="complaints-filters" id="complaintFilters">
+        <div>
+          <label for="status">Status</label>
+          <select id="status" name="status">
+            <?php foreach ($statusOptions as $value => $label): ?><option value="<?= complaints_overview_safe($value) ?>" <?= $statusFilter === $value ? 'selected' : '' ?>><?= complaints_overview_safe($label) ?></option><?php endforeach; ?>
+          </select>
+        </div>
+        <div>
+          <label for="assignee">Assignee</label>
+          <select id="assignee" name="assignee"><option value="all" <?= $assigneeFilter === 'all' ? 'selected' : '' ?>>All assignees</option><?php foreach ($assigneeOptions as $assignee): $value = complaints_overview_safe($assignee); ?><option value="<?= $value ?>" <?= strcasecmp($assigneeFilter, $assignee) === 0 ? 'selected' : '' ?>><?= $value ?></option><?php endforeach; ?></select>
+        </div>
+        <div>
+          <label for="category">Category</label>
+          <select id="category" name="category"><option value="all" <?= $categoryFilter === 'all' ? 'selected' : '' ?>>All categories</option><?php foreach (complaint_problem_categories() as $category): ?><option value="<?= complaints_overview_safe($category) ?>" <?= strcasecmp($categoryFilter, $category) === 0 ? 'selected' : '' ?>><?= complaints_overview_safe($category) ?></option><?php endforeach; ?></select>
+        </div>
+        <div><label aria-hidden="true">&nbsp;</label><button type="submit">Apply filters</button></div>
+        <div><label aria-hidden="true">&nbsp;</label><a class="filter-reset" href="complaints-overview.php" id="resetFilters">Reset filters</a></div>
+      </form>
+      <div class="active-filter-context" id="activeFilterContext" aria-live="polite">
+        <strong>Showing:</strong>
+        <span>Status: <?= complaints_overview_safe($statusOptions[$statusFilter] ?? $statusFilter) ?></span>
+        <span>Assignee: <?= complaints_overview_safe($assigneeFilter === 'all' ? 'All assignees' : $assigneeFilter) ?></span>
+        <span>Category: <?= complaints_overview_safe($categoryFilter === 'all' ? 'All categories' : $categoryFilter) ?></span>
       </div>
-      <div>
-        <label class="sr-only" for="assignee">Assignee</label>
-        <select id="assignee" name="assignee"><option value="all" <?= $assigneeFilter === 'all' ? 'selected' : '' ?>>All assignees</option><?php foreach ($assigneeOptions as $assignee): $value = complaints_overview_safe($assignee); ?><option value="<?= $value ?>" <?= strcasecmp($assigneeFilter, $assignee) === 0 ? 'selected' : '' ?>><?= $value ?></option><?php endforeach; ?></select>
-      </div>
-      <div>
-        <label class="sr-only" for="category">Category</label>
-        <select id="category" name="category"><option value="all" <?= $categoryFilter === 'all' ? 'selected' : '' ?>>All categories</option><?php foreach (complaint_problem_categories() as $category): ?><option value="<?= complaints_overview_safe($category) ?>" <?= strcasecmp($categoryFilter, $category) === 0 ? 'selected' : '' ?>><?= complaints_overview_safe($category) ?></option><?php endforeach; ?></select>
-      </div>
-      <div><button type="submit">Apply filters</button></div>
-    </form>
+      <div class="notice-region" id="quickActionNotice" aria-live="polite"></div>
+    </section>
 
-    <section class="complaints-export complaints-export--secondary">
-      <h2>Export Excel</h2>
+    <details class="complaints-export complaints-export--secondary" <?= $exportError !== '' ? 'open' : '' ?>>
+      <summary>Export Excel (optional)</summary>
+      <div class="complaints-export-body">
       <form method="post" target="_blank" rel="noopener">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="export_excel" />
@@ -752,13 +780,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
           <div class="complaints-export-error"><?= complaints_overview_safe($exportError) ?></div>
         <?php endif; ?>
       </form>
-    </section>
+      </div>
+    </details>
 
     <div id="complaintsTableRoot"><?= complaints_overview_render_table($filtered, $customerByMobile) ?></div>
   </div>
 
   <div class="ux-backdrop" id="complaintsBackdrop"></div>
-  <aside class="ux-drawer" id="complaintsDrawer" aria-hidden="true">
+  <aside class="ux-drawer" id="complaintsDrawer" aria-hidden="true" aria-modal="true" role="dialog" aria-labelledby="drawerTitle">
     <div class="ux-drawer-head"><strong id="drawerTitle">Complaint details</strong><button type="button" class="btn btn-ghost" id="drawerClose">Close</button></div>
     <iframe id="complaintDetailFrame" src="about:blank" title="Complaint detail"></iframe>
   </aside>
@@ -773,6 +802,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
       const backdrop = document.getElementById('complaintsBackdrop');
       const closeBtn = document.getElementById('drawerClose');
       const frame = document.getElementById('complaintDetailFrame');
+      const notice = document.getElementById('quickActionNotice');
+      const resetFilters = document.getElementById('resetFilters');
+      const activeFilterContext = document.getElementById('activeFilterContext');
+      const csrfToken = <?= json_encode(csrf_token(), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
 
       const getState = () => new URLSearchParams(new FormData(form));
       const persist = () => {
@@ -792,24 +825,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
       const refreshData = async () => {
         const params = getState();
         params.set('ajax', '1');
+        const scrollY = Number(sessionStorage.getItem('complaints-overview:scroll') || window.scrollY || 0);
         persist();
         app.classList.add('loading');
         try {
           const response = await fetch('complaints-overview.php?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
           const payload = await response.json();
-          if (!payload || !payload.ok) return;
+          if (!payload || !payload.ok) throw new Error('Unable to refresh complaint data.');
           summaryRoot.innerHTML = payload.summary_html || '';
           tableRoot.innerHTML = payload.table_html || '';
           history.replaceState({}, '', 'complaints-overview.php?' + getState().toString());
+          updateFilterContext();
+          window.scrollTo({ top: scrollY, behavior: 'auto' });
         } catch (err) {
           console.error(err);
+          showNotice('error', err && err.message ? err.message : 'Unable to refresh complaint data.');
         } finally {
           app.classList.remove('loading');
         }
       };
 
+      const showNotice = (type, message) => {
+        if (!notice) return;
+        notice.innerHTML = '<div class="admin-alert admin-alert--' + (type === 'success' ? 'success' : 'error') + '" role="' + (type === 'success' ? 'status' : 'alert') + '">' + escapeHtml(message) + '</div>';
+      };
+
+      const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+      }[char]));
+
+      const selectedText = (select) => select && select.selectedOptions.length ? select.selectedOptions[0].textContent.trim() : 'All';
+      const updateFilterContext = () => {
+        if (!activeFilterContext) return;
+        activeFilterContext.innerHTML = '<strong>Showing:</strong>'
+          + '<span>Status: ' + escapeHtml(selectedText(form.status)) + '</span>'
+          + '<span>Assignee: ' + escapeHtml(selectedText(form.assignee)) + '</span>'
+          + '<span>Category: ' + escapeHtml(selectedText(form.category)) + '</span>';
+      };
+
       form.addEventListener('submit', function (event) {
         event.preventDefault();
+        refreshData();
+      });
+      form.addEventListener('change', function (event) {
+        if (event.target && event.target.matches('select')) {
+          refreshData();
+        }
+      });
+
+      resetFilters.addEventListener('click', function (event) {
+        event.preventDefault();
+        form.status.value = 'active';
+        form.assignee.value = 'all';
+        form.category.value = 'all';
+        sessionStorage.removeItem('complaints-overview:filters');
+        sessionStorage.setItem('complaints-overview:scroll', String(window.scrollY || 0));
         refreshData();
       });
 
@@ -819,6 +889,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
         drawer.classList.add('open');
         backdrop.classList.add('open');
         drawer.setAttribute('aria-hidden', 'false');
+        closeBtn.focus();
       };
       const closeDrawer = () => {
         drawer.classList.remove('open');
@@ -847,18 +918,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
           payload.set('action', 'quick_action');
           payload.set('quick_type', channel === 'whatsapp' ? 'notify_whatsapp' : 'notify_sms');
           payload.set('id', id);
+          payload.set('csrf_token', csrfToken);
 
-          const response = await fetch('complaints-overview.php?' + getState().toString(), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
-            body: payload.toString()
-          });
-          const result = await response.json();
-          if (result && result.ok) {
-            if (result.open_url) {
-              window.open(result.open_url, '_blank', 'noopener');
+          try {
+            const response = await fetch('complaints-overview.php?' + getState().toString(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
+              body: payload.toString()
+            });
+            const result = await response.json();
+            if (!result || !result.ok) {
+              throw new Error((result && result.error) || 'Notification action failed.');
             }
-            refreshData();
+            showNotice('success', result.message || 'Customer notification logged.');
+            if (result.open_url) window.open(result.open_url, '_blank', 'noopener');
+            await refreshData();
+          } catch (err) {
+            showNotice('error', err && err.message ? err.message : 'Notification action failed.');
           }
           return;
         }
@@ -874,22 +950,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
         payload.set('action', 'quick_action');
         payload.set('quick_type', 'close');
         payload.set('id', id);
+        payload.set('csrf_token', csrfToken);
 
-        const response = await fetch('complaints-overview.php?' + getState().toString(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
-          body: payload.toString()
-        });
-        const result = await response.json();
-        if (result && result.ok) {
-          refreshData();
+        try {
+          const response = await fetch('complaints-overview.php?' + getState().toString(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
+            body: payload.toString()
+          });
+          const result = await response.json();
+          if (!result || !result.ok) {
+            throw new Error((result && result.error) || 'Close action failed.');
+          }
+          showNotice('success', 'Complaint closed successfully.');
+          await refreshData();
+        } catch (err) {
+          showNotice('error', err && err.message ? err.message : 'Close action failed.');
         }
       });
 
       closeBtn.addEventListener('click', closeDrawer);
       backdrop.addEventListener('click', closeDrawer);
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && drawer.classList.contains('open')) {
+          closeDrawer();
+        }
+      });
 
       restore();
+      updateFilterContext();
       const scroll = Number(sessionStorage.getItem('complaints-overview:scroll') || 0);
       if (Number.isFinite(scroll) && scroll > 0) {
         window.scrollTo({ top: scroll, behavior: 'auto' });
