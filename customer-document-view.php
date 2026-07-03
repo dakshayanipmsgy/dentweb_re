@@ -15,6 +15,34 @@ function customer_document_quote_mobile(array $document): string
     return normalize_customer_mobile((string) ($document['customer_mobile'] ?? $document['customer_snapshot']['mobile'] ?? $document['party_snapshot']['customer_mobile'] ?? ''));
 }
 
+function customer_document_quote_tax_summary(array $quote): array
+{
+    $calc = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
+    $taxBreakdown = is_array($calc['tax_breakdown'] ?? null) ? $calc['tax_breakdown'] : (is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : []);
+    $gross = (float) ($taxBreakdown['gross_incl_gst'] ?? $calc['grand_total'] ?? $calc['final_price_incl_gst'] ?? $quote['input_total_gst_inclusive'] ?? 0);
+    $taxable = (float) ($taxBreakdown['basic_total'] ?? $calc['basic_total'] ?? $calc['taxable_total'] ?? $calc['basic_value'] ?? 0);
+    $gst = (float) ($taxBreakdown['gst_total'] ?? $calc['gst_total'] ?? $calc['total_gst'] ?? 0);
+    if ($gst <= 0 && $gross > 0 && $taxable > 0) {
+        $gst = max(0, $gross - $taxable);
+    }
+    $split = is_array($calc['gst_split'] ?? null) ? $calc['gst_split'] : [];
+    $components = [];
+    foreach ([
+        'CGST' => ['cgst_5', 'cgst_18'],
+        'SGST' => ['sgst_5', 'sgst_18'],
+        'IGST' => ['igst_5', 'igst_18'],
+    ] as $label => $keys) {
+        $amount = 0.0;
+        foreach ($keys as $key) {
+            $amount += (float) ($split[$key] ?? 0);
+        }
+        if ($amount > 0) {
+            $components[$label] = $amount;
+        }
+    }
+    return ['taxable' => $taxable, 'gst' => $gst, 'gross' => $gross, 'components' => $components];
+}
+
 function customer_document_assert_owner(array $document, string $customerMobile): void
 {
     $docMobile = customer_document_quote_mobile($document);
@@ -103,10 +131,12 @@ if ($type === 'accepted_quotation') {
 if (!is_array($document)) { http_response_code(404); exit('Document not found.'); }
 customer_document_assert_owner($document, $customerMobile);
 $esc = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
-$fmt = static fn($v): string => '₹' . number_format((float) $v, 2);
+$fmt = static fn($v): string => quotation_format_inr_indian((float) $v, true);
 $calc = is_array($document['calc'] ?? null) ? $document['calc'] : [];
 $snapshot = is_array($document['customer_snapshot'] ?? null) ? $document['customer_snapshot'] : [];
-$acceptedSummary = $type === 'accepted_quotation' ? [
+$acceptedTaxSummary = $type === 'accepted_quotation' ? customer_document_quote_tax_summary($document) : ['taxable' => 0.0, 'gst' => 0.0, 'gross' => 0.0, 'components' => []];
+$acceptedSpecialRequest = $type === 'accepted_quotation' ? trim((string) ($document['special_requests_text'] ?? $document['special_requests_inclusive'] ?? '')) : '';
+$acceptedSummary = [
     'Quotation reference' => $number,
     'Customer name' => (string) ($document['customer_name'] ?? $snapshot['name'] ?? $customer['name'] ?? ''),
     'Project / system' => trim((string) ($document['capacity_kwp'] ?? $document['system_capacity_kwp'] ?? '') . ' kWp ' . (string) ($document['system_type'] ?? 'Solar project')),
@@ -115,11 +145,17 @@ $acceptedSummary = $type === 'accepted_quotation' ? [
     'Acceptance reference' => (string) ($document['acceptance_ref'] ?? $document['customer_acceptance']['acceptance_ref'] ?? '—'),
     'Acceptance / project status' => ucwords(str_replace('_', ' ', (string) ($document['status'] ?? 'accepted'))),
     'Accepted amount' => $fmt($amount),
-    'Taxable value' => isset($calc['taxable_total']) || isset($calc['basic_value']) ? $fmt((float) ($calc['taxable_total'] ?? $calc['basic_value'] ?? 0)) : '—',
-    'GST / tax total' => isset($calc['total_gst']) || isset($calc['gst_total']) ? $fmt((float) ($calc['total_gst'] ?? $calc['gst_total'] ?? 0)) : '—',
+    'Taxable value' => ((float) $acceptedTaxSummary['taxable'] > 0) ? $fmt((float) $acceptedTaxSummary['taxable']) : '—',
+    'GST / tax total' => ((float) $acceptedTaxSummary['gst'] > 0) ? $fmt((float) $acceptedTaxSummary['gst']) : '—',
     'Expected subsidy' => isset($calc['subsidy_expected_rs']) ? $fmt((float) $calc['subsidy_expected_rs']) : '—',
     'Net after subsidy' => isset($calc['net_after_subsidy']) ? $fmt((float) $calc['net_after_subsidy']) : '—',
-] : [];
+];
+if ($type === 'accepted_quotation') {
+    foreach ((array) $acceptedTaxSummary['components'] as $label => $value) {
+        $acceptedSummary[$label] = $fmt((float) $value);
+    }
+}
+$acceptedSummary = $type === 'accepted_quotation' ? $acceptedSummary : [];
 ?>
 <!doctype html>
 <html lang="en">
@@ -138,6 +174,9 @@ $acceptedSummary = $type === 'accepted_quotation' ? [
       <div class="card"><div class="label"><?= $esc($label) ?></div><div class="value"><?= $esc($value === '' ? '—' : $value) ?></div></div>
     <?php endforeach; ?>
   </section>
+  <?php if ($acceptedSpecialRequest !== ''): ?>
+    <section class="card" aria-label="Customer special request"><div class="label">Customer Special Request</div><div class="value"><?= quotation_sanitize_html($acceptedSpecialRequest) ?></div></section>
+  <?php endif; ?>
   <?php if ($rows !== []): ?>
     <h2 class="section-title">Accepted system / project details</h2>
     <table><thead><tr><th>#</th><th>Item / detail</th><th>Qty</th><th>Unit</th></tr></thead><tbody>
