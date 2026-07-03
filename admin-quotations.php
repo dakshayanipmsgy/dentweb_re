@@ -1685,7 +1685,7 @@ body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px
 
 </style></head>
 <body class="admin-shell commercial-admin"><main class="wrap commercial-shell">
-<header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Quotations</h1><p class="muted">Build the customer offer, then continue it through agreement, dispatch advice, delivery challan, and invoice.</p></div><nav class="commercial-header__actions" aria-label="Page actions"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php">Document Center</a><a class="btn commercial-header__primary" href="admin-quotations.php?tab=editor">+ New Quotation</a></nav></header>
+<header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Quotations</h1><p class="muted">Build the customer offer, then continue it through agreement, delivery, invoice, and receipt.</p></div><nav class="commercial-header__actions" aria-label="Page actions"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php">Document Center</a><a class="btn commercial-header__primary" href="admin-quotations.php?tab=editor">+ New Quotation</a></nav></header>
 <?= render_commercial_lifecycle('quotation') ?>
 <div data-workspace-root>
 <nav class="quotation-tabs workspace-tabs" data-workspace-tabs="fetch" aria-label="Quotation workspace">

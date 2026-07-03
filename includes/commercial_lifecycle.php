@@ -10,10 +10,11 @@ if (!function_exists('commercial_lifecycle_stages')) {
     {
         return [
             'quotation' => ['label' => 'Quotation', 'href' => 'admin-quotations.php'],
-            'agreement' => ['label' => 'Vendor Consumer Agreement', 'href' => 'admin-agreements.php'],
+            'agreement' => ['label' => 'Agreement', 'href' => 'admin-agreements.php'],
             'dispatch_advice' => ['label' => 'Dispatch Advice', 'href' => 'admin-dispatch-advices.php'],
-            'challan' => ['label' => 'Delivery Challan', 'href' => 'admin-challans.php'],
+            'challan' => ['label' => 'Challan', 'href' => 'admin-challans.php'],
             'invoice' => ['label' => 'Invoice', 'href' => 'admin-invoices.php'],
+            'receipt' => ['label' => 'Receipt', 'href' => 'admin-documents.php?tab=accepted_customers'],
         ];
     }
 }
