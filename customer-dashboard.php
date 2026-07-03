@@ -63,7 +63,7 @@ $customerFinalReceipts = [];
 if (is_array($customerQuote)) {
     $customerPaymentSummary = documents_payment_summary_for_quote($customerQuote);
     $customerPaymentRequests = array_values(array_filter($customerPaymentSummary['requests'], static function (array $request): bool {
-        return !empty($request['visibility_to_customer']) && !in_array(strtolower((string) ($request['status'] ?? '')), ['cancelled'], true);
+        return !empty($request['visibility_to_customer']) && empty($request['archived_flag']) && !in_array(strtolower((string) ($request['status'] ?? '')), ['cancelled'], true);
     }));
     $customerFinalReceipts = documents_final_receipts_for_quote((string) ($customerQuote['id'] ?? ''));
 }
@@ -439,7 +439,7 @@ $customerInr = static fn(float $amount): string => '₹' . number_format($amount
             </div>
             <h3>Active Payment Requests</h3>
             <?php if ($customerPaymentRequests === []): ?>
-              <p style="margin: 0; color: #4b5563;">No visible payment requests.</p>
+              <p style="margin: 0; color: #4b5563;">No customer-visible payment requests.</p>
             <?php else: ?>
               <div class="complaints-table-wrapper"><table class="complaint-table"><thead><tr><th>Date</th><th>Amount</th><th>Reason</th><th>Due</th><th>Status</th><th>Note</th></tr></thead><tbody>
               <?php foreach ($customerPaymentRequests as $request): ?>
