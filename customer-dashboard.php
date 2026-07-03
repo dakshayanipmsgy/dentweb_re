@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/includes/customer_portal.php';
 require_once __DIR__ . '/includes/customer_complaints.php';
+require_once __DIR__ . '/admin/includes/documents_helpers.php';
 
 $store = new CustomerFsStore();
 customer_portal_require_login();
@@ -49,6 +50,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['complaint_action'] ?? '') 
 }
 
 $customerComplaints = get_complaints_by_customer((string) ($customer['mobile'] ?? ''));
+$customerMobile = normalize_customer_mobile((string) ($customer['mobile'] ?? ''));
+$customerQuotes = array_values(array_filter(documents_list_quotes(), static function (array $quote) use ($customerMobile): bool {
+    return normalize_customer_mobile((string) ($quote['customer_mobile'] ?? '')) === $customerMobile
+        && documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')) === 'accepted'
+        && !empty($quote['is_current_version']);
+}));
+$customerQuote = $customerQuotes[0] ?? null;
+$customerPaymentSummary = ['quotation_amount' => 0, 'total_received' => 0, 'outstanding' => 0, 'requests' => [], 'active_request_count' => 0, 'last_request' => null];
+$customerPaymentRequests = [];
+$customerFinalReceipts = [];
+if (is_array($customerQuote)) {
+    $customerPaymentSummary = documents_payment_summary_for_quote($customerQuote);
+    $customerPaymentRequests = array_values(array_filter($customerPaymentSummary['requests'], static function (array $request): bool {
+        return !empty($request['visibility_to_customer']) && !in_array(strtolower((string) ($request['status'] ?? '')), ['cancelled'], true);
+    }));
+    $customerFinalReceipts = documents_final_receipts_for_quote((string) ($customerQuote['id'] ?? ''));
+}
+$customerInr = static fn(float $amount): string => '₹' . number_format($amount, 2);
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -402,6 +422,42 @@ $customerComplaints = get_complaints_by_customer((string) ($customer['mobile'] ?
               <p class="tile-value"><?= customer_portal_safe($customer['complaints_raised'] ?? '') ?></p>
             </div>
           </div>
+        </div>
+
+
+
+        <div class="dashboard-card payments-card">
+          <h2 style="margin-top: 0; margin-bottom: 0.25rem;">Payments</h2>
+          <?php if (!is_array($customerQuote)): ?>
+            <p style="margin: 0; color: #4b5563;">No accepted project payment summary is available yet.</p>
+          <?php else: ?>
+            <div class="details-grid" style="margin-top: 0.75rem;">
+              <div class="details-tile"><p class="tile-label">Total project amount</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $customerPaymentSummary['quotation_amount'])) ?></p></div>
+              <div class="details-tile"><p class="tile-label">Total paid</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $customerPaymentSummary['total_received'])) ?></p></div>
+              <div class="details-tile"><p class="tile-label">Total outstanding</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $customerPaymentSummary['outstanding'])) ?></p></div>
+              <div class="details-tile"><p class="tile-label">Next due amount</p><p class="tile-value"><?php $latestVisible = $customerPaymentRequests[0] ?? null; ?><?= $latestVisible ? customer_portal_safe($customerInr((float) ($latestVisible['outstanding_against_request'] ?? $latestVisible['amount_requested'] ?? 0))) : '—' ?></p></div>
+            </div>
+            <h3>Active Payment Requests</h3>
+            <?php if ($customerPaymentRequests === []): ?>
+              <p style="margin: 0; color: #4b5563;">No visible payment requests.</p>
+            <?php else: ?>
+              <div class="complaints-table-wrapper"><table class="complaint-table"><thead><tr><th>Date</th><th>Amount</th><th>Reason</th><th>Due</th><th>Status</th><th>Note</th></tr></thead><tbody>
+              <?php foreach ($customerPaymentRequests as $request): ?>
+                <tr><td><?= customer_portal_safe(substr((string) ($request['created_at'] ?? ''), 0, 10)) ?></td><td><?= customer_portal_safe($customerInr((float) ($request['amount_requested'] ?? 0))) ?></td><td><?= customer_portal_safe(documents_payment_request_reason_label($request)) ?></td><td><?= customer_portal_safe((string) ($request['due_date'] ?? '')) ?></td><td><?= customer_portal_safe(ucwords(str_replace('_', ' ', (string) ($request['status'] ?? 'draft')))) ?></td><td><?= nl2br(customer_portal_safe((string) ($request['message'] ?? ''))) ?></td></tr>
+              <?php endforeach; ?>
+              </tbody></table></div>
+            <?php endif; ?>
+            <h3>Payment History</h3>
+            <?php if ($customerFinalReceipts === []): ?>
+              <p style="margin: 0; color: #4b5563;">No finalized payments received yet.</p>
+            <?php else: ?>
+              <div class="complaints-table-wrapper"><table class="complaint-table"><thead><tr><th>Date</th><th>Amount paid</th><th>Mode / Reference</th><th>Receipt</th></tr></thead><tbody>
+              <?php foreach ($customerFinalReceipts as $receipt): ?>
+                <tr><td><?= customer_portal_safe((string) ($receipt['date_received'] ?? $receipt['receipt_date'] ?? '')) ?></td><td><?= customer_portal_safe($customerInr((float) ($receipt['amount_rs'] ?? $receipt['amount_received'] ?? 0))) ?></td><td><?= customer_portal_safe(trim((string) ($receipt['mode'] ?? '') . ' ' . (string) ($receipt['txn_ref'] ?? $receipt['reference'] ?? ''))) ?></td><td><a target="_blank" rel="noreferrer" href="receipt-view.php?rid=<?= urlencode((string) ($receipt['id'] ?? '')) ?>"><?= customer_portal_safe((string) ($receipt['receipt_number'] ?? $receipt['id'] ?? 'Receipt')) ?></a></td></tr>
+              <?php endforeach; ?>
+              </tbody></table></div>
+            <?php endif; ?>
+          <?php endif; ?>
         </div>
 
         <div class="dashboard-card handover-card">
