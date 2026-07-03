@@ -462,3 +462,35 @@ form :is(button,input[type="submit"]):disabled { cursor:not-allowed; opacity:.65
 .workflow-badges{display:flex;flex-wrap:wrap;gap:.3rem;min-width:220px}.workflow-badge{display:inline-flex;align-items:center;gap:.25rem;padding:.24rem .48rem;border-radius:999px;font-size:.68rem;font-weight:800;white-space:nowrap}.workflow-badge:before{content:'✓'}.workflow-badge.is-complete{background:#e3f5ec;color:#166534}.workflow-badge.is-missing{background:#f1f5f9;color:#64748b}.workflow-badge.is-missing:before{content:'–'}.debug-record{max-height:65vh;overflow:auto;padding:.85rem;white-space:pre-wrap}.checkbox-field{display:flex;align-items:center;gap:.45rem;min-height:38px}.checkbox-field input{width:auto}.commercial-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:.75rem;flex-wrap:wrap}.commercial-toolbar h2{margin-bottom:.2rem}.list-toolbar{margin:.85rem 0}.responsive-table{overflow:visible}.responsive-table table{display:table}.responsive-table td:last-child{min-width:180px}
 @media(max-width:900px){.responsive-table{overflow-x:auto;padding-bottom:5rem}.responsive-table table{min-width:850px}.row-action-group{flex-wrap:nowrap}.commercial-flow-strip{scroll-snap-type:x proximity}.commercial-flow-strip a{scroll-snap-align:center}.workspace-tabs{position:static}}
 @media(max-width:620px){.commercial-header{padding:.85rem!important}.commercial-flow-strip{margin-bottom:.7rem}.workspace-tabs a{padding:.5rem .65rem}.responsive-table{margin-inline:0}.row-action-group .btn{white-space:nowrap}.workflow-badges{min-width:180px}}
+
+/* Unified commercial module visual system. */
+.commercial-admin{background:#f4f7fb;color:var(--admin-text)}
+.commercial-shell{display:grid;gap:1rem}
+.commercial-admin .card{margin:0 0 1rem;padding:1rem 1.1rem;border:1px solid var(--admin-border);border-radius:16px;background:#fff;box-shadow:var(--admin-shadow-soft)}
+.commercial-header{margin:0;background:linear-gradient(135deg,#ffffff 0%,#f2f8f5 100%)!important;border:1px solid var(--admin-border)!important;border-radius:18px!important}
+.commercial-header__actions .btn,.commercial-admin .btn{min-height:2.25rem;border-radius:10px;padding:.5rem .78rem;font-size:.84rem;font-weight:750;line-height:1.1}
+.commercial-admin .btn:not(.secondary):not(.quiet):not(.danger):not(.warn),.commercial-header__primary{background:var(--admin-primary)!important;color:#fff!important;border:1px solid var(--admin-primary)!important}
+.commercial-admin .btn.secondary,.commercial-admin .btn.quiet{background:#fff!important;color:var(--admin-text)!important;border:1px solid var(--admin-border-strong)!important}
+.commercial-flow-strip{position:relative;margin:0 0 1rem;padding:.45rem;border-radius:16px;background:rgba(255,255,255,.96);box-shadow:var(--admin-shadow-soft)}
+.commercial-flow-strip a{border:1px solid transparent;border-radius:11px;white-space:nowrap}
+.commercial-flow-strip a.active,.commercial-flow-strip a:hover{background:var(--admin-primary)!important;border-color:var(--admin-primary)!important;color:#fff!important}
+.commercial-admin .workspace-tabs,.commercial-admin .quotation-tabs{margin:0 0 1rem;border-radius:15px;background:rgba(255,255,255,.96)}
+.commercial-admin .workspace-panel.active{display:block}
+.commercial-admin .commercial-toolbar,.commercial-admin .list-toolbar,.commercial-admin .editor-intro{display:flex;align-items:flex-end;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin-bottom:.85rem}
+.commercial-admin .responsive-table,.commercial-admin .list-table-wrap{width:100%;overflow:visible;border:1px solid var(--admin-border);border-radius:14px;background:#fff}
+.commercial-admin .responsive-table table,.commercial-admin .list-table-wrap table{display:table;width:100%;min-width:850px;margin:0;border-collapse:collapse}
+.commercial-admin table th,.commercial-admin table td{border:0;border-bottom:1px solid var(--admin-border);padding:.72rem .7rem;text-align:left;vertical-align:top;font-size:.86rem}
+.commercial-admin table th{background:#f2f8f5;color:var(--admin-muted);font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.045em}
+.commercial-admin table tbody tr:hover{background:#fbfdfc}
+.commercial-admin .status-badge,.commercial-admin .status-pill{display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .58rem;border:1px solid #cfe5dc;border-radius:999px;background:#edf7f2;color:var(--admin-primary);font-size:.72rem;font-weight:800;white-space:nowrap}
+.commercial-admin .status-badge--archived,.commercial-admin .status-badge--cancelled,.commercial-admin .status-badge--rejected{background:#fef2f2;color:#991b1b;border-color:#fecaca}
+.commercial-admin .status-badge--draft,.commercial-admin .status-badge--pending,.commercial-admin .status-badge--warning{background:#fffbeb;color:#92400e;border-color:#fde68a}
+.commercial-admin .status-badge--accepted,.commercial-admin .status-badge--approved,.commercial-admin .status-badge--final,.commercial-admin .status-badge--finalized,.commercial-admin .status-badge--delivered,.commercial-admin .status-badge--issued{background:#ecfdf5;color:#166534;border-color:#bbf7d0}
+.commercial-admin .row-action-group,.commercial-admin .list-actions{display:flex;gap:.42rem;align-items:flex-start;flex-wrap:wrap;min-width:0}
+.commercial-admin .more-actions__menu,.commercial-admin .more-menu{position:absolute;right:0;z-index:30;display:grid;gap:.42rem;min-width:220px;margin-top:.35rem;padding:.55rem;border:1px solid var(--admin-border);border-radius:12px;background:#fff;box-shadow:var(--admin-shadow)}
+.commercial-admin .more-actions:not([open])>.more-actions__menu{display:none}
+.commercial-admin .more-actions__menu .secondary-actions{display:grid;gap:.42rem;margin:0}
+.commercial-admin .more-actions__menu .btn,.commercial-admin .more-actions__menu form{width:100%;box-sizing:border-box;margin:0;text-align:center}
+.commercial-admin .empty-state{padding:2rem!important;color:var(--admin-muted);text-align:center;background:#fbfdfc}
+.commercial-admin .empty-state strong{display:block;color:var(--admin-text);margin-bottom:.2rem}
+@media(max-width:900px){.commercial-admin .responsive-table,.commercial-admin .list-table-wrap{overflow-x:auto;padding-bottom:4rem}.commercial-admin .row-action-group,.commercial-admin .list-actions{flex-wrap:nowrap}.commercial-admin .more-actions__menu,.commercial-admin .more-menu{position:fixed;right:.75rem;left:.75rem;bottom:.75rem}}
