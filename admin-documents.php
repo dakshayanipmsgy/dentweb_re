@@ -446,8 +446,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'capacity_kwp' => safe_text((string) ($quote['capacity_kwp'] ?? '')),
         ];
         $finishDocumentAction = static function (string $docType, string $docId, bool $created, string $message) use ($wantsJson, $sendJsonResponse, $documentActionUrl, $documentActionLabel, $quoteContext): void {
+            $openUrl = $documentActionUrl($docType, $docId);
             if (!$wantsJson) {
-                header('Location: ' . $documentActionUrl($docType, $docId) . ($docType === 'agreement' ? '&status=success&message=' . urlencode($message) : ''));
+                header('Location: ' . $openUrl . ($docType === 'agreement' ? '&status=success&message=' . urlencode($message) : ''));
                 exit;
             }
             $sendJsonResponse([
@@ -458,8 +459,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'type' => $docType,
                     'label' => $documentActionLabel($docType),
                     'id' => $docId,
-                    'url' => $documentActionUrl($docType, $docId),
+                    'url' => $openUrl,
                 ],
+                'open_url' => $openUrl,
                 'context' => $quoteContext,
             ]);
         };
@@ -720,7 +722,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $failDocumentAction('Invoice created but could not be loaded.');
             }
 
-            $salesInvoice = documents_sales_document_defaults('invoice');
+            $salesInvoice = documents_get_sales_document('invoice', $invoiceId) ?: documents_sales_document_defaults('invoice');
             $salesInvoice['id'] = $invoiceId;
             $salesInvoice['quotation_id'] = (string) ($quote['id'] ?? '');
             $salesInvoice['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
@@ -1101,6 +1103,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectDocuments($tab, 'error', 'Document not found.', $view !== '' ? ['view' => $view] : []);
         }
 
+        if ($mappedType === 'invoice') {
+            $invoiceDoc = documents_get_invoice($docId);
+            if (is_array($invoiceDoc)) {
+                if ($shouldArchive) {
+                    $invoiceDoc = documents_set_archived($invoiceDoc, [
+                        'type' => 'admin',
+                        'id' => (string) ($user['id'] ?? ''),
+                        'name' => (string) ($user['full_name'] ?? 'Admin'),
+                    ]);
+                } else {
+                    $invoiceDoc = documents_set_unarchived($invoiceDoc);
+                    if (strtolower((string) ($invoiceDoc['status'] ?? '')) === 'active') {
+                        $invoiceDoc['status'] = 'Draft';
+                    }
+                }
+                $invoiceDoc['updated_at'] = date('c');
+                documents_save_invoice($invoiceDoc);
+            }
+        }
+
         if ($shouldArchive) {
             $document = documents_set_archived($document, [
                 'type' => 'admin',
@@ -1109,6 +1131,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
         } else {
             $document = documents_set_unarchived($document);
+            if ($mappedType === 'invoice' && strtolower((string) ($document['status'] ?? '')) === 'active') {
+                $document['status'] = 'Draft';
+            }
         }
         $document['updated_at'] = date('c');
         $saved = documents_save_sales_document($mappedType, $document);
@@ -3874,7 +3899,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           <form method="get" class="filter-grid list-toolbar"><input type="hidden" name="tab" value="accepted_customers" /><div><label>Search customer / mobile</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div><div><label>Archive visibility</label><label class="checkbox-field"><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived</label></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form>
           <div class="responsive-table"><table><thead><tr><th>Accepted quotation</th><th>Customer</th><th>System</th><th>Workflow</th><th>Actions</th></tr></thead><tbody>
           <?php foreach ($acceptedRows as $row): $quote=$row['quote']; $qid=(string)($quote['id']??''); $workflow=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Dispatch Advice'=>array_values(array_filter(documents_dispatch_advices_for_quote($qid), static fn(array $row): bool => !documents_is_archived($row)))!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[]]; ?>
-          <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Enter</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php foreach ([['create_agreement','Create/Open Agreement'],['create_dispatch_advice','Create/Open Dispatch Advice'],['create_delivery_challan','Create/Open Challan'],['create_invoice','Create/Open Invoice']] as $docAction): ?><form method="post" class="document-action-form" data-document-action="1" data-document-label="<?= htmlspecialchars($docAction[1], ENT_QUOTES) ?>" data-quote-no="<?= htmlspecialchars((string)($quote['quote_no']??$qid), ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($quote['customer_name']??''), ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars((string)($quote['customer_mobile']??''), ENT_QUOTES) ?>"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="<?= htmlspecialchars($docAction[0], ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn secondary" type="submit"><?= htmlspecialchars($docAction[1], ENT_QUOTES) ?></button></form><?php endforeach; ?><?php if($isAdmin && empty($row['is_archived'])):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
+          <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Enter</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php foreach ([['create_agreement','Create/Open Agreement'],['create_dispatch_advice','Create/Open Dispatch Advice'],['create_delivery_challan','Create/Open Challan'],['create_invoice','Create/Open Invoice']] as $docAction): ?><form method="post" class="document-action-form" data-document-action="1" data-document-label="<?= htmlspecialchars($docAction[1], ENT_QUOTES) ?>" data-quote-no="<?= htmlspecialchars((string)($quote['quote_no']??$qid), ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($quote['customer_name']??''), ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars((string)($quote['customer_mobile']??''), ENT_QUOTES) ?>"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="<?= htmlspecialchars($docAction[0], ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><input type="hidden" name="response_format" value="json"><button class="btn secondary" type="submit"><?= htmlspecialchars($docAction[1], ENT_QUOTES) ?></button></form><?php endforeach; ?><?php if($isAdmin && empty($row['is_archived'])):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
           <?php endforeach; if($acceptedRows===[]):?><tr><td colspan="5" class="empty-state">No accepted customers found.</td></tr><?php endif;?></tbody></table></div>
         <?php endif; ?>
       </section>
@@ -4835,8 +4860,8 @@ document.querySelectorAll('form[data-inventory-form="1"]').forEach(function (for
     status.className='document-action-modal__status'; status.textContent='Creating or locating the document…'; openLink.hidden=true; openLink.removeAttribute('href');
     if(typeof dialog.showModal==='function') dialog.showModal(); else dialog.setAttribute('open','open');
     fetch(form.action || window.location.href,{method:'POST',body:new FormData(form),headers:{'Accept':'application/json','X-Requested-With':'fetch'},credentials:'same-origin'})
-      .then(function(resp){return resp.json().catch(function(){throw new Error('Unexpected server response.');}).then(function(data){if(!resp.ok||!data.ok){throw new Error(data.error||'Document action failed.');}return data;});})
-      .then(function(data){var doc=data.document||{}; status.className='document-action-modal__status is-success'; status.textContent=data.message || ((data.created?'Created ':'Opened ')+(doc.label||'document')+'.'); if(doc.url){openLink.href=doc.url; openLink.textContent='Open/View '+(doc.label||'Document'); openLink.hidden=false;}})
+      .then(function(resp){return resp.text().then(function(text){var data; try{data=JSON.parse(text);}catch(e){throw new Error('The server did not return JSON for this document action. Please retry; if it continues, share this response preview: '+text.slice(0,160));} if(!resp.ok||!data.ok){throw new Error(data.error||'Document action failed.');} return data;});})
+      .then(function(data){var doc=data.document||{}, openUrl=(doc.url||data.open_url||''); status.className='document-action-modal__status is-success'; status.textContent=data.message || ((data.created?'Created ':'Opened ')+(doc.label||'document')+'.'); if(openUrl){openLink.href=openUrl; openLink.textContent=(doc.type==='invoice'?'Open/View Invoice':'Open/View '+(doc.label||'Document')); openLink.hidden=false;}})
       .catch(function(err){status.className='document-action-modal__status is-error'; status.textContent=err.message || 'Document action failed.';});
   });
 })();
