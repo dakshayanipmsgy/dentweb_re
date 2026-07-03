@@ -251,7 +251,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = safe_text($_POST['action'] ?? '');
 
-    $employeeAllowedActions = ['create_inventory_tx', 'edit_inventory_tx', 'save_inventory_edits', 'import_inventory_stock_in_csv', 'create_receipt', 'save_receipt_draft', 'finalize_receipt'];
+    $employeeAllowedActions = ['create_inventory_tx', 'edit_inventory_tx', 'save_inventory_edits', 'import_inventory_stock_in_csv', 'create_receipt', 'save_receipt_draft', 'finalize_receipt', 'create_payment_request', 'cancel_payment_request', 'mark_payment_request_sent'];
     if (!$isAdmin && !in_array($action, $employeeAllowedActions, true)) {
         $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
     }
@@ -292,6 +292,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? 'Company profile saved. Warning: PAN format looks unusual (expected ABCDE1234F).'
             : 'Company profile saved successfully.';
         $redirectWith('company', 'success', $msg);
+    }
+
+
+    if (in_array($action, ['create_payment_request', 'cancel_payment_request', 'mark_payment_request_sent'], true)) {
+        $tab = 'accepted_customers';
+        $view = safe_text($_POST['quotation_id'] ?? $_POST['return_view'] ?? '');
+        $viewer = ['role' => $isAdmin ? 'admin' : 'employee', 'id' => (string) ($user['id'] ?? ''), 'name' => (string) ($user['full_name'] ?? ($isAdmin ? 'Admin' : 'Employee'))];
+
+        if ($action === 'cancel_payment_request') {
+            $requestId = safe_text($_POST['payment_request_id'] ?? '');
+            $request = documents_get_payment_request($requestId);
+            if ($request === null) { $redirectDocuments($tab, 'error', 'Payment request not found.', $view !== '' ? ['view' => $view] : []); }
+            $request['status'] = 'cancelled';
+            $request['updated_at'] = date('c');
+            $saved = documents_save_payment_request($request);
+            $redirectDocuments($tab, ($saved['ok'] ?? false) ? 'success' : 'error', ($saved['ok'] ?? false) ? 'Payment request cancelled.' : 'Unable to cancel payment request.', ['view' => (string) ($request['quotation_id'] ?? $view)]);
+        }
+
+        if ($action === 'mark_payment_request_sent') {
+            $requestId = safe_text($_POST['payment_request_id'] ?? '');
+            $via = safe_text($_POST['sent_via'] ?? 'generated');
+            $request = documents_get_payment_request($requestId);
+            if ($request === null) { $redirectDocuments($tab, 'error', 'Payment request not found.', $view !== '' ? ['view' => $view] : []); }
+            if (!in_array(strtolower((string) ($request['status'] ?? '')), ['cancelled','paid'], true)) { $request['status'] = 'sent'; }
+            $request['sent_via'] = $via; $request['sent_at'] = date('c'); $request['sent_by'] = $viewer;
+            $saved = documents_save_payment_request($request);
+            $redirectDocuments($tab, ($saved['ok'] ?? false) ? 'success' : 'error', ($saved['ok'] ?? false) ? 'Payment request marked as sent/generated.' : 'Unable to update payment request.', ['view' => (string) ($request['quotation_id'] ?? $view)]);
+        }
+
+        $quote = $view !== '' ? documents_get_quote($view) : null;
+        if ($quote === null) { $redirectDocuments($tab, 'error', 'Accepted quotation not found.'); }
+        $quote = documents_quote_prepare($quote);
+        if (documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')) !== 'accepted' || empty($quote['is_current_version']) || $isArchivedRecord($quote)) {
+            $redirectDocuments($tab, 'error', 'Payment requests can only be created for current accepted quotations.', ['view' => $view]);
+        }
+        $amount = round((float) ($_POST['amount_requested'] ?? 0), 2);
+        $reason = safe_text($_POST['reason'] ?? '');
+        $customReason = safe_text($_POST['custom_reason'] ?? '');
+        $mode = safe_text($_POST['request_mode'] ?? 'portal_only');
+        $summary = documents_payment_summary_for_quote($quote, documents_final_receipts_for_quote((string) ($quote['id'] ?? '')));
+        if ($amount <= 0) { $redirectDocuments($tab, 'error', 'Requested amount must be greater than zero.', ['view' => $view, 'action' => 'request_payment']); }
+        if ($amount > (float) $summary['outstanding']) { $redirectDocuments($tab, 'error', 'Requested amount cannot exceed current outstanding amount.', ['view' => $view, 'action' => 'request_payment']); }
+        if ($reason === '') { $redirectDocuments($tab, 'error', 'Payment request reason is required.', ['view' => $view, 'action' => 'request_payment']); }
+        if ($reason === 'Custom Reason' && $customReason === '') { $redirectDocuments($tab, 'error', 'Custom reason is required.', ['view' => $view, 'action' => 'request_payment']); }
+        $request = documents_payment_request_defaults();
+        $request['id'] = documents_generate_payment_request_id();
+        $request['quotation_id'] = (string) ($quote['id'] ?? '');
+        $request['customer_mobile'] = normalize_customer_mobile((string) ($quote['customer_mobile'] ?? ''));
+        $request['customer_name'] = safe_text((string) ($quote['customer_name'] ?? ''));
+        $request['quotation_amount'] = (float) $summary['quotation_amount'];
+        $request['amount_requested'] = $amount;
+        $request['outstanding_against_request'] = $amount;
+        $request['reason'] = $reason; $request['custom_reason'] = $customReason;
+        $request['message'] = safe_multiline_text((string) ($_POST['message'] ?? ''));
+        $request['due_date'] = safe_text($_POST['due_date'] ?? '');
+        $request['request_mode'] = in_array($mode, ['phone','whatsapp','email','letter','portal_only'], true) ? $mode : 'portal_only';
+        $request['status'] = $request['request_mode'] === 'phone' ? 'phone_requested' : 'draft';
+        $request['visibility_to_customer'] = ($_POST['visibility_to_customer'] ?? '1') === '1';
+        $request['internal_notes'] = safe_multiline_text((string) ($_POST['internal_notes'] ?? ''));
+        $request['customer_response'] = safe_multiline_text((string) ($_POST['customer_response'] ?? ''));
+        $request['follow_up_date'] = safe_text($_POST['follow_up_date'] ?? '');
+        $request['created_by'] = $viewer;
+        $saved = documents_save_payment_request($request);
+        $redirectDocuments($tab, ($saved['ok'] ?? false) ? 'success' : 'error', ($saved['ok'] ?? false) ? 'Payment request saved. Receipts remain the source of received payment.' : 'Unable to save payment request.', ['view' => (string) ($quote['id'] ?? '')]);
     }
 
     if (in_array($action, ['create_agreement', 'create_receipt', 'create_delivery_challan', 'create_invoice'], true)) {
@@ -804,6 +868,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mode = safe_text($_POST['mode'] ?? (string) ($receipt['mode'] ?? ''));
         $txnRef = safe_text($_POST['txn_ref'] ?? $_POST['reference'] ?? (string) ($receipt['txn_ref'] ?? $receipt['reference'] ?? ''));
         $notes = safe_text($_POST['notes'] ?? (string) ($receipt['notes'] ?? ''));
+        $linkedPaymentRequestId = safe_text($_POST['payment_request_id'] ?? (string) ($receipt['payment_request_id'] ?? ''));
 
         if ($action === 'finalize_receipt' && $amount <= 0) {
             $redirectDocuments($tab, 'error', 'Amount must be greater than 0 to finalize receipt.', ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => $receiptId]);
@@ -817,6 +882,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $receipt['txn_ref'] = $txnRef;
         $receipt['reference'] = $txnRef;
         $receipt['notes'] = $notes;
+        $receipt['payment_request_id'] = $linkedPaymentRequestId;
         $receipt['status'] = ($action === 'finalize_receipt') ? 'final' : 'draft';
 
         $saved = documents_save_sales_document('receipt', $receipt);
@@ -824,6 +890,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectDocuments($tab, 'error', 'Unable to save receipt.', ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => $receiptId]);
         }
 
+        if ($action === 'finalize_receipt' && $linkedPaymentRequestId !== '') {
+            $payReq = documents_get_payment_request($linkedPaymentRequestId);
+            if (is_array($payReq) && (string)($payReq['quotation_id'] ?? '') === (string)($quote['id'] ?? '')) {
+                $ids = is_array($payReq['linked_receipt_ids'] ?? null) ? $payReq['linked_receipt_ids'] : [];
+                $ids[] = $receiptId;
+                $payReq['linked_receipt_ids'] = array_values(array_unique($ids));
+                documents_save_payment_request(documents_payment_request_refresh_from_receipts($payReq));
+            }
+        }
         $msg = $action === 'finalize_receipt' ? 'Receipt finalized.' : 'Receipt draft saved.';
         $redirectDocuments($tab, 'success', $msg, ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => $receiptId]);
     }
@@ -3051,6 +3126,7 @@ foreach ($quotes as $quote) {
         $received += (float) ($receipt['amount_rs'] ?? $receipt['amount_received'] ?? $receipt['amount'] ?? 0);
     }
     $receivable = $quotationAmount - $received;
+    $paymentSummary = documents_payment_summary_for_quote($quote, $receiptsByQuote[(string) ($quote['id'] ?? '')] ?? []);
     $acceptedRows[] = [
         'quote' => $quote,
         'quotation_amount' => $quotationAmount,
@@ -3058,6 +3134,7 @@ foreach ($quotes as $quote) {
         'receivables' => $receivable,
         'advance' => $received > $quotationAmount,
         'is_archived' => $isArchived,
+        'payment_summary' => $paymentSummary,
     ];
 }
 
@@ -3176,6 +3253,18 @@ $workspaceDetails = [
 ];
 $activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace', 'Manage document settings and customer workflows.'];
 
+$printPaymentRequestId = safe_text($_GET['payment_request_id'] ?? '');
+if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_request' && $printPaymentRequestId !== '') {
+    $request = documents_get_payment_request($printPaymentRequestId);
+    if ($request === null) { http_response_code(404); echo 'Payment request not found.'; exit; }
+    $quote = documents_get_quote((string) ($request['quotation_id'] ?? ''));
+    $summary = is_array($quote) ? documents_payment_summary_for_quote($quote) : [];
+    $request = documents_payment_request_refresh_from_receipts($request);
+    $publicMessage = documents_build_payment_request_message($request, $summary);
+    ?><!doctype html><html><head><meta charset="utf-8"><title>Payment Request <?= htmlspecialchars((string)($request['id'] ?? ''), ENT_QUOTES) ?></title><style>body{font-family:Arial,sans-serif;margin:32px;line-height:1.5}.letter{max-width:760px;margin:auto}.meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:20px 0}.box{border:1px solid #ddd;padding:10px;border-radius:8px}pre{white-space:pre-wrap;font-family:inherit}@media print{button{display:none}}</style></head><body><div class="letter"><button onclick="window.print()">Print</button><h1>Dakshayani Enterprises</h1><h2>Payment Request</h2><div class="meta"><div class="box"><strong>Customer</strong><br><?= htmlspecialchars((string)($request['customer_name'] ?? ''), ENT_QUOTES) ?><br><?= htmlspecialchars((string)($request['customer_mobile'] ?? ''), ENT_QUOTES) ?></div><div class="box"><strong>Reference</strong><br><?= htmlspecialchars((string)($request['quotation_id'] ?? ''), ENT_QUOTES) ?><br><?= htmlspecialchars((string)($request['id'] ?? ''), ENT_QUOTES) ?></div><div class="box"><strong>Requested Amount</strong><br><?= htmlspecialchars($inr((float)($request['amount_requested'] ?? 0)), ENT_QUOTES) ?></div><div class="box"><strong>Reason / Due Date</strong><br><?= htmlspecialchars(documents_payment_request_reason_label($request), ENT_QUOTES) ?><br><?= htmlspecialchars((string)($request['due_date'] ?? ''), ENT_QUOTES) ?></div></div><pre><?= htmlspecialchars($publicMessage, ENT_QUOTES) ?></pre></div></body></html><?php
+    exit;
+}
+
 ?>
 <!doctype html>
 <html lang="en">
@@ -3290,6 +3379,10 @@ $activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace'
             }
             $packQuoteAmount = (float) ($packQuote['calc']['gross_payable'] ?? $packQuote['calc']['final_price_incl_gst'] ?? $packQuote['calc']['grand_total'] ?? 0);
             $packRemainingReceivable = $packQuoteAmount - $packFinalReceived;
+            $packPaymentSummary = documents_payment_summary_for_quote($packQuote, $packReceiptsActive);
+            $packPaymentRequests = documents_payment_requests_by_quote($packQuoteId);
+            $packCanRequestPayment = documents_quote_normalize_status((string)($packQuote['status'] ?? 'draft')) === 'accepted' && !empty($packQuote['is_current_version']) && !documents_is_archived($packQuote);
+            $editingPaymentRequest = ($packAction === 'request_payment' && $packCanRequestPayment) ? documents_payment_request_defaults() : null;
             $editingReceipt = null;
             if ($packAction === 'edit_receipt' && $packReceiptId !== '') {
                 $editingReceipt = documents_get_sales_document('receipt', $packReceiptId);
@@ -3411,7 +3504,36 @@ $activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace'
             </table>
           <?php endif; ?>
 
-          <h3>C) Payment Receipts</h3>
+          <h3>C) Payment Requests</h3>
+          <div class="card" style="padding:10px;margin-bottom:10px;display:flex;gap:14px;flex-wrap:wrap">
+            <div><strong>Total project:</strong> <?= htmlspecialchars($inr((float)$packPaymentSummary['quotation_amount']), ENT_QUOTES) ?></div>
+            <div><strong>Received (final receipts):</strong> <?= htmlspecialchars($inr((float)$packPaymentSummary['total_received']), ENT_QUOTES) ?></div>
+            <div><strong>Outstanding:</strong> <?= htmlspecialchars($inr((float)$packPaymentSummary['outstanding']), ENT_QUOTES) ?></div>
+            <div><strong>Active requests:</strong> <?= (int)$packPaymentSummary['active_request_count'] ?></div>
+          </div>
+          <?php if ($packCanRequestPayment): ?><p><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$packQuoteId,'action'=>'request_payment']), ENT_QUOTES) ?>">Request Payment</a></p><?php else: ?><p class="muted">Payment requests are available only for current accepted quotations.</p><?php endif; ?>
+          <?php if ($editingPaymentRequest !== null): ?>
+            <div class="card" style="padding:12px;margin-bottom:12px;">
+              <h4 style="margin:0 0 8px 0;">New Payment Request</h4>
+              <form method="post">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                <input type="hidden" name="action" value="create_payment_request" />
+                <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+                <div class="grid"><label>Quotation ID<input readonly value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>"></label><label>Customer<input readonly value="<?= htmlspecialchars((string)($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?>"></label><label>Mobile<input readonly value="<?= htmlspecialchars((string)($packQuote['customer_mobile'] ?? ''), ENT_QUOTES) ?>"></label><label>Outstanding<input readonly value="<?= htmlspecialchars($inr((float)$packPaymentSummary['outstanding']), ENT_QUOTES) ?>"></label></div>
+                <div class="grid"><label>Requested amount (₹)<input type="number" step="0.01" min="0.01" max="<?= htmlspecialchars((string)(float)$packPaymentSummary['outstanding'], ENT_QUOTES) ?>" name="amount_requested" required></label><label>Reason<select name="reason" required><?php foreach(['Advance Payment','Material Procurement Payment','Work Start Payment','Installation Progress Payment','Meter / Net Metering Stage Payment','Final Balance Payment','Custom Reason'] as $reasonOpt): ?><option value="<?= htmlspecialchars($reasonOpt, ENT_QUOTES) ?>"><?= htmlspecialchars($reasonOpt, ENT_QUOTES) ?></option><?php endforeach; ?></select></label><label>Custom reason<input name="custom_reason"></label><label>Due date<input type="date" name="due_date"></label><label>Mode<select name="request_mode"><option value="phone">Phone</option><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="letter">Letter</option><option value="portal_only">Portal only</option></select></label><label>Visible to customer<select name="visibility_to_customer"><option value="1">Visible to customer</option><option value="0">Internal only</option></select></label><label>Follow-up date<input type="date" name="follow_up_date"></label></div>
+                <label>Customer-facing message/note<textarea name="message"></textarea></label>
+                <label>Customer response (for phone requests)<textarea name="customer_response"></textarea></label>
+                <label>Internal notes (hidden from customer)<textarea name="internal_notes"></textarea></label>
+                <button class="btn" type="submit">Save Payment Request</button> <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$packQuoteId]), ENT_QUOTES) ?>">Cancel</a>
+              </form>
+            </div>
+          <?php endif; ?>
+          <table><thead><tr><th>Request</th><th>Amount</th><th>Reason</th><th>Status</th><th>Follow-up / Notes</th><th>Actions</th></tr></thead><tbody>
+          <?php foreach ($packPaymentRequests as $payReq): $payReq=documents_payment_request_refresh_from_receipts($payReq); $payMsg=documents_build_payment_request_message($payReq,$packPaymentSummary); ?>
+            <tr><td><?= htmlspecialchars((string)($payReq['id'] ?? ''), ENT_QUOTES) ?><br><span class="muted"><?= htmlspecialchars((string)($payReq['created_at'] ?? ''), ENT_QUOTES) ?></span><?= empty($payReq['visibility_to_customer']) ? '<br><span class="pill warn">Internal Only</span>' : '' ?></td><td><?= htmlspecialchars($inr((float)($payReq['amount_requested'] ?? 0)), ENT_QUOTES) ?><br><span class="muted">Due <?= htmlspecialchars((string)($payReq['due_date'] ?? '—'), ENT_QUOTES) ?></span></td><td><?= htmlspecialchars(documents_payment_request_reason_label($payReq), ENT_QUOTES) ?></td><td><span class="pill"><?= htmlspecialchars(ucwords(str_replace('_',' ',(string)($payReq['status'] ?? 'draft'))), ENT_QUOTES) ?></span><br><span class="muted"><?= htmlspecialchars((string)($payReq['sent_via'] ?? ''), ENT_QUOTES) ?> <?= htmlspecialchars((string)($payReq['sent_at'] ?? ''), ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($payReq['follow_up_date'] ?? ''), ENT_QUOTES) ?><br><span class="muted"><?= nl2br(htmlspecialchars((string)($payReq['internal_notes'] ?? ''), ENT_QUOTES)) ?></span></td><td class="row-actions"><a class="btn secondary" target="_blank" rel="noopener" href="<?= htmlspecialchars(documents_payment_request_whatsapp_url($payReq,$payMsg), ENT_QUOTES) ?>">WhatsApp</a><a class="btn secondary" href="<?= htmlspecialchars(documents_payment_request_mailto($payReq,$payMsg), ENT_QUOTES) ?>">Email</a><a class="btn secondary" target="_blank" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','action'=>'print_payment_request','payment_request_id'=>(string)($payReq['id'] ?? '')]), ENT_QUOTES) ?>">Print</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="mark_payment_request_sent"><input type="hidden" name="payment_request_id" value="<?= htmlspecialchars((string)($payReq['id']??''),ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId,ENT_QUOTES) ?>"><input type="hidden" name="sent_via" value="generated"><button class="btn secondary" type="submit">Mark Sent</button></form><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="cancel_payment_request"><input type="hidden" name="payment_request_id" value="<?= htmlspecialchars((string)($payReq['id']??''),ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId,ENT_QUOTES) ?>"><button class="btn warn" type="submit">Cancel</button></form></td></tr>
+          <?php endforeach; if ($packPaymentRequests === []): ?><tr><td colspan="6" class="muted">No payment requests yet.</td></tr><?php endif; ?></tbody></table>
+
+          <h3>D) Payment Receipts</h3>
           <div class="card" style="padding:10px;margin-bottom:10px;display:flex;gap:14px;flex-wrap:wrap">
             <div><strong>Total received (final):</strong> <?= htmlspecialchars($inr($packFinalReceived), ENT_QUOTES) ?></div>
             <div><strong>Remaining receivable:</strong> <?= htmlspecialchars($inr($packRemainingReceivable), ENT_QUOTES) ?></div>
@@ -3451,6 +3573,9 @@ $activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace'
                   </label>
                   <label>Txn / Ref
                     <input type="text" name="txn_ref" value="<?= htmlspecialchars((string) ($editingReceipt['txn_ref'] ?? $editingReceipt['reference'] ?? ''), ENT_QUOTES) ?>" <?= $isReceiptFinal ? 'readonly' : '' ?> />
+                  </label>
+                  <label>Link payment request
+                    <select name="payment_request_id" <?= $isReceiptFinal ? 'disabled' : '' ?>><option value="">No linked request</option><?php foreach ($packPaymentRequests as $linkReq): if (in_array(strtolower((string)($linkReq['status'] ?? '')), ['cancelled','paid'], true)) { continue; } ?><option value="<?= htmlspecialchars((string)($linkReq['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($editingReceipt['payment_request_id'] ?? '') === (string)($linkReq['id'] ?? '') ? 'selected' : '' ?>><?= htmlspecialchars((string)($linkReq['id'] ?? '') . ' - ' . $inr((float)($linkReq['amount_requested'] ?? 0)), ENT_QUOTES) ?></option><?php endforeach; ?></select>
                   </label>
                 </div>
                 <label>Notes
@@ -3531,10 +3656,11 @@ $activeWorkspaceDetail = $workspaceDetails[$activeTab] ?? ['Documents workspace'
         <?php else: ?>
           <div class="commercial-toolbar"><div><h2>Accepted Customers &amp; Receipts</h2><p class="muted-helper">Continue every accepted quotation through its complete commercial document lifecycle.</p></div></div>
           <form method="get" class="filter-grid list-toolbar"><input type="hidden" name="tab" value="accepted_customers" /><div><label>Search customer / mobile</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div><div><label>Archive visibility</label><label class="checkbox-field"><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived</label></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form>
-          <div class="responsive-table"><table><thead><tr><th>Accepted quotation</th><th>Customer</th><th>System</th><th>Amount</th><th>Workflow</th><th>Actions</th></tr></thead><tbody>
+          <div class="responsive-table"><table><thead><tr><th>Accepted quotation</th><th>Customer</th><th>System</th><th>Payment Summary</th><th>Payment Requests</th><th>Workflow</th><th>Actions</th></tr></thead><tbody>
           <?php foreach ($acceptedRows as $row): $quote=$row['quote']; $qid=(string)($quote['id']??''); $workflow=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[],'Receipt'=>$collectByQuote($salesReceipts,$qid,false)!==[]]; ?>
-          <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td class="quote-amount"><?= htmlspecialchars($inr((float)$row['quotation_amount']),ENT_QUOTES) ?><br><span class="muted-helper"><?= htmlspecialchars($inr((float)$row['payment_received']),ENT_QUOTES) ?> received</span></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Open</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php if($isAdmin && empty($row['is_archived'])):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
-          <?php endforeach; if($acceptedRows===[]):?><tr><td colspan="6" class="empty-state">No accepted customers found.</td></tr><?php endif;?></tbody></table></div>
+          <?php $paySummary = $row['payment_summary'] ?? []; $lastReq = is_array($paySummary['last_request'] ?? null) ? $paySummary['last_request'] : null; $payBadge = ((float)($row['receivables'] ?? 0) <= 0) ? 'Fully Paid' : (((int)($paySummary['active_request_count'] ?? 0) > 0) ? 'Request Sent' : 'Payment Pending'); ?>
+          <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td class="quote-amount"><?= htmlspecialchars($inr((float)$row['quotation_amount']),ENT_QUOTES) ?><br><span class="muted-helper"><?= htmlspecialchars($inr((float)$row['payment_received']),ENT_QUOTES) ?> received</span><br><span class="muted-helper"><?= htmlspecialchars($inr((float)$row['receivables']),ENT_QUOTES) ?> outstanding</span><br><span class="pill <?= $payBadge==='Fully Paid'?'':'warn' ?>"><?= htmlspecialchars($payBadge,ENT_QUOTES) ?></span></td><td><strong><?= (int)($paySummary['active_request_count'] ?? 0) ?></strong> active<br><?php if($lastReq): ?><span class="muted-helper">Last: <?= htmlspecialchars(ucwords(str_replace('_',' ',(string)($lastReq['status']??''))),ENT_QUOTES) ?> <?= htmlspecialchars(substr((string)($lastReq['created_at']??''),0,10),ENT_QUOTES) ?></span><?php else: ?><span class="muted-helper">No Request Yet</span><?php endif; ?></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">View Payments</a><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid,'action'=>'request_payment']),ENT_QUOTES) ?>">Request Payment</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php if($isAdmin && empty($row['is_archived'])):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
+          <?php endforeach; if($acceptedRows===[]):?><tr><td colspan="7" class="empty-state">No accepted customers found.</td></tr><?php endif;?></tbody></table></div>
         <?php endif; ?>
       </section>
     <?php endif; ?>

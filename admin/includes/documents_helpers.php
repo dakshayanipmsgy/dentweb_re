@@ -7384,3 +7384,135 @@ function documents_challan_apply_admin_transition(array $c, string $action, arra
     else return ['ok'=>false,'changed'=>false,'document'=>$c,'message'=>'Unsupported action.'];
     $c['updated_at']=date('c'); $c['status_audit'][]=['event'=>$action,'at'=>date('c'),'actor'=>$actor,'reason'=>$context['reason']??'']; documents_save_challan($c); return ['ok'=>true,'changed'=>true,'document'=>$c,'message'=>'Updated.'];
 }
+
+function documents_payment_requests_path(): string
+{
+    return documents_base_dir() . '/payment_requests.json';
+}
+
+function documents_ensure_payment_request_store(): void
+{
+    $path = documents_payment_requests_path();
+    $dir = dirname($path);
+    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+    if (!is_file($path)) { json_save($path, []); }
+}
+
+function documents_list_payment_requests(): array
+{
+    documents_ensure_payment_request_store();
+    $rows = json_load(documents_payment_requests_path(), []);
+    $rows = is_array($rows) ? array_values(array_filter($rows, 'is_array')) : [];
+    usort($rows, static fn(array $a, array $b): int => strcmp((string)($b['created_at'] ?? ''), (string)($a['created_at'] ?? '')));
+    return $rows;
+}
+
+function documents_save_payment_requests(array $rows): array
+{
+    documents_ensure_payment_request_store();
+    return json_save(documents_payment_requests_path(), array_values(array_filter($rows, 'is_array')));
+}
+
+function documents_generate_payment_request_id(): string
+{
+    return documents_generate_simple_document_id('PAYREQ');
+}
+
+function documents_payment_request_defaults(): array
+{
+    return ['id'=>'','quotation_id'=>'','customer_mobile'=>'','customer_name'=>'','quotation_amount'=>0,'amount_requested'=>0,'amount_paid_against_request'=>0,'outstanding_against_request'=>0,'reason'=>'','custom_reason'=>'','message'=>'','due_date'=>'','status'=>'draft','visibility_to_customer'=>true,'request_mode'=>'portal_only','sent_via'=>'','sent_at'=>'','sent_by'=>['role'=>'','id'=>'','name'=>''],'created_by'=>['role'=>'','id'=>'','name'=>''],'created_at'=>'','updated_at'=>'','linked_receipt_ids'=>[],'internal_notes'=>'','customer_response'=>'','follow_up_date'=>''];
+}
+
+function documents_get_payment_request(string $id): ?array
+{
+    foreach (documents_list_payment_requests() as $row) { if ((string)($row['id'] ?? '') === $id) { return array_merge(documents_payment_request_defaults(), $row); } }
+    return null;
+}
+
+function documents_save_payment_request(array $request): array
+{
+    $base = documents_payment_request_defaults();
+    $request = array_merge($base, $request);
+    if ((string)$request['id'] === '') { $request['id'] = documents_generate_payment_request_id(); }
+    if ((string)$request['created_at'] === '') { $request['created_at'] = date('c'); }
+    $request['updated_at'] = date('c');
+    $request['customer_mobile'] = normalize_customer_mobile((string)$request['customer_mobile']);
+    $request['amount_requested'] = round((float)$request['amount_requested'], 2);
+    $request['amount_paid_against_request'] = round((float)$request['amount_paid_against_request'], 2);
+    $request['outstanding_against_request'] = max(0, round($request['amount_requested'] - $request['amount_paid_against_request'], 2));
+    $rows = documents_list_payment_requests(); $found = false;
+    foreach ($rows as $i => $row) { if ((string)($row['id'] ?? '') === (string)$request['id']) { $rows[$i] = $request; $found = true; break; } }
+    if (!$found) { $rows[] = $request; }
+    return documents_save_payment_requests($rows);
+}
+
+function documents_payment_requests_by_quote(string $quoteId): array
+{
+    return array_values(array_filter(documents_list_payment_requests(), static fn(array $r): bool => (string)($r['quotation_id'] ?? '') === $quoteId));
+}
+
+function documents_payment_requests_by_mobile(string $mobile): array
+{
+    $mobile = normalize_customer_mobile($mobile);
+    return array_values(array_filter(documents_list_payment_requests(), static fn(array $r): bool => normalize_customer_mobile((string)($r['customer_mobile'] ?? '')) === $mobile));
+}
+
+function documents_final_receipts_for_quote(string $quoteId): array
+{
+    return array_values(array_filter(documents_list_sales_documents('receipt'), static function(array $r) use ($quoteId): bool { return (string)($r['quotation_id'] ?? '') === $quoteId && strtolower(trim((string)($r['status'] ?? ''))) === 'final' && empty($r['archived_flag']) && empty($r['archived']); }));
+}
+
+function documents_payment_request_refresh_from_receipts(array $request): array
+{
+    $paid = 0.0; $linked = is_array($request['linked_receipt_ids'] ?? null) ? $request['linked_receipt_ids'] : [];
+    foreach (documents_final_receipts_for_quote((string)($request['quotation_id'] ?? '')) as $receipt) {
+        if ($linked !== [] && !in_array((string)($receipt['id'] ?? ''), $linked, true)) { continue; }
+        if ($linked === []) { continue; }
+        $paid += (float)($receipt['amount_rs'] ?? $receipt['amount_received'] ?? $receipt['amount'] ?? 0);
+    }
+    $request['amount_paid_against_request'] = round($paid, 2);
+    $request['outstanding_against_request'] = max(0, round((float)($request['amount_requested'] ?? 0) - $paid, 2));
+    $status = strtolower((string)($request['status'] ?? 'draft'));
+    if (!in_array($status, ['cancelled'], true) && $paid > 0) { $request['status'] = $request['outstanding_against_request'] <= 0 ? 'paid' : 'partially_paid'; }
+    return $request;
+}
+
+function documents_payment_summary_for_quote(array $quote, array $receipts = null): array
+{
+    $quoteId = (string)($quote['id'] ?? ''); $amount = (float)($quote['calc']['gross_payable'] ?? $quote['calc']['final_price_incl_gst'] ?? $quote['calc']['grand_total'] ?? 0); $received = 0.0;
+    foreach (($receipts ?? documents_final_receipts_for_quote($quoteId)) as $r) { if (strtolower(trim((string)($r['status'] ?? ''))) === 'final' && empty($r['archived_flag']) && empty($r['archived'])) { $received += (float)($r['amount_rs'] ?? $r['amount_received'] ?? $r['amount'] ?? 0); } }
+    $requests = documents_payment_requests_by_quote($quoteId); $active = array_values(array_filter($requests, static fn(array $r): bool => !in_array(strtolower((string)($r['status'] ?? '')), ['cancelled','paid'], true)));
+    return ['quotation_amount'=>$amount,'total_received'=>$received,'outstanding'=>max(0,$amount-$received),'requests'=>$requests,'active_request_count'=>count($active),'last_request'=>$requests[0] ?? null];
+}
+
+function documents_payment_request_reason_label(array $request): string
+{
+    return (string)($request['reason'] ?? '') === 'Custom Reason' ? (string)($request['custom_reason'] ?? '') : (string)($request['reason'] ?? '');
+}
+
+function documents_build_payment_request_message(array $request, array $summary = []): string
+{
+    $fmt = static fn($n): string => '₹' . number_format((float)$n, 2);
+    $lines = ['Dear ' . ((string)($request['customer_name'] ?? '') ?: 'Customer') . ',', '', 'This is a payment request from Dakshayani Enterprises for your solar project.', '', 'Requested Amount: ' . $fmt($request['amount_requested'] ?? 0), 'Reason: ' . documents_payment_request_reason_label($request)];
+    if ((string)($request['due_date'] ?? '') !== '') { $lines[] = 'Due Date: ' . (string)$request['due_date']; }
+    $lines[] = 'Project / Quotation Reference: ' . (string)($request['quotation_id'] ?? '');
+    $lines[] = 'Total Project Amount: ' . $fmt($request['quotation_amount'] ?? ($summary['quotation_amount'] ?? 0));
+    $lines[] = 'Total Paid So Far: ' . $fmt($summary['total_received'] ?? 0);
+    $lines[] = 'Total Outstanding: ' . $fmt($summary['outstanding'] ?? 0);
+    if (trim((string)($request['message'] ?? '')) !== '') { $lines[] = ''; $lines[] = (string)$request['message']; }
+    $lines[] = ''; $lines[] = 'Kindly make the payment so that we can proceed with the next stage of work.'; $lines[] = ''; $lines[] = 'Regards,'; $lines[] = 'Dakshayani Enterprises';
+    return implode("\n", $lines);
+}
+
+function documents_payment_request_whatsapp_url(array $request, string $message): string
+{
+    $digits = preg_replace('/\D+/', '', (string)($request['customer_mobile'] ?? '')) ?? '';
+    if (strlen($digits) === 10) { $digits = '91' . $digits; }
+    return $digits !== '' ? 'https://wa.me/' . rawurlencode($digits) . '?text=' . rawurlencode($message) : 'https://wa.me/?text=' . rawurlencode($message);
+}
+
+function documents_payment_request_mailto(array $request, string $message): string
+{
+    $subject = 'Payment Request - Dakshayani Enterprises - ' . (string)($request['customer_name'] ?? '') . ' - ' . (string)($request['quotation_id'] ?? '');
+    return 'mailto:?subject=' . rawurlencode($subject) . '&body=' . rawurlencode($message);
+}
