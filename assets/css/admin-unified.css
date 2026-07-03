@@ -461,3 +461,31 @@ form :is(button,input[type="submit"]):disabled { cursor:not-allowed; opacity:.65
 .workflow-badges{display:flex;flex-wrap:wrap;gap:.3rem;min-width:220px}.workflow-badge{display:inline-flex;align-items:center;gap:.25rem;padding:.24rem .48rem;border-radius:999px;font-size:.68rem;font-weight:800;white-space:nowrap}.workflow-badge:before{content:'✓'}.workflow-badge.is-complete{background:#e3f5ec;color:#166534}.workflow-badge.is-missing{background:#f1f5f9;color:#64748b}.workflow-badge.is-missing:before{content:'–'}.debug-record{max-height:65vh;overflow:auto;padding:.85rem;white-space:pre-wrap}.checkbox-field{display:flex;align-items:center;gap:.45rem;min-height:38px}.checkbox-field input{width:auto}.commercial-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:.75rem;flex-wrap:wrap}.commercial-toolbar h2{margin-bottom:.2rem}.list-toolbar{margin:.85rem 0}.responsive-table{overflow:visible}.responsive-table table{display:table}.responsive-table td:last-child{min-width:180px}
 @media(max-width:900px){.responsive-table{overflow-x:auto;padding-bottom:5rem}.responsive-table table{min-width:850px}.row-action-group{flex-wrap:nowrap}.commercial-flow-strip{scroll-snap-type:x proximity}.commercial-flow-strip a{scroll-snap-align:center}.workspace-tabs{position:static}}
 @media(max-width:620px){.commercial-header{padding:.85rem!important}.commercial-flow-strip{margin-bottom:.7rem}.workspace-tabs a{padding:.5rem .65rem}.responsive-table{margin-inline:0}.row-action-group .btn{white-space:nowrap}.workflow-badges{min-width:180px}}
+
+/* Shared commercial document page refinements. Keep document workspaces visually consistent. */
+.commercial-admin{background:#f4f8f6;color:var(--admin-text)}
+.commercial-admin :is(.card,.panel){padding:1rem;border:1px solid var(--admin-border);border-radius:14px;background:#fff;box-shadow:var(--admin-shadow-soft)}
+.commercial-admin .card + .card,.commercial-admin .card + .form-section-card,.commercial-admin .form-section-card + .card{margin-top:1rem}
+.commercial-admin :is(.btn,button.btn){display:inline-flex;align-items:center;justify-content:center;gap:.35rem;min-height:36px;padding:.5rem .75rem;border-radius:9px;font-size:.84rem;font-weight:750;line-height:1.2;text-decoration:none;cursor:pointer}
+.commercial-admin .btn.secondary{background:#fff!important;color:var(--admin-text)!important;border:1px solid var(--admin-border-strong)!important}
+.commercial-admin .btn.secondary:hover{background:#f8fbfa!important;border-color:var(--admin-primary)!important;color:var(--admin-primary)!important}
+.commercial-admin :is(label,.field-label){color:var(--admin-text);font-size:.82rem;font-weight:750}
+.commercial-admin :is(input,select,textarea){min-height:38px;border:1px solid var(--admin-border-strong);border-radius:9px;background:#fff;color:var(--admin-text)}
+.commercial-admin textarea{min-height:80px}
+.commercial-admin :is(.muted,.muted-helper){color:var(--admin-muted)!important;font-size:.82rem;line-height:1.45}
+.commercial-admin :is(.quotation-tabs,.tabs.admin-documents__tabs){position:sticky;top:.35rem;z-index:20;display:flex;gap:.35rem;align-items:center;overflow-x:auto;margin:0 0 1rem;padding:.4rem;border:1px solid var(--admin-border);border-radius:13px;background:rgba(255,255,255,.96);box-shadow:var(--admin-shadow-soft);backdrop-filter:blur(10px);scrollbar-width:thin}
+.commercial-admin :is(.quotation-tabs,.tabs.admin-documents__tabs) a{flex:0 0 auto;padding:.58rem .78rem;border-radius:9px;background:transparent;color:var(--admin-muted);font-size:.82rem;font-weight:750;text-decoration:none}
+.commercial-admin :is(.quotation-tabs,.tabs.admin-documents__tabs) a:hover,.commercial-admin :is(.quotation-tabs,.tabs.admin-documents__tabs) a.active{background:var(--admin-primary);color:#fff}
+.commercial-admin .responsive-table{overflow:visible;border:1px solid var(--admin-border);border-radius:13px;background:#fff}
+.commercial-admin .responsive-table table,.commercial-admin table{width:100%;border-collapse:collapse}
+.commercial-admin :is(th,td){border-bottom:1px solid var(--admin-border);padding:.7rem;text-align:left;vertical-align:top}
+.commercial-admin th{background:#f2f8f5;color:var(--admin-muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em}
+.quote-customer{font-weight:800;color:var(--admin-text)}.quote-amount{text-align:right;white-space:nowrap;font-weight:800;color:var(--admin-text)}
+.commercial-admin :is(.status-pill,.pill){display:inline-flex;align-items:center;gap:.25rem;padding:.25rem .55rem;border-radius:999px;background:#edf5f1;color:var(--admin-primary);font-size:.72rem;font-weight:800}.commercial-admin .pill.warn{background:#fffbeb;color:#92400e}.commercial-admin .pill.archived{background:#feeceb;color:#9b3434}
+.commercial-admin :is(.list-actions,.row-actions,.row-action-group){display:flex;gap:.4rem;align-items:flex-start;flex-wrap:wrap}
+.commercial-admin :is(.more-menu,.more-actions__menu){position:absolute;right:0;z-index:25;display:grid;gap:.4rem;min-width:210px;margin-top:.35rem;padding:.55rem;border:1px solid var(--admin-border);border-radius:11px;background:#fff;box-shadow:var(--admin-shadow)}
+.commercial-admin .more-actions:not([open])>.more-actions__menu{display:none}.commercial-admin .more-actions[open]>.more-actions__menu{display:grid}
+.commercial-admin .more-menu :is(form,.btn),.commercial-admin .more-actions__menu :is(form,.btn){width:100%;margin:0;box-sizing:border-box;text-align:center}
+.commercial-admin .empty-state{padding:2rem!important;color:var(--admin-muted)!important;text-align:center;background:#fbfdfc}
+@media(max-width:900px){.commercial-admin .responsive-table{overflow-x:auto;padding-bottom:4rem}.commercial-admin .responsive-table table,.commercial-admin table{min-width:850px}.commercial-admin :is(.row-action-group,.row-actions,.list-actions){flex-wrap:nowrap}.commercial-admin :is(.quotation-tabs,.tabs.admin-documents__tabs){position:static}}
+@media(max-width:620px){.commercial-admin :is(.card,.panel,.form-section-card){padding:.85rem}.commercial-admin :is(.btn,button.btn){white-space:nowrap}.commercial-admin :is(.more-menu,.more-actions__menu){position:fixed;right:.75rem;left:.75rem;bottom:.75rem}.commercial-admin .commercial-header__actions .btn{flex:1 1 auto}}
