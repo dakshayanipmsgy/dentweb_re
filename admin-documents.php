@@ -3335,10 +3335,71 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
     .pill.warn { background:#fef3c7; color:#92400e; }
     .row-actions { display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center; }
     .inline-form { display:inline-block; margin:0; }
+    .accepted-summary {
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+      gap:1rem;
+      align-items:start;
+    }
+    .accepted-summary__card {
+      background:#fff;
+      border:1px solid #dbe7ef;
+      border-radius:16px;
+      box-shadow:0 10px 24px rgba(15,23,42,0.06);
+      padding:1rem;
+      overflow:auto;
+    }
+    .accepted-summary__card h3 {
+      margin:0 0 0.75rem;
+      color:#0f172a;
+      font-size:1.05rem;
+    }
+    .accepted-summary__card--wide { grid-column:1 / -1; }
+    .accepted-context {
+      background:linear-gradient(135deg,#ecfeff,#f8fafc);
+      border:1px solid #bae6fd;
+      border-radius:18px;
+      padding:1rem;
+      margin-bottom:1rem;
+    }
+    .accepted-context__meta,
+    .commercial-card-metrics {
+      display:flex;
+      flex-wrap:wrap;
+      gap:0.75rem 1rem;
+      margin-top:0.65rem;
+    }
+    .commercial-card-metrics > div {
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+      border-radius:12px;
+      padding:0.55rem 0.7rem;
+    }
+    .empty-card-state {
+      background:#f8fafc;
+      border:1px dashed #cbd5e1;
+      border-radius:12px;
+      color:#64748b;
+      padding:0.85rem;
+      margin-bottom:0.75rem;
+    }
+    details.secondary-history {
+      border:1px solid #e2e8f0;
+      border-radius:12px;
+      padding:0.65rem;
+      background:#f8fafc;
+      margin-top:0.8rem;
+    }
+    details.secondary-history summary {
+      cursor:pointer;
+      font-weight:700;
+      color:#334155;
+    }
     @media (max-width: 768px) {
       .admin-documents .page {
         padding: 0.75rem 12px 1rem;
       }
+      .accepted-summary { grid-template-columns:1fr; }
     }
   </style>
 </head>
@@ -3414,7 +3475,16 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             }
           ?>
           <p><a class="btn secondary" href="?tab=accepted_customers">&larr; Back to Accepted Customers</a></p>
-          <h2 style="margin-top:0;">Document Pack: <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></h2>
+          <section class="accepted-context">
+            <h2 style="margin-top:0;">Accepted Customer Commercial Summary: <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></h2>
+            <div class="accepted-context__meta">
+              <span><strong>Quotation:</strong> <?= htmlspecialchars((string) ($packQuote['quote_no'] ?? $packQuoteId), ENT_QUOTES) ?></span>
+              <span><strong>Amount:</strong> <?= htmlspecialchars($inr($packQuoteAmount), ENT_QUOTES) ?></span>
+              <span><strong>Status:</strong> <span class="pill"><?= htmlspecialchars(ucwords(str_replace('_', ' ', documents_quote_normalize_status((string) ($packQuote['status'] ?? 'draft')))), ENT_QUOTES) ?></span></span>
+              <span><strong>Received:</strong> <?= htmlspecialchars($inr($packFinalReceived), ENT_QUOTES) ?></span>
+              <span><strong>Outstanding:</strong> <?= htmlspecialchars($inr($packRemainingReceivable), ENT_QUOTES) ?></span>
+            </div>
+          </section>
           <div class="document-pack-flow" aria-label="Document pack lifecycle">
             <div class="done"><strong>1</strong><span>Quotation<small>Accepted source</small></span></div>
             <div class="<?= $packAgreements !== [] ? 'done' : '' ?>"><strong>2</strong><span>Agreement<small><?= $packAgreements !== [] ? 'Created' : 'Create from quotation' ?></small></span></div>
@@ -3430,47 +3500,15 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             <label><input type="checkbox" name="include_archived_pack" value="1" <?= $includeArchivedPack ? 'checked' : '' ?> onchange="this.form.submit()" /> Include Archived in Pack</label>
           </form>
 
-          <?php $packPackingList = documents_get_packing_list_for_quote($packQuoteId, $includeArchivedPack); ?>
-          <h3>Packing &amp; Dispatch Status</h3>
-          <?php if ($packPackingList !== null): ?>
-            <table><thead><tr><th>Component</th><th>Mode</th><th>Required/Target</th><th>Dispatched</th><th>Status</th></tr></thead><tbody>
-              <?php foreach ((array) ($packPackingList['required_items'] ?? []) as $line): ?>
-                <?php $mode = (string) ($line['mode'] ?? 'fixed_qty'); ?>
-                <tr>
-                  <td><?= htmlspecialchars((string) ($line['component_name_snapshot'] ?? ''), ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars($mode, ENT_QUOTES) ?></td>
-                  <?php if ($mode === 'rule_fulfillment'): ?>
-                    <td>Target <?= htmlspecialchars((string) ((float) ($line['target_wp'] ?? 0)), ENT_QUOTES) ?> Wp</td>
-                    <td><?= htmlspecialchars((string) ((float) ($line['dispatched_wp'] ?? 0)), ENT_QUOTES) ?> Wp</td>
-                    <td><?= !empty($line['fulfilled_flag']) ? '<span class="pill" style="background:#dcfce7;color:#166534">Fulfilled</span>' : ('Remaining ' . htmlspecialchars((string) max(0, (float) ($line['target_wp'] ?? 0) - (float) ($line['dispatched_wp'] ?? 0)), ENT_QUOTES) . ' Wp') ?></td>
-                  <?php elseif ($mode === 'unfixed_manual'): ?>
-                    <td><?= htmlspecialchars((string) (($line['planned_note'] ?? '') ?: 'planned at dispatch'), ENT_QUOTES) ?></td>
-                    <td><?= htmlspecialchars((string) (((float) ($line['dispatched_ft'] ?? 0) > 0) ? (($line['dispatched_ft'] ?? 0) . ' ft') : (($line['dispatched_qty'] ?? 0) . ' ' . ($line['unit'] ?? ''))), ENT_QUOTES) ?></td>
-                    <td><?= htmlspecialchars((string) ($line['dispatched_summary'] ?? ''), ENT_QUOTES) ?></td>
-                  <?php else: ?>
-                    <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ($line['required_ft'] . ' ft') : ($line['required_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
-                    <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ($line['dispatched_ft'] . ' ft') : ($line['dispatched_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
-                    <td><?= htmlspecialchars((string) (((float) ($line['required_ft'] ?? 0) > 0 ? ('Pending ' . $line['pending_ft'] . ' ft') : ('Pending ' . $line['pending_qty'] . ' ' . ($line['unit'] ?? '')))), ENT_QUOTES) ?></td>
-                  <?php endif; ?>
-                </tr>
-                <?php if ($mode === 'rule_fulfillment' && (array) ($line['dispatch_variant_breakdown'] ?? []) !== []): ?>
-                  <tr><td colspan="5"><table><thead><tr><th>Variant</th><th>Wattage</th><th>Qty</th><th>Total Wp</th></tr></thead><tbody><?php foreach ((array) ($line['dispatch_variant_breakdown'] ?? []) as $b): ?><tr><td><?= htmlspecialchars((string) ($b['variant_name_snapshot'] ?? $b['variant_id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($b['wattage_wp'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($b['dispatched_qty'] ?? 0), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($b['dispatched_wp'] ?? 0), ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table></td></tr>
-                <?php endif; ?>
-              <?php endforeach; ?>
-              <?php if ((array) ($packPackingList['required_items'] ?? []) === []): ?><tr><td colspan="5" class="muted">No structured items in packing list.</td></tr><?php endif; ?>
-            </tbody></table>
-            <h4>Dispatch Log</h4>
-            <table><thead><tr><th>Delivery Challan</th><th>Date</th><th>Items Count</th></tr></thead><tbody>
-              <?php foreach ((array) ($packPackingList['dispatch_log'] ?? []) as $dispatchRow): ?>
-                <tr><td><?= htmlspecialchars((string) ($dispatchRow['delivery_challan_id'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($dispatchRow['at'] ?? ''), ENT_QUOTES) ?></td><td><?= count((array) ($dispatchRow['items'] ?? [])) ?></td></tr>
-              <?php endforeach; ?>
-              <?php if ((array) ($packPackingList['dispatch_log'] ?? []) === []): ?><tr><td colspan="3" class="muted">No dispatch yet.</td></tr><?php endif; ?>
-            </tbody></table>
-          <?php else: ?>
-            <p class="muted">No packing list available. It is created automatically only when quotation has structured items.</p>
-          <?php endif; ?>
-
-          <h3>A) Quotation</h3>
+          <div class="accepted-summary">
+          <section class="accepted-summary__card">
+          <h3>Quotation</h3>
+          <div class="commercial-card-metrics">
+            <div><strong>Reference:</strong> <?= htmlspecialchars((string) ($packQuote['quote_no'] ?? $packQuoteId), ENT_QUOTES) ?></div>
+            <div><strong>Customer:</strong> <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></div>
+            <div><strong>Amount:</strong> <?= htmlspecialchars($inr($packQuoteAmount), ENT_QUOTES) ?></div>
+            <div><strong>Status:</strong> <?= htmlspecialchars(ucwords(str_replace('_', ' ', documents_quote_normalize_status((string) ($packQuote['status'] ?? 'draft')))), ENT_QUOTES) ?></div>
+          </div>
           <p>
             <a class="btn secondary" href="quotation-view.php?id=<?= urlencode($packQuoteId) ?>" target="_blank" rel="noopener">View Quotation</a>
             <?php if ($isAdmin && documents_quote_normalize_status((string) ($packQuote['status'] ?? 'draft')) === 'accepted'): ?>
@@ -3485,7 +3523,9 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             <?php if ($isArchivedRecord($packQuote)): ?><span class="pill archived">ARCHIVED</span><?php endif; ?>
           </p>
 
-          <h3>B) Vendor Consumer Agreement</h3>
+          </section>
+          <section class="accepted-summary__card">
+          <h3>Vendor consumer agreement</h3>
           <?php if ($packAgreements === []): ?>
             <form method="post" class="inline-form">
               <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
@@ -3493,7 +3533,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
               <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
               <input type="hidden" name="return_tab" value="accepted_customers" />
               <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
-              <p class="muted">No agreement found. <button class="btn" type="submit">Create Agreement</button></p>
+              <div class="empty-card-state">No agreement exists for this accepted customer yet.</div><button class="btn" type="submit">Create Agreement</button>
             </form>
           <?php else: ?>
             <table>
@@ -3526,8 +3566,10 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             </table>
           <?php endif; ?>
 
-          <h3>C) Payment Requests</h3>
-          <div class="card" style="padding:10px;margin-bottom:10px;display:flex;gap:14px;flex-wrap:wrap">
+          </section>
+          <section class="accepted-summary__card accepted-summary__card--wide">
+          <h3>Payment requests</h3>
+          <div class="commercial-card-metrics">
             <div><strong>Total project:</strong> <?= htmlspecialchars($inr((float)$packPaymentSummary['quotation_amount']), ENT_QUOTES) ?></div>
             <div><strong>Received (final receipts):</strong> <?= htmlspecialchars($inr((float)$packPaymentSummary['total_received']), ENT_QUOTES) ?></div>
             <div><strong>Outstanding:</strong> <?= htmlspecialchars($inr((float)$packPaymentSummary['outstanding']), ENT_QUOTES) ?></div>
@@ -3561,15 +3603,24 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             }
           ?>
           <?php foreach ($paymentRequestGroups as $groupKey => $groupTitle): ?>
+            <?php if (in_array($groupKey, ['cancelled', 'archived'], true)): ?>
+              <details class="secondary-history">
+                <summary><?= htmlspecialchars($groupTitle . ' Requests (' . count($groupedPaymentRequests[$groupKey]) . ')', ENT_QUOTES) ?></summary>
+            <?php endif; ?>
             <h4><?= htmlspecialchars($groupTitle, ENT_QUOTES) ?></h4>
             <table><thead><tr><th>Request</th><th>Amount</th><th>Reason</th><th>Status</th><th>Follow-up / Notes</th><th>Actions</th></tr></thead><tbody>
             <?php foreach ($groupedPaymentRequests[$groupKey] as $payReq): $payMsg=documents_build_payment_request_message($payReq,$packPaymentSummary); $payStatus=strtolower((string)($payReq['status'] ?? 'draft')); $isPayArchived=!empty($payReq['archived_flag']); $isOverdue=(!$isPayArchived && !in_array($payStatus,['paid','cancelled'],true) && (string)($payReq['due_date'] ?? '') !== '' && (string)$payReq['due_date'] < date('Y-m-d')); ?>
               <tr><td><?= htmlspecialchars((string)($payReq['id'] ?? ''), ENT_QUOTES) ?><br><span class="muted"><?= htmlspecialchars((string)($payReq['created_at'] ?? ''), ENT_QUOTES) ?></span><?= empty($payReq['visibility_to_customer']) ? '<br><span class="pill warn">Internal Only</span>' : '' ?></td><td><?= htmlspecialchars($inr((float)($payReq['amount_requested'] ?? 0)), ENT_QUOTES) ?><br><span class="muted">Due <?= htmlspecialchars((string)($payReq['due_date'] ?? '—'), ENT_QUOTES) ?></span></td><td><?= htmlspecialchars(documents_payment_request_reason_label($payReq), ENT_QUOTES) ?></td><td><span class="pill <?= $isPayArchived ? 'archived' : ($isOverdue ? 'warn' : '') ?>"><?= htmlspecialchars($isPayArchived ? 'Archived' : ($isOverdue ? 'Overdue' : ucwords(str_replace('_',' ',(string)($payReq['status'] ?? 'draft')))), ENT_QUOTES) ?></span><br><span class="muted"><?= htmlspecialchars((string)($payReq['sent_via'] ?? ''), ENT_QUOTES) ?> <?= htmlspecialchars((string)($payReq['sent_at'] ?? ''), ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($payReq['follow_up_date'] ?? ''), ENT_QUOTES) ?><br><span class="muted"><?= nl2br(htmlspecialchars((string)($payReq['internal_notes'] ?? ''), ENT_QUOTES)) ?></span></td><td class="row-actions"><a class="btn secondary" target="_blank" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','action'=>'print_payment_request','payment_request_id'=>(string)($payReq['id'] ?? '')]), ENT_QUOTES) ?>">Print</a><?php if (!$isPayArchived && !in_array($payStatus,['cancelled','paid'],true)): ?><a class="btn secondary" target="_blank" rel="noopener" href="<?= htmlspecialchars(documents_payment_request_whatsapp_url($payReq,$payMsg), ENT_QUOTES) ?>">WhatsApp</a><a class="btn secondary" href="<?= htmlspecialchars(documents_payment_request_mailto($payReq,$payMsg), ENT_QUOTES) ?>">Email</a><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="mark_payment_request_sent"><input type="hidden" name="payment_request_id" value="<?= htmlspecialchars((string)($payReq['id']??''),ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId,ENT_QUOTES) ?>"><input type="hidden" name="sent_via" value="generated"><button class="btn secondary" type="submit">Mark Sent</button></form><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="cancel_payment_request"><input type="hidden" name="payment_request_id" value="<?= htmlspecialchars((string)($payReq['id']??''),ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId,ENT_QUOTES) ?>"><button class="btn warn" type="submit">Cancel</button></form><?php elseif (!$isPayArchived && $payStatus === 'cancelled'): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_payment_request"><input type="hidden" name="payment_request_id" value="<?= htmlspecialchars((string)($payReq['id']??''),ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId,ENT_QUOTES) ?>"><button class="btn warn" type="submit">Archive</button></form><?php elseif ($isPayArchived): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="unarchive_payment_request"><input type="hidden" name="payment_request_id" value="<?= htmlspecialchars((string)($payReq['id']??''),ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId,ENT_QUOTES) ?>"><button class="btn secondary" type="submit">Unarchive</button></form><?php endif; ?></td></tr>
             <?php endforeach; if ($groupedPaymentRequests[$groupKey] === []): ?><tr><td colspan="6" class="muted"><?= $groupKey === 'active' ? 'No active payment requests.' : ($groupKey === 'archived' ? 'No archived cancelled requests.' : 'No ' . htmlspecialchars(strtolower($groupTitle), ENT_QUOTES) . ' payment requests.') ?></td></tr><?php endif; ?></tbody></table>
+            <?php if (in_array($groupKey, ['cancelled', 'archived'], true)): ?>
+              </details>
+            <?php endif; ?>
           <?php endforeach; ?>
 
-          <h3>D) Payment Receipts</h3>
-          <div class="card" style="padding:10px;margin-bottom:10px;display:flex;gap:14px;flex-wrap:wrap">
+          </section>
+          <section class="accepted-summary__card accepted-summary__card--wide">
+          <h3>Payment receipts</h3>
+          <div class="commercial-card-metrics">
             <div><strong>Total received (final):</strong> <?= htmlspecialchars($inr($packFinalReceived), ENT_QUOTES) ?></div>
             <div><strong>Remaining receivable:</strong> <?= htmlspecialchars($inr($packRemainingReceivable), ENT_QUOTES) ?></div>
           </div>
@@ -3653,7 +3704,9 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             </tbody>
           </table>
 
-          <h3>D) Delivery Challans</h3>
+          </section>
+          <section class="accepted-summary__card">
+          <h3>Delivery challan</h3>
           <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
             <input type="hidden" name="action" value="create_delivery_challan" />
@@ -3662,20 +3715,21 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
             <button class="btn" type="submit">Create DC</button>
           </form>
-          <table><thead><tr><th>ID</th><th>Date</th><th>Items</th><th>Actions</th></tr></thead><tbody>
+          <table><thead><tr><th>ID</th><th>Date</th><th>Status</th><th>Items</th><th>Actions</th></tr></thead><tbody>
           <?php foreach ($packChallans as $row): ?>
             <tr>
               <td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td>
               <td><?= htmlspecialchars((string) ($row['challan_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td>
+              <td><?= htmlspecialchars((string) ($row['status'] ?? 'draft'), ENT_QUOTES) ?></td>
               <td><?= count(is_array($row['items'] ?? null) ? $row['items'] : []) ?></td>
               <td class="row-actions"><a class="btn secondary" href="challan-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">Open Builder</a> <a class="btn secondary" href="challan-print.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View HTML</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="delivery_challan" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td>
             </tr>
           <?php endforeach; ?>
-          <?php if ($packChallans === []): ?><tr><td colspan="4" class="muted">No delivery challans available.</td></tr><?php endif; ?>
+          <?php if ($packChallans === []): ?><tr><td colspan="5"><div class="empty-card-state">No delivery challan exists yet. Create one when delivery documentation is needed.</div></td></tr><?php endif; ?>
           </tbody></table>
-          </tbody></table>
-
-          <h3>F) Invoice</h3>
+          </section>
+          <section class="accepted-summary__card">
+          <h3>Invoice</h3>
           <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
             <input type="hidden" name="action" value="create_invoice" />
@@ -3684,10 +3738,12 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
             <button class="btn" type="submit">Create Invoice</button>
           </form>
-          <table><thead><tr><th>ID</th><th>Date</th><th>Actions</th></tr></thead><tbody>
-          <?php foreach ($packInvoices as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['invoice_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="admin-invoices.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="invoice" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
-          <?php if ($packInvoices === []): ?><tr><td colspan="3" class="muted">No invoice found.</td></tr><?php endif; ?>
+          <table><thead><tr><th>ID</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+          <?php foreach ($packInvoices as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['invoice_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($row['status'] ?? 'draft'), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="admin-invoices.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="invoice" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
+          <?php if ($packInvoices === []): ?><tr><td colspan="4"><div class="empty-card-state">No invoice exists yet. Create one when the customer is ready for billing.</div></td></tr><?php endif; ?>
           </tbody></table>
+          </section>
+          </div>
         <?php else: ?>
           <div class="commercial-toolbar"><div><h2>Accepted Customers &amp; Receipts</h2><p class="muted-helper">Continue every accepted quotation through its complete commercial document lifecycle.</p></div></div>
           <form method="get" class="filter-grid list-toolbar"><input type="hidden" name="tab" value="accepted_customers" /><div><label>Search customer / mobile</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div><div><label>Archive visibility</label><label class="checkbox-field"><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived</label></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form>
