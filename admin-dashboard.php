@@ -7,6 +7,7 @@ require_once __DIR__ . '/includes/customer_complaints.php';
 require_once __DIR__ . '/includes/leads.php';
 require_once __DIR__ . '/includes/tasks_helpers.php';
 require_once __DIR__ . '/includes/employee_admin.php';
+require_once __DIR__ . '/includes/business_pulse_helpers.php';
 
 require_admin();
 $user = current_user();
@@ -52,8 +53,27 @@ usort($openComplaints, static function (array $left, array $right): int {
     return strcmp($rightTime, $leftTime);
 });
 
-$highlightComplaints = array_slice($openComplaints, 0, 3);
+$highlightComplaints = array_slice($openComplaints, 0, 5);
 $openComplaintCount = count($openComplaints);
+
+$complaintsOpen7 = 0;
+$complaintsOpen15 = 0;
+$complaintsResolvedMonth = 0;
+$complaintsClosedMonth = 0;
+$monthPrefix = date('Y-m');
+foreach ($complaints as $complaint) {
+    $status = strtolower((string) ($complaint['status'] ?? 'open'));
+    $createdDate = substr((string) ($complaint['created_at'] ?? ''), 0, 10);
+    if ($status !== 'closed' && $createdDate !== '') {
+        $ageDays = max(0, (int) floor((time() - strtotime($createdDate)) / 86400));
+        if ($ageDays >= 7) { $complaintsOpen7++; }
+        if ($ageDays >= 15) { $complaintsOpen15++; }
+    }
+    $updatedMonth = substr((string) ($complaint['updated_at'] ?? $complaint['closed_at'] ?? ''), 0, 7);
+    if ($status === 'resolved' && $updatedMonth === $monthPrefix) { $complaintsResolvedMonth++; }
+    if ($status === 'closed' && $updatedMonth === $monthPrefix) { $complaintsClosedMonth++; }
+}
+
 
 $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
 if ($scriptDir === '/' || $scriptDir === '.') {
@@ -82,6 +102,18 @@ $complaintStatusLabels = [
     'closed' => 'Closed',
 ];
 
+$businessPulse = business_pulse_summary();
+$inr = static function (float $amount): string {
+    $negative = $amount < 0;
+    $amount = abs($amount);
+    $parts = explode('.', number_format($amount, 2, '.', ''));
+    $int = $parts[0];
+    $decimal = $parts[1] ?? '00';
+    $last3 = substr($int, -3);
+    $rest = substr($int, 0, -3);
+    if ($rest !== '') { $rest = (preg_replace('/\B(?=(\d{2})+(?!\d))/', ',', $rest) ?? $rest) . ',' . $last3; } else { $rest = $last3; }
+    return ($negative ? '-₹' : '₹') . $rest . '.' . $decimal;
+};
 $leadStats = get_lead_stats_for_dashboard();
 
 $employeeStore = new EmployeeFsStore();
@@ -119,6 +151,19 @@ foreach ($pendingTasks as $task) {
     }
 }
 $pendingTotal = count($pendingTasks);
+$pendingNext3Days = 0;
+$unassignedTasks = 0;
+$overdueByEmployee = [];
+foreach ($pendingTasks as $task) {
+    $due = get_effective_due_date($task);
+    $assigneeId = (string) ($task['assigned_to_id'] ?? '');
+    if ($assigneeId === '') { $unassignedTasks++; }
+    if ($due !== '' && strcmp($due, $today) > 0 && strcmp($due, $upcomingAdminLimit) <= 0) { $pendingNext3Days++; }
+    if (is_overdue($task, $today)) { $overdueByEmployee[$assigneeId] = ($overdueByEmployee[$assigneeId] ?? 0) + 1; }
+}
+arsort($overdueByEmployee);
+$topOverdueEmployeeId = (string) array_key_first($overdueByEmployee);
+$topOverdueEmployee = $topOverdueEmployeeId !== '' ? (string) ($employeeIndex[$topOverdueEmployeeId]['name'] ?? 'Unassigned') : '—';
 
 $atRiskTasks = array_values(array_filter($pendingTasks, static function (array $task) use ($today, $upcomingAdminLimit): bool {
     $due = get_effective_due_date($task);
@@ -453,6 +498,7 @@ $cardConfigs[] = [
       text-decoration: none;
       justify-content: center;
     }
+    .pulse-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:.75rem;margin:0 0 1.25rem}.pulse-section{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:1rem;box-shadow:0 10px 24px rgba(15,23,42,.05);margin-bottom:1rem}.pulse-section h3{margin:0 0 .75rem;color:#0f172a}.pulse-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:.75rem}.pulse-card span{display:block;color:#64748b;font-size:.82rem;font-weight:700}.pulse-card strong{display:block;margin-top:.25rem;color:#0f172a;font-size:1.25rem}.pulse-list{margin:.5rem 0 0;padding-left:1.1rem;color:#334155}
   </style>
 </head>
 <body class="admin-overview admin-shell" data-theme="light">
@@ -554,6 +600,29 @@ $cardConfigs[] = [
         <p>Open the area that needs attention without losing your place.</p>
       </div>
     </div>
+
+    <section class="pulse-section" aria-label="Business Pulse">
+      <h3>Business Pulse</h3>
+      <div class="pulse-grid">
+        <?php foreach ([['Business Booked This FY',$inr($businessPulse['fy_booked'])],['Business Booked This Month',$inr($businessPulse['month_booked'])],['Business Booked Last Month',$inr($businessPulse['last_month_booked'])],['Total Invoiced This FY',$inr($businessPulse['total_invoiced_fy'])],['Total Received This FY',$inr($businessPulse['total_received'])],['Total Outstanding Dues',$inr($businessPulse['total_dues'])],['Collection %',business_pulse_format_pct($businessPulse['collection_pct'])],['Average Project Size',$inr($businessPulse['avg_project'])]] as $m): ?><div class="pulse-card"><span><?= htmlspecialchars($m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars($m[1],ENT_QUOTES) ?></strong></div><?php endforeach; ?>
+      </div>
+    </section>
+    <section class="pulse-section" aria-label="Dues, customers, leads, complaints and tasks">
+      <h3>Money to Collect / Customer Health / Pipeline</h3>
+      <div class="pulse-grid">
+        <?php $b=$businessPulse['dues_buckets']; foreach ([['Total Dues',$inr($businessPulse['total_dues'])],['Due Since 0–7 Days',$inr($b[0])],['Due Since 8–15 Days',$inr($b[1])],['Due Since 16–30 Days',$inr($b[2])],['Due Since 30+ Days',$inr($b[3])],['Customers With Dues',number_format($businessPulse['customers_with_dues'])],['Highest Due Customer',$businessPulse['highest_due'] ? (($businessPulse['highest_due']['quote']['customer_name'] ?? 'Customer').' · '.$inr($businessPulse['highest_due']['due'])) : '—'],['Advance / Overpaid Customers',number_format($businessPulse['advance_customers'])],['Accepted Customers',number_format($businessPulse['accepted_count'])],['New Accepted This Month',number_format($businessPulse['new_accepted_month'])],['Pending Agreement',number_format($businessPulse['pending']['agreement'])],['Pending Dispatch Advice',number_format($businessPulse['pending']['dispatch'])],['Pending Challan',number_format($businessPulse['pending']['challan'])],['Pending Invoice',number_format($businessPulse['pending']['invoice'])],['Pending Payment Request',number_format($businessPulse['pending']['payment_request'])],['Fully Paid Customers',number_format($businessPulse['fully_paid'])],['Total Leads',number_format($leadStats['total_leads'])],['New Leads',number_format($leadStats['new_leads'])],['Site Visit Pending',number_format($leadStats['site_visit_needed'])],['Quotation Pending','—'],['Quotation Sent',number_format($leadStats['quotation_sent'])],['Follow-up Today',number_format($leadStats['today_followups'])],['Overdue Follow-ups',number_format($leadStats['overdue_followups'])],['Lead to Accepted Conversion %', business_pulse_format_pct(business_pulse_collection_pct((float)$businessPulse['accepted_count'], max(1,(float)$leadStats['total_leads'])) )]] as $m): ?><div class="pulse-card"><span><?= htmlspecialchars($m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach; ?>
+      </div>
+    </section>
+
+
+    <section class="pulse-section" aria-label="Service and employee task pressure">
+      <h3>Service / Complaints Health & Employee Task Pressure</h3>
+      <div class="pulse-grid">
+        <?php foreach ([['Open Complaints',number_format($openComplaintCount)],['Unassigned Complaints',number_format($complaintCounts['unassigned'])],['Complaints Open 7+ Days',number_format($complaintsOpen7)],['Complaints Open 15+ Days',number_format($complaintsOpen15)],['Resolved This Month',number_format($complaintsResolvedMonth)],['Closed This Month',number_format($complaintsClosedMonth)],['Average Resolution Time','—'],['Total Pending Tasks',number_format($pendingTotal)],['Overdue Tasks',number_format($pendingOverdue)],['Due Today',number_format($pendingToday)],['Due in Next 3 Days',number_format($pendingNext3Days)],['Employee With Most Overdue Tasks',$topOverdueEmployee],['Unassigned Tasks',number_format($unassignedTasks)]] as $m): ?><div class="pulse-card"><span><?= htmlspecialchars($m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach; ?>
+      </div>
+      <?php if ($highlightComplaints !== []): ?><h4>Latest 5 Active Complaints</h4><ul class="pulse-list"><?php foreach ($highlightComplaints as $complaint): ?><li><?= htmlspecialchars((string)($complaint['customer_name'] ?? $complaint['name'] ?? 'Customer'), ENT_QUOTES) ?> — <?= htmlspecialchars((string)($complaint['category'] ?? $complaint['issue'] ?? $complaint['status'] ?? 'Open'), ENT_QUOTES) ?></li><?php endforeach; ?></ul><?php endif; ?>
+    </section>
+
     <section class="admin-overview__cards" aria-label="Operational summaries">
       <?php foreach ($cardConfigs as $card): ?>
       <?php
