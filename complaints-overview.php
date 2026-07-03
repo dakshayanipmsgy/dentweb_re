@@ -375,12 +375,11 @@ function complaints_overview_render_table(array $filtered, array $customerByMobi
             <td><?= $created ?></td>
             <td>
               <div class="complaint-actions" aria-label="Complaint actions">
-                <?php $complaintId = complaints_overview_safe((string) ($complaint['id'] ?? '')); ?>
-                <a href="complaint-detail.php?id=<?= $complaintId ?>" class="action-link action-link--primary js-complaint-open" data-complaint-id="<?= $complaintId ?>">View / Edit</a>
-                <a href="complaint-detail.php?id=<?= $complaintId ?>&amp;action=notify_whatsapp" class="action-link js-complaint-notify" data-id="<?= $complaintId ?>" data-channel="whatsapp">WhatsApp</a>
-                <a href="complaint-detail.php?id=<?= $complaintId ?>&amp;action=notify_sms" class="action-link js-complaint-notify" data-id="<?= $complaintId ?>" data-channel="sms">SMS</a>
+                <a href="complaint-detail.php?id=<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" class="action-link action-link--primary js-complaint-open" data-complaint-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>">View / Edit</a>
+                <a href="#" class="action-link js-complaint-notify" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" data-channel="whatsapp">WhatsApp</a>
+                <a href="#" class="action-link js-complaint-notify" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" data-channel="sms">SMS</a>
                 <?php if ($status !== 'closed'): ?>
-                  <a href="complaint-detail.php?id=<?= $complaintId ?>&amp;action=close" class="action-link action-link--danger js-complaint-close" data-id="<?= $complaintId ?>">Close</a>
+                  <a href="#" class="action-link action-link--danger js-complaint-close" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>">Close</a>
                 <?php endif; ?>
               </div>
             </td>
