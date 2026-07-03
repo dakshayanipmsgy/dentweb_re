@@ -3583,8 +3583,8 @@ function documents_create_proforma_from_quote(array $quote): array
 function documents_create_invoice_from_quote(array $quote): array
 {
     $quoteId = safe_text((string) ($quote['id'] ?? ''));
-    if (!documents_dispatch_quote_eligible($quote) || documents_delivered_challans_for_quote($quoteId) === []) {
-        return ['ok' => false, 'error' => 'Invoice requires an accepted current quotation and at least one delivered Challan.'];
+    if (!documents_dispatch_quote_eligible($quote)) {
+        return ['ok' => false, 'error' => 'Invoice requires an accepted current quotation.'];
     }
     $links = is_array($quote['links'] ?? null) ? $quote['links'] : [];
     $existingId = safe_text((string) ($links['invoice_id'] ?? ''));
