@@ -1407,6 +1407,9 @@ function documents_invoice_defaults(): array
         'pricing_mode' => 'solar_split_70_30',
         'input_total_gst_inclusive' => 0,
         'calc' => [],
+        'archived_flag' => false,
+        'archived_at' => '',
+        'archived_by' => ['type' => '', 'id' => '', 'name' => ''],
         'created_at' => '',
         'updated_at' => '',
     ];
@@ -3335,6 +3338,43 @@ function documents_save_invoice(array $doc): array
     return json_save(documents_invoices_dir() . '/' . $id . '.json', $doc);
 }
 
+function documents_sync_sales_invoice_from_invoice(array $invoice, array $quote = [], array $viewer = []): array
+{
+    $invoiceId = safe_text((string) ($invoice['id'] ?? ''));
+    if ($invoiceId === '') {
+        return ['ok' => false, 'error' => 'Missing invoice ID'];
+    }
+
+    $snapshot = array_merge(documents_customer_snapshot_defaults(), is_array($invoice['customer_snapshot'] ?? null) ? $invoice['customer_snapshot'] : []);
+    $quoteId = safe_text((string) ($invoice['linked_quote_id'] ?? $invoice['quotation_id'] ?? $quote['id'] ?? ''));
+    $salesInvoice = documents_get_sales_document('invoice', $invoiceId);
+    if ($salesInvoice === null) {
+        $salesInvoice = documents_sales_document_defaults('invoice');
+        $salesInvoice['id'] = $invoiceId;
+        $salesInvoice['created_at'] = (string) ($invoice['created_at'] ?? date('c'));
+        $salesInvoice['created_by'] = [
+            'type' => (string) ($viewer['type'] ?? ''),
+            'id' => (string) ($viewer['id'] ?? ''),
+            'name' => (string) ($viewer['name'] ?? ''),
+        ];
+    }
+
+    $salesInvoice['quotation_id'] = $quoteId;
+    $salesInvoice['customer_mobile'] = normalize_customer_mobile((string) ($invoice['customer_mobile'] ?? $snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+    $salesInvoice['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
+    $salesInvoice['invoice_no'] = safe_text((string) ($invoice['invoice_no'] ?? ''));
+    $salesInvoice['invoice_date'] = safe_text((string) ($salesInvoice['invoice_date'] ?? '')) ?: date('Y-m-d');
+    $salesInvoice['amount'] = (float) ($invoice['input_total_gst_inclusive'] ?? $invoice['calc']['grand_total'] ?? $invoice['calc']['gross_payable'] ?? 0);
+    $salesInvoice['tax_profile_id'] = safe_text((string) ($quote['tax_profile_id'] ?? $salesInvoice['tax_profile_id'] ?? ''));
+    $salesInvoice['tax_breakdown'] = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : (is_array($quote['calc']['tax_breakdown'] ?? null) ? $quote['calc']['tax_breakdown'] : (array) ($salesInvoice['tax_breakdown'] ?? []));
+    $salesInvoice['status'] = documents_is_archived($invoice) ? 'archived' : strtolower(safe_text((string) ($invoice['status'] ?? $salesInvoice['status'] ?? 'draft')));
+    $salesInvoice['archived_flag'] = documents_is_archived($invoice);
+    $salesInvoice['archived_at'] = (string) ($invoice['archived_at'] ?? ($salesInvoice['archived_at'] ?? ''));
+    $salesInvoice['archived_by'] = is_array($invoice['archived_by'] ?? null) ? $invoice['archived_by'] : (is_array($salesInvoice['archived_by'] ?? null) ? $salesInvoice['archived_by'] : ['type' => '', 'id' => '', 'name' => '']);
+
+    return documents_save_sales_document('invoice', $salesInvoice);
+}
+
 function documents_generate_proforma_number(string $segment): array
 {
     $number = documents_generate_document_number('proforma', $segment);
@@ -3601,6 +3641,7 @@ function documents_create_invoice_from_quote(array $quote): array
         $updated = documents_update_draft_invoice_delivery((array) documents_get_invoice($existingId), $quoteId);
         if (!empty($updated['ok'])) {
             documents_save_invoice($updated['invoice']);
+            documents_sync_sales_invoice_from_invoice($updated['invoice'], $quote);
         }
         return ['ok' => true, 'invoice_id' => $existingId, 'error' => ''];
     }
@@ -3639,6 +3680,11 @@ function documents_create_invoice_from_quote(array $quote): array
     if (!$saved['ok']) {
         documents_log('file save failed for invoice quote ' . (string) ($quote['id'] ?? ''));
         return ['ok' => false, 'error' => 'Failed to create invoice draft.'];
+    }
+    $salesSaved = documents_sync_sales_invoice_from_invoice($doc, $quote);
+    if (empty($salesSaved['ok'])) {
+        documents_log('sales invoice sync failed for invoice ' . (string) $doc['id']);
+        return ['ok' => false, 'error' => 'Invoice draft created, but sales invoice record could not be synced.'];
     }
 
     return ['ok' => true, 'invoice_id' => (string) $doc['id'], 'error' => ''];
