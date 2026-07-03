@@ -1407,6 +1407,7 @@ function documents_invoice_defaults(): array
         'pricing_mode' => 'solar_split_70_30',
         'input_total_gst_inclusive' => 0,
         'calc' => [],
+        'quotation_snapshot' => [],
         'created_at' => '',
         'updated_at' => '',
     ];
@@ -3580,6 +3581,97 @@ function documents_create_proforma_from_quote(array $quote): array
     return ['ok' => true, 'proforma_id' => (string) $doc['id'], 'error' => ''];
 }
 
+
+function documents_quote_invoice_item_summary(array $quote): array
+{
+    $settings = documents_get_quote_defaults_settings();
+    $quoteItems = documents_normalize_quote_structured_items(is_array($quote['quote_items'] ?? null) ? $quote['quote_items'] : []);
+    $rows = [];
+    foreach ($quoteItems as $quoteItem) {
+        if (!is_array($quoteItem)) {
+            continue;
+        }
+        $qty = (float) ($quoteItem['qty'] ?? 0);
+        if ($qty <= 0) {
+            continue;
+        }
+        if ((string) ($quoteItem['type'] ?? 'component') === 'kit') {
+            $kit = documents_inventory_get_kit((string) ($quoteItem['kit_id'] ?? ''));
+            $name = safe_text((string) ($quoteItem['name_snapshot'] ?? '')) ?: safe_text((string) ($kit['name'] ?? 'Kit'));
+            $description = safe_multiline_text((string) ($quoteItem['master_description_snapshot'] ?? $quoteItem['description_snapshot'] ?? '')) ?: safe_text((string) ($kit['description'] ?? ''));
+            $hsn = safe_text((string) ($quoteItem['hsn_snapshot'] ?? '')) ?: (safe_text((string) ($settings['defaults']['hsn_solar'] ?? '8541')) ?: '8541');
+            $unit = safe_text((string) ($quoteItem['unit'] ?? '')) ?: 'set';
+        } else {
+            $component = documents_inventory_get_component((string) ($quoteItem['component_id'] ?? ''));
+            $variantSnapshot = is_array($quoteItem['variant_snapshot'] ?? null) ? $quoteItem['variant_snapshot'] : [];
+            $name = safe_text((string) ($quoteItem['name_snapshot'] ?? ''));
+            if ($name === '') {
+                $name = safe_text((string) ($component['name'] ?? 'Component'));
+                $variantName = safe_text((string) ($variantSnapshot['display_name'] ?? ''));
+                if ($variantName !== '') {
+                    $name .= ' (' . $variantName . ')';
+                }
+            }
+            $description = safe_multiline_text((string) ($quoteItem['master_description_snapshot'] ?? $quoteItem['description_snapshot'] ?? '')) ?: safe_text((string) ($component['description'] ?? $component['notes'] ?? ''));
+            $hsn = safe_text((string) ($quoteItem['hsn_snapshot'] ?? '')) ?: (safe_text((string) ($component['hsn'] ?? '')) ?: (safe_text((string) ($settings['defaults']['hsn_solar'] ?? '8541')) ?: '8541'));
+            $unit = safe_text((string) ($quoteItem['unit'] ?? '')) ?: safe_text((string) ($component['default_unit'] ?? ''));
+        }
+        $rows[] = [
+            'name' => $name,
+            'description' => $description,
+            'auto_description' => safe_multiline_text((string) ($quoteItem['auto_description'] ?? '')),
+            'custom_description' => safe_multiline_text((string) ($quoteItem['custom_description'] ?? '')),
+            'hsn' => $hsn,
+            'qty' => $qty,
+            'unit' => $unit,
+        ];
+    }
+    return $rows;
+}
+
+function documents_quote_invoice_customer_fields(array $quote): array
+{
+    $snapshot = documents_quote_resolve_snapshot($quote);
+    $value = static fn($v): string => trim((string) ($v ?? ''));
+    $fields = [
+        ['label' => 'Name', 'value' => $value($quote['customer_name'] ?? $snapshot['name'] ?? '')],
+        ['label' => 'Mobile', 'value' => $value($quote['customer_mobile'] ?? $snapshot['mobile'] ?? '')],
+        ['label' => 'Site Address', 'value' => $value($quote['site_address'] ?? $snapshot['address'] ?? '')],
+        ['label' => 'District', 'value' => $value($quote['district'] ?? $snapshot['district'] ?? '')],
+        ['label' => 'City', 'value' => $value($quote['city'] ?? $snapshot['city'] ?? '')],
+        ['label' => 'State', 'value' => $value($quote['state'] ?? $snapshot['state'] ?? '')],
+        ['label' => 'PIN', 'value' => $value($quote['pin'] ?? $snapshot['pin_code'] ?? '')],
+        ['label' => 'Billing Address', 'value' => $value($quote['billing_address'] ?? '')],
+        ['label' => 'Place of Supply State', 'value' => $value($quote['place_of_supply_state'] ?? '')],
+        ['label' => 'Consumer Account No. (JBVNL)', 'value' => $value($quote['consumer_account_no'] ?? $snapshot['consumer_account_no'] ?? '')],
+        ['label' => 'Meter Number', 'value' => $value($quote['meter_number'] ?? $snapshot['meter_number'] ?? '')],
+        ['label' => 'Meter Serial Number', 'value' => $value($quote['meter_serial_number'] ?? $snapshot['meter_serial_number'] ?? '')],
+        ['label' => 'Application ID', 'value' => $value($quote['application_id'] ?? $snapshot['application_id'] ?? '')],
+        ['label' => 'Application Submitted Date', 'value' => $value($quote['application_submitted_date'] ?? $snapshot['application_submitted_date'] ?? '')],
+        ['label' => 'Sanction Load', 'value' => $value($quote['sanction_load_kwp'] ?? $snapshot['sanction_load_kwp'] ?? '')],
+        ['label' => 'Installed PV Capacity', 'value' => $value($quote['installed_pv_module_capacity_kwp'] ?? $snapshot['installed_pv_module_capacity_kwp'] ?? '')],
+        ['label' => 'Circle', 'value' => $value($quote['circle_name'] ?? $snapshot['circle_name'] ?? '')],
+        ['label' => 'Division', 'value' => $value($quote['division_name'] ?? $snapshot['division_name'] ?? '')],
+        ['label' => 'Sub Division', 'value' => $value($quote['sub_division_name'] ?? $snapshot['sub_division_name'] ?? '')],
+    ];
+    return array_values(array_filter($fields, static fn(array $f): bool => trim((string) ($f['value'] ?? '')) !== ''));
+}
+
+function documents_invoice_quote_snapshot(array $quote): array
+{
+    return [
+        'quote_id' => safe_text((string) ($quote['id'] ?? '')),
+        'quote_no' => safe_text((string) ($quote['quote_no'] ?? '')),
+        'item_summary' => documents_quote_invoice_item_summary($quote),
+        'customer_site_fields' => documents_quote_invoice_customer_fields($quote),
+        'special_requests_text' => trim((string) ($quote['special_requests_text'] ?? $quote['special_requests_inclusive'] ?? '')),
+        'pricing_mode' => safe_text((string) ($quote['pricing_mode'] ?? 'solar_split_70_30')),
+        'input_total_gst_inclusive' => (float) ($quote['input_total_gst_inclusive'] ?? 0),
+        'calc' => is_array($quote['calc'] ?? null) ? $quote['calc'] : [],
+        'tax_breakdown' => is_array($quote['calc']['tax_breakdown'] ?? null) ? $quote['calc']['tax_breakdown'] : (is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : []),
+    ];
+}
+
 function documents_create_invoice_from_quote(array $quote): array
 {
     $quoteId = safe_text((string) ($quote['id'] ?? ''));
@@ -3630,6 +3722,8 @@ function documents_create_invoice_from_quote(array $quote): array
     $doc['pricing_mode'] = safe_text((string) ($quote['pricing_mode'] ?? 'solar_split_70_30'));
     $doc['input_total_gst_inclusive'] = (float) ($quote['input_total_gst_inclusive'] ?? 0);
     $doc['calc'] = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
+    $doc['quotation_snapshot'] = documents_invoice_quote_snapshot($quote);
+    $doc['tax_breakdown'] = is_array($doc['quotation_snapshot']['tax_breakdown'] ?? null) ? $doc['quotation_snapshot']['tax_breakdown'] : [];
     $doc['created_at'] = date('c');
     $doc['updated_at'] = date('c');
     $delivery = documents_update_draft_invoice_delivery($doc, $quoteId);
@@ -4778,6 +4872,13 @@ function documents_update_draft_invoice_delivery(array $invoice, string $quoteId
         'delivery_exception' => $c['delivery_exception'] ?? [], 'items' => $c['items'] ?? [],
     ], $challans);
     $invoice['delivery_summary'] = documents_quote_delivery_summary($quoteId);
+    if (!is_array($invoice['quotation_snapshot'] ?? null) || $invoice['quotation_snapshot'] === []) {
+        $quote = documents_get_quote($quoteId);
+        if (is_array($quote)) {
+            $invoice['quotation_snapshot'] = documents_invoice_quote_snapshot($quote);
+            $invoice['tax_breakdown'] = is_array($invoice['quotation_snapshot']['tax_breakdown'] ?? null) ? $invoice['quotation_snapshot']['tax_breakdown'] : [];
+        }
+    }
     $invoice['updated_at'] = date('c');
     return ['ok' => true, 'error' => '', 'invoice' => $invoice];
 }
