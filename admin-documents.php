@@ -3263,7 +3263,7 @@ $workspaceDetails = [
     'company' => ['Company profile & branding', 'Keep the identity used across every customer-facing document accurate.'],
     'numbering' => ['Numbering rules', 'Manage consistent document references without changing existing records.'],
     'templates' => ['Template sets', 'Maintain reusable wording and layouts for document creation.'],
-    'accepted_customers' => ['Accepted customers', 'Continue accepted quotations through agreement, challan, invoice, and receipt workflows.'],
+    'accepted_customers' => ['Accepted customers', 'Manage accepted customer document packs, payment requests, receipts, and received-payment tracking.'],
     'items' => ['Items & inventory', 'Maintain catalogue, kits, stock movements, and verification in one workspace.'],
     'archived' => ['Archived records', 'Review retained records without mixing them into active work.'],
 ];
@@ -3422,8 +3422,6 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
       <div class="banner <?= htmlspecialchars($status, ENT_QUOTES) ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div>
     <?php endif; ?>
 
-    <?= render_commercial_lifecycle('receipt') ?>
-
     <div data-workspace-root>
     <section class="admin-documents__context" aria-labelledby="workspace-title">
       <div>
@@ -3450,6 +3448,10 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             $packQuoteId = (string) ($packQuote['id'] ?? '');
             $packAgreements = $collectByQuote($salesAgreements, $packQuoteId, $includeArchivedPack);
             $packReceipts = $collectByQuote($salesReceipts, $packQuoteId, $includeArchivedPack);
+            $packDispatchAdvices = function_exists('documents_dispatch_advices_for_quote') ? documents_dispatch_advices_for_quote($packQuoteId) : [];
+            if (!$includeArchivedPack) {
+                $packDispatchAdvices = array_values(array_filter($packDispatchAdvices, static fn(array $r): bool => !documents_is_archived($r)));
+            }
             $packChallans = $collectByQuote($salesChallans, $packQuoteId, $includeArchivedPack);
             $packInvoices = $collectByQuote($salesInvoices, $packQuoteId, $includeArchivedPack);
             $packReceiptsActive = array_values(array_filter($packReceipts, static fn(array $r): bool => !documents_is_archived($r)));
@@ -3485,13 +3487,17 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
               <span><strong>Outstanding:</strong> <?= htmlspecialchars($inr($packRemainingReceivable), ENT_QUOTES) ?></span>
             </div>
           </section>
-          <div class="document-pack-flow" aria-label="Document pack lifecycle">
+          <div class="document-pack-flow" aria-label="Commercial document chain">
             <div class="done"><strong>1</strong><span>Quotation<small>Accepted source</small></span></div>
             <div class="<?= $packAgreements !== [] ? 'done' : '' ?>"><strong>2</strong><span>Agreement<small><?= $packAgreements !== [] ? 'Created' : 'Create from quotation' ?></small></span></div>
-            <div class="<?= $packChallans !== [] ? 'done' : '' ?>"><strong>3</strong><span>Challan<small><?= $packChallans !== [] ? 'Dispatch recorded' : 'Create for delivery' ?></small></span></div>
-            <div class="<?= $packInvoices !== [] ? 'done' : '' ?>"><strong>4</strong><span>Invoice<small><?= $packInvoices !== [] ? 'Created' : 'Create after delivery' ?></small></span></div>
-            <div class="<?= $packReceipts !== [] ? 'done' : '' ?>"><strong>5</strong><span>Receipt<small><?= $packReceipts !== [] ? 'Payment recorded' : 'Record payment' ?></small></span></div>
+            <div class="<?= $packDispatchAdvices !== [] ? 'done' : '' ?>"><strong>3</strong><span>Dispatch Advice<small><?= $packDispatchAdvices !== [] ? 'Customer accepted' : 'Plan material dispatch' ?></small></span></div>
+            <div class="<?= $packChallans !== [] ? 'done' : '' ?>"><strong>4</strong><span>Challan<small><?= $packChallans !== [] ? 'Delivery tracked' : 'Create for delivery' ?></small></span></div>
+            <div class="<?= $packInvoices !== [] ? 'done' : '' ?>"><strong>5</strong><span>Invoice<small><?= $packInvoices !== [] ? 'Created' : 'Create after delivery' ?></small></span></div>
           </div>
+          <section class="accepted-payment-strip" aria-label="Payment workspace">
+            <div><strong>Payments &amp; receipts</strong><span><?= $packReceipts !== [] ? 'Receipts recorded for this accepted customer.' : 'Record payment receipts and payment requests here without adding them to the lifecycle chain.' ?></span></div>
+            <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => $packQuoteId, 'action' => 'request_payment']), ENT_QUOTES) ?>">Request Payment</a>
+          </section>
           <div class="card" style="padding:10px;margin-bottom:10px"><strong>Current Version: v<?= (int) $packCurrentVersionNo ?></strong><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><?php foreach ($packVersions as $versionRow): $isCurrentVersionRow = (bool) ($versionRow['is_current_version'] ?? false); ?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => (string) ($versionRow['id'] ?? ''), 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">v<?= (int) ($versionRow['version_no'] ?? 1) ?></a><?php if ($isCurrentVersionRow): ?><span class="pill" style="background:#dcfce7;color:#166534">CURRENT</span><?php endif; ?><?php endforeach; ?></div></div>
           <?php if ($packIsOlderVersion): ?><div class="alert err">You are viewing an older version.</div><?php endif; ?>
           <form method="get" style="margin-bottom:1rem;">
@@ -3745,10 +3751,10 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           </section>
           </div>
         <?php else: ?>
-          <div class="commercial-toolbar"><div><h2>Accepted Customers &amp; Receipts</h2><p class="muted-helper">Continue every accepted quotation through its complete commercial document lifecycle.</p></div></div>
+          <div class="commercial-toolbar"><div><h2>Accepted Customers &amp; Receipts</h2><p class="muted-helper">Accepted customers, payment requests, and receipts live in this documents workspace; the commercial lifecycle itself ends at Invoice.</p></div></div>
           <form method="get" class="filter-grid list-toolbar"><input type="hidden" name="tab" value="accepted_customers" /><div><label>Search customer / mobile</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div><div><label>Archive visibility</label><label class="checkbox-field"><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived</label></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form>
-          <div class="responsive-table"><table><thead><tr><th>Accepted quotation</th><th>Customer</th><th>System</th><th>Payment Summary</th><th>Payment Requests</th><th>Workflow</th><th>Actions</th></tr></thead><tbody>
-          <?php foreach ($acceptedRows as $row): $quote=$row['quote']; $qid=(string)($quote['id']??''); $workflow=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[],'Receipt'=>$collectByQuote($salesReceipts,$qid,false)!==[]]; ?>
+          <div class="responsive-table"><table><thead><tr><th>Accepted quotation</th><th>Customer</th><th>System</th><th>Payment Summary</th><th>Payment Requests</th><th>Document Chain</th><th>Actions</th></tr></thead><tbody>
+          <?php foreach ($acceptedRows as $row): $quote=$row['quote']; $qid=(string)($quote['id']??''); $rowDispatchAdvices=function_exists('documents_dispatch_advices_for_quote') ? documents_dispatch_advices_for_quote($qid) : []; $workflow=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Dispatch Advice'=>array_values(array_filter($rowDispatchAdvices, static fn(array $r): bool => !documents_is_archived($r)))!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[]]; ?>
           <?php $paySummary = $row['payment_summary'] ?? []; $lastReq = is_array($paySummary['last_request'] ?? null) ? $paySummary['last_request'] : null; $payBadge = ((float)($row['receivables'] ?? 0) <= 0) ? 'Fully Paid' : (((int)($paySummary['active_request_count'] ?? 0) > 0) ? 'Request Sent' : 'Payment Pending'); ?>
           <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td class="quote-amount"><?= htmlspecialchars($inr((float)$row['quotation_amount']),ENT_QUOTES) ?><br><span class="muted-helper"><?= htmlspecialchars($inr((float)$row['payment_received']),ENT_QUOTES) ?> received</span><br><span class="muted-helper"><?= htmlspecialchars($inr((float)$row['receivables']),ENT_QUOTES) ?> outstanding</span><br><span class="pill <?= $payBadge==='Fully Paid'?'':'warn' ?>"><?= htmlspecialchars($payBadge,ENT_QUOTES) ?></span></td><td><strong><?= (int)($paySummary['active_request_count'] ?? 0) ?></strong> active<br><?php if($lastReq): ?><span class="muted-helper">Last: <?= htmlspecialchars(ucwords(str_replace('_',' ',(string)($lastReq['status']??''))),ENT_QUOTES) ?> <?= htmlspecialchars(substr((string)($lastReq['created_at']??''),0,10),ENT_QUOTES) ?></span><?php else: ?><span class="muted-helper">No Request Yet</span><?php endif; ?></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">View Payments</a><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid,'action'=>'request_payment']),ENT_QUOTES) ?>">Request Payment</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php if($isAdmin && empty($row['is_archived'])):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
           <?php endforeach; if($acceptedRows===[]):?><tr><td colspan="7" class="empty-state">No accepted customers found.</td></tr><?php endif;?></tbody></table></div>
