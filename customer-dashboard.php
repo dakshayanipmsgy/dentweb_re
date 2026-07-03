@@ -120,6 +120,26 @@ function customer_dashboard_doc_url(string $type, array $doc): string
 {
     return 'customer-document-view.php?type=' . urlencode($type) . '&id=' . urlencode((string) ($doc['id'] ?? ''));
 }
+function customer_dashboard_doc_description(string $type, array $doc, string $fallback): string
+{
+    if ($type === 'quotation') {
+        return 'Original quotation shared with you.';
+    }
+    if ($type === 'accepted_quotation') {
+        return 'Your accepted project summary and customer-specific details.';
+    }
+    return (string) ($doc['quote_no'] ?? $doc['agreement_no'] ?? $doc['dispatch_advice_no'] ?? $doc['challan_no'] ?? $doc['invoice_no'] ?? $fallback);
+}
+function customer_dashboard_doc_action_label(string $type): string
+{
+    if ($type === 'quotation') {
+        return 'View Quotation';
+    }
+    if ($type === 'accepted_quotation') {
+        return 'View Accepted Details';
+    }
+    return 'View / Open';
+}
 function customer_dashboard_status_label(string $value): string
 {
     $value = trim(str_replace('_', ' ', $value));
@@ -462,14 +482,14 @@ $customerInr = static fn(float $amount): string => '₹' . number_format($amount
               <div class="doc-grid">
                 <?php $docGroups = [
                   ['Quotation', 'quotation', [$quote], $quoteNo],
-                  ['Accepted quotation details', 'quotation', [$quote], 'Scope, pricing, and terms accepted'],
+                  ['Accepted Quotation Details', 'accepted_quotation', [$quote], 'Accepted project summary'],
                   ['Agreement', 'agreement', $project['agreements'], 'Vendor-consumer agreement'],
                   ['Dispatch advice', 'dispatch_advice', $project['dispatch_advices'], 'Planned material dispatch'],
                   ['Delivery challan', 'challan', $project['challans'], 'Delivery confirmation document'],
                   ['Invoice', 'invoice', $project['invoices'], 'Tax invoice'],
                 ]; ?>
                 <?php foreach ($docGroups as [$label, $type, $docs, $fallback]): $doc = $docs[0] ?? null; ?>
-                  <article class="doc-card"><h3><?= customer_portal_safe($label) ?></h3><p><?= customer_portal_safe($doc ? ((string) ($doc['quote_no'] ?? $doc['agreement_no'] ?? $doc['dispatch_advice_no'] ?? $doc['challan_no'] ?? $doc['invoice_no'] ?? $fallback)) : 'Not generated yet') ?></p><?php if ($doc): ?><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe(customer_dashboard_doc_url($type, $doc)) ?>">View / Open</a><?php else: ?><span class="doc-action pending">Pending</span><?php endif; ?></article>
+                  <article class="doc-card"><h3><?= customer_portal_safe($label) ?></h3><p><?= customer_portal_safe($doc ? customer_dashboard_doc_description($type, $doc, $fallback) : 'Not generated yet') ?></p><?php if ($doc): ?><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe(customer_dashboard_doc_url($type, $doc)) ?>"><?= customer_portal_safe(customer_dashboard_doc_action_label($type)) ?></a><?php else: ?><span class="doc-action pending">Pending</span><?php endif; ?></article>
                 <?php endforeach; ?>
                 <?php if ($handoverHtmlPath !== ''): ?><article class="doc-card"><h3>Handover pack</h3><p>System handover documents</p><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe('/' . ltrim($handoverHtmlPath, '/')) ?>">View / Print</a></article><?php endif; ?>
               </div>
