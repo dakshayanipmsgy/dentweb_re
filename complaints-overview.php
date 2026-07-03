@@ -303,8 +303,7 @@ function complaints_overview_render_summary(array $counts): string
 
 function complaints_overview_mobile_digits(array $complaint, array $customer): string
 {
-    $mobile = preg_replace('/\D+/', '', (string) ($complaint['customer_mobile'] ?? ($customer['mobile'] ?? '')));
-    return is_string($mobile) ? $mobile : '';
+    return complaint_mobile_digits($complaint, $customer);
 }
 
 function complaints_overview_render_table(array $filtered, array $customerByMobile): string
@@ -378,6 +377,7 @@ function complaints_overview_render_table(array $filtered, array $customerByMobi
                 <a href="complaint-detail.php?id=<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" class="action-link action-link--primary js-complaint-open" data-complaint-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>">View / Edit</a>
                 <a href="#" class="action-link js-complaint-notify" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" data-channel="whatsapp">WhatsApp</a>
                 <a href="#" class="action-link js-complaint-notify" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>" data-channel="sms">SMS</a>
+                <a href="#" class="action-link js-complaint-forward-wa" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>">WA Forward</a>
                 <?php if ($status !== 'closed'): ?>
                   <a href="#" class="action-link action-link--danger js-complaint-close" data-id="<?= complaints_overview_safe((string) ($complaint['id'] ?? '')) ?>">Close</a>
                 <?php endif; ?>
@@ -452,12 +452,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
 
         $message = complaint_customer_resolution_message($complaint, $customer);
         if ($channel === 'whatsapp') {
-            $phone = '91' . substr($mobile, -10);
-            $url = 'https://wa.me/' . rawurlencode($phone) . '?text=' . rawurlencode($message);
+            $urls = complaint_whatsapp_urls($message, $mobile);
+            $url = $urls['open_url'];
+            $fallbackUrl = $urls['fallback_url'];
         } else {
-            $url = 'sms:' . rawurlencode(substr($mobile, -10)) . '?&body=' . rawurlencode($message);
+            $url = complaint_sms_url($message, $mobile);
+            $fallbackUrl = null;
         }
-        echo json_encode(['ok' => true, 'message' => 'Customer notification logged. Opening ' . strtoupper($channel) . ' composer.', 'open_url' => $url]);
+        echo json_encode(array_filter(['ok' => true, 'message' => 'Customer notification logged. Opening ' . strtoupper($channel) . ' composer.', 'open_url' => $url, 'fallback_url' => $fallbackUrl], static fn ($value): bool => $value !== null));
+        exit;
+    }
+
+    if ($quickType === 'forward_whatsapp') {
+        update_complaint([
+            'id' => $id,
+            'forwarded_via' => complaint_add_forwarded_channel($complaint['forwarded_via'] ?? 'none', 'whatsapp'),
+        ]);
+        $urls = complaint_whatsapp_urls(complaint_forward_message($complaint, $customer));
+        echo json_encode(['ok' => true, 'message' => 'Complaint forwarding logged. Opening WhatsApp composer.', 'open_url' => $urls['open_url'], 'fallback_url' => $urls['fallback_url']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -898,6 +910,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
         frame.src = 'about:blank';
         refreshData();
       };
+      const openExternal = (url, fallbackUrl) => {
+        if (!url) return;
+        window.open(url, '_blank', 'noopener');
+        if (fallbackUrl && fallbackUrl !== url) {
+          window.setTimeout(() => window.open(fallbackUrl, '_blank', 'noopener'), 900);
+        }
+      };
 
       document.addEventListener('click', function (event) {
         const link = event.target.closest('.js-complaint-open');
@@ -931,10 +950,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
               throw new Error((result && result.error) || 'Notification action failed.');
             }
             showNotice('success', result.message || 'Customer notification logged.');
-            if (result.open_url) window.open(result.open_url, '_blank', 'noopener');
+            openExternal(result.open_url, result.fallback_url || '');
             await refreshData();
           } catch (err) {
             showNotice('error', err && err.message ? err.message : 'Notification action failed.');
+          }
+          return;
+        }
+
+        const waForwardLink = event.target.closest('.js-complaint-forward-wa');
+        if (waForwardLink) {
+          event.preventDefault();
+          const id = waForwardLink.getAttribute('data-id');
+          if (!id) return;
+
+          const payload = new URLSearchParams();
+          payload.set('action', 'quick_action');
+          payload.set('quick_type', 'forward_whatsapp');
+          payload.set('id', id);
+          payload.set('csrf_token', csrfToken);
+
+          try {
+            const response = await fetch('complaints-overview.php?' + getState().toString(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
+              body: payload.toString()
+            });
+            const result = await response.json();
+            if (!result || !result.ok) {
+              throw new Error((result && result.error) || 'WhatsApp forward action failed.');
+            }
+            showNotice('success', result.message || 'Complaint forwarding logged.');
+            openExternal(result.open_url, result.fallback_url || '');
+            await refreshData();
+          } catch (err) {
+            showNotice('error', err && err.message ? err.message : 'WhatsApp forward action failed.');
           }
           return;
         }
