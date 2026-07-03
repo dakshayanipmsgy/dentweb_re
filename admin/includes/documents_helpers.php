@@ -7420,7 +7420,7 @@ function documents_generate_payment_request_id(): string
 
 function documents_payment_request_defaults(): array
 {
-    return ['id'=>'','quotation_id'=>'','customer_mobile'=>'','customer_name'=>'','quotation_amount'=>0,'amount_requested'=>0,'amount_paid_against_request'=>0,'outstanding_against_request'=>0,'reason'=>'','custom_reason'=>'','message'=>'','due_date'=>'','status'=>'draft','visibility_to_customer'=>true,'request_mode'=>'portal_only','sent_via'=>'','sent_at'=>'','sent_by'=>['role'=>'','id'=>'','name'=>''],'created_by'=>['role'=>'','id'=>'','name'=>''],'created_at'=>'','updated_at'=>'','linked_receipt_ids'=>[],'internal_notes'=>'','customer_response'=>'','follow_up_date'=>''];
+    return ['id'=>'','quotation_id'=>'','customer_mobile'=>'','customer_name'=>'','quotation_amount'=>0,'amount_requested'=>0,'amount_paid_against_request'=>0,'outstanding_against_request'=>0,'reason'=>'','custom_reason'=>'','message'=>'','due_date'=>'','status'=>'draft','visibility_to_customer'=>true,'request_mode'=>'portal_only','sent_via'=>'','sent_at'=>'','sent_by'=>['role'=>'','id'=>'','name'=>''],'created_by'=>['role'=>'','id'=>'','name'=>''],'created_at'=>'','updated_at'=>'','linked_receipt_ids'=>[],'internal_notes'=>'','customer_response'=>'','follow_up_date'=>'','archived_flag'=>false,'archived_at'=>'','archived_by'=>['role'=>'','id'=>'','name'=>'']];
 }
 
 function documents_get_payment_request(string $id): ?array
@@ -7437,6 +7437,8 @@ function documents_save_payment_request(array $request): array
     if ((string)$request['created_at'] === '') { $request['created_at'] = date('c'); }
     $request['updated_at'] = date('c');
     $request['customer_mobile'] = normalize_customer_mobile((string)$request['customer_mobile']);
+    $request['archived_flag'] = !empty($request['archived_flag']);
+    $request['archived_by'] = is_array($request['archived_by'] ?? null) ? array_merge(['role'=>'','id'=>'','name'=>''], $request['archived_by']) : ['role'=>'','id'=>'','name'=>''];
     $request['amount_requested'] = round((float)$request['amount_requested'], 2);
     $request['amount_paid_against_request'] = round((float)$request['amount_paid_against_request'], 2);
     $request['outstanding_against_request'] = max(0, round($request['amount_requested'] - $request['amount_paid_against_request'], 2));
@@ -7481,7 +7483,7 @@ function documents_payment_summary_for_quote(array $quote, array $receipts = nul
 {
     $quoteId = (string)($quote['id'] ?? ''); $amount = (float)($quote['calc']['gross_payable'] ?? $quote['calc']['final_price_incl_gst'] ?? $quote['calc']['grand_total'] ?? 0); $received = 0.0;
     foreach (($receipts ?? documents_final_receipts_for_quote($quoteId)) as $r) { if (strtolower(trim((string)($r['status'] ?? ''))) === 'final' && empty($r['archived_flag']) && empty($r['archived'])) { $received += (float)($r['amount_rs'] ?? $r['amount_received'] ?? $r['amount'] ?? 0); } }
-    $requests = documents_payment_requests_by_quote($quoteId); $active = array_values(array_filter($requests, static fn(array $r): bool => !in_array(strtolower((string)($r['status'] ?? '')), ['cancelled','paid'], true)));
+    $requests = documents_payment_requests_by_quote($quoteId); $active = array_values(array_filter($requests, static fn(array $r): bool => empty($r['archived_flag']) && !in_array(strtolower((string)($r['status'] ?? '')), ['cancelled','paid'], true)));
     return ['quotation_amount'=>$amount,'total_received'=>$received,'outstanding'=>max(0,$amount-$received),'requests'=>$requests,'active_request_count'=>count($active),'last_request'=>$requests[0] ?? null];
 }
 
@@ -7515,4 +7517,32 @@ function documents_payment_request_mailto(array $request, string $message): stri
 {
     $subject = 'Payment Request - Dakshayani Enterprises - ' . (string)($request['customer_name'] ?? '') . ' - ' . (string)($request['quotation_id'] ?? '');
     return 'mailto:?subject=' . rawurlencode($subject) . '&body=' . rawurlencode($message);
+}
+
+
+function documents_payment_request_is_archived(array $request): bool
+{
+    return !empty($request['archived_flag']);
+}
+
+function documents_payment_request_archive(array $request, array $byUser = []): array
+{
+    $request = array_merge(documents_payment_request_defaults(), $request);
+    $request['archived_flag'] = true;
+    $request['archived_at'] = date('c');
+    $request['archived_by'] = [
+        'role' => safe_text((string) ($byUser['role'] ?? $byUser['type'] ?? '')),
+        'id' => safe_text((string) ($byUser['id'] ?? '')),
+        'name' => safe_text((string) ($byUser['name'] ?? '')),
+    ];
+    return $request;
+}
+
+function documents_payment_request_unarchive(array $request): array
+{
+    $request = array_merge(documents_payment_request_defaults(), $request);
+    $request['archived_flag'] = false;
+    $request['archived_at'] = '';
+    $request['archived_by'] = ['role'=>'','id'=>'','name'=>''];
+    return $request;
 }
