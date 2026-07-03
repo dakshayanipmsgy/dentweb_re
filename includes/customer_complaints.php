@@ -169,6 +169,99 @@ function complaint_customer_resolution_message(array $complaint, array $customer
     return implode("\n", $lines);
 }
 
+function complaint_mobile_digits(array $complaint, array $customer): string
+{
+    $mobile = preg_replace('/\D+/', '', (string) ($complaint['customer_mobile'] ?? ($customer['mobile'] ?? '')));
+    return is_string($mobile) ? $mobile : '';
+}
+
+function complaint_whatsapp_urls(string $message, ?string $mobileDigits = null): array
+{
+    $digits = preg_replace('/\D+/', '', (string) $mobileDigits);
+    $digits = is_string($digits) ? $digits : '';
+    $phone = $digits === '' ? '' : ('91' . substr($digits, -10));
+    $encodedMessage = rawurlencode($message);
+
+    if ($phone === '') {
+        return [
+            'open_url' => 'whatsapp://send?text=' . $encodedMessage,
+            'fallback_url' => 'https://wa.me/?text=' . $encodedMessage,
+        ];
+    }
+
+    return [
+        'open_url' => 'whatsapp://send?phone=' . rawurlencode($phone) . '&text=' . $encodedMessage,
+        'fallback_url' => 'https://wa.me/' . rawurlencode($phone) . '?text=' . $encodedMessage,
+    ];
+}
+
+function complaint_sms_url(string $message, string $mobileDigits): string
+{
+    $digits = preg_replace('/\D+/', '', $mobileDigits);
+    $digits = is_string($digits) ? $digits : '';
+    if ($digits === '') {
+        return 'sms:?&body=' . rawurlencode($message);
+    }
+
+    return 'sms:' . rawurlencode(substr($digits, -10)) . '?&body=' . rawurlencode($message);
+}
+
+function complaint_forward_message(array $complaint, array $customer): string
+{
+    $customerName = trim((string) ($customer['name'] ?? ''));
+    $customerMobile = trim((string) ($customer['mobile'] ?? ($complaint['customer_mobile'] ?? '')));
+    $division = trim((string) ($customer['division_name'] ?? ''));
+    $subdivision = trim((string) ($customer['sub_division_name'] ?? ''));
+    $jbvnlAccount = trim((string) ($customer['jbvnl_account_number'] ?? ''));
+    $applicationId = trim((string) ($customer['application_id'] ?? ''));
+
+    $lines = [
+        'Customer Details',
+        'Customer Name: ' . $customerName,
+        'Mobile: ' . $customerMobile,
+        'Division: ' . $division,
+        'Subdivision: ' . $subdivision,
+        'JBVNL Account Number: ' . $jbvnlAccount,
+        'Application ID: ' . $applicationId,
+        '',
+        'Complaint Details',
+        'Complaint ID: ' . (string) ($complaint['id'] ?? ''),
+        'Problem Category: ' . trim((string) ($complaint['problem_category'] ?? '')),
+        'Complaint Title: ' . trim((string) ($complaint['title'] ?? '')),
+        'Description: ' . trim((string) ($complaint['description'] ?? '')),
+        'Assignee: ' . trim((string) ($complaint['assignee'] ?? '')),
+        'Status: ' . trim((string) ($complaint['status'] ?? '')),
+        'Created At: ' . trim((string) ($complaint['created_at'] ?? '')),
+        'Updated At: ' . trim((string) ($complaint['updated_at'] ?? '')),
+    ];
+
+    return implode("\n", $lines);
+}
+
+function complaint_forward_email_subject(array $complaint, array $customer): string
+{
+    $customerName = trim((string) ($customer['name'] ?? ''));
+    $id = trim((string) ($complaint['id'] ?? ''));
+
+    return 'Complaint Forwarded - Complaint ID ' . $id . ' - ' . $customerName;
+}
+
+function complaint_add_forwarded_channel(?string $currentValue, string $channel): string
+{
+    $current = complaint_normalize_forwarded_via($currentValue);
+    if (!in_array($channel, ['whatsapp', 'email'], true)) {
+        return $current;
+    }
+    if ($current === 'none') {
+        return $channel;
+    }
+    if ($current === $channel || $current === 'both') {
+        return $current;
+    }
+
+    return 'both';
+}
+
 function complaint_summary_counts(?array $complaints = null): array
 {
     if ($complaints === null) {
