@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/customer_portal.php';
 require_once __DIR__ . '/includes/customer_complaints.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
+require_once __DIR__ . '/includes/quotation_view_renderer.php';
 
 $store = new CustomerFsStore();
 customer_portal_require_login();
@@ -56,6 +57,19 @@ $customerQuotes = array_values(array_filter(documents_list_quotes(), static func
         && documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')) === 'accepted'
         && !empty($quote['is_current_version']);
 }));
+function customer_dashboard_quote_tax_summary(array $quote): array
+{
+    $calc = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
+    $taxBreakdown = is_array($calc['tax_breakdown'] ?? null) ? $calc['tax_breakdown'] : (is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : []);
+    $gross = (float) ($taxBreakdown['gross_incl_gst'] ?? $calc['grand_total'] ?? $calc['final_price_incl_gst'] ?? $quote['input_total_gst_inclusive'] ?? 0);
+    $taxable = (float) ($taxBreakdown['basic_total'] ?? $calc['basic_total'] ?? $calc['taxable_total'] ?? $calc['basic_value'] ?? 0);
+    $gst = (float) ($taxBreakdown['gst_total'] ?? $calc['gst_total'] ?? $calc['total_gst'] ?? 0);
+    if ($gst <= 0 && $gross > 0 && $taxable > 0) {
+        $gst = max(0, $gross - $taxable);
+    }
+    return ['taxable' => $taxable, 'gst' => $gst];
+}
+
 $customerProjects = [];
 foreach ($customerQuotes as $quote) {
     $quoteId = (string) ($quote['id'] ?? '');
@@ -95,9 +109,9 @@ foreach ($customerQuotes as $quote) {
     foreach ($invoices as $invoice) {
         $invoiceValue += (float) ($invoice['input_total_gst_inclusive'] ?? $invoice['calc']['grand_total'] ?? $invoice['calc']['gross_payable'] ?? 0);
     }
-    $tax = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : (is_array($quote['calc']['tax_breakdown'] ?? null) ? $quote['calc']['tax_breakdown'] : []);
-    $gstTotal = (float) ($quote['calc']['total_gst'] ?? $quote['calc']['gst_total'] ?? $tax['total_gst'] ?? 0);
-    $taxableTotal = (float) ($quote['calc']['taxable_total'] ?? $quote['calc']['basic_value'] ?? $tax['taxable_total'] ?? 0);
+    $taxSummary = customer_dashboard_quote_tax_summary($quote);
+    $gstTotal = (float) ($taxSummary['gst'] ?? 0);
+    $taxableTotal = (float) ($taxSummary['taxable'] ?? 0);
     $customerProjects[] = [
         'quote' => $quote,
         'agreements' => $agreements,
@@ -145,7 +159,7 @@ function customer_dashboard_status_label(string $value): string
     $value = trim(str_replace('_', ' ', $value));
     return $value === '' ? 'Pending' : ucwords($value);
 }
-$customerInr = static fn(float $amount): string => '₹' . number_format($amount, 2);
+$customerInr = static fn(float $amount): string => quotation_format_inr_indian($amount, true);
 
 ?>
 <!DOCTYPE html>
