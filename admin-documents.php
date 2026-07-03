@@ -3492,7 +3492,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             <div class="<?= $packAgreements !== [] ? 'done' : '' ?>"><strong>2</strong><span>Agreement<small><?= $packAgreements !== [] ? 'Created' : 'Create from quotation' ?></small></span></div>
             <div class="<?= $packDispatchAdvices !== [] ? 'done' : '' ?>"><strong>3</strong><span>Dispatch Advice<small><?= $packDispatchAdvices !== [] ? 'Customer accepted' : 'Plan material dispatch' ?></small></span></div>
             <div class="<?= $packChallans !== [] ? 'done' : '' ?>"><strong>4</strong><span>Challan<small><?= $packChallans !== [] ? 'Delivery tracked' : 'Create for delivery' ?></small></span></div>
-            <div class="<?= $packInvoices !== [] ? 'done' : '' ?>"><strong>5</strong><span>Invoice<small><?= $packInvoices !== [] ? 'Created' : 'Create after delivery' ?></small></span></div>
+            <div class="<?= $packInvoices !== [] ? 'done' : '' ?>"><strong>5</strong><span>Invoice<small><?= $packInvoices !== [] ? 'Created' : 'Create from accepted quote' ?></small></span></div>
           </div>
           <section class="accepted-payment-strip" aria-label="Payment workspace">
             <div><strong>Payments &amp; receipts</strong><span><?= $packReceipts !== [] ? 'Receipts recorded for this accepted customer.' : 'Record payment receipts and payment requests here without adding them to the lifecycle chain.' ?></span></div>
