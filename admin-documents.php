@@ -48,6 +48,42 @@ $redirectDocuments = static function (string $tab, string $type, string $msg, ar
 };
 
 
+
+$wantsJsonResponse = static function (): bool {
+    $accept = strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? ''));
+    $requestedWith = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+    return $requestedWith === 'fetch' || str_contains($accept, 'application/json') || (string) ($_POST['response_format'] ?? '') === 'json';
+};
+
+$sendJsonResponse = static function (array $payload, int $statusCode = 200): void {
+    http_response_code($statusCode);
+    header('Content-Type: application/json; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
+    echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit;
+};
+
+$documentActionUrl = static function (string $type, string $id): string {
+    $encoded = urlencode($id);
+    return match ($type) {
+        'agreement' => 'agreement-view.php?id=' . $encoded . '&mode=edit',
+        'dispatch_advice' => 'admin-dispatch-advices.php?tab=editor&edit=' . $encoded,
+        'delivery_challan' => 'challan-view.php?id=' . $encoded,
+        'invoice' => 'admin-invoices.php?id=' . $encoded,
+        default => '#',
+    };
+};
+
+$documentActionLabel = static function (string $type): string {
+    return match ($type) {
+        'agreement' => 'Agreement',
+        'dispatch_advice' => 'Dispatch Advice',
+        'delivery_challan' => 'Challan',
+        'invoice' => 'Invoice',
+        default => 'Document',
+    };
+};
+
 $redirectCsvImport = static function (string $type, string $message, array $report = []): void {
     $_SESSION['items_csv_import_report'] = $report;
     $query = http_build_query([
@@ -245,7 +281,11 @@ $resolveAgreementTemplateId = static function (array $quote, array $templates): 
 };
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $wantsJson = $wantsJsonResponse();
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+        if ($wantsJson) {
+            $sendJsonResponse(['ok' => false, 'error' => 'Security validation failed. Please retry.'], 403);
+        }
         $redirectWith('company', 'error', 'Security validation failed. Please retry.');
     }
 
@@ -253,6 +293,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $employeeAllowedActions = ['create_inventory_tx', 'edit_inventory_tx', 'save_inventory_edits', 'import_inventory_stock_in_csv', 'create_receipt', 'save_receipt_draft', 'finalize_receipt', 'create_payment_request', 'cancel_payment_request', 'mark_payment_request_sent', 'archive_payment_request', 'unarchive_payment_request'];
     if (!$isAdmin && !in_array($action, $employeeAllowedActions, true)) {
+        if ($wantsJson) {
+            $sendJsonResponse(['ok' => false, 'error' => 'Access denied.'], 403);
+        }
         $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
     }
 
@@ -374,15 +417,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $redirectDocuments($tab, ($saved['ok'] ?? false) ? 'success' : 'error', ($saved['ok'] ?? false) ? 'Payment request saved. Receipts remain the source of received payment.' : 'Unable to save payment request.', ['view' => (string) ($quote['id'] ?? '')]);
     }
 
-    if (in_array($action, ['create_agreement', 'create_receipt', 'create_delivery_challan', 'create_invoice'], true)) {
+    if (in_array($action, ['create_agreement', 'create_receipt', 'create_dispatch_advice', 'create_delivery_challan', 'create_invoice'], true)) {
         $tab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
         $view = safe_text($_POST['quotation_id'] ?? safe_text($_POST['return_view'] ?? ''));
         if ($view === '') {
+            if ($wantsJson) { $sendJsonResponse(['ok' => false, 'error' => 'Quotation is required.'], 422); }
             $redirectDocuments($tab, 'error', 'Quotation is required.');
         }
 
         $quote = documents_get_quote($view);
         if ($quote === null) {
+            if ($wantsJson) { $sendJsonResponse(['ok' => false, 'error' => 'Quotation not found.'], 404); }
             $redirectDocuments($tab, 'error', 'Quotation not found.', ['view' => $view]);
         }
         $quote = documents_quote_prepare($quote);
@@ -393,20 +438,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'id' => (string) ($user['id'] ?? ''),
             'name' => (string) ($user['full_name'] ?? ($isAdmin ? 'Admin' : 'Employee')),
         ];
+        $quoteContext = [
+            'quotation_id' => (string) ($quote['id'] ?? ''),
+            'quotation_no' => (string) ($quote['quote_no'] ?? ''),
+            'customer_name' => safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? '')),
+            'customer_mobile' => normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? '')),
+            'capacity_kwp' => safe_text((string) ($quote['capacity_kwp'] ?? '')),
+        ];
+        $finishDocumentAction = static function (string $docType, string $docId, bool $created, string $message) use ($wantsJson, $sendJsonResponse, $documentActionUrl, $documentActionLabel, $quoteContext): void {
+            if (!$wantsJson) {
+                header('Location: ' . $documentActionUrl($docType, $docId) . ($docType === 'agreement' ? '&status=success&message=' . urlencode($message) : ''));
+                exit;
+            }
+            $sendJsonResponse([
+                'ok' => true,
+                'created' => $created,
+                'message' => $message,
+                'document' => [
+                    'type' => $docType,
+                    'label' => $documentActionLabel($docType),
+                    'id' => $docId,
+                    'url' => $documentActionUrl($docType, $docId),
+                ],
+                'context' => $quoteContext,
+            ]);
+        };
+        $failDocumentAction = static function (string $message, int $statusCode = 422) use ($wantsJson, $sendJsonResponse, $redirectDocuments, $tab, $view): void {
+            if ($wantsJson) {
+                $sendJsonResponse(['ok' => false, 'error' => $message], $statusCode);
+            }
+            $redirectDocuments($tab, 'error', $message, ['view' => $view]);
+        };
 
         if ($action === 'create_agreement') {
             $existingAgreementId = safe_text((string) ($quote['workflow']['agreement_id'] ?? ''));
             if ($existingAgreementId !== '') {
                 $existingAgreement = documents_get_sales_document('agreement', $existingAgreementId);
                 if ($existingAgreement !== null && !documents_is_archived($existingAgreement)) {
-                    header('Location: agreement-view.php?id=' . urlencode($existingAgreementId) . '&mode=edit&status=success&message=' . urlencode('Agreement already exists.'));
-                    exit;
+                    $finishDocumentAction('agreement', $existingAgreementId, false, 'Agreement already exists.');
+                }
+            }
+            foreach (documents_list_sales_documents('agreement') as $existingAgreement) {
+                if ((string) ($existingAgreement['quotation_id'] ?? '') === (string) ($quote['id'] ?? '') && !documents_is_archived($existingAgreement)) {
+                    $finishDocumentAction('agreement', (string) ($existingAgreement['id'] ?? ''), false, 'Agreement already exists.');
                 }
             }
 
             $number = documents_generate_agreement_number(safe_text((string) ($quote['segment'] ?? 'RES')) ?: 'RES');
             if (!$number['ok']) {
-                $redirectDocuments($tab, 'error', (string) ($number['error'] ?? 'Unable to generate agreement number.'), ['view' => $view]);
+                $failDocumentAction((string) ($number['error'] ?? 'Unable to generate agreement number.'));
             }
 
             $templates = documents_get_agreement_templates();
@@ -445,7 +525,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $savedAgreement = documents_save_agreement($agreement);
             if (!$savedAgreement['ok']) {
-                $redirectDocuments($tab, 'error', 'Failed to create agreement draft.', ['view' => $view]);
+                $failDocumentAction('Failed to create agreement draft.');
             }
 
             $renderedAgreementHtml = documents_render_agreement_body_html($agreement, $companyProfile);
@@ -465,18 +545,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $salesAgreement['created_at'] = (string) $agreement['created_at'];
             $savedSalesAgreement = documents_save_sales_document('agreement', $salesAgreement);
             if (!$savedSalesAgreement['ok']) {
-                $redirectDocuments($tab, 'error', 'Failed to update agreement workflow.', ['view' => $view]);
+                $failDocumentAction('Failed to update agreement workflow.');
             }
 
             documents_quote_link_workflow_doc($quote, 'agreement', (string) $agreement['id']);
             $quote['updated_at'] = date('c');
             $savedQuote = documents_save_quote($quote);
             if (!$savedQuote['ok']) {
-                $redirectDocuments($tab, 'error', 'Agreement created, but quotation workflow update failed.', ['view' => $view]);
+                $failDocumentAction('Agreement created, but quotation workflow update failed.');
             }
 
-            header('Location: agreement-view.php?id=' . urlencode((string) $agreement['id']) . '&mode=edit&status=success&message=' . urlencode('Agreement created from default template.'));
-            exit;
+            $finishDocumentAction('agreement', (string) $agreement['id'], true, 'Agreement created from default template.');
+        }
+
+        if ($action === 'create_dispatch_advice') {
+            $existingAdvices = array_values(array_filter(documents_dispatch_advices_for_quote((string) ($quote['id'] ?? '')), static fn(array $row): bool => !documents_is_archived($row)));
+            if ($existingAdvices !== []) {
+                $existingAdvice = $existingAdvices[0];
+                $finishDocumentAction('dispatch_advice', (string) ($existingAdvice['id'] ?? ''), false, 'Dispatch Advice already exists.');
+            }
+            if (!documents_dispatch_quote_eligible($quote)) {
+                $failDocumentAction('Only accepted current quotations are eligible for Dispatch Advice creation.');
+            }
+            $advice = documents_dispatch_advice_defaults();
+            $advice['id'] = 'da_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
+            $advice['segment'] = safe_text((string) ($quote['segment'] ?? 'RES')) ?: 'RES';
+            $advice['dispatch_advice_no'] = documents_generate_dispatch_advice_number($advice['segment']);
+            $advice['quotation_id'] = (string) ($quote['id'] ?? '');
+            $advice['quotation_no'] = (string) ($quote['quote_no'] ?? '');
+            $advice['agreement_id'] = (string) ($quote['workflow']['agreement_id'] ?? $quote['agreement_id'] ?? '');
+            $advice['agreement_no'] = (string) ($quote['agreement_no'] ?? '');
+            $advice['customer_name'] = (string) ($quoteContext['customer_name'] ?? '');
+            $advice['customer_mobile'] = documents_dispatch_advice_customer_mobile($advice, $quote);
+            $advice['delivery_address'] = safe_text((string) ($quote['site_address'] ?? $snapshot['address'] ?? ''));
+            $advice['items'] = documents_dispatch_advice_suggested_items($quote);
+            $advice['planned_dispatch_date'] = date('Y-m-d');
+            $advice['created_at'] = date('c');
+            $advice['updated_at'] = date('c');
+            $savedAdvice = documents_save_dispatch_advice($advice);
+            if (empty($savedAdvice['ok'])) {
+                $failDocumentAction('Unable to create Dispatch Advice draft.');
+            }
+            documents_quote_link_workflow_doc($quote, 'dispatch_advice', (string) $advice['id']);
+            $quote['updated_at'] = date('c');
+            documents_save_quote($quote);
+            $finishDocumentAction('dispatch_advice', (string) $advice['id'], true, 'Dispatch Advice created. Review materials before finalizing.');
         }
 
         if ($action === 'create_receipt') {
@@ -517,10 +630,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($action === 'create_delivery_challan') {
+            $existingChallans = documents_challans_for_quote((string) ($quote['id'] ?? ''));
+            if ($existingChallans !== []) {
+                $finishDocumentAction('delivery_challan', (string) ($existingChallans[0]['id'] ?? ''), false, 'Challan already exists.');
+            }
             $challan = documents_challan_defaults();
             $number = documents_generate_challan_number(safe_text((string) ($quote['segment'] ?? 'RES')) ?: 'RES');
             if (!$number['ok']) {
-                $redirectDocuments($tab, 'error', (string) ($number['error'] ?? 'Unable to create challan number.'), ['view' => $view]);
+                $failDocumentAction((string) ($number['error'] ?? 'Unable to create challan number.'));
             }
             $challan['id'] = 'dc_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
             $challan['challan_no'] = (string) ($number['challan_no'] ?? '');
@@ -554,7 +671,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $savedChallan = documents_save_challan($challan);
             if (!$savedChallan['ok']) {
-                $redirectDocuments($tab, 'error', 'Unable to create delivery challan draft.', ['view' => $view]);
+                $failDocumentAction('Unable to create delivery challan draft.');
             }
 
             $salesChallan = documents_sales_document_defaults('delivery_challan');
@@ -570,14 +687,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $salesChallan['created_at'] = (string) $challan['created_at'];
             $savedSales = documents_save_sales_document('delivery_challan', $salesChallan);
             if (!$savedSales['ok']) {
-                $redirectDocuments($tab, 'error', 'Delivery challan created, but pack workflow update failed.', ['view' => $view]);
+                $failDocumentAction('Delivery challan created, but pack workflow update failed.');
             }
 
             documents_quote_link_workflow_doc($quote, 'delivery_challan', (string) $challan['id']);
             $quote['updated_at'] = date('c');
             documents_save_quote($quote);
-            header('Location: challan-view.php?id=' . urlencode((string) $challan['id']) . '&status=success&message=' . urlencode('Delivery challan draft created.'));
-            exit;
+            $finishDocumentAction('delivery_challan', (string) $challan['id'], true, 'Delivery challan draft created.');
         }
 
         if ($action === 'create_invoice') {
@@ -585,19 +701,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($existingId !== '') {
                 $existing = documents_get_sales_document('invoice', $existingId);
                 if ($existing !== null && !documents_is_archived($existing)) {
-                    header('Location: admin-invoices.php?id=' . urlencode($existingId));
-                    exit;
+                    $finishDocumentAction('invoice', $existingId, false, 'Invoice already exists.');
+                }
+            }
+            foreach (documents_list_sales_documents('invoice') as $existingInvoice) {
+                if ((string) ($existingInvoice['quotation_id'] ?? '') === (string) ($quote['id'] ?? '') && !documents_is_archived($existingInvoice)) {
+                    $finishDocumentAction('invoice', (string) ($existingInvoice['id'] ?? ''), false, 'Invoice already exists.');
                 }
             }
 
             $created = documents_create_invoice_from_quote($quote);
             if (!($created['ok'] ?? false)) {
-                $redirectDocuments($tab, 'error', (string) ($created['error'] ?? 'Unable to create invoice.'), ['view' => $view]);
+                $failDocumentAction((string) ($created['error'] ?? 'Unable to create invoice.'));
             }
             $invoiceId = (string) ($created['invoice_id'] ?? '');
             $invoiceDoc = $invoiceId !== '' ? documents_get_invoice($invoiceId) : null;
             if ($invoiceDoc === null || $invoiceId === '') {
-                $redirectDocuments($tab, 'error', 'Invoice created but could not be loaded.', ['view' => $view]);
+                $failDocumentAction('Invoice created but could not be loaded.');
             }
 
             $salesInvoice = documents_sales_document_defaults('invoice');
@@ -615,14 +735,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $salesInvoice['created_at'] = (string) ($invoiceDoc['created_at'] ?? date('c'));
             $savedSalesInvoice = documents_save_sales_document('invoice', $salesInvoice);
             if (!$savedSalesInvoice['ok']) {
-                $redirectDocuments($tab, 'error', 'Invoice created, but workflow update failed.', ['view' => $view]);
+                $failDocumentAction('Invoice created, but workflow update failed.');
             }
 
             documents_quote_link_workflow_doc($quote, 'invoice', $invoiceId);
             $quote['updated_at'] = date('c');
             documents_save_quote($quote);
-            header('Location: admin-invoices.php?id=' . urlencode($invoiceId));
-            exit;
+            $finishDocumentAction('invoice', $invoiceId, true, 'Invoice draft created.');
         }
     }
 
@@ -3401,6 +3520,8 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
       }
       .accepted-summary { grid-template-columns:1fr; }
     }
+    .document-action-form{margin:0}.document-action-dialog::backdrop{background:rgba(15,23,42,.45)}.document-action-dialog{border:0;border-radius:18px;box-shadow:0 24px 80px rgba(15,23,42,.3);max-width:560px;width:calc(100% - 32px);padding:0}.document-action-modal{padding:22px}.document-action-modal__header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:1px solid #dbe7e3;padding-bottom:12px}.document-action-modal__body{display:grid;gap:12px;padding:16px 0}.document-action-modal__context{background:#f8fbfa;border:1px solid #dbe7e3;border-radius:12px;padding:12px}.document-action-modal__status{border-radius:12px;padding:12px;background:#eef6ff;color:#1e3a8a}.document-action-modal__status.is-success{background:#ecfdf5;color:#065f46}.document-action-modal__status.is-error{background:#fef2f2;color:#991b1b}.document-action-modal__footer{display:flex;justify-content:flex-end;gap:10px;border-top:1px solid #dbe7e3;padding-top:14px}.document-action-modal__open[hidden]{display:none}
+
   </style>
 </head>
 <body class="admin-shell admin-documents">
@@ -3753,7 +3874,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           <form method="get" class="filter-grid list-toolbar"><input type="hidden" name="tab" value="accepted_customers" /><div><label>Search customer / mobile</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div><div><label>Archive visibility</label><label class="checkbox-field"><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived</label></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form>
           <div class="responsive-table"><table><thead><tr><th>Accepted quotation</th><th>Customer</th><th>System</th><th>Workflow</th><th>Actions</th></tr></thead><tbody>
           <?php foreach ($acceptedRows as $row): $quote=$row['quote']; $qid=(string)($quote['id']??''); $workflow=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Dispatch Advice'=>array_values(array_filter(documents_dispatch_advices_for_quote($qid), static fn(array $row): bool => !documents_is_archived($row)))!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[]]; ?>
-          <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Enter</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php if($isAdmin && empty($row['is_archived'])):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
+          <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Enter</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php foreach ([['create_agreement','Create/Open Agreement'],['create_dispatch_advice','Create/Open Dispatch Advice'],['create_delivery_challan','Create/Open Challan'],['create_invoice','Create/Open Invoice']] as $docAction): ?><form method="post" class="document-action-form" data-document-action="1" data-document-label="<?= htmlspecialchars($docAction[1], ENT_QUOTES) ?>" data-quote-no="<?= htmlspecialchars((string)($quote['quote_no']??$qid), ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($quote['customer_name']??''), ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars((string)($quote['customer_mobile']??''), ENT_QUOTES) ?>"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="<?= htmlspecialchars($docAction[0], ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn secondary" type="submit"><?= htmlspecialchars($docAction[1], ENT_QUOTES) ?></button></form><?php endforeach; ?><?php if($isAdmin && empty($row['is_archived'])):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
           <?php endforeach; if($acceptedRows===[]):?><tr><td colspan="5" class="empty-state">No accepted customers found.</td></tr><?php endif;?></tbody></table></div>
         <?php endif; ?>
       </section>
@@ -4699,5 +4820,27 @@ document.querySelectorAll('form[data-inventory-form="1"]').forEach(function (for
 });
 
 </script>
+<dialog class="document-action-dialog" id="document-action-dialog"><div class="document-action-modal"><div class="document-action-modal__header"><div><h2 id="document-action-title" style="margin:0">Document action</h2><p class="muted-helper" id="document-action-subtitle" style="margin:.25rem 0 0"></p></div><button class="btn secondary" type="button" data-document-action-close>&times;</button></div><div class="document-action-modal__body"><div class="document-action-modal__context" id="document-action-context"></div><div class="document-action-modal__status" id="document-action-status">Working…</div></div><div class="document-action-modal__footer"><button class="btn secondary" type="button" data-document-action-close>Close</button><a class="btn document-action-modal__open" id="document-action-open" href="#" target="_blank" rel="noopener" hidden>Open/View Document</a></div></div></dialog>
+<script>
+(function(){
+  var dialog=document.getElementById('document-action-dialog'); if(!dialog || !window.fetch) return;
+  var title=document.getElementById('document-action-title'), subtitle=document.getElementById('document-action-subtitle'), context=document.getElementById('document-action-context'), status=document.getElementById('document-action-status'), openLink=document.getElementById('document-action-open');
+  function esc(v){return String(v||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];});}
+  document.querySelectorAll('[data-document-action-close]').forEach(function(btn){btn.addEventListener('click',function(){dialog.close();});});
+  document.addEventListener('submit',function(ev){
+    var form=ev.target.closest('form[data-document-action]'); if(!form) return; ev.preventDefault();
+    var label=form.getAttribute('data-document-label')||'Document action';
+    title.textContent=label; subtitle.textContent='Accepted customer document center';
+    context.innerHTML='<strong>Quotation:</strong> '+esc(form.getAttribute('data-quote-no'))+'<br><strong>Customer:</strong> '+esc(form.getAttribute('data-customer-name'))+'<br><strong>Mobile:</strong> '+esc(form.getAttribute('data-customer-mobile'));
+    status.className='document-action-modal__status'; status.textContent='Creating or locating the document…'; openLink.hidden=true; openLink.removeAttribute('href');
+    if(typeof dialog.showModal==='function') dialog.showModal(); else dialog.setAttribute('open','open');
+    fetch(form.action || window.location.href,{method:'POST',body:new FormData(form),headers:{'Accept':'application/json','X-Requested-With':'fetch'},credentials:'same-origin'})
+      .then(function(resp){return resp.json().catch(function(){throw new Error('Unexpected server response.');}).then(function(data){if(!resp.ok||!data.ok){throw new Error(data.error||'Document action failed.');}return data;});})
+      .then(function(data){var doc=data.document||{}; status.className='document-action-modal__status is-success'; status.textContent=data.message || ((data.created?'Created ':'Opened ')+(doc.label||'document')+'.'); if(doc.url){openLink.href=doc.url; openLink.textContent='Open/View '+(doc.label||'Document'); openLink.hidden=false;}})
+      .catch(function(err){status.className='document-action-modal__status is-error'; status.textContent=err.message || 'Document action failed.';});
+  });
+})();
+</script>
+
 </body>
 </html>
