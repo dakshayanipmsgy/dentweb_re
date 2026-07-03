@@ -3422,7 +3422,18 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
       <div class="banner <?= htmlspecialchars($status, ENT_QUOTES) ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div>
     <?php endif; ?>
 
-    <?= render_commercial_lifecycle('receipt') ?>
+    <section class="admin-documents__billing-access" aria-label="Payments and receipt workspace shortcuts">
+      <div>
+        <p class="admin-section-heading__eyebrow">Payments workspace</p>
+        <h2>Accepted Customers, Payments &amp; Receipts</h2>
+        <p>Payment requests, customer receipts, and accepted-customer document packs live here separately from the quotation-to-invoice lifecycle.</p>
+      </div>
+      <nav aria-label="Payment workspace links">
+        <a class="btn secondary" href="?tab=accepted_customers">Accepted Customers</a>
+        <a class="btn secondary" href="?tab=accepted_customers">Payments</a>
+        <a class="btn secondary" href="?tab=accepted_customers">Payment Receipts</a>
+      </nav>
+    </section>
 
     <div data-workspace-root>
     <section class="admin-documents__context" aria-labelledby="workspace-title">
@@ -3433,7 +3444,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
       </div>
     </section>
 
-    <nav class="tabs admin-documents__tabs workspace-tabs" data-workspace-tabs="fetch" aria-label="Document Center tabs">
+    <nav class="tabs admin-documents__tabs admin-documents__workspace-nav workspace-tabs" data-workspace-tabs="fetch" aria-label="Document Center tabs">
       <a data-workspace-tab class="tab <?= $activeTab === 'company' ? 'active' : '' ?>" href="?tab=company"<?= $activeTab === 'company' ? ' aria-current="page"' : '' ?>>Company Profile &amp; Branding</a>
       <a data-workspace-tab class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering"<?= $activeTab === 'numbering' ? ' aria-current="page"' : '' ?>>Numbering Rules</a>
       <a data-workspace-tab class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates"<?= $activeTab === 'templates' ? ' aria-current="page"' : '' ?>>Template Sets</a>
