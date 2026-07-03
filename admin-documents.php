@@ -456,6 +456,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header('Location: ' . $openUrl . ($docType === 'agreement' ? '&status=success&message=' . urlencode($message) : ''));
                 exit;
             }
+            $viewUrl = $docType === 'invoice' ? 'invoice-view.php?id=' . urlencode($docId) : $openUrl;
             $sendJsonResponse([
                 'ok' => true,
                 'created' => $created,
@@ -465,8 +466,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'label' => $documentActionLabel($docType),
                     'id' => $docId,
                     'url' => $openUrl,
+                    'editor_url' => $openUrl,
+                    'view_url' => $viewUrl,
                 ],
                 'open_url' => $openUrl,
+                'editor_url' => $openUrl,
+                'view_url' => $viewUrl,
                 'context' => $quoteContext,
             ]);
         };
@@ -3894,7 +3899,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             <button class="btn" type="submit">Create Invoice</button>
           </form>
           <table><thead><tr><th>ID</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-          <?php foreach ($packInvoices as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['invoice_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($row['status'] ?? 'draft'), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="admin-invoices.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View/Edit</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="invoice" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
+          <?php foreach ($packInvoices as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars((string) ($row['invoice_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($row['status'] ?? 'draft'), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="admin-invoices.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">Open/Edit</a><a class="btn secondary" href="invoice-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View/Print</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="invoice" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
           <?php if ($packInvoices === []): ?><tr><td colspan="4"><div class="empty-card-state">No invoice exists yet. Create one when the customer is ready for billing.</div></td></tr><?php endif; ?>
           </tbody></table>
           </section>
@@ -4868,7 +4873,7 @@ document.querySelectorAll('form[data-inventory-form="1"]').forEach(function (for
     var target=form.getAttribute('action') || (root ? root.getAttribute('data-document-action-endpoint') : '') || window.location.pathname;
     fetch(target,{method:'POST',body:new FormData(form),headers:{'Accept':'application/json','X-Requested-With':'fetch'},credentials:'same-origin'})
       .then(function(resp){return resp.text().then(function(text){var data; try{data=JSON.parse(text);}catch(e){console.error('Document action returned non-JSON response.',{target:target,status:resp.status,preview:text.slice(0,320)}); throw new Error('The server did not return JSON for this document action. Please retry; if it continues, share this response preview: '+text.slice(0,160));} if(!resp.ok||!data.ok){throw new Error(data.error||'Document action failed.');} return data;});})
-      .then(function(data){var doc=data.document||{}, openUrl=(doc.url||data.open_url||''); status.className='document-action-modal__status is-success'; status.textContent=data.message || ((data.created?'Created ':'Opened ')+(doc.label||'document')+'.'); if(openUrl){openLink.href=openUrl; openLink.textContent=(doc.type==='invoice'?'Open/View Invoice':'Open/View '+(doc.label||'Document')); openLink.hidden=false;}})
+      .then(function(data){var doc=data.document||{}, openUrl=(doc.view_url||data.view_url||doc.url||data.open_url||''); status.className='document-action-modal__status is-success'; status.textContent=data.message || ((data.created?'Created ':'Opened ')+(doc.label||'document')+'.'); if(openUrl){openLink.href=openUrl; openLink.textContent=(doc.type==='invoice'?'Open/View Invoice':'Open/View '+(doc.label||'Document')); openLink.hidden=false;}})
       .catch(function(err){status.className='document-action-modal__status is-error'; status.textContent=err.message || 'Document action failed.';});
   });
 })();
