@@ -7,6 +7,37 @@ require_once __DIR__ . '/includes/commercial_lifecycle.php';
 require_admin();
 documents_ensure_structure();
 
+
+function invoice_archive_actor(): array
+{
+    $user = current_user();
+    return ['type' => 'admin', 'id' => (string) ($user['id'] ?? ''), 'name' => (string) ($user['full_name'] ?? 'Admin')];
+}
+
+function invoice_sync_sales_record(array $doc): void
+{
+    $invoiceId = (string) ($doc['id'] ?? '');
+    if ($invoiceId === '') {
+        return;
+    }
+    $snap = array_merge(documents_customer_snapshot_defaults(), is_array($doc['customer_snapshot'] ?? null) ? $doc['customer_snapshot'] : []);
+    $sales = documents_get_sales_document('invoice', $invoiceId) ?: documents_sales_document_defaults('invoice');
+    $sales['id'] = $invoiceId;
+    $sales['quotation_id'] = (string) ($doc['linked_quote_id'] ?? $doc['quotation_id'] ?? '');
+    $sales['customer_mobile'] = (string) ($doc['customer_mobile'] ?? $snap['mobile'] ?? '');
+    $sales['customer_name'] = (string) ($snap['name'] ?? '');
+    $sales['invoice_no'] = (string) ($doc['invoice_no'] ?? '');
+    $sales['invoice_date'] = (string) ($doc['invoice_date'] ?? substr((string) ($doc['created_at'] ?? ''), 0, 10));
+    $sales['amount'] = (float) ($doc['input_total_gst_inclusive'] ?? $doc['calc']['grand_total'] ?? $doc['calc']['gross_payable'] ?? 0);
+    $sales['status'] = (string) ($doc['status'] ?? 'Draft');
+    $sales['archived_flag'] = !empty($doc['archived_flag']);
+    $sales['archived_at'] = (string) ($doc['archived_at'] ?? '');
+    $sales['archived_by'] = is_array($doc['archived_by'] ?? null) ? $doc['archived_by'] : ['type' => '', 'id' => '', 'name' => ''];
+    $sales['created_at'] = (string) ($sales['created_at'] ?: ($doc['created_at'] ?? date('c')));
+    $sales['updated_at'] = (string) ($doc['updated_at'] ?? date('c'));
+    documents_save_sales_document('invoice', $sales);
+}
+
 function invoice_workspace_redirect(string $id, string $status, string $message): void
 {
     $query = $id !== '' ? ['id' => $id] : [];
@@ -25,6 +56,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $action = safe_text($_POST['action'] ?? '');
+    if (in_array($action, ['archive_invoice', 'unarchive_invoice'], true)) {
+        $invoiceId = safe_text($_POST['invoice_id'] ?? '');
+        $doc = $invoiceId !== '' ? documents_get_invoice($invoiceId) : null;
+        if ($doc === null) { invoice_workspace_redirect('', 'error', 'Invoice not found.'); }
+        if ($action === 'archive_invoice') {
+            $doc = documents_set_archived($doc, invoice_archive_actor());
+            $message = 'Invoice archived.';
+        } else {
+            $doc = documents_set_unarchived($doc);
+            if (strtolower((string) ($doc['status'] ?? '')) === 'active') { $doc['status'] = 'Draft'; }
+            $message = 'Invoice unarchived.';
+        }
+        $doc['updated_at'] = date('c');
+        $saved = documents_save_invoice($doc);
+        if (empty($saved['ok'])) { invoice_workspace_redirect($invoiceId, 'error', 'Unable to update invoice archive state.'); }
+        invoice_sync_sales_record($doc);
+        invoice_workspace_redirect($invoiceId, 'success', $message);
+    }
+
     if ($action === 'save_invoice_draft') {
         $invoiceId = safe_text($_POST['invoice_id'] ?? '');
         $doc = $invoiceId !== '' ? documents_get_invoice($invoiceId) : null;
@@ -53,26 +103,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             invoice_workspace_redirect($invoiceId, 'error', 'Unable to save invoice draft.');
         }
 
-        $sales = documents_get_sales_document('invoice', $invoiceId);
-        if (is_array($sales)) {
-            $sales['invoice_no'] = (string) $doc['invoice_no'];
-            $sales['customer_mobile'] = (string) $doc['customer_mobile'];
-            $sales['customer_name'] = (string) ($snap['name'] ?? '');
-            $sales['amount'] = (float) $doc['input_total_gst_inclusive'];
-            $sales['updated_at'] = (string) $doc['updated_at'];
-            documents_save_sales_document('invoice', $sales);
-        }
+        invoice_sync_sales_record($doc);
 
         invoice_workspace_redirect($invoiceId, 'success', 'Invoice draft saved.');
     }
 }
 
 $doc = $id !== '' ? documents_get_invoice($id) : null;
+if ($doc !== null) { invoice_sync_sales_record($doc); }
+$showArchived = (string) ($_GET['show_archived'] ?? '') === '1';
 $rows = [];
 foreach (glob(documents_invoices_dir() . '/*.json') ?: [] as $file) {
     $row = json_load((string) $file, []);
     if (is_array($row)) {
-        $rows[] = array_merge(documents_invoice_defaults(), $row);
+        $merged = array_merge(documents_invoice_defaults(), $row);
+        invoice_sync_sales_record($merged);
+        if ($showArchived || !documents_is_archived($merged)) { $rows[] = $merged; }
     }
 }
 usort($rows, static fn(array $a, array $b): int => strcmp((string) ($b['updated_at'] ?? $b['created_at'] ?? ''), (string) ($a['updated_at'] ?? $a['created_at'] ?? '')));
@@ -88,10 +134,10 @@ $isDraft = $doc !== null && strtolower((string) ($doc['status'] ?? 'draft')) ===
 <header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Invoices</h1><p>Create, review, and maintain invoice drafts directly from accepted current quotations. Challans remain available for delivery tracking but are not required for invoice creation.</p></div><nav class="commercial-header__actions"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php">Document Center</a><a class="btn commercial-header__primary" href="admin-documents.php?tab=accepted_customers">Accepted Customers</a></nav></header>
 <?= render_commercial_lifecycle('invoice') ?>
 <?php if ($flashMessage !== ''): ?><div class="flash <?= $flashStatus === 'error' ? 'error' : 'success' ?>"><?= htmlspecialchars($flashMessage, ENT_QUOTES) ?></div><?php endif; ?>
-<section class="card"><div class="commercial-toolbar"><div><h2>Invoice list</h2><p class="muted-helper">Open an invoice to view its quotation/customer link, delivery references, and editable draft fields.</p></div></div><div class="responsive-table"><table><thead><tr><th>Invoice</th><th>Customer</th><th>Linked quotation</th><th>Status</th><th>Amount</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
-<?php foreach ($rows as $row): $quote=documents_get_quote((string)($row['linked_quote_id']??$row['quotation_id']??'')); $snap=array_merge(documents_customer_snapshot_defaults(), is_array($row['customer_snapshot']??null)?$row['customer_snapshot']:[]); $amount=(float)($row['calc']['grand_total']??$row['calc']['gross_payable']??$row['input_total_gst_inclusive']??0); ?><tr><td><strong><?=htmlspecialchars((string)($row['invoice_no']?:$row['id']),ENT_QUOTES)?></strong><br><span class="muted-helper"><?=htmlspecialchars((string)($row['id']??''),ENT_QUOTES)?></span></td><td><span class="quote-customer"><?=htmlspecialchars((string)($snap['name']??$quote['customer_name']??''),ENT_QUOTES)?></span><br><span class="muted-helper"><?=htmlspecialchars((string)($row['customer_mobile']??$snap['mobile']??''),ENT_QUOTES)?></span></td><td><?=htmlspecialchars((string)($quote['quote_no']??$row['quotation_no']??$row['linked_quote_id']??''),ENT_QUOTES)?></td><td><span class="status-badge status-badge--<?=strtolower(htmlspecialchars((string)($row['status']??''),ENT_QUOTES))?>"><?=htmlspecialchars((string)($row['status']??''),ENT_QUOTES)?></span></td><td class="quote-amount">₹<?=number_format($amount,2)?></td><td><?=htmlspecialchars((string)($row['updated_at']??$row['created_at']??''),ENT_QUOTES)?></td><td><div class="row-action-group"><a class="btn" href="?id=<?=urlencode((string)($row['id']??''))?>">Open</a><a class="btn secondary" href="admin-documents.php?tab=accepted_customers&amp;view=<?=urlencode((string)($row['linked_quote_id']??$row['quotation_id']??''))?>">Document Pack</a></div></td></tr><?php endforeach; if ($rows===[]): ?><tr><td colspan="7" class="empty-state">No invoices found. Create one from an accepted customer's document pack.</td></tr><?php endif; ?></tbody></table></div></section>
+<section class="card"><div class="commercial-toolbar"><div><h2>Invoice list</h2><p class="muted-helper">Open an invoice to view its quotation/customer link, delivery references, and editable draft fields.</p></div><form method="get"><label class="checkbox-field"><input type="checkbox" name="show_archived" value="1" <?= $showArchived ? 'checked' : '' ?>> Show Archived</label><button class="btn secondary" type="submit">Apply</button></form></div><div class="responsive-table"><table><thead><tr><th>Invoice</th><th>Customer</th><th>Linked quotation</th><th>Status</th><th>Amount</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
+<?php foreach ($rows as $row): $quote=documents_get_quote((string)($row['linked_quote_id']??$row['quotation_id']??'')); $snap=array_merge(documents_customer_snapshot_defaults(), is_array($row['customer_snapshot']??null)?$row['customer_snapshot']:[]); $amount=(float)($row['calc']['grand_total']??$row['calc']['gross_payable']??$row['input_total_gst_inclusive']??0); ?><tr><td><strong><?=htmlspecialchars((string)($row['invoice_no']?:$row['id']),ENT_QUOTES)?></strong><br><span class="muted-helper"><?=htmlspecialchars((string)($row['id']??''),ENT_QUOTES)?></span></td><td><span class="quote-customer"><?=htmlspecialchars((string)($snap['name']??$quote['customer_name']??''),ENT_QUOTES)?></span><br><span class="muted-helper"><?=htmlspecialchars((string)($row['customer_mobile']??$snap['mobile']??''),ENT_QUOTES)?></span></td><td><?=htmlspecialchars((string)($quote['quote_no']??$row['quotation_no']??$row['linked_quote_id']??''),ENT_QUOTES)?></td><td><span class="status-badge status-badge--<?=strtolower(htmlspecialchars((string)($row['status']??''),ENT_QUOTES))?>"><?=htmlspecialchars((string)($row['status']??''),ENT_QUOTES)?></span><?php if (documents_is_archived($row)): ?><br><span class="pill archived">Archived</span><?php endif; ?></td><td class="quote-amount">₹<?=number_format($amount,2)?></td><td><?=htmlspecialchars((string)($row['updated_at']??$row['created_at']??''),ENT_QUOTES)?></td><td><div class="row-action-group"><a class="btn" href="?id=<?=urlencode((string)($row['id']??''))?>">Open</a><a class="btn secondary" href="admin-documents.php?tab=accepted_customers&amp;view=<?=urlencode((string)($row['linked_quote_id']??$row['quotation_id']??''))?>">Document Pack</a><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES) ?>"><input type="hidden" name="action" value="<?= documents_is_archived($row) ? 'unarchive_invoice' : 'archive_invoice' ?>"><input type="hidden" name="invoice_id" value="<?= htmlspecialchars((string)($row['id']??''), ENT_QUOTES) ?>"><button class="btn <?= documents_is_archived($row) ? 'secondary' : 'warn' ?>" type="submit"><?= documents_is_archived($row) ? 'Unarchive' : 'Archive' ?></button></form></div></td></tr><?php endforeach; if ($rows===[]): ?><tr><td colspan="7" class="empty-state">No invoices found. Create one from an accepted customer's document pack.</td></tr><?php endif; ?></tbody></table></div></section>
 <?php if ($doc !== null): ?>
-<section class="card"><div class="commercial-toolbar"><div><h2>Invoice workspace: <?= htmlspecialchars((string)($doc['invoice_no'] ?: $doc['id']), ENT_QUOTES) ?></h2><p class="muted-helper">Linked quotation: <?= htmlspecialchars((string)($selectedQuote['quote_no'] ?? $doc['quotation_no'] ?? $doc['linked_quote_id'] ?? ''), ENT_QUOTES) ?>. Invoice data is sourced from the accepted quotation and can stand without a challan.</p></div><div class="row-action-group"><a class="btn secondary" href="admin-documents.php?tab=accepted_customers&amp;view=<?= urlencode((string)($doc['linked_quote_id'] ?? $doc['quotation_id'] ?? '')) ?>">Open document pack</a><a class="btn secondary" href="?id=<?= urlencode((string)$doc['id']) ?>&amp;debug=1">Debug record</a></div></div>
+<section class="card"><div class="commercial-toolbar"><div><h2>Invoice workspace: <?= htmlspecialchars((string)($doc['invoice_no'] ?: $doc['id']), ENT_QUOTES) ?></h2><p class="muted-helper">Linked quotation: <?= htmlspecialchars((string)($selectedQuote['quote_no'] ?? $doc['quotation_no'] ?? $doc['linked_quote_id'] ?? ''), ENT_QUOTES) ?>. Invoice data is sourced from the accepted quotation and can stand without a challan.</p></div><div class="row-action-group"><?php if (documents_is_archived($doc)): ?><span class="pill archived">Archived</span><?php endif; ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES) ?>"><input type="hidden" name="action" value="<?= documents_is_archived($doc) ? 'unarchive_invoice' : 'archive_invoice' ?>"><input type="hidden" name="invoice_id" value="<?= htmlspecialchars((string)$doc['id'], ENT_QUOTES) ?>"><button class="btn <?= documents_is_archived($doc) ? 'secondary' : 'warn' ?>" type="submit"><?= documents_is_archived($doc) ? 'Unarchive' : 'Archive' ?></button></form><a class="btn secondary" href="admin-documents.php?tab=accepted_customers&amp;view=<?= urlencode((string)($doc['linked_quote_id'] ?? $doc['quotation_id'] ?? '')) ?>">Open document pack</a><a class="btn secondary" href="?id=<?= urlencode((string)$doc['id']) ?>&amp;debug=1">Debug record</a></div></div>
 <form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_invoice_draft"><input type="hidden" name="invoice_id" value="<?= htmlspecialchars((string)$doc['id'], ENT_QUOTES) ?>">
 <div class="form-section-card"><h3>Invoice details</h3><p class="muted-helper">Draft fields are editable until the invoice is issued or finalized.</p><div class="form-grid"><div><label>Invoice number</label><input type="text" name="invoice_no" value="<?= htmlspecialchars((string)($doc['invoice_no'] ?? ''), ENT_QUOTES) ?>" <?= $isDraft ? '' : 'readonly' ?>></div><div><label>Status</label><input type="text" value="<?= htmlspecialchars((string)($doc['status'] ?? ''), ENT_QUOTES) ?>" readonly></div><div><label>Amount</label><input type="number" step="0.01" min="0" name="input_total_gst_inclusive" value="<?= htmlspecialchars((string)$selectedAmount, ENT_QUOTES) ?>" <?= $isDraft ? '' : 'readonly' ?>></div><div><label>Capacity (kWp)</label><input type="text" name="capacity_kwp" value="<?= htmlspecialchars((string)($doc['capacity_kwp'] ?? ''), ENT_QUOTES) ?>" <?= $isDraft ? '' : 'readonly' ?>></div><div><label>Pricing mode</label><input type="text" name="pricing_mode" value="<?= htmlspecialchars((string)($doc['pricing_mode'] ?? ''), ENT_QUOTES) ?>" <?= $isDraft ? '' : 'readonly' ?>></div><div><label>Quotation ID</label><input type="text" value="<?= htmlspecialchars((string)($doc['linked_quote_id'] ?? $doc['quotation_id'] ?? ''), ENT_QUOTES) ?>" readonly></div></div></div>
 <div class="form-section-card"><h3>Customer snapshot</h3><div class="form-grid"><div><label>Name</label><input type="text" name="customer_name" value="<?= htmlspecialchars((string)($selectedSnap['name'] ?? ''), ENT_QUOTES) ?>" <?= $isDraft ? '' : 'readonly' ?>></div><div><label>Mobile</label><input type="text" name="customer_mobile" value="<?= htmlspecialchars((string)($doc['customer_mobile'] ?? $selectedSnap['mobile'] ?? ''), ENT_QUOTES) ?>" <?= $isDraft ? '' : 'readonly' ?>></div><div class="full-span"><label>Address</label><textarea name="customer_address" rows="3" <?= $isDraft ? '' : 'readonly' ?>><?= htmlspecialchars((string)($selectedSnap['address'] ?? ''), ENT_QUOTES) ?></textarea></div></div></div>
