@@ -3509,6 +3509,28 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
       font-size:1.05rem;
     }
     .accepted-summary__card--wide { grid-column:1 / -1; }
+    .accepted-summary__card--document { grid-column:span 2; min-width:0; }
+    .accepted-summary__card--document table { min-width:620px; }
+    .accepted-summary__card--document .row-actions { align-items:stretch; }
+    .accepted-summary__card--document .row-actions .btn { white-space:nowrap; }
+    .accepted-finance { display:grid; gap:0.25rem; min-width:150px; font-size:0.88rem; line-height:1.25; }
+    .accepted-finance__row { display:flex; justify-content:space-between; gap:0.7rem; }
+    .accepted-finance__label { color:#64748b; }
+    .accepted-finance__value { color:#0f172a; font-weight:700; white-space:nowrap; }
+    .accepted-finance .pill { justify-self:start; margin-top:0.15rem; }
+    .accepted-customers-table-wrap { overflow-x:auto; overflow-y:visible; position:relative; }
+    .accepted-customers-table { overflow:visible; }
+    .accepted-customers-table td { overflow:visible; }
+    .row-action-group { display:flex; flex-wrap:wrap; gap:0.4rem; align-items:center; }
+    .more-actions { position:relative; z-index:5; }
+    .more-actions[open] { z-index:1000; }
+    .more-actions summary { list-style:none; cursor:pointer; }
+    .more-actions summary::-webkit-details-marker { display:none; }
+    .more-actions__menu { position:absolute; right:0; top:calc(100% + 0.4rem); display:grid; gap:0.35rem; min-width:230px; padding:0.55rem; background:#fff; border:1px solid #dbe7ef; border-radius:14px; box-shadow:0 18px 46px rgba(15,23,42,0.18); z-index:1001; }
+    .more-actions[open] .more-actions__menu { position:fixed; top:auto; right:auto; bottom:auto; }
+    .more-actions--dropup .more-actions__menu { top:auto; bottom:auto; }
+    .more-actions__menu .btn { width:100%; text-align:left; justify-content:flex-start; }
+    .more-actions__menu form { margin:0; }
     .accepted-context {
       background:linear-gradient(135deg,#ecfeff,#f8fafc);
       border:1px solid #bae6fd;
@@ -3554,6 +3576,9 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
         padding: 0.75rem 12px 1rem;
       }
       .accepted-summary { grid-template-columns:1fr; }
+      .accepted-summary__card--document { grid-column:1 / -1; }
+      .accepted-summary__card--document table { min-width:560px; }
+      .more-actions__menu { left:0; right:auto; max-width:calc(100vw - 2rem); }
     }
     .document-action-form{margin:0}.document-action-dialog::backdrop{background:rgba(15,23,42,.45)}.document-action-dialog{border:0;border-radius:18px;box-shadow:0 24px 80px rgba(15,23,42,.3);max-width:560px;width:calc(100% - 32px);padding:0}.document-action-modal{padding:22px}.document-action-modal__header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:1px solid #dbe7e3;padding-bottom:12px}.document-action-modal__body{display:grid;gap:12px;padding:16px 0}.document-action-modal__context{background:#f8fbfa;border:1px solid #dbe7e3;border-radius:12px;padding:12px}.document-action-modal__status{border-radius:12px;padding:12px;background:#eef6ff;color:#1e3a8a}.document-action-modal__status.is-success{background:#ecfdf5;color:#065f46}.document-action-modal__status.is-error{background:#fef2f2;color:#991b1b}.document-action-modal__footer{display:flex;justify-content:flex-end;gap:10px;border-top:1px solid #dbe7e3;padding-top:14px}.document-action-modal__open[hidden]{display:none}
 
@@ -3684,7 +3709,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           </p>
 
           </section>
-          <section class="accepted-summary__card">
+          <section class="accepted-summary__card accepted-summary__card--document">
           <h3>Vendor consumer agreement</h3>
           <?php if ($packAgreements === []): ?>
             <form method="post" class="inline-form">
@@ -3865,7 +3890,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           </table>
 
           </section>
-          <section class="accepted-summary__card">
+          <section class="accepted-summary__card accepted-summary__card--document">
           <h3>Delivery challan</h3>
           <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
@@ -3888,7 +3913,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           <?php if ($packChallans === []): ?><tr><td colspan="5"><div class="empty-card-state">No delivery challan exists yet. Create one when delivery documentation is needed.</div></td></tr><?php endif; ?>
           </tbody></table>
           </section>
-          <section class="accepted-summary__card">
+          <section class="accepted-summary__card accepted-summary__card--document">
           <h3>Invoice</h3>
           <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
@@ -3907,10 +3932,10 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
         <?php else: ?>
           <div class="commercial-toolbar"><div><h2>Accepted Customers</h2><p class="muted-helper">Enter an accepted customer workbench to manage payment requests, receipts, summaries, and lifecycle documents.</p></div></div>
           <form method="get" class="filter-grid list-toolbar"><input type="hidden" name="tab" value="accepted_customers" /><div><label>Search customer / mobile</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div><div><label>Archive visibility</label><label class="checkbox-field"><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived</label></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form>
-          <div class="responsive-table"><table><thead><tr><th>Accepted quotation</th><th>Customer</th><th>System</th><th>Workflow</th><th>Actions</th></tr></thead><tbody>
-          <?php foreach ($acceptedRows as $row): $quote=$row['quote']; $qid=(string)($quote['id']??''); $workflow=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Dispatch Advice'=>array_values(array_filter(documents_dispatch_advices_for_quote($qid), static fn(array $row): bool => !documents_is_archived($row)))!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[]]; ?>
-          <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Enter</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php foreach ([['create_agreement','Create/Open Agreement'],['create_dispatch_advice','Create/Open Dispatch Advice'],['create_delivery_challan','Create/Open Challan'],['create_invoice','Create/Open Invoice']] as $docAction): ?><form method="post" action="<?= htmlspecialchars($documentActionEndpoint, ENT_QUOTES) ?>" class="document-action-form" data-document-action="1" data-document-label="<?= htmlspecialchars($docAction[1], ENT_QUOTES) ?>" data-quote-no="<?= htmlspecialchars((string)($quote['quote_no']??$qid), ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($quote['customer_name']??''), ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars((string)($quote['customer_mobile']??''), ENT_QUOTES) ?>"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="<?= htmlspecialchars($docAction[0], ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><input type="hidden" name="response_format" value="json"><button class="btn secondary" type="submit"><?= htmlspecialchars($docAction[1], ENT_QUOTES) ?></button></form><?php endforeach; ?><?php if($isAdmin && empty($row['is_archived'])):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
-          <?php endforeach; if($acceptedRows===[]):?><tr><td colspan="5" class="empty-state">No accepted customers found.</td></tr><?php endif;?></tbody></table></div>
+          <div class="responsive-table accepted-customers-table-wrap"><table class="accepted-customers-table"><thead><tr><th>Accepted quotation</th><th>Customer</th><th>System</th><th>Finance</th><th>Workflow</th><th>Actions</th></tr></thead><tbody>
+          <?php foreach ($acceptedRows as $row): $quote=$row['quote']; $qid=(string)($quote['id']??''); $paymentSummary=is_array($row['payment_summary']??null)?$row['payment_summary']:[]; $activePaymentRequests=(int)($paymentSummary['active_request_count']??0); $workflow=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Dispatch Advice'=>array_values(array_filter(documents_dispatch_advices_for_quote($qid), static fn(array $row): bool => !documents_is_archived($row)))!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[]]; ?>
+          <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td><div class="accepted-finance"><div class="accepted-finance__row"><span class="accepted-finance__label">Total</span><span class="accepted-finance__value"><?= htmlspecialchars($inr((float)($row['quotation_amount']??0)),ENT_QUOTES) ?></span></div><div class="accepted-finance__row"><span class="accepted-finance__label">Received</span><span class="accepted-finance__value"><?= htmlspecialchars($inr((float)($row['payment_received']??0)),ENT_QUOTES) ?></span></div><div class="accepted-finance__row"><span class="accepted-finance__label">Due</span><span class="accepted-finance__value"><?= htmlspecialchars($inr(max(0,(float)($row['receivables']??0))),ENT_QUOTES) ?></span></div><?php if(!empty($row['advance'])):?><span class="pill warn">Overpaid / advance <?= htmlspecialchars($inr(abs((float)($row['receivables']??0))),ENT_QUOTES) ?></span><?php endif;?><?php if($activePaymentRequests>0):?><span class="pill"><?= $activePaymentRequests ?> active request<?= $activePaymentRequests===1?'':'s' ?></span><?php endif;?></div></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Enter</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php foreach ([['create_agreement','Create/Open Agreement'],['create_dispatch_advice','Create/Open Dispatch Advice'],['create_delivery_challan','Create/Open Challan'],['create_invoice','Create/Open Invoice']] as $docAction): ?><form method="post" action="<?= htmlspecialchars($documentActionEndpoint, ENT_QUOTES) ?>" class="document-action-form" data-document-action="1" data-document-label="<?= htmlspecialchars($docAction[1], ENT_QUOTES) ?>" data-quote-no="<?= htmlspecialchars((string)($quote['quote_no']??$qid), ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($quote['customer_name']??''), ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars((string)($quote['customer_mobile']??''), ENT_QUOTES) ?>"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="<?= htmlspecialchars($docAction[0], ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><input type="hidden" name="response_format" value="json"><button class="btn secondary" type="submit"><?= htmlspecialchars($docAction[1], ENT_QUOTES) ?></button></form><?php endforeach; ?><?php if($isAdmin && empty($row['is_archived'])):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
+          <?php endforeach; if($acceptedRows===[]):?><tr><td colspan="6" class="empty-state">No accepted customers found.</td></tr><?php endif;?></tbody></table></div>
         <?php endif; ?>
       </section>
     <?php endif; ?>
@@ -4853,6 +4878,74 @@ document.querySelectorAll('form[data-inventory-form="1"]').forEach(function (for
     });
   }
 });
+
+(function () {
+  const moreActions = Array.from(document.querySelectorAll('.more-actions'));
+  if (moreActions.length === 0) return;
+
+  function closeOtherMenus(active) {
+    moreActions.forEach(function (menu) {
+      if (menu !== active) {
+        menu.removeAttribute('open');
+        menu.classList.remove('more-actions--dropup');
+      }
+    });
+  }
+
+  function positionMenu(menu) {
+    const flyout = menu.querySelector('.more-actions__menu');
+    if (!flyout) return;
+    menu.classList.remove('more-actions--dropup');
+    flyout.style.left = '';
+    flyout.style.top = '';
+    const summary = menu.querySelector('summary');
+    const summaryRect = summary ? summary.getBoundingClientRect() : menu.getBoundingClientRect();
+    const flyoutRect = flyout.getBoundingClientRect();
+    const flyoutWidth = flyoutRect.width || 230;
+    const flyoutHeight = flyoutRect.height || 260;
+    const viewportPad = 12;
+    const gap = 6;
+    const spaceBelow = window.innerHeight - summaryRect.bottom;
+    const spaceAbove = summaryRect.top;
+    const openUpward = spaceBelow < flyoutHeight + gap + viewportPad && spaceAbove > spaceBelow;
+    const left = Math.min(Math.max(viewportPad, summaryRect.right - flyoutWidth), window.innerWidth - flyoutWidth - viewportPad);
+    const top = openUpward
+      ? Math.max(viewportPad, summaryRect.top - flyoutHeight - gap)
+      : Math.min(summaryRect.bottom + gap, window.innerHeight - flyoutHeight - viewportPad);
+    if (openUpward) {
+      menu.classList.add('more-actions--dropup');
+    }
+    flyout.style.left = left + 'px';
+    flyout.style.top = top + 'px';
+  }
+
+  moreActions.forEach(function (menu) {
+    menu.addEventListener('toggle', function () {
+      if (!menu.open) {
+        menu.classList.remove('more-actions--dropup');
+        return;
+      }
+      closeOtherMenus(menu);
+      window.requestAnimationFrame(function () { positionMenu(menu); });
+    });
+  });
+
+  document.addEventListener('click', function (event) {
+    const active = event.target.closest ? event.target.closest('.more-actions') : null;
+    moreActions.forEach(function (menu) {
+      if (menu !== active) {
+        menu.removeAttribute('open');
+        menu.classList.remove('more-actions--dropup');
+      }
+    });
+  });
+
+  window.addEventListener('resize', function () {
+    moreActions.forEach(function (menu) {
+      if (menu.open) positionMenu(menu);
+    });
+  });
+})();
 
 </script>
 <dialog class="document-action-dialog" id="document-action-dialog"><div class="document-action-modal"><div class="document-action-modal__header"><div><h2 id="document-action-title" style="margin:0">Document action</h2><p class="muted-helper" id="document-action-subtitle" style="margin:.25rem 0 0"></p></div><button class="btn secondary" type="button" data-document-action-close>&times;</button></div><div class="document-action-modal__body"><div class="document-action-modal__context" id="document-action-context"></div><div class="document-action-modal__status" id="document-action-status">Working…</div></div><div class="document-action-modal__footer"><button class="btn secondary" type="button" data-document-action-close>Close</button><a class="btn document-action-modal__open" id="document-action-open" href="#" target="_blank" rel="noopener" hidden>Open/View Document</a></div></div></dialog>
