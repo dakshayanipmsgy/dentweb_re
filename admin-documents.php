@@ -720,7 +720,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $failDocumentAction('Invoice created but could not be loaded.');
             }
 
-            $savedSalesInvoice = documents_sync_sales_invoice_from_invoice($invoiceDoc, $quote, $viewer);
+            $salesInvoice = documents_sales_document_defaults('invoice');
+            $salesInvoice['id'] = $invoiceId;
+            $salesInvoice['quotation_id'] = (string) ($quote['id'] ?? '');
+            $salesInvoice['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+            $salesInvoice['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
+            $salesInvoice['invoice_no'] = (string) ($invoiceDoc['invoice_no'] ?? '');
+            $salesInvoice['invoice_date'] = date('Y-m-d');
+            $salesInvoice['amount'] = (float) ($invoiceDoc['input_total_gst_inclusive'] ?? 0);
+            $salesInvoice['tax_profile_id'] = (string) ($quote['tax_profile_id'] ?? '');
+            $salesInvoice['tax_breakdown'] = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : (array) ($quote['calc']['tax_breakdown'] ?? []);
+            $salesInvoice['status'] = 'draft';
+            $salesInvoice['created_by'] = $viewer;
+            $salesInvoice['created_at'] = (string) ($invoiceDoc['created_at'] ?? date('c'));
+            $savedSalesInvoice = documents_save_sales_document('invoice', $salesInvoice);
             if (!$savedSalesInvoice['ok']) {
                 $failDocumentAction('Invoice created, but workflow update failed.');
             }
@@ -4823,7 +4836,7 @@ document.querySelectorAll('form[data-inventory-form="1"]').forEach(function (for
     if(typeof dialog.showModal==='function') dialog.showModal(); else dialog.setAttribute('open','open');
     fetch(form.action || window.location.href,{method:'POST',body:new FormData(form),headers:{'Accept':'application/json','X-Requested-With':'fetch'},credentials:'same-origin'})
       .then(function(resp){return resp.json().catch(function(){throw new Error('Unexpected server response.');}).then(function(data){if(!resp.ok||!data.ok){throw new Error(data.error||'Document action failed.');}return data;});})
-      .then(function(data){var doc=data.document||{}; status.className='document-action-modal__status is-success'; status.textContent=data.message || ((data.created?'Created ':'Opened ')+(doc.label||'document')+'.'); if(doc.url){openLink.href=doc.url; openLink.textContent=(doc.type==='invoice'?'Open Invoice Now':'Open/View '+(doc.label||'Document')); openLink.hidden=false; if(doc.type==='invoice'){openLink.classList.add('commercial-header__primary'); openLink.focus();}}})
+      .then(function(data){var doc=data.document||{}; status.className='document-action-modal__status is-success'; status.textContent=data.message || ((data.created?'Created ':'Opened ')+(doc.label||'document')+'.'); if(doc.url){openLink.href=doc.url; openLink.textContent='Open/View '+(doc.label||'Document'); openLink.hidden=false;}})
       .catch(function(err){status.className='document-action-modal__status is-error'; status.textContent=err.message || 'Document action failed.';});
   });
 })();
