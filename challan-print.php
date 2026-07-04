@@ -5,6 +5,7 @@ require_once __DIR__ . '/includes/public_document_security.php';
 protect_customer_document_response();
 
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/customer_portal.php';
 require_once __DIR__ . '/includes/employee_portal.php';
 require_once __DIR__ . '/includes/employee_admin.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
@@ -70,11 +71,20 @@ function challan_print_render_dispatch_details(array $details): void
 
 documents_ensure_structure();
 $employeeStore = new EmployeeFsStore();
+$customerView = (string) ($_GET['customer_view'] ?? '') === '1';
+$customer = null;
 
 $viewerType = '';
 $viewerId = '';
 $user = current_user();
-if (is_array($user) && (($user['role_name'] ?? '') === 'admin')) {
+if ($customerView) {
+    $store = new CustomerFsStore();
+    customer_portal_require_login();
+    $customer = customer_portal_fetch_customer($store);
+    if ($customer === null) { customer_portal_logout(); header('Location: customer-login.php'); exit; }
+    $viewerType = 'customer';
+    $viewerId = (string) ($customer['id'] ?? normalize_customer_mobile((string) ($customer['mobile'] ?? '')));
+} elseif (is_array($user) && (($user['role_name'] ?? '') === 'admin')) {
     $viewerType = 'admin';
     $viewerId = (string) ($user['id'] ?? '');
 } else {
@@ -88,6 +98,17 @@ if ($viewerType === '') { header('Location: login.php'); exit; }
 
 $challan = documents_get_challan(safe_text($_GET['id'] ?? ''));
 if ($challan === null) { http_response_code(404); echo 'Challan not found.'; exit; }
+if ($viewerType === 'customer') {
+    $customerMobile = normalize_customer_mobile((string) ($customer['mobile'] ?? ''));
+    $docMobile = normalize_customer_mobile((string) ($challan['customer_mobile'] ?? $challan['customer_snapshot']['mobile'] ?? ''));
+    if ($docMobile === '') {
+        $quoteForOwner = documents_get_quote((string) ($challan['quote_id'] ?? $challan['linked_quote_id'] ?? ''));
+        if (is_array($quoteForOwner)) {
+            $docMobile = normalize_customer_mobile((string) ($quoteForOwner['customer_mobile'] ?? $quoteForOwner['customer_snapshot']['mobile'] ?? ''));
+        }
+    }
+    if ($customerMobile === '' || $docMobile !== $customerMobile) { http_response_code(403); echo 'Access denied.'; exit; }
+}
 if ($viewerType === 'employee' && ((string) ($challan['created_by']['role'] ?? $challan['created_by_type'] ?? '') !== 'employee' || (string) ($challan['created_by']['id'] ?? $challan['created_by_id'] ?? '') !== $viewerId)) {
     http_response_code(403); echo 'Access denied.'; exit;
 }

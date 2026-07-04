@@ -1,14 +1,35 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/customer_portal.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 
-require_admin();
+$customerView = (string) ($_GET['customer_view'] ?? '') === '1';
+$customer = null;
+if ($customerView) {
+    $store = new CustomerFsStore();
+    customer_portal_require_login();
+    $customer = customer_portal_fetch_customer($store);
+    if ($customer === null) { customer_portal_logout(); header('Location: customer-login.php'); exit; }
+} else {
+    require_admin();
+}
 documents_ensure_structure();
 
 $id = safe_text((string) ($_GET['id'] ?? ''));
 $invoice = $id !== '' ? documents_get_invoice($id) : null;
 $company = documents_get_company_profile_for_quotes();
+if ($customerView && is_array($invoice)) {
+    $customerMobile = normalize_customer_mobile((string) ($customer['mobile'] ?? ''));
+    $docMobile = normalize_customer_mobile((string) ($invoice['customer_mobile'] ?? $invoice['customer_snapshot']['mobile'] ?? ''));
+    if ($docMobile === '') {
+        $ownQuote = documents_get_quote((string) ($invoice['linked_quote_id'] ?? $invoice['quotation_id'] ?? ''));
+        if (is_array($ownQuote)) {
+            $docMobile = normalize_customer_mobile((string) ($ownQuote['customer_mobile'] ?? $ownQuote['customer_snapshot']['mobile'] ?? ''));
+        }
+    }
+    if ($customerMobile === '' || $docMobile !== $customerMobile) { http_response_code(403); exit('Access denied.'); }
+}
 
 $esc = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 $money = static fn($value): string => '₹' . number_format((float) $value, 2);
@@ -106,7 +127,7 @@ $displaySolarKwp = $hasSolarSizeBreakup ? $totalSolarKwp : $solarSizeValue($invo
 <body>
 <main class="invoice-page">
   <div class="page-actions">
-    <a class="btn secondary" href="admin-invoices.php<?= $id !== '' ? '?id=' . urlencode($id) : '' ?>">Back to editor</a>
+    <?php if ($customerView): ?><a class="btn secondary" href="customer-dashboard.php">Back to dashboard</a><?php else: ?><a class="btn secondary" href="admin-invoices.php<?= $id !== '' ? '?id=' . urlencode($id) : '' ?>">Back to editor</a><?php endif; ?>
     <?php if ($invoice !== null): ?><button class="btn" type="button" onclick="window.print()">Print invoice</button><?php endif; ?>
   </div>
   <?php if ($invoice === null): ?>

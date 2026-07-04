@@ -5,6 +5,7 @@ require_once __DIR__ . '/includes/public_document_security.php';
 protect_customer_document_response();
 
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/customer_portal.php';
 require_once __DIR__ . '/includes/customer_document_acceptance.php';
 require_once __DIR__ . '/includes/employee_portal.php';
 require_once __DIR__ . '/includes/employee_admin.php';
@@ -12,12 +13,22 @@ require_once __DIR__ . '/admin/includes/documents_helpers.php';
 
 documents_ensure_structure();
 $employeeStore = new EmployeeFsStore();
+$customerView = (string) ($_GET['customer_view'] ?? '') === '1';
+$customer = null;
 
 $viewerType = '';
 $viewerId = '';
 $viewerName = 'User';
 $user = current_user();
-if (is_array($user) && (($user['role_name'] ?? '') === 'admin')) {
+if ($customerView) {
+    $store = new CustomerFsStore();
+    customer_portal_require_login();
+    $customer = customer_portal_fetch_customer($store);
+    if ($customer === null) { customer_portal_logout(); header('Location: customer-login.php'); exit; }
+    $viewerType = 'customer';
+    $viewerId = (string) ($customer['id'] ?? normalize_customer_mobile((string) ($customer['mobile'] ?? '')));
+    $viewerName = (string) ($customer['name'] ?? 'Customer');
+} elseif (is_array($user) && (($user['role_name'] ?? '') === 'admin')) {
     $viewerType = 'admin';
     $viewerId = (string) ($user['id'] ?? '');
     $viewerName = (string) ($user['full_name'] ?? 'Admin');
@@ -41,6 +52,17 @@ if ($challan === null) {
     echo 'Challan not found.';
     exit;
 }
+if ($viewerType === 'customer') {
+    $customerMobile = normalize_customer_mobile((string) ($customer['mobile'] ?? ''));
+    $docMobile = normalize_customer_mobile((string) ($challan['customer_mobile'] ?? $challan['customer_snapshot']['mobile'] ?? ''));
+    if ($docMobile === '') {
+        $quoteForOwner = documents_get_quote((string) ($challan['quote_id'] ?? $challan['linked_quote_id'] ?? ''));
+        if (is_array($quoteForOwner)) {
+            $docMobile = normalize_customer_mobile((string) ($quoteForOwner['customer_mobile'] ?? $quoteForOwner['customer_snapshot']['mobile'] ?? ''));
+        }
+    }
+    if ($customerMobile === '' || $docMobile !== $customerMobile) { http_response_code(403); echo 'Access denied.'; exit; }
+}
 if ($viewerType === 'employee' && ((string) ($challan['created_by']['role'] ?? $challan['created_by_type'] ?? '') !== 'employee' || (string) ($challan['created_by']['id'] ?? $challan['created_by_id'] ?? '') !== $viewerId)) {
     http_response_code(403);
     echo 'Access denied.';
@@ -60,7 +82,7 @@ if (!empty($sourceRepair['ok'])) {
         }
     }
     $go = static function(string $status,string $message) use ($id): void { header('Location: challan-view.php?id='.urlencode($id).'&status='.urlencode($status).'&message='.urlencode($message)); exit; };
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!$customerView && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!verify_csrf_token($_POST['csrf_token'] ?? null)) $go('error','Security validation failed.');
         $action=safe_text($_POST['action'] ?? '');
         if ($action === 'save_operational' || $action === 'mark_dispatched') {
@@ -94,12 +116,12 @@ if (!empty($sourceRepair['ok'])) {
     $linkedAdviceItemCount=count(documents_normalize_dispatch_advice_items((array)($dispatchAdvice['items'] ?? [])));
     function cvh($v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
     ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow,noarchive"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Challan <?=cvh($challan['challan_no']??'')?></title><link rel="stylesheet" href="assets/css/admin-unified.css"></head><body class="admin-shell commercial-admin"><main class="commercial-shell">
-    <header class="card commercial-header"><div><p class="admin-kicker">Delivery Challan</p><h1><?=cvh($challan['challan_no']??$challan['dc_number']??'Challan')?></h1><p>Linked Dispatch Advice <?=cvh($challan['dispatch_advice_no']??'')?> · Quotation <?=cvh($challan['linked_quote_no']??'')?></p></div><nav class="commercial-header__actions"><a class="btn secondary" href="admin-challans.php">Challan Workspace</a><a class="btn secondary" href="challan-print.php?id=<?=urlencode((string)$challan['id'])?>" target="_blank">Print</a></nav></header>
+    <header class="card commercial-header"><div><p class="admin-kicker">Delivery Challan</p><h1><?=cvh($challan['challan_no']??$challan['dc_number']??'Challan')?></h1><p>Linked Dispatch Advice <?=cvh($challan['dispatch_advice_no']??'')?> · Quotation <?=cvh($challan['linked_quote_no']??'')?></p></div><nav class="commercial-header__actions"><a class="btn secondary" href="<?= $customerView ? 'customer-dashboard.php' : 'admin-challans.php' ?>"><?= $customerView ? 'Back to dashboard' : 'Challan Workspace' ?></a><a class="btn secondary" href="challan-print.php?id=<?=urlencode((string)$challan['id'])?><?= $customerView ? '&customer_view=1' : '' ?>" target="_blank">Print</a></nav></header>
     <?php if(isset($_GET['message'])):?><div class="card" style="background:<?=cvh(($_GET['status']??'')==='error'?'#fef2f2':'#ecfdf5')?>"><?=cvh($_GET['message'])?></div><?php endif;?>
     <section class="form-section-card"><h2>Status <span class="status-badge"><?=cvh($workflow)?></span></h2><div class="form-grid"><div><label>Dispatch Advice</label><input value="<?=cvh($challan['dispatch_advice_no']??'')?>" readonly></div><div><label>Quotation</label><input value="<?=cvh($challan['linked_quote_no']??'')?>" readonly></div><div><label>Customer</label><input value="<?=cvh($challan['customer_snapshot']['name']??'')?>" readonly></div><div><label>Registered mobile</label><input value="<?=cvh($registeredMobileMask)?>" readonly></div><div class="full-span"><label>Delivery address</label><textarea readonly><?=cvh($challan['delivery_address']??'')?></textarea></div></div></section>
-    <form method="post"><input type="hidden" name="csrf_token" value="<?=cvh($_SESSION['csrf_token']??'')?>"><section class="form-section-card"><h3>Accepted material snapshot (read-only)</h3><div class="responsive-table"><table><thead><tr><th>#</th><th>Item / description</th><th>Brand / model</th><th>Qty</th><th>Remarks</th></tr></thead><tbody><?php foreach($items as $i=>$it):?><tr><td><?=($i+1)?></td><td><strong><?=cvh($it['name']??'')?></strong><?php if(trim((string)($it['description']??''))!==''):?><br><span class="muted-helper"><?=cvh($it['description']??'')?></span><?php endif;?></td><td><?=cvh($it['brand_model']??'')?></td><td><?=cvh($it['qty']??'')?> <?=cvh($it['unit']??'')?></td><td><?=cvh($it['remarks']??'')?></td></tr><?php endforeach;if(!$items):?><tr><td colspan="5" class="empty-state">No material items were found. The linked Dispatch Advice contains <?= (int)$linkedAdviceItemCount ?> item(s). Repair or recreate this Challan.</td></tr><?php endif;?></tbody></table></div></section>
+    <form method="post"><fieldset <?= $customerView ? 'disabled' : '' ?> style="border:0;padding:0;margin:0"><input type="hidden" name="csrf_token" value="<?=cvh($_SESSION['csrf_token']??'')?>"><section class="form-section-card"><h3>Accepted material snapshot (read-only)</h3><div class="responsive-table"><table><thead><tr><th>#</th><th>Item / description</th><th>Brand / model</th><th>Qty</th><th>Remarks</th></tr></thead><tbody><?php foreach($items as $i=>$it):?><tr><td><?=($i+1)?></td><td><strong><?=cvh($it['name']??'')?></strong><?php if(trim((string)($it['description']??''))!==''):?><br><span class="muted-helper"><?=cvh($it['description']??'')?></span><?php endif;?></td><td><?=cvh($it['brand_model']??'')?></td><td><?=cvh($it['qty']??'')?> <?=cvh($it['unit']??'')?></td><td><?=cvh($it['remarks']??'')?></td></tr><?php endforeach;if(!$items):?><tr><td colspan="5" class="empty-state">No material items were found. The linked Dispatch Advice contains <?= (int)$linkedAdviceItemCount ?> item(s). Repair or recreate this Challan.</td></tr><?php endif;?></tbody></table></div></section>
     <section class="form-section-card"><h3>Dispatch details</h3><div class="form-grid"><div><label>Dispatch date</label><input type="date" name="delivery_date" value="<?=cvh($challan['delivery_date']??'')?>" <?=$workflow==='Delivered'?'readonly':''?>></div><div><label>Dispatch time</label><input type="time" name="dispatch_time" value="<?=cvh($challan['dispatch_time']??'')?>"></div><div><label>Vehicle number</label><input name="vehicle_no" value="<?=cvh($challan['vehicle_no']??'')?>"></div><div><label>Driver / transporter</label><input name="driver_name" value="<?=cvh($challan['driver_name']??'')?>"></div><div><label>Driver mobile</label><input name="driver_mobile" value="<?=cvh($challan['driver_mobile']??'')?>"></div><div><label>E-way bill / reference</label><input name="eway_bill_ref" value="<?=cvh($challan['eway_bill_ref']??'')?>"></div><div class="full-span"><label>Delivery notes</label><textarea name="delivery_notes"><?=cvh($challan['delivery_notes']??'')?></textarea></div></div></section>
-    <footer class="sticky-action-footer"><span class="muted-helper">Materials are locked to the accepted Dispatch Advice.</span><?php if($workflow==='Created'):?><button class="btn secondary" name="action" value="save_operational">Save Dispatch Details</button><button class="btn" name="action" value="mark_dispatched">Mark Dispatched</button><?php elseif($workflow==='Dispatched'):?><button class="btn secondary" name="action" value="save_operational">Save operational details</button><button class="btn" name="action" value="share_whatsapp" formtarget="_blank">Share</button><a class="btn secondary" href="challan-public.php?token=<?=urlencode((string)($challan['public_token']??''))?>" target="_blank">Copy/open public link</a><?php else:?><span>Customer receipt confirmed <?=cvh($challan['customer_acceptance']['confirmed_at']??$challan['delivered_at']??'')?></span><?php endif;?></footer></form>
+    </fieldset><footer class="sticky-action-footer"><span class="muted-helper">Materials are locked to the accepted Dispatch Advice.</span><?php if($customerView):?><button class="btn" type="button" onclick="window.print()">Print</button><?php elseif($workflow==='Created'):?><button class="btn secondary" name="action" value="save_operational">Save Dispatch Details</button><button class="btn" name="action" value="mark_dispatched">Mark Dispatched</button><?php elseif($workflow==='Dispatched'):?><button class="btn secondary" name="action" value="save_operational">Save operational details</button><button class="btn" name="action" value="share_whatsapp" formtarget="_blank">Share</button><a class="btn secondary" href="challan-public.php?token=<?=urlencode((string)($challan['public_token']??''))?>" target="_blank">Copy/open public link</a><?php else:?><span>Customer receipt confirmed <?=cvh($challan['customer_acceptance']['confirmed_at']??$challan['delivered_at']??'')?></span><?php endif;?></footer></form>
     </main></body></html><?php exit;
 }
 
@@ -550,7 +572,7 @@ $redirectWith = static function (string $status, string $message) use ($id): voi
     exit;
 };
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (!$customerView && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
         $redirectWith('error', 'Security validation failed.');
     }
@@ -1249,10 +1271,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$backLink = (is_array($user) && (($user['role_name'] ?? '') === 'admin')) ? 'admin-documents.php?tab=accepted_customers&view=' . urlencode((string) ($challan['quote_id'] ?? $challan['linked_quote_id'] ?? '')) : 'employee-challans.php';
+$backLink = $customerView ? 'customer-dashboard.php' : ((is_array($user) && (($user['role_name'] ?? '') === 'admin')) ? 'admin-documents.php?tab=accepted_customers&view=' . urlencode((string) ($challan['quote_id'] ?? $challan['linked_quote_id'] ?? '')) : 'employee-challans.php');
 $statusParam = safe_text($_GET['status'] ?? '');
 $messageParam = safe_text($_GET['message'] ?? '');
-$editable = (string) ($challan['status'] ?? 'draft') === 'draft';
+$editable = !$customerView && (string) ($challan['status'] ?? 'draft') === 'draft';
 ?>
 <!doctype html>
 <html lang="en"><head><meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
@@ -1263,7 +1285,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 <body><main class="wrap">
 <div class="card"><h1 style="margin:0 0 8px">Delivery Challan</h1>
 <p><strong><?= htmlspecialchars((string) ($challan['dc_number'] ?: $challan['challan_no']), ENT_QUOTES) ?></strong> · Status: <?= htmlspecialchars(strtoupper((string) ($challan['status'] ?? 'draft')), ENT_QUOTES) ?></p>
-<div class="row-actions"><a class="btn secondary" href="<?= htmlspecialchars($backLink, ENT_QUOTES) ?>">Back</a><a class="btn secondary" href="challan-print.php?id=<?= urlencode((string) ($challan['id'] ?? '')) ?>" target="_blank" rel="noopener">View as HTML</a></div>
+<div class="row-actions"><a class="btn secondary" href="<?= htmlspecialchars($backLink, ENT_QUOTES) ?>">Back</a><a class="btn secondary" href="challan-print.php?id=<?= urlencode((string) ($challan['id'] ?? '')) ?><?= $customerView ? '&customer_view=1' : '' ?>" target="_blank" rel="noopener">View as HTML</a></div>
 </div>
 <?php if ($statusParam !== '' && $messageParam !== ''): ?><div class="card"><strong><?= htmlspecialchars(strtoupper($statusParam), ENT_QUOTES) ?>:</strong> <?= htmlspecialchars($messageParam, ENT_QUOTES) ?></div><?php endif; ?>
 
@@ -1402,7 +1424,7 @@ body{font-family:Arial,sans-serif;background:#f5f7fb;color:#111;margin:0}.wrap{m
 </div>
 <?php endif; ?>
 
-<div class="row-actions" style="margin-top:12px"><?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="finalize">Finalize DC</button><?php endif; ?><?php if ((string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php endif; ?></div>
+<div class="row-actions" style="margin-top:12px"><?php if ($editable): ?><button class="btn secondary" type="submit" name="action" value="save_draft">Save Draft</button><button class="btn" type="submit" name="action" value="finalize">Finalize DC</button><?php endif; ?><?php if (!$customerView && (string) ($challan['status'] ?? '') !== 'archived'): ?><button class="btn warn" type="submit" name="action" value="archive">Archive</button><?php endif; ?></div>
 </form>
 </main>
 <script>
