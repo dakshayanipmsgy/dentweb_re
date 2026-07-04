@@ -68,10 +68,10 @@ $d = documents_get_quote_defaults_settings();
 ?>
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quote Settings</title>
-<style>body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px}.card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}input,select{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px}.btn{display:inline-block;background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:8px 12px;text-decoration:none}</style></head><body><main class="wrap">
-<div class="card"><h1>Quote Design & Finance Defaults</h1><a class="btn" href="admin-documents.php">Back</a></div>
-<?php if (safe_text($_GET['message'] ?? '') !== ''): ?><div class="card"><?= htmlspecialchars((string)($_GET['message'] ?? ''), ENT_QUOTES) ?></div><?php endif; ?>
-<form method="post" enctype="multipart/form-data" class="card grid"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>">
+<link rel="stylesheet" href="assets/css/admin-unified.css"></head><body class="admin-shell commercial-admin"><main class="wrap commercial-shell">
+<header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Quote Design & Finance Defaults</h1><p>Set the reusable finance, energy, typography, and branding defaults used by quotation builders.</p></div><nav class="commercial-header__actions" aria-label="Page actions"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php">Document Center</a><a class="btn secondary" href="admin-quotations.php">Quotations</a></nav></header>
+<?php if (safe_text($_GET['message'] ?? '') !== ''): ?><div class="banner <?= safe_text($_GET['status'] ?? 'success') === 'error' ? 'error' : 'success' ?>"><?= htmlspecialchars((string)($_GET['message'] ?? ''), ENT_QUOTES) ?></div><?php endif; ?>
+<form method="post" enctype="multipart/form-data" class="card form-grid"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>">
 <div><label>Annual generation per kW (global)</label><input type="number" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)$d['global']['energy_defaults']['annual_generation_per_kw'], ENT_QUOTES) ?>"></div>
 <div><label>Emission factor kg/kWh</label><input type="number" step="0.01" name="emission_factor_kg_per_kwh" value="<?= htmlspecialchars((string)$d['global']['energy_defaults']['emission_factor_kg_per_kwh'], ENT_QUOTES) ?>"></div>
 <div><label>Tree absorption kg/tree/year</label><input type="number" step="0.01" name="tree_absorption_kg_per_tree_per_year" value="<?= htmlspecialchars((string)$d['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'], ENT_QUOTES) ?>"></div>
@@ -91,7 +91,7 @@ $d = documents_get_quote_defaults_settings();
 <div><label>Higher slab range text (info only)</label><input name="res_slab2_range" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_info']['slab2_range'] ?? '₹2L–₹6L'), ENT_QUOTES) ?>"></div>
 
 <div><label>Default HSN (solar)</label><input name="default_hsn_solar" value="<?= htmlspecialchars((string)($d['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>"></div>
-<div style="grid-column:1/-1"><label>Default Cover Note Template</label><input name="cover_note_template" value="<?= htmlspecialchars((string)($d['defaults']['cover_note_template'] ?? ''), ENT_QUOTES) ?>"></div>
+<div class="full-span"><label>Default Cover Note Template</label><input name="cover_note_template" value="<?= htmlspecialchars((string)($d['defaults']['cover_note_template'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Primary color</label><input type="color" name="primary_color" value="<?= htmlspecialchars((string)($d['global']['branding']['primary_color'] ?? '#0f766e'), ENT_QUOTES) ?>"></div>
 <div><label>Secondary color</label><input type="color" name="secondary_color" value="<?= htmlspecialchars((string)($d['global']['branding']['secondary_color'] ?? '#22c55e'), ENT_QUOTES) ?>"></div>
 <div><label>Accent color</label><input type="color" name="accent_color" value="<?= htmlspecialchars((string)($d['global']['branding']['accent_color'] ?? '#f59e0b'), ENT_QUOTES) ?>"></div>
@@ -104,4 +104,4 @@ $d = documents_get_quote_defaults_settings();
 <div><label><input type="checkbox" name="wm_enabled" <?= !empty($d['global']['branding']['watermark']['enabled'])?'checked':'' ?>> Enable print watermark</label></div>
 <div><label>Watermark image upload</label><input type="file" name="wm_upload" accept="image/*"></div>
 <div><label>Watermark opacity</label><input type="number" step="0.01" min="0" max="1" name="wm_opacity" value="<?= htmlspecialchars((string)$d['global']['branding']['watermark']['opacity'], ENT_QUOTES) ?>"></div>
-<div><button class="btn" type="submit">Save</button></div></form></main></body></html>
+<div class="sticky-action-footer full-span"><button class="btn" type="submit">Save defaults</button></div></form></main></body></html>
