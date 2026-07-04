@@ -103,23 +103,28 @@ if ($type === 'accepted_quotation') {
     $amount = is_numeric($document['total_cost'] ?? null) ? (float) $document['total_cost'] : null;
 } elseif ($type === 'dispatch_advice') {
     $document = documents_get_dispatch_advice($id);
+    if (is_array($document)) {
+        customer_document_assert_owner($document, $customerMobile);
+        header('Location: dispatch-advice-view.php?' . http_build_query(['id' => $id, 'customer_view' => '1']));
+        exit;
+    }
     $title = 'Dispatch Advice';
-    $number = (string) ($document['dispatch_advice_no'] ?? $document['id'] ?? '');
-    $date = (string) ($document['planned_dispatch_date'] ?? $document['created_at'] ?? '');
-    $rows = is_array($document['items'] ?? null) ? $document['items'] : [];
 } elseif ($type === 'challan') {
     $document = documents_get_challan($id);
+    if (is_array($document)) {
+        customer_document_assert_owner($document, $customerMobile);
+        header('Location: challan-view.php?' . http_build_query(['id' => $id, 'customer_view' => '1']));
+        exit;
+    }
     $title = 'Delivery Challan';
-    $number = (string) ($document['challan_no'] ?? $document['dc_number'] ?? $document['id'] ?? '');
-    $date = (string) ($document['delivery_date'] ?? $document['created_at'] ?? '');
-    $rows = documents_challan_customer_items($document ?? []);
 } elseif ($type === 'invoice') {
     $document = documents_get_invoice($id);
+    if (is_array($document)) {
+        customer_document_assert_owner($document, $customerMobile);
+        header('Location: invoice-view.php?' . http_build_query(['id' => $id, 'customer_view' => '1']));
+        exit;
+    }
     $title = 'Invoice';
-    $number = (string) ($document['invoice_no'] ?? $document['id'] ?? '');
-    $date = (string) ($document['invoice_date'] ?? $document['created_at'] ?? '');
-    $amount = (float) ($document['input_total_gst_inclusive'] ?? $document['calc']['grand_total'] ?? $document['calc']['gross_payable'] ?? 0);
-    $rows = is_array($document['commercial_items'] ?? null) ? $document['commercial_items'] : [];
 } elseif ($type === 'receipt') {
     $document = documents_get_sales_document('receipt', $id);
     $title = 'Payment Receipt';
