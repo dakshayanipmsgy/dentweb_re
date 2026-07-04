@@ -659,3 +659,223 @@ form :is(button,input[type="submit"]):disabled { cursor:not-allowed; opacity:.65
     flex: 1 1 145px;
   }
 }
+
+/* Issue #725 — modern commercial document workspaces */
+.commercial-admin {
+  --doc-bg: #eef4fb;
+  --doc-card: rgba(255,255,255,.96);
+  --doc-border: #d7e2f0;
+  --doc-border-strong: #b8c9dd;
+  --doc-text: #0f172a;
+  --doc-muted: #64748b;
+  --doc-primary: #1d4ed8;
+  --doc-primary-dark: #1e40af;
+  --doc-primary-soft: #eaf1ff;
+  --doc-success: #047857;
+  background:
+    radial-gradient(circle at top left, rgba(59,130,246,.13), transparent 34rem),
+    linear-gradient(180deg, #f7fbff 0%, var(--doc-bg) 100%);
+}
+.commercial-admin .commercial-shell,
+.commercial-admin .wrap.commercial-shell {
+  width: min(1540px, calc(100% - 28px));
+  margin: 0 auto;
+  padding: 18px 0 32px;
+}
+.commercial-admin .card,
+.commercial-admin .workspace-panel,
+.commercial-admin .form-section-card,
+.commercial-admin .section-card {
+  border: 1px solid var(--doc-border);
+  border-radius: 20px;
+  background: var(--doc-card);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, .075);
+}
+.commercial-admin .commercial-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 22px;
+  margin-bottom: 14px;
+  background: linear-gradient(135deg, #ffffff 0%, #f7fbff 54%, #eaf2ff 100%);
+}
+.commercial-admin .commercial-header h1 { margin: .15rem 0 .35rem; font-size: clamp(1.6rem, 2.8vw, 2.25rem); letter-spacing: -.03em; }
+.commercial-admin .commercial-header p { max-width: 780px; color: var(--doc-muted); }
+.commercial-admin .commercial-header__actions,
+.commercial-admin .row-action-group { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.commercial-admin .btn,
+.commercial-admin button.btn,
+.commercial-admin a.btn {
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: .62rem .9rem;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  background: linear-gradient(180deg, var(--doc-primary), var(--doc-primary-dark));
+  color: #fff;
+  font-weight: 750;
+  line-height: 1.1;
+  text-decoration: none;
+  box-shadow: 0 8px 18px rgba(29,78,216,.18);
+}
+.commercial-admin .btn.secondary,
+.commercial-admin .btn.warn,
+.commercial-admin .btn.danger,
+.commercial-admin .commercial-header__actions .btn.secondary {
+  background: #fff;
+  color: #334155;
+  border-color: #cfdbea;
+  box-shadow: 0 5px 14px rgba(15,23,42,.055);
+}
+.commercial-admin .btn.warn,
+.commercial-admin .btn.danger { color: #9f1239; border-color: #fecdd3; background: #fff5f6; }
+.commercial-admin .workspace-tabs {
+  position: sticky;
+  top: 8px;
+  z-index: 30;
+  display: flex;
+  gap: .45rem;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+  padding: .55rem;
+  border: 1px solid var(--doc-border);
+  border-radius: 18px;
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 26px rgba(15,23,42,.07);
+}
+.commercial-admin .workspace-tabs a {
+  border: 1px solid #d8e2ef;
+  border-radius: 999px;
+  padding: .52rem .86rem;
+  background: #f8fbff;
+  color: #334155;
+  font-weight: 800;
+  text-decoration: none;
+}
+.commercial-admin .workspace-tabs a.active,
+.commercial-admin .workspace-tabs a[aria-current="page"] { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+.commercial-admin .commercial-toolbar,
+.commercial-admin .editor-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding-bottom: .75rem;
+  border-bottom: 1px solid #e6edf6;
+}
+.commercial-admin .form-section-card,
+.commercial-admin .section-card { padding: 18px; margin: 14px 0; }
+.commercial-admin .form-section-card h2,
+.commercial-admin .form-section-card h3,
+.commercial-admin .section-card h3 { margin-top: 0; letter-spacing: -.015em; }
+.commercial-admin .form-grid,
+.commercial-admin .filter-grid,
+.commercial-admin form.grid,
+.commercial-admin .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: .9rem;
+  align-items: start;
+}
+.commercial-admin .form-grid--two { grid-template-columns: repeat(2, minmax(260px, 1fr)); }
+.commercial-admin .full-span,
+.commercial-admin .form-grid .full-span { grid-column: 1 / -1; }
+.commercial-admin label { color: #334155; font-size: .82rem; font-weight: 800; }
+.commercial-admin :is(input,select,textarea) {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cfdbea;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--doc-text);
+  padding: .62rem .72rem;
+  font: inherit;
+  min-height: 40px;
+}
+.commercial-admin textarea { min-height: 96px; resize: vertical; line-height: 1.45; }
+.commercial-admin input[type="date"],
+.commercial-admin input[type="number"],
+.commercial-admin input[name*="qty"],
+.commercial-admin input[name*="kwp"],
+.commercial-admin input[name*="capacity"],
+.commercial-admin input[name*="amount"],
+.commercial-admin input[name*="cost"],
+.commercial-admin input[name*="rate"],
+.commercial-admin input[name*="opacity"] { max-width: 210px; }
+.commercial-admin input[name*="mobile"],
+.commercial-admin input[name*="pin"],
+.commercial-admin input[name*="date"] { max-width: 240px; }
+.commercial-admin input[name*="address"],
+.commercial-admin input[name*="note"],
+.commercial-admin input[name*="name"],
+.commercial-admin select { max-width: none; }
+.commercial-admin :is(input,select,textarea):focus { border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37,99,235,.13); outline: 0; }
+.commercial-admin .responsive-table { overflow: auto; border: 1px solid var(--doc-border); border-radius: 16px; background: #fff; }
+.commercial-admin table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.commercial-admin th,
+.commercial-admin td { border-bottom: 1px solid #e8eef7; padding: .72rem .68rem; vertical-align: top; }
+.commercial-admin th { font-size: .74rem; letter-spacing: .045em; text-transform: uppercase; color: #475569; }
+.commercial-admin tbody tr:nth-child(even) { background: #fbfdff; }
+.commercial-admin tbody tr:hover { background: #f2f7ff; }
+.commercial-admin .status-badge,
+.commercial-admin .pill { border: 1px solid transparent; border-radius: 999px; padding: .25rem .58rem; font-size: .76rem; font-weight: 800; background: #eef2ff; color: #3730a3; }
+.commercial-admin .quote-amount,
+.commercial-admin td:has(> .quote-amount) { font-weight: 850; color: #0f766e; }
+.commercial-admin .empty-state { padding: 1.25rem; text-align: center; color: var(--doc-muted); background: #f8fbff; border-radius: 14px; }
+.commercial-admin details.advanced-fields,
+.commercial-admin details.more-actions,
+.commercial-admin details.item-picker { border-radius: 14px; }
+.commercial-admin details.advanced-fields > summary,
+.commercial-admin details.item-picker > summary,
+.commercial-admin .section-card > summary { cursor: pointer; }
+.commercial-admin .more-actions { position: relative; }
+.commercial-admin .more-actions__menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 210px; display: grid; gap: .4rem; padding: .55rem; border: 1px solid var(--doc-border); border-radius: 14px; background: #fff; box-shadow: 0 16px 34px rgba(15,23,42,.16); }
+.commercial-admin .sticky-action-footer {
+  position: sticky;
+  bottom: 12px;
+  z-index: 25;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: .55rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding: .75rem;
+  border: 1px solid #c8d8ec;
+  border-radius: 18px;
+}
+.commercial-admin .quote-builder-progress { border-radius: 18px; padding: .5rem; }
+.commercial-admin .builder-section:not([open]) { background: linear-gradient(180deg,#fff,#f8fbff); }
+.commercial-admin .builder-section > summary { align-items: center; }
+.commercial-admin .section-number { box-shadow: 0 7px 16px rgba(29,78,216,.2); }
+.commercial-admin .section-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.commercial-admin .review-summary div { border-radius: 14px; background: #fff; }
+@media (max-width: 820px) {
+  .commercial-admin .commercial-shell,
+  .commercial-admin .wrap.commercial-shell { width: min(100% - 16px, 1540px); padding-top: 10px; }
+  .commercial-admin .commercial-header,
+  .commercial-admin .commercial-toolbar,
+  .commercial-admin .editor-intro { display: grid; }
+  .commercial-admin .workspace-tabs { position: static; }
+  .commercial-admin .form-grid--two,
+  .commercial-admin .form-grid,
+  .commercial-admin .filter-grid,
+  .commercial-admin form.grid,
+  .commercial-admin .grid { grid-template-columns: 1fr; }
+  .commercial-admin input[type="date"],
+  .commercial-admin input[type="number"],
+  .commercial-admin input[name*="qty"],
+  .commercial-admin input[name*="kwp"],
+  .commercial-admin input[name*="capacity"],
+  .commercial-admin input[name*="amount"],
+  .commercial-admin input[name*="cost"],
+  .commercial-admin input[name*="rate"],
+  .commercial-admin input[name*="mobile"] { max-width: none; }
+  .commercial-admin .sticky-action-footer { position: static; justify-content: stretch; }
+  .commercial-admin .sticky-action-footer .btn { flex: 1 1 160px; }
+}
