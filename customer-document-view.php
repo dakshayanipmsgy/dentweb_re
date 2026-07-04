@@ -58,9 +58,116 @@ function customer_document_assert_owner(array $document, string $customerMobile)
     }
 }
 
+function customer_document_quote_id(array $document): string
+{
+    return (string) ($document['quotation_id'] ?? $document['linked_quote_id'] ?? $document['quote_id'] ?? '');
+}
+
+function customer_document_items_summary(array $document): string
+{
+    $items = is_array($document['items'] ?? null) ? $document['items'] : (is_array($document['lines'] ?? null) ? $document['lines'] : []);
+    $count = count($items);
+    $names = [];
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $name = trim((string) ($item['name'] ?? $item['item_name'] ?? $item['description'] ?? $item['material'] ?? ''));
+        if ($name !== '') {
+            $names[] = $name;
+        }
+        if (count($names) >= 2) {
+            break;
+        }
+    }
+    $summary = $names === [] ? '' : implode(', ', $names);
+    if ($count > 0) {
+        return $count . ' item' . ($count === 1 ? '' : 's') . ($summary !== '' ? ' · ' . $summary : '');
+    }
+    return $summary !== '' ? $summary : '—';
+}
+
+function customer_document_confirmation_status(array $document, string $fallbackStatus): string
+{
+    $acceptance = is_array($document['customer_acceptance'] ?? null) ? $document['customer_acceptance'] : [];
+    if (!empty($acceptance['confirmed_at'])) {
+        return 'Confirmed · ' . (string) ($acceptance['acceptance_ref'] ?? 'Reference recorded');
+    }
+    return ucwords(str_replace('_', ' ', trim((string) ($acceptance['status'] ?? $fallbackStatus ?: 'Pending'))));
+}
+
 $type = safe_text((string) ($_GET['type'] ?? ''));
 $id = safe_text((string) ($_GET['id'] ?? ''));
+$quoteId = safe_text((string) ($_GET['quote_id'] ?? ''));
 $customerMobile = normalize_customer_mobile((string) ($customer['mobile'] ?? ''));
+
+if (in_array($type, ['dispatch_advice', 'challan'], true) && $id === '' && $quoteId !== '') {
+    $quote = documents_get_quote($quoteId);
+    if (!is_array($quote)) {
+        http_response_code(404);
+        exit('Document not found.');
+    }
+    customer_document_assert_owner($quote, $customerMobile);
+    $documents = $type === 'dispatch_advice' ? documents_dispatch_advices_for_quote($quoteId) : documents_challans_for_quote($quoteId);
+    $documents = array_values(array_filter($documents, static function (array $document) use ($customerMobile, $quoteId): bool {
+        if (customer_document_quote_id($document) !== $quoteId) {
+            return false;
+        }
+        $docMobile = customer_document_quote_mobile($document);
+        if ($docMobile === '') {
+            return true;
+        }
+        return $docMobile === $customerMobile;
+    }));
+    if (count($documents) === 1) {
+        header('Location: customer-document-view.php?' . http_build_query(['type' => $type, 'id' => (string) ($documents[0]['id'] ?? '')]));
+        exit;
+    }
+    if ($documents === []) {
+        http_response_code(404);
+        exit('Document not found.');
+    }
+    $esc = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+    $title = $type === 'dispatch_advice' ? 'Dispatch Advices' : 'Delivery Challans';
+    $quoteNo = (string) ($quote['quote_no'] ?? $quote['id'] ?? $quoteId);
+    $dateLabel = $type === 'dispatch_advice' ? 'Date / Created' : 'Dispatch / Date';
+    $linkedLabel = $type === 'dispatch_advice' ? 'Linked quotation / project' : 'Linked dispatch advice / quotation';
+    $actionLabel = $type === 'dispatch_advice' ? 'Open / Confirm' : 'Open / Confirm Delivery';
+    ?>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title><?= $esc($title . ' for ' . $quoteNo) ?></title>
+<style>body{margin:0;background:#f8fafc;color:#0f172a;font:15px/1.55 Arial,sans-serif}.sheet{max-width:1100px;margin:24px auto;background:#fff;border:1px solid #e2e8f0;border-radius:22px;padding:28px;box-shadow:0 20px 60px rgba(15,23,42,.08)}.actions{margin-bottom:14px}.btn{display:inline-block;background:#2563eb;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:800}.muted{color:#64748b}.list{display:grid;gap:14px;margin-top:18px}.doc-row{border:1px solid #e2e8f0;border-radius:16px;padding:16px;background:#fbfdff;display:grid;grid-template-columns:1.1fr repeat(4,1fr) auto;gap:12px;align-items:center}.label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:800}.value{font-weight:800;margin-top:3px}.pill{display:inline-block;background:#e0f2fe;color:#075985;border-radius:999px;padding:4px 9px;font-weight:800;font-size:12px}@media(max-width:900px){.sheet{margin:0;border-radius:0;padding:18px}.doc-row{display:block}.doc-row>div{margin:10px 0}}</style>
+</head>
+<body><main class="sheet">
+<div class="actions"><a class="btn" href="customer-dashboard.php">Back to dashboard</a></div>
+<h1><?= $esc($title) ?></h1>
+<p class="muted">Select the exact document for <?= $esc($quoteNo) ?>. Only documents linked to your customer portal are shown.</p>
+<section class="list" aria-label="<?= $esc($title) ?>">
+<?php foreach ($documents as $document): ?>
+  <?php
+    $number = $type === 'dispatch_advice' ? (string) ($document['dispatch_advice_no'] ?? $document['id'] ?? '') : (string) ($document['challan_no'] ?? $document['dc_number'] ?? $document['id'] ?? '');
+    $date = $type === 'dispatch_advice' ? (string) ($document['planned_dispatch_date'] ?? $document['created_at'] ?? '') : (string) ($document['dispatch_date'] ?? $document['delivery_date'] ?? $document['created_at'] ?? '');
+    $linked = $type === 'dispatch_advice'
+        ? trim((string) ($document['quotation_no'] ?? $quoteNo) . ' ' . (string) ($document['agreement_no'] ?? ''))
+        : trim((string) ($document['dispatch_advice_no'] ?? '') . ' ' . (string) ($document['linked_quote_no'] ?? $document['quotation_no'] ?? $quoteNo));
+  ?>
+  <article class="doc-row">
+    <div><div class="label"><?= $type === 'dispatch_advice' ? 'Dispatch Advice number' : 'Challan number' ?></div><div class="value"><?= $esc($number ?: '—') ?></div></div>
+    <div><div class="label"><?= $esc($dateLabel) ?></div><div class="value"><?= $esc(substr($date, 0, 10) ?: '—') ?></div></div>
+    <div><div class="label">Status</div><div class="value"><span class="pill"><?= $esc(customer_document_confirmation_status($document, (string) ($document['workflow_status'] ?? $document['status'] ?? 'Pending'))) ?></span></div></div>
+    <div><div class="label"><?= $esc($linkedLabel) ?></div><div class="value"><?= $esc($linked ?: '—') ?></div></div>
+    <div><div class="label">Items / summary</div><div class="value"><?= $esc(customer_document_items_summary($document)) ?></div></div>
+    <div><a class="btn" href="customer-document-view.php?<?= $esc(http_build_query(['type' => $type, 'id' => (string) ($document['id'] ?? '')])) ?>"><?= $esc($actionLabel) ?></a></div>
+  </article>
+<?php endforeach; ?>
+</section>
+</main></body></html>
+    <?php
+    exit;
+}
 
 if ($type === 'quotation' || $type === 'accepted_quotation') {
     $quote = documents_get_quote($id);

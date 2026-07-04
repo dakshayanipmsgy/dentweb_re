@@ -134,6 +134,14 @@ function customer_dashboard_doc_url(string $type, array $doc): string
 {
     return 'customer-document-view.php?type=' . urlencode($type) . '&id=' . urlencode((string) ($doc['id'] ?? ''));
 }
+function customer_dashboard_doc_group_url(string $type, array $docs, string $quoteId): string
+{
+    $doc = $docs[0] ?? [];
+    if (in_array($type, ['dispatch_advice', 'challan'], true) && count($docs) > 1 && $quoteId !== '') {
+        return 'customer-document-view.php?' . http_build_query(['type' => $type, 'quote_id' => $quoteId]);
+    }
+    return customer_dashboard_doc_url($type, is_array($doc) ? $doc : []);
+}
 function customer_dashboard_doc_description(string $type, array $doc, string $fallback): string
 {
     if ($type === 'quotation') {
@@ -502,8 +510,8 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
                   ['Delivery challan', 'challan', $project['challans'], 'Delivery confirmation document'],
                   ['Invoice', 'invoice', $project['invoices'], 'Tax invoice'],
                 ]; ?>
-                <?php foreach ($docGroups as [$label, $type, $docs, $fallback]): $doc = $docs[0] ?? null; ?>
-                  <article class="doc-card"><h3><?= customer_portal_safe($label) ?></h3><p><?= customer_portal_safe($doc ? customer_dashboard_doc_description($type, $doc, $fallback) : 'Not generated yet') ?></p><?php if ($doc): ?><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe(customer_dashboard_doc_url($type, $doc)) ?>"><?= customer_portal_safe(customer_dashboard_doc_action_label($type)) ?></a><?php else: ?><span class="doc-action pending">Pending</span><?php endif; ?></article>
+                <?php foreach ($docGroups as [$label, $type, $docs, $fallback]): $doc = $docs[0] ?? null; $docCount = count($docs); ?>
+                  <article class="doc-card"><h3><?= customer_portal_safe($label) ?></h3><p><?= customer_portal_safe($doc ? ($docCount > 1 && in_array($type, ['dispatch_advice', 'challan'], true) ? $docCount . ' documents available' : customer_dashboard_doc_description($type, $doc, $fallback)) : 'Not generated yet') ?></p><?php if ($doc): ?><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe(customer_dashboard_doc_group_url($type, $docs, (string) ($quote['id'] ?? ''))) ?>"><?= customer_portal_safe($docCount > 1 && in_array($type, ['dispatch_advice', 'challan'], true) ? 'View List' : customer_dashboard_doc_action_label($type)) ?></a><?php else: ?><span class="doc-action pending">Pending</span><?php endif; ?></article>
                 <?php endforeach; ?>
                 <?php if ($handoverHtmlPath !== ''): ?><article class="doc-card"><h3>Handover pack</h3><p>System handover documents</p><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe('/' . ltrim($handoverHtmlPath, '/')) ?>">View / Print</a></article><?php endif; ?>
               </div>
