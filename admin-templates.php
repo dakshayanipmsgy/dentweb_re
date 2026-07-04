@@ -158,11 +158,11 @@ $diagramOptions = array_values(array_filter($library, static fn($m): bool => is_
 ?>
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Template Blocks & Media</title>
-<link rel="stylesheet" href="assets/css/admin-unified.css"><style>.media-item{display:grid;grid-template-columns:110px 1fr;gap:12px;border:1px solid var(--doc-border);border-radius:14px;padding:10px;margin-bottom:10px;background:#fff}.thumb{max-width:100px;max-height:80px;object-fit:contain;border-radius:10px;background:#f8fbff}.template-preview{max-height:420px;overflow:auto}</style>
-</head><body class="admin-shell commercial-admin"><main class="wrap commercial-shell">
-<header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Template Blocks & Media Library</h1><p>Maintain reusable quote content blocks, diagrams, and page backgrounds without changing storage systems.</p></div><nav class="commercial-header__actions" aria-label="Page actions"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php?tab=templates">Document Center</a><a class="btn secondary" href="admin-quote-settings.php">Quote Settings</a></nav></header>
-<?php if ($message !== ''): ?><div class="banner <?= $status === 'success' ? 'success' : 'error' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
-<section class="card workspace-panel">
+<style>body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px}.card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.btn{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}.btn.secondary{background:#fff;color:#1f2937;border:1px solid #cbd5e1}label{font-size:12px;font-weight:700;display:block;margin-bottom:4px}textarea,input,select{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;padding:8px}textarea{min-height:90px}.ok{background:#ecfdf5;padding:8px;border:1px solid #34d399}.err{background:#fef2f2;padding:8px;border:1px solid #f87171}.media-item{display:grid;grid-template-columns:110px 1fr;gap:10px;border:1px solid #dbe1ea;border-radius:8px;padding:8px;margin-bottom:8px}.thumb{max-width:100px;max-height:80px}</style>
+</head><body><main class="wrap">
+<div class="card"><h1>Template Blocks & Media Library</h1><a class="btn secondary" href="admin-documents.php?tab=templates">Back to Documents</a></div>
+<?php if ($message !== ''): ?><div class="<?= $status === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
+<div class="card">
 <form method="get"><label>Template Set</label><select name="template_id" onchange="this.form.submit()"><?php foreach ($templates as $tpl): if (!is_array($tpl)) continue; ?><option value="<?= htmlspecialchars((string)$tpl['id'], ENT_QUOTES) ?>" <?= ((string)$tpl['id']===$selectedTemplateId)?'selected':'' ?>><?= htmlspecialchars((string)$tpl['name'], ENT_QUOTES) ?><?= !empty($tpl['archived_flag']) ? ' [Archived]' : '' ?></option><?php endforeach; ?></select></form>
 <form method="post" style="margin-top:10px">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_blocks"><input type="hidden" name="template_set_id" value="<?= htmlspecialchars($selectedTemplateId, ENT_QUOTES) ?>">
@@ -177,10 +177,10 @@ $diagramOptions = array_values(array_filter($library, static fn($m): bool => is_
 <button class="btn secondary" type="submit" name="action" value="insert_starter_com">Insert Commercial/Industrial starter text (DE/425 style)</button>
 <button class="btn secondary" type="submit" name="action" value="reset_blocks" onclick="return confirm('Reset all blocks to blank?')">Reset Blocks to Blank</button>
 </form>
-<div class="card template-preview" style="margin-top:10px"><h3>Preview</h3><?php foreach (($selectedBlocks['blocks'] ?? []) as $key=>$value): ?><h4><?= htmlspecialchars(ucwords(str_replace('_', ' ', (string)$key)), ENT_QUOTES) ?></h4><div><?= strip_tags((string)$value, '<p><br><ul><ol><li><strong><em><b><i><u><table><thead><tbody><tr><td><th>') ?></div><?php endforeach; ?></div>
-</section>
+<div class="card" style="margin-top:10px"><h3>Preview</h3><?php foreach (($selectedBlocks['blocks'] ?? []) as $key=>$value): ?><h4><?= htmlspecialchars(ucwords(str_replace('_', ' ', (string)$key)), ENT_QUOTES) ?></h4><div><?= strip_tags((string)$value, '<p><br><ul><ol><li><strong><em><b><i><u><table><thead><tbody><tr><td><th>') ?></div><?php endforeach; ?></div>
+</div>
 
-<section class="card workspace-panel"><h2>Media Library</h2>
+<div class="card"><h2>Media Library</h2>
 <form method="post" enctype="multipart/form-data" class="grid">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>"><input type="hidden" name="action" value="upload_media"><input type="hidden" name="template_set_id" value="<?= htmlspecialchars($selectedTemplateId, ENT_QUOTES) ?>">
 <div><label>Type</label><select name="media_type"><option value="background">Background</option><option value="diagram">Diagram</option></select></div>
@@ -200,5 +200,5 @@ $diagramOptions = array_values(array_filter($library, static fn($m): bool => is_
 <?php endif; ?>
 </div></div>
 <?php endforeach; ?>
-</section>
+</div>
 </main></body></html>
