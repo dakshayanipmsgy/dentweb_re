@@ -105,7 +105,7 @@ if ($type === 'accepted_quotation') {
     $document = documents_get_dispatch_advice($id);
     if (is_array($document)) {
         customer_document_assert_owner($document, $customerMobile);
-        header('Location: dispatch-advice-view.php?' . http_build_query(['id' => $id, 'customer_view' => '1']));
+        header('Location: customer-document-acceptance.php?' . http_build_query(['type' => 'dispatch_advice', 'id' => $id, 'portal' => '1']));
         exit;
     }
     $title = 'Dispatch Advice';
@@ -113,7 +113,7 @@ if ($type === 'accepted_quotation') {
     $document = documents_get_challan($id);
     if (is_array($document)) {
         customer_document_assert_owner($document, $customerMobile);
-        header('Location: challan-view.php?' . http_build_query(['id' => $id, 'customer_view' => '1']));
+        header('Location: customer-document-acceptance.php?' . http_build_query(['type' => 'challan', 'id' => $id, 'portal' => '1']));
         exit;
     }
     $title = 'Delivery Challan';
