@@ -101,14 +101,14 @@ $id = safe_text((string) ($_GET['id'] ?? ''));
 $quoteId = safe_text((string) ($_GET['quote_id'] ?? ''));
 $customerMobile = normalize_customer_mobile((string) ($customer['mobile'] ?? ''));
 
-if (in_array($type, ['dispatch_advice', 'challan'], true) && $id === '' && $quoteId !== '') {
+if (in_array($type, ['dispatch_advice', 'challan', 'receipt'], true) && $id === '' && $quoteId !== '') {
     $quote = documents_get_quote($quoteId);
     if (!is_array($quote)) {
         http_response_code(404);
         exit('Document not found.');
     }
     customer_document_assert_owner($quote, $customerMobile);
-    $documents = $type === 'dispatch_advice' ? documents_dispatch_advices_for_quote($quoteId) : documents_challans_for_quote($quoteId);
+    $documents = $type === 'dispatch_advice' ? documents_dispatch_advices_for_quote($quoteId) : ($type === 'challan' ? documents_challans_for_quote($quoteId) : documents_final_receipts_for_quote($quoteId));
     $documents = array_values(array_filter($documents, static function (array $document) use ($customerMobile, $quoteId): bool {
         if (customer_document_quote_id($document) !== $quoteId) {
             return false;
@@ -128,11 +128,11 @@ if (in_array($type, ['dispatch_advice', 'challan'], true) && $id === '' && $quot
         exit('Document not found.');
     }
     $esc = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
-    $title = $type === 'dispatch_advice' ? 'Dispatch Advices' : 'Delivery Challans';
+    $title = $type === 'dispatch_advice' ? 'Dispatch Advices' : ($type === 'challan' ? 'Delivery Challans' : 'Payment Receipts');
     $quoteNo = (string) ($quote['quote_no'] ?? $quote['id'] ?? $quoteId);
-    $dateLabel = $type === 'dispatch_advice' ? 'Date / Created' : 'Dispatch / Date';
-    $linkedLabel = $type === 'dispatch_advice' ? 'Linked quotation / project' : 'Linked dispatch advice / quotation';
-    $actionLabel = $type === 'dispatch_advice' ? 'Open / Confirm' : 'Open / Confirm Delivery';
+    $dateLabel = $type === 'dispatch_advice' ? 'Date / Created' : ($type === 'challan' ? 'Dispatch / Date' : 'Receipt Date');
+    $linkedLabel = $type === 'dispatch_advice' ? 'Linked quotation / project' : ($type === 'challan' ? 'Linked dispatch advice / quotation' : 'Linked quotation / payment');
+    $actionLabel = $type === 'dispatch_advice' ? 'Open / Confirm' : ($type === 'challan' ? 'Open / Confirm Delivery' : 'Open Receipt');
     ?>
 <!doctype html>
 <html lang="en">
@@ -148,14 +148,16 @@ if (in_array($type, ['dispatch_advice', 'challan'], true) && $id === '' && $quot
 <section class="list" aria-label="<?= $esc($title) ?>">
 <?php foreach ($documents as $document): ?>
   <?php
-    $number = $type === 'dispatch_advice' ? (string) ($document['dispatch_advice_no'] ?? $document['id'] ?? '') : (string) ($document['challan_no'] ?? $document['dc_number'] ?? $document['id'] ?? '');
-    $date = $type === 'dispatch_advice' ? (string) ($document['planned_dispatch_date'] ?? $document['created_at'] ?? '') : (string) ($document['dispatch_date'] ?? $document['delivery_date'] ?? $document['created_at'] ?? '');
+    $number = $type === 'dispatch_advice' ? (string) ($document['dispatch_advice_no'] ?? $document['id'] ?? '') : ($type === 'challan' ? (string) ($document['challan_no'] ?? $document['dc_number'] ?? $document['id'] ?? '') : (string) ($document['receipt_number'] ?? $document['id'] ?? ''));
+    $date = $type === 'dispatch_advice' ? (string) ($document['planned_dispatch_date'] ?? $document['created_at'] ?? '') : ($type === 'challan' ? (string) ($document['dispatch_date'] ?? $document['delivery_date'] ?? $document['created_at'] ?? '') : (string) ($document['date_received'] ?? $document['receipt_date'] ?? $document['created_at'] ?? ''));
     $linked = $type === 'dispatch_advice'
         ? trim((string) ($document['quotation_no'] ?? $quoteNo) . ' ' . (string) ($document['agreement_no'] ?? ''))
-        : trim((string) ($document['dispatch_advice_no'] ?? '') . ' ' . (string) ($document['linked_quote_no'] ?? $document['quotation_no'] ?? $quoteNo));
+        : ($type === 'challan'
+            ? trim((string) ($document['dispatch_advice_no'] ?? '') . ' ' . (string) ($document['linked_quote_no'] ?? $document['quotation_no'] ?? $quoteNo))
+            : trim((string) ($document['quotation_no'] ?? $document['quote_no'] ?? $quoteNo) . ' ' . (string) ($document['mode'] ?? '')));
   ?>
   <article class="doc-row">
-    <div><div class="label"><?= $type === 'dispatch_advice' ? 'Dispatch Advice number' : 'Challan number' ?></div><div class="value"><?= $esc($number ?: '—') ?></div></div>
+    <div><div class="label"><?= $type === 'dispatch_advice' ? 'Dispatch Advice number' : ($type === 'challan' ? 'Challan number' : 'Receipt number') ?></div><div class="value"><?= $esc($number ?: '—') ?></div></div>
     <div><div class="label"><?= $esc($dateLabel) ?></div><div class="value"><?= $esc(substr($date, 0, 10) ?: '—') ?></div></div>
     <div><div class="label">Status</div><div class="value"><span class="pill"><?= $esc(customer_document_confirmation_status($document, (string) ($document['workflow_status'] ?? $document['status'] ?? 'Pending'))) ?></span></div></div>
     <div><div class="label"><?= $esc($linkedLabel) ?></div><div class="value"><?= $esc($linked ?: '—') ?></div></div>
