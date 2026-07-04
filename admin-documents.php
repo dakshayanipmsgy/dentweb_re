@@ -3900,6 +3900,30 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
 
           </section>
           <section class="accepted-summary__card accepted-summary__card--document">
+          <h3>Dispatch Advice</h3>
+          <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+            <input type="hidden" name="action" value="create_dispatch_advice" />
+            <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+            <input type="hidden" name="return_tab" value="accepted_customers" />
+            <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+            <button class="btn" type="submit">Create Dispatch Advice</button>
+          </form>
+          <table><thead><tr><th>ID</th><th>Advice No</th><th>Planned Date</th><th>Status</th><th>Items</th><th>Actions</th></tr></thead><tbody>
+          <?php foreach ($packDispatchAdvices as $row): ?>
+            <tr>
+              <td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td>
+              <td><?= htmlspecialchars((string) ($row['dispatch_advice_no'] ?? ''), ENT_QUOTES) ?></td>
+              <td><?= htmlspecialchars((string) ($row['planned_dispatch_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td>
+              <td><?= htmlspecialchars((string) ($row['status'] ?? 'draft'), ENT_QUOTES) ?></td>
+              <td><?= count(is_array($row['items'] ?? null) ? $row['items'] : []) ?></td>
+              <td class="row-actions"><a class="btn secondary" href="admin-dispatch-advices.php?tab=editor&amp;edit=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">Open Builder</a> <a class="btn secondary" href="dispatch-advice-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View HTML</a><?php if ($isAdmin): ?><form class="inline-form" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="dispatch_advice" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td>
+            </tr>
+          <?php endforeach; ?>
+          <?php if ($packDispatchAdvices === []): ?><tr><td colspan="6"><div class="empty-card-state">No Dispatch Advice exists yet. Create one from this accepted quotation when material dispatch planning is needed.</div></td></tr><?php endif; ?>
+          </tbody></table>
+          </section>
+          <section class="accepted-summary__card accepted-summary__card--document">
           <h3>Delivery challan</h3>
           <form method="post" class="inline-form" style="margin-bottom:0.75rem;">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
