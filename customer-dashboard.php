@@ -500,7 +500,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
                 <div class="step <?= $project['invoices'] !== [] ? 'done' : '' ?>"><strong>Invoice</strong><span><?= $project['invoices'] !== [] ? 'Available' : 'Pending' ?></span></div>
               </div>
 
-              <h3 class="section-title">Documents</h3>
+              <h3 id="documents" class="section-title">Documents</h3>
               <div class="doc-grid">
                 <?php $docGroups = [
                   ['Quotation', 'quotation', [$quote], $quoteNo],
@@ -517,7 +517,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
                 <?php if ($handoverHtmlPath !== ''): ?><article class="doc-card"><h3>Handover pack</h3><p>System handover documents</p><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe('/' . ltrim($handoverHtmlPath, '/')) ?>">View / Print</a></article><?php endif; ?>
               </div>
 
-              <h3 class="section-title" style="margin-top:1.25rem">Financial summary</h3>
+              <h3 id="financials" class="section-title" style="margin-top:1.25rem">Financial summary</h3>
               <div class="details-grid">
                 <div class="details-tile"><p class="tile-label">Total project / quotation value</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['payment_summary']['quotation_amount'])) ?></p></div>
                 <div class="details-tile"><p class="tile-label">Invoice value</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['invoice_value'])) ?></p></div>
@@ -543,7 +543,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
             </article>
           <?php endforeach; ?>
 
-          <section class="project-card legacy-section"><h2 class="section-title">Your account information</h2><div class="status-banner" role="status">Current Status: <?= customer_portal_safe($customer['status'] ?? 'New') ?></div><div class="details-grid">
+          <section id="profile" class="project-card legacy-section"><h2 class="section-title">Your account information</h2><div class="status-banner" role="status">Current Status: <?= customer_portal_safe($customer['status'] ?? 'New') ?></div><div class="details-grid">
             <?php foreach ([['Mobile number','mobile'],['Customer type','customer_type'],['Address','address'],['City','city'],['District','district'],['PIN code','pin_code'],['State','state'],['Meter number','meter_number'],['Meter serial number','meter_serial_number'],['JBVNL account number','jbvnl_account_number'],['Application ID','application_id'],['Complaints raised','complaints_raised']] as [$label,$key]): ?><div class="details-tile"><p class="tile-label"><?= customer_portal_safe($label) ?></p><p class="tile-value"><?= customer_portal_safe($customer[$key] ?? '') ?></p></div><?php endforeach; ?>
           </div></section>
         </div>
