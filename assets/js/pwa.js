@@ -35,9 +35,15 @@
   const createNotice = (className, message, actions, role = 'status') => {
     if (document.querySelector(`.${className}`)) return null;
     const notice = document.createElement('div');
+    const text = document.createElement('span');
+    const actionWrap = document.createElement('span');
     notice.className = className;
     notice.setAttribute('role', role);
-    notice.innerHTML = `<span>${message}</span>${actions}`;
+    notice.setAttribute('aria-live', role === 'alert' ? 'assertive' : 'polite');
+    text.textContent = message;
+    actionWrap.className = 'pwa-notice-actions';
+    actionWrap.innerHTML = actions;
+    notice.append(text, actionWrap);
     document.body.appendChild(notice);
     return notice;
   };
@@ -81,7 +87,7 @@
   const dismissedKey = 'dakshayani-install-dismissed-v3';
   const showInstallPrompt = () => {
     if (!deferredPrompt || getDisplayMode().standalone || storage.get(dismissedKey) === '1' || document.querySelector('.pwa-install-banner')) return;
-    const banner = createNotice('pwa-install-banner', 'Install Dakshayani app for quicker access to your secure workspace.', '<button type="button" class="pwa-install-action">Install</button><button type="button" class="pwa-install-close">Not now</button><a class="pwa-install-help" href="' + installHelpUrl + '">Help</a>');
+    const banner = createNotice('pwa-install-banner', 'Install Dakshayani app for quicker access to your secure workspace.', '<button type="button" class="pwa-install-action">Install</button><button type="button" class="pwa-install-close">Not now</button><a class="pwa-install-help" href="' + installHelpUrl + '">Install help</a>');
     if (!banner) return;
     banner.querySelector('.pwa-install-close').addEventListener('click', () => { storage.set(dismissedKey, '1'); banner.remove(); });
     banner.querySelector('.pwa-install-action').addEventListener('click', async () => {

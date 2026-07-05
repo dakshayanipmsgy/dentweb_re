@@ -25,3 +25,11 @@ button,a,input,select,textarea{touch-action:manipulation}input,select,textarea,b
 
 .pwa-welcome-note{position:fixed;left:1rem;right:1rem;top:calc(1rem + var(--pwa-safe-top));z-index:1002;display:flex;align-items:center;gap:.7rem;max-width:620px;margin-inline:auto;padding:.85rem .95rem;background:#ecfeff;color:#0f172a;border:1px solid #99f6e4;border-radius:18px;box-shadow:0 18px 44px rgba(15,23,42,.18);font-size:.92rem}.pwa-welcome-note span{flex:1}.pwa-welcome-close{border:0;border-radius:999px;background:#0f766e;color:#fff;font-weight:800;padding:.55rem .85rem}
 @media (max-width:760px){.pwa-welcome-note{left:.75rem;right:.75rem;display:grid;grid-template-columns:1fr auto;font-size:.86rem}}
+
+/* Release polish: visible focus and safer bottom spacing for installed/mobile use. */
+:where(a,button,input,select,textarea,[tabindex]):focus-visible{outline:3px solid rgba(20,184,166,.75);outline-offset:3px}
+.mobile-app-nav a{white-space:nowrap}.mobile-app-nav a[aria-current="page"]{text-decoration:none}.mobile-app-nav a:last-child{font-weight:900}
+@media (min-width:761px){body{padding-bottom:0}.mobile-app-nav{display:none!important}}
+@media (max-width:380px){.mobile-app-nav a{min-width:68px;font-size:.72rem;padding:.55rem .45rem}.pwa-install-banner,.pwa-update-banner,.pwa-welcome-note{font-size:.82rem}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}
+.pwa-notice-actions{display:contents}
