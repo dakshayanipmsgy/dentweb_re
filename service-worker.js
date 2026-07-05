@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dakshayani-pwa-static-v2';
+const CACHE_NAME = 'dakshayani-pwa-static-v3';
 
 // Resolve precache URLs relative to the service worker file so cPanel subdirectory
 // installs (example.com/portal/service-worker.js) cache /portal/assets/... safely.
@@ -12,9 +12,11 @@ const SAFE_ASSETS = [
   'assets/css/admin-unified.css',
   'assets/css/pwa-shell.css',
   'assets/js/pwa.js',
-  'assets/icons/app-icon.svg',
-  'assets/icons/app-icon-maskable.svg',
-  'images/favicon.ico'
+  'images/favicon.ico',
+  'images/apple-touch-icon.png',
+  'images/pwa/icon-192.png',
+  'images/pwa/icon-512.png',
+  'images/pwa/icon-maskable-512.png'
 ].map((path) => new URL(path, SW_BASE).toString());
 
 // Authenticated PHP pages and generated/customer documents can contain private
@@ -30,7 +32,7 @@ const PRIVATE_ROUTE_PATTERNS = [
   /download|storage\/|generated|handover|pdf/i,
   /customer[-_]?files|uploads/i
 ];
-const SAFE_STATIC_EXTENSIONS = /\.(?:css|js|svg|ico|woff2?|ttf|webmanifest)$/i;
+const SAFE_STATIC_EXTENSIONS = /\.(?:css|js|svg|png|ico|woff2?|ttf|webmanifest)$/i;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SAFE_ASSETS)).catch(() => undefined));
