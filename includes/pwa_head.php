@@ -8,13 +8,17 @@ if (!function_exists('pwa_asset')) {
         if ($scriptDir === '/' || $scriptDir === '.') {
             $scriptDir = '';
         }
+        // Build relative-to-current-script URLs so hosted subdirectories on cPanel
+        // load the manifest, service worker helper, and icons from the same app root.
         return ($scriptDir === '' ? '' : rtrim($scriptDir, '/') . '/') . ltrim($path, '/');
     }
 }
+
+if (!defined('DAKSHAYANI_PWA_HEAD_PRINTED')):
+    define('DAKSHAYANI_PWA_HEAD_PRINTED', true);
 ?>
 <link rel="manifest" href="<?= htmlspecialchars(pwa_asset('manifest.webmanifest'), ENT_QUOTES) ?>">
 <meta name="theme-color" content="#0f766e">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -25,3 +29,4 @@ if (!function_exists('pwa_asset')) {
 <link rel="apple-touch-icon" href="<?= htmlspecialchars(pwa_asset('assets/icons/app-icon.svg'), ENT_QUOTES) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(pwa_asset('assets/css/pwa-shell.css'), ENT_QUOTES) ?>">
 <script defer src="<?= htmlspecialchars(pwa_asset('assets/js/pwa.js'), ENT_QUOTES) ?>"></script>
+<?php endif; ?>
