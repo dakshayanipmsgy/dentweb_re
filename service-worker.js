@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'dakshayani-pwa-v2';
+const CACHE_VERSION = 'dakshayani-pwa-v3-release-audit';
 const CACHE_NAME = CACHE_VERSION;
 
 // Increment CACHE_VERSION after changing cached assets so deployed users receive
