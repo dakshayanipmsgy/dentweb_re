@@ -459,7 +459,7 @@ if ($requestMethod === 'POST') {
     crossorigin="anonymous"
     referrerpolicy="no-referrer"
   />
-</head>
+<?php require_once __DIR__ . '/includes/pwa_head.php'; ?></head>
 <body data-active-nav="login">
   <header class="site-header"></header>
 

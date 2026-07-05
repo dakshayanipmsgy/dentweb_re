@@ -236,8 +236,8 @@ if ($tab === 'archived') { $statusFilter = 'Archived'; $showArchived = true; $ro
 $status = safe_text($_GET['status'] ?? '');
 $message = safe_text($_GET['message'] ?? '');
 ?>
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agreements</title><link rel="stylesheet" href="assets/css/admin-unified.css"></head>
-<body class="admin-shell commercial-admin"><main class="commercial-shell">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agreements</title><link rel="stylesheet" href="assets/css/admin-unified.css"><?php require_once __DIR__ . '/includes/pwa_head.php'; ?></head>
+<body class="admin-shell commercial-admin"><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?><main class="commercial-shell">
 <header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Vendor–Consumer Agreements</h1><p>Turn an accepted quotation into a clear, traceable customer agreement.</p></div><nav class="commercial-header__actions" aria-label="Page actions"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php">Document Center</a><a class="btn commercial-header__primary" href="admin-agreements.php?tab=create">+ New Agreement</a></nav></header>
 <?= render_commercial_lifecycle('agreement') ?>
 <div data-workspace-root><nav class="workspace-tabs" data-workspace-tabs="fetch" aria-label="Agreement workspace"><a data-workspace-tab class="<?= $tab === 'agreements' ? 'active' : '' ?>" href="?tab=agreements">Agreements</a><a data-workspace-tab class="<?= $tab === 'create' ? 'active' : '' ?>" href="?tab=create">Create Agreement</a><a data-workspace-tab class="<?= $tab === 'templates' ? 'active' : '' ?>" href="?tab=templates">Templates</a><a data-workspace-tab class="<?= $tab === 'archived' ? 'active' : '' ?>" href="?tab=archived">Archived</a></nav>

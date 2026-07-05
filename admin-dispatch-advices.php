@@ -257,8 +257,8 @@ $tabLabels = ['active' => 'Active', 'drafts' => 'Drafts', 'customer_accepted' =>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Material Dispatch Advice</title>
 <link rel="stylesheet" href="assets/css/admin-unified.css">
-</head>
-<body class="admin-shell commercial-admin">
+<?php require_once __DIR__ . '/includes/pwa_head.php'; ?></head>
+<body class="admin-shell commercial-admin"><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?>
 <main class="commercial-shell">
 <header class="card commercial-header">
     <div>

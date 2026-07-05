@@ -151,8 +151,8 @@ if ($mode === 'edit') {
     .preview{border:1px solid #dbe1ea;border-radius:8px;padding:12px;background:#fff}
     .muted{color:#64748b;font-size:12px}
   </style>
-</head>
-<body>
+<?php require_once __DIR__ . '/includes/pwa_head.php'; ?></head>
+<body><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?>
 <main class="wrap">
   <?php if ($message !== '' && ($status === 'success' || $status === 'error')): ?><div class="banner <?= htmlspecialchars($status, ENT_QUOTES) ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
 
