@@ -1,10 +1,12 @@
-const CACHE_NAME = 'dakshayani-pwa-static-v3';
+const CACHE_VERSION = 'dakshayani-pwa-v2';
+const CACHE_NAME = CACHE_VERSION;
 
-// Resolve precache URLs relative to the service worker file so cPanel subdirectory
-// installs (example.com/portal/service-worker.js) cache /portal/assets/... safely.
+// Increment CACHE_VERSION after changing cached assets so deployed users receive
+// fresh CSS/JS/manifest files. Activation removes all older Dakshayani caches.
 const SW_BASE = new URL('./', self.location.href);
 const SAFE_ASSETS = [
   'manifest.webmanifest',
+  'offline.html',
   'style.css',
   'layout-styles.css',
   'script.js',
@@ -12,16 +14,10 @@ const SAFE_ASSETS = [
   'assets/css/admin-unified.css',
   'assets/css/pwa-shell.css',
   'assets/js/pwa.js',
-  'images/favicon.ico',
-  'images/apple-touch-icon.png',
-  'images/pwa/icon-192.png',
-  'images/pwa/icon-512.png',
-  'images/pwa/icon-maskable-512.png'
+  'assets/icons/app-icon.svg',
+  'assets/icons/app-icon-maskable.svg'
 ].map((path) => new URL(path, SW_BASE).toString());
 
-// Authenticated PHP pages and generated/customer documents can contain private
-// business or customer data, so the service worker never stores navigation/PHP
-// responses or routes matching these portal/document keywords.
 const PRIVATE_ROUTE_PATTERNS = [
   /(?:^|\/)admin(?:-|\/|$)/i,
   /(?:^|\/)customer(?:-|\/|$)/i,
@@ -30,23 +26,32 @@ const PRIVATE_ROUTE_PATTERNS = [
   /quotation|agreement|dispatch|challan|invoice|receipt/i,
   /complaint|task|lead|record|document/i,
   /download|storage\/|generated|handover|pdf/i,
-  /customer[-_]?files|uploads/i
+  /customer[-_]?files|uploads/i,
+  /api\//i
 ];
-const SAFE_STATIC_EXTENSIONS = /\.(?:css|js|svg|png|ico|woff2?|ttf|webmanifest)$/i;
+const SAFE_STATIC_EXTENSIONS = /\.(?:css|js|svg|webmanifest)$/i;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SAFE_ASSETS)).catch(() => undefined));
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))));
-  self.clients.claim();
+  event.waitUntil(caches.keys().then((keys) => Promise.all(keys
+    .filter((key) => key.startsWith('dakshayani-pwa') && key !== CACHE_NAME)
+    .map((key) => caches.delete(key)))));
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 function isPrivateRoute(url) {
   const route = url.pathname + url.search;
   return PRIVATE_ROUTE_PATTERNS.some((pattern) => pattern.test(route));
+}
+
+function noStoreFetch(request) {
+  return fetch(request, { cache: 'no-store' });
 }
 
 function isSafeStaticAsset(request, url) {
@@ -59,16 +64,29 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Never cache POST responses, navigations, PHP pages, or document/private data.
-  if (request.method !== 'GET' || request.mode === 'navigate' || url.pathname.endsWith('.php') || isPrivateRoute(url)) {
+  // Never cache POST responses, authenticated navigation/PHP pages, generated
+  // documents, uploads, storage files, or API-like responses.
+  if (request.method !== 'GET') return;
+
+  if (request.mode === 'navigate') {
+    event.respondWith(noStoreFetch(request).catch(() => caches.match(new URL('offline.html', SW_BASE).toString())));
     return;
   }
+
+  if (url.pathname.endsWith('.php') || isPrivateRoute(url)) {
+    event.respondWith(noStoreFetch(request));
+    return;
+  }
+
   if (!isSafeStaticAsset(request, url)) return;
 
-  event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-    if (response.ok && response.type === 'basic') {
-      caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
-    }
-    return response;
-  })));
+  event.respondWith(caches.match(request).then((cached) => {
+    const network = fetch(request, { cache: 'no-cache' }).then((response) => {
+      if (response.ok && response.type === 'basic') {
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
+      }
+      return response;
+    });
+    return cached || network;
+  }));
 });

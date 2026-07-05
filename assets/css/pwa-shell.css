@@ -20,3 +20,5 @@ button,a,input,select,textarea{touch-action:manipulation}input,select,textarea,b
   body{padding-top:calc(.35rem + var(--pwa-safe-top));background:linear-gradient(180deg,#ecfeff 0,#f8fafc 180px)}
   .admin-overview__shell,.employee-shell,.dashboard-shell,.portal-shell,.commercial-shell{max-width:720px;margin-inline:auto!important}
 }
+.pwa-update-banner{position:fixed;left:1rem;right:1rem;bottom:calc(5.25rem + var(--pwa-safe-bottom));z-index:1001;display:flex;align-items:center;gap:.7rem;max-width:560px;margin-inline:auto;padding:.8rem .9rem;background:#fff;color:#0f172a;border:1px solid #99f6e4;border-radius:16px;box-shadow:0 16px 40px rgba(15,23,42,.18);font-size:.92rem}.pwa-update-banner span{flex:1}.pwa-update-refresh{border:0;border-radius:999px;background:#0f766e;color:#fff;font-weight:800;padding:.55rem .9rem;cursor:pointer}.pwa-update-dismiss{border:0;background:#f1f5f9;color:#0f172a;border-radius:999px;padding:.5rem .7rem;cursor:pointer}
+@media (max-width:760px){.pwa-update-banner{bottom:calc(9.5rem + var(--pwa-safe-bottom));left:.75rem;right:.75rem;display:grid;grid-template-columns:1fr auto auto;font-size:.86rem}}

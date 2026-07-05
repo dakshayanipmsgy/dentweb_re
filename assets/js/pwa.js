@@ -4,13 +4,43 @@
 
   const manifestLink = document.querySelector('link[rel="manifest"]');
   const base = manifestLink?.href || document.baseURI;
-  // Register beside the manifest so subdirectory deployments use /subdir/service-worker.js.
   const swUrl = new URL('service-worker.js', base).toString();
   const swScope = new URL('./', swUrl).toString();
 
+  const createNotice = (className, message, actions) => {
+    if (document.querySelector(`.${className}`)) return null;
+    const notice = document.createElement('div');
+    notice.className = className;
+    notice.setAttribute('role', 'status');
+    notice.innerHTML = `<span>${message}</span>${actions}`;
+    document.body.appendChild(notice);
+    return notice;
+  };
+
+  const showUpdateNotice = (registration) => {
+    if (!registration?.waiting || sessionStorage.getItem('dakshayani-update-dismissed') === '1') return;
+    const notice = createNotice('pwa-update-banner', 'App update available. Refresh to update.', '<button type="button" class="pwa-update-refresh">Refresh</button><button type="button" class="pwa-update-dismiss" aria-label="Dismiss update notice">×</button>');
+    if (!notice) return;
+    notice.querySelector('.pwa-update-dismiss').addEventListener('click', () => { sessionStorage.setItem('dakshayani-update-dismissed', '1'); notice.remove(); });
+    notice.querySelector('.pwa-update-refresh').addEventListener('click', () => {
+      let refreshed = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => { if (!refreshed) { refreshed = true; window.location.reload(); } });
+      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    });
+  };
+
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register(swUrl, { scope: swScope }).catch((error) => console.warn('PWA registration skipped:', error));
+      navigator.serviceWorker.register(swUrl, { scope: swScope }).then((registration) => {
+        showUpdateNotice(registration);
+        registration.addEventListener('updatefound', () => {
+          const worker = registration.installing;
+          if (!worker) return;
+          worker.addEventListener('statechange', () => {
+            if (worker.state === 'installed' && navigator.serviceWorker.controller) showUpdateNotice(registration);
+          });
+        });
+      }).catch((error) => console.warn('PWA registration skipped:', error));
     }, { once: true });
   }
 
@@ -19,11 +49,8 @@
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   const show = () => {
     if (!deferredPrompt || isStandalone || localStorage.getItem(dismissedKey) === '1' || document.querySelector('.pwa-install-banner')) return;
-    const banner = document.createElement('div');
-    banner.className = 'pwa-install-banner';
-    banner.setAttribute('role', 'status');
-    banner.innerHTML = '<span>Install Dakshayani app for quicker access.</span><button type="button" class="pwa-install-action">Install</button><button type="button" class="pwa-install-close" aria-label="Dismiss install prompt">×</button>';
-    document.body.appendChild(banner);
+    const banner = createNotice('pwa-install-banner', 'Install Dakshayani app for quicker access to your secure workspace.', '<button type="button" class="pwa-install-action">Install</button><button type="button" class="pwa-install-close">Not now</button>');
+    if (!banner) return;
     banner.querySelector('.pwa-install-close').addEventListener('click', () => { localStorage.setItem(dismissedKey, '1'); banner.remove(); });
     banner.querySelector('.pwa-install-action').addEventListener('click', async () => { banner.remove(); deferredPrompt.prompt(); await deferredPrompt.userChoice.catch(() => null); deferredPrompt = null; });
   };
