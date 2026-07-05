@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Dakshayani Enterprises app icon</title>
+  <desc id="desc">Teal Dakshayani Enterprises initials icon for PWA install metadata.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+  <path d="M84 354c72-8 112-43 156-82 54-48 108-89 188-92v86c-52 4-86 30-127 66-51 45-105 87-217 96z" fill="#ccfbf1" opacity=".55"/>
+  <rect x="76" y="76" width="360" height="360" rx="88" fill="none" stroke="#fff" stroke-width="20"/>
+  <text x="256" y="288" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="142" font-weight="800" fill="#fff">DE</text>
+  <circle cx="360" cy="368" r="30" fill="#facc15"/>
+</svg>

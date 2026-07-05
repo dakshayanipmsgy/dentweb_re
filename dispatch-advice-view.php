@@ -51,8 +51,8 @@ $company = load_company_profile();
 <meta charset="utf-8">
 <title>Material Dispatch Advice</title>
 <style>body{font:14px Arial;max-width:210mm;margin:20px auto;color:#172033}.document{border:1px solid #ccd5e1;padding:14mm}.document-header{display:flex;justify-content:space-between;border-bottom:3px solid #087b61}.document-title{text-align:right}.company-logo{max-width:140px;max-height:70px}.meta{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccd5e1;padding:8px;text-align:left}.disclaimer{background:#fff7ed;padding:12px}footer{text-align:right;margin-top:45px;font-weight:bold}@media print{@page{size:A4;margin:10mm}.actions{display:none}body{margin:0}.document{border:0;padding:0}}</style>
-</head>
-<body>
+<?php require_once __DIR__ . '/includes/pwa_head.php'; ?></head>
+<body><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?>
 <p class="actions"><a href="<?= $customerView ? 'customer-dashboard.php' : 'admin-dispatch-advices.php' ?>"><?= $customerView ? 'Back to dashboard' : 'Back' ?></a> · <button onclick="print()">Print HTML</button></p>
 <?php render_dispatch_advice($d, $company); ?>
 </body>

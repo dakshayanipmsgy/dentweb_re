@@ -92,8 +92,8 @@ $quoteNo = (string) ($quote['quote_no'] ?? $receipt['quotation_id'] ?? '');
       @page { size:A4; margin:0; }
     }
   </style>
-</head>
-<body>
+<?php require_once __DIR__ . '/includes/pwa_head.php'; ?></head>
+<body><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?>
   <div class="print-tools"><button onclick="window.print()">Print</button></div>
   <main class="sheet">
     <header class="header">

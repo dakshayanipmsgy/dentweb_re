@@ -427,8 +427,8 @@ function employee_dashboard_safe(string $value): string
       background: #f8fafc;
     }
   </style>
-</head>
-<body>
+<?php require_once __DIR__ . '/includes/pwa_head.php'; ?></head>
+<body><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?>
   <div class="employee-shell">
     <div class="employee-card">
       <div class="employee-header">

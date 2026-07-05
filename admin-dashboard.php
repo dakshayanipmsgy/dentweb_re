@@ -500,8 +500,8 @@ $cardConfigs[] = [
     }
     .pulse-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:.75rem;margin:0 0 1.25rem}.pulse-section{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:1rem;box-shadow:0 10px 24px rgba(15,23,42,.05);margin-bottom:1rem}.pulse-section h3{margin:0 0 .75rem;color:#0f172a}.pulse-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:.75rem}.pulse-card span{display:block;color:#64748b;font-size:.82rem;font-weight:700}.pulse-card strong{display:block;margin-top:.25rem;color:#0f172a;font-size:1.25rem}.pulse-list{margin:.5rem 0 0;padding-left:1.1rem;color:#334155}
   </style>
-</head>
-<body class="admin-overview admin-shell" data-theme="light">
+<?php require_once __DIR__ . '/includes/pwa_head.php'; ?></head>
+<body class="admin-overview admin-shell" data-theme="light"><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?>
   <main class="admin-overview__shell admin-page">
     <?php if ($flashMessage !== ''): ?>
     <div class="admin-alert admin-alert--<?= htmlspecialchars($flashTone, ENT_QUOTES) ?>" role="status" aria-live="polite">
