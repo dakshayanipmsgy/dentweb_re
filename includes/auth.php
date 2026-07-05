@@ -272,6 +272,7 @@ function send_private_workspace_headers(): void
 
     header('Cache-Control: no-store, no-cache, must-revalidate, private, max-age=0');
     header('Pragma: no-cache');
+    header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
     header('X-Robots-Tag: noindex, nofollow, noarchive', true);
 }
 
@@ -675,6 +676,7 @@ function is_offline_access_disabled(): bool
 
 function logout_user(): void
 {
+    send_private_workspace_headers();
     start_session();
     unset(
         $_SESSION['customer_logged_in'],

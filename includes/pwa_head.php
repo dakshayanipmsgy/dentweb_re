@@ -25,8 +25,8 @@ if (!defined('DAKSHAYANI_PWA_HEAD_PRINTED')):
 <meta name="apple-mobile-web-app-title" content="Dakshayani">
 <meta name="application-name" content="Dakshayani Enterprises">
 <meta name="format-detection" content="telephone=no">
-<link rel="icon" href="<?= htmlspecialchars(pwa_asset('images/favicon.ico'), ENT_QUOTES) ?>">
-<link rel="apple-touch-icon" href="<?= htmlspecialchars(pwa_asset('images/apple-touch-icon.png'), ENT_QUOTES) ?>">
+<link rel="icon" type="image/svg+xml" href="<?= htmlspecialchars(pwa_asset('assets/icons/app-icon.svg'), ENT_QUOTES) ?>">
+<link rel="apple-touch-icon" href="<?= htmlspecialchars(pwa_asset('assets/icons/app-icon.svg'), ENT_QUOTES) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(pwa_asset('assets/css/pwa-shell.css'), ENT_QUOTES) ?>">
 <script defer src="<?= htmlspecialchars(pwa_asset('assets/js/pwa.js'), ENT_QUOTES) ?>"></script>
 <?php endif; ?>
