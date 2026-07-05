@@ -459,7 +459,11 @@ if ($requestMethod === 'POST') {
     crossorigin="anonymous"
     referrerpolicy="no-referrer"
   />
-<?php require_once __DIR__ . '/includes/pwa_head.php'; ?></head>
+<?php require_once __DIR__ . '/includes/pwa_head.php'; ?>
+  <style>
+    .login-help-footer{margin:1.25rem auto 0;max-width:1120px;padding:0 1rem 1.5rem;color:#64748b;text-align:center}.login-help-footer__links{display:flex;flex-wrap:wrap;justify-content:center;gap:.6rem}.login-help-footer a{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:.45rem .8rem;border-radius:999px;background:#f1f5f9;color:#0f766e;text-decoration:none;font-weight:800;font-size:.9rem}.login-help-footer a:hover,.login-help-footer a:focus{background:#ccfbf1;color:#115e59}.login-help-footer p{margin:.65rem 0 0;font-size:.82rem}
+  </style>
+</head>
 <body data-active-nav="login">
   <header class="site-header"></header>
 
@@ -561,7 +565,7 @@ if ($requestMethod === 'POST') {
             <?php if ($rateLimitMessage !== ''): ?>
             <p class="login-feedback is-warning" aria-live="polite"><?= htmlspecialchars($rateLimitMessage, ENT_QUOTES) ?></p>
             <?php endif; ?>
-            <p class="text-xs login-support">Having trouble? <a href="#admin-recovery-title">Reset password</a>.</p>
+            <p class="text-xs login-support">Having trouble? <a href="#admin-recovery-title">Reset password</a>. <a href="app-install-help.php">Need help installing the app?</a></p>
           </form>
 
           <?php if ($recoverySecretConfigured): ?>
@@ -648,6 +652,15 @@ if ($requestMethod === 'POST') {
           </article>
         </div>
       </div>
+    </section>
+    <section class="login-help-footer" aria-label="Login help links">
+      <nav class="login-help-footer__links" aria-label="App and policy links">
+        <a href="app-install-help.php">Install App</a>
+        <a href="privacy-policy.php">Privacy Policy</a>
+        <a href="terms.php">Terms</a>
+        <a href="mailto:<?= htmlspecialchars($supportEmail !== '' ? $supportEmail : 'support@dakshayani.co.in', ENT_QUOTES) ?>">Support</a>
+      </nav>
+      <p>Use only your own authorized login. Access is protected by server-side role checks.</p>
     </section>
   </main>
 
