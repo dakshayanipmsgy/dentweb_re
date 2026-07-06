@@ -15,6 +15,7 @@ $appUrl = $scheme . '://' . $host . ($basePath === '' ? '/' : $basePath . '/');
 $asset = static fn(string $path): string => ($basePath === '' ? '' : $basePath) . '/' . ltrim($path, '/');
 $exists = static fn(string $path): bool => is_file(__DIR__ . '/' . ltrim($path, '/'));
 $sw = @file_get_contents(__DIR__ . '/service-worker.js') ?: '';
+$pwaDisplayVersion = '1.0.0';
 $cacheVersion = 'Not detected';
 if (preg_match("/CACHE_VERSION\\s*=\\s*['\"]([^'\"]+)['\"]/", $sw, $m)) { $cacheVersion = $m[1]; }
 $requiredIcons = ['assets/icons/app-icon.svg', 'assets/icons/app-icon-maskable.svg'];
@@ -32,6 +33,8 @@ $checks = [
     'Install help page exists' => $exists('app-install-help.php'),
     'Privacy policy exists' => $exists('privacy-policy.php'),
     'Terms page exists' => $exists('terms.php'),
+    'Android readiness docs exist' => $exists('docs/android-play-store-readiness.md'),
+    'Asset links example exists' => $exists('.well-known/assetlinks.example.json'),
     'HTTPS detected' => $scheme === 'https',
     'SVG app icons exist' => count(array_filter($requiredIcons, $exists)) === count($requiredIcons),
     'Current path/base path detected' => $appUrl !== '',
@@ -52,10 +55,11 @@ $checks = [
   <div class="top"><div><p class="admin-muted">Admin setup/testing only</p><h1>PWA Diagnostics</h1></div><div style="display:flex;gap:.5rem;flex-wrap:wrap"><a class="btn btn-ghost" href="<?= htmlspecialchars($asset('app-install-help.php'), ENT_QUOTES) ?>">Need help installing the app?</a><a class="btn btn-ghost" href="<?= htmlspecialchars($asset('admin-dashboard.php'), ENT_QUOTES) ?>">Back to dashboard</a></div></div>
   <section class="grid" aria-label="PWA diagnostics">
     <div class="card"><h2>Files</h2><p>Manifest: <span class="<?= $exists('manifest.webmanifest') ? 'ok' : 'bad' ?>"><?= $exists('manifest.webmanifest') ? 'Exists' : 'Missing' ?></span></p><p>Service worker: <span class="<?= $exists('service-worker.js') ? 'ok' : 'bad' ?>"><?= $exists('service-worker.js') ? 'Exists' : 'Missing' ?></span></p><p>Offline fallback: <span class="<?= $exists('offline.html') ? 'ok' : 'bad' ?>"><?= $exists('offline.html') ? 'Exists' : 'Missing' ?></span></p></div>
-    <div class="card"><h2>Paths</h2><p>App URL/base path</p><p class="mono"><?= htmlspecialchars($appUrl, ENT_QUOTES) ?></p><p>Manifest path</p><p class="mono"><?= htmlspecialchars($asset('manifest.webmanifest'), ENT_QUOTES) ?></p><p>Service worker registration script path</p><p class="mono"><?= htmlspecialchars($asset('service-worker.js'), ENT_QUOTES) ?></p></div>
-    <div class="card"><h2>Security & version</h2><p>HTTPS: <span class="<?= $scheme === 'https' ? 'ok' : 'bad' ?>"><?= $scheme === 'https' ? 'Detected' : 'Not detected' ?></span></p><p>Cache version name</p><p class="mono"><?= htmlspecialchars($cacheVersion, ENT_QUOTES) ?></p></div>
+    <div class="card"><h2>Paths</h2><p>App URL/base path</p><p class="mono"><?= htmlspecialchars($appUrl, ENT_QUOTES) ?></p><p>Manifest path</p><p class="mono"><?= htmlspecialchars($asset('manifest.webmanifest'), ENT_QUOTES) ?></p><p>Service worker path</p><p class="mono"><?= htmlspecialchars($asset('service-worker.js'), ENT_QUOTES) ?></p><p>Privacy policy path</p><p class="mono"><?= htmlspecialchars($asset('privacy-policy.php'), ENT_QUOTES) ?></p><p>Terms path</p><p class="mono"><?= htmlspecialchars($asset('terms.php'), ENT_QUOTES) ?></p><p>Install help path</p><p class="mono"><?= htmlspecialchars($asset('app-install-help.php'), ENT_QUOTES) ?></p></div>
+    <div class="card"><h2>Security & version</h2><p>HTTPS: <span class="<?= $scheme === 'https' ? 'ok' : 'bad' ?>"><?= $scheme === 'https' ? 'Detected' : 'Not detected' ?></span></p><p>PWA version</p><p class="mono"><?= htmlspecialchars($pwaDisplayVersion, ENT_QUOTES) ?></p><p>Cache version</p><p class="mono"><?= htmlspecialchars($cacheVersion, ENT_QUOTES) ?></p></div>
     <div class="card"><h2>Required SVG icons</h2><ul class="list"><?php foreach ($requiredIcons as $icon): ?><li><span class="<?= $exists($icon) ? 'ok' : 'bad' ?>"><?= $exists($icon) ? 'Exists' : 'Missing' ?></span> <span class="mono"><?= htmlspecialchars($icon, ENT_QUOTES) ?></span></li><?php endforeach; ?></ul></div>
   </section>
+  <section class="card" style="margin-top:1rem"><h2>Android readiness references</h2><ul class="list"><li>Android readiness docs path: <span class="mono">docs/android-play-store-readiness.md</span></li><li>Asset links example path: <span class="mono">.well-known/assetlinks.example.json</span></li><li>Play Store listing draft: <span class="mono">docs/play-store-listing-draft.md</span></li><li>App metadata: <span class="mono">docs/app-metadata.md</span></li><li>Release notes: <span class="mono">docs/release-notes-v1.md</span></li></ul></section>
   <section class="card" style="margin-top:1rem"><h2>Admin PWA smoke test checklist</h2><ul class="list"><?php foreach ($checks as $label => $pass): ?><li><span class="<?= $pass ? 'ok' : 'bad' ?>"><?= $pass ? 'Pass' : 'Needs attention' ?></span> — <?= htmlspecialchars($label, ENT_QUOTES) ?></li><?php endforeach; ?></ul></section>
   <section class="card" style="margin-top:1rem"><h2>Private-cache exclusion checks</h2><p class="admin-muted">These checks inspect <span class="mono">service-worker.js</span> for the release rules that keep private pages and documents out of Cache Storage.</p><ul class="list"><?php foreach ($privateCacheRules as $label => $pass): ?><li><span class="<?= $pass ? 'ok' : 'bad' ?>"><?= $pass ? 'Pass' : 'Needs attention' ?></span> — <?= htmlspecialchars($label, ENT_QUOTES) ?></li><?php endforeach; ?></ul></section>
   <section class="card" style="margin-top:1rem"><h2>Manual release reminders</h2><ul class="list"><li>Use Chrome DevTools Application panel to verify only safe static assets are cached.</li><li>Share the public install help page with users who need install steps: <span class="mono"><?= htmlspecialchars($asset('app-install-help.php'), ENT_QUOTES) ?></span></li><li>Test from both domain root and a cPanel subdirectory before inviting users.</li><li>Follow <span class="mono">docs/pwa-release-test-plan.md</span> before rollout.</li></ul></section>
