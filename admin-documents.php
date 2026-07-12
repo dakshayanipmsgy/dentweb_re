@@ -3616,7 +3616,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
       </div>
       <div class="admin-documents__header-actions commercial-header__actions">
         <a class="btn secondary" href="<?= $isAdmin ? 'admin-dashboard.php' : 'employee-dashboard.php' ?>"><?= $isAdmin ? 'Dashboard' : 'Employee Dashboard' ?></a>
-        <a class="btn commercial-header__primary" href="admin-quotations.php?tab=editor">+ New Quotation</a>
+        <a class="btn commercial-header__primary" href="admin-quotations.php">+ New Quotation</a>
       </div>
     </header>
 
