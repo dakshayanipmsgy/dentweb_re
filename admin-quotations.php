@@ -286,12 +286,16 @@ if (safe_text($_GET['action'] ?? '') === 'download_quotation_csv_template') {
 }
 if (safe_text($_GET['action'] ?? '') === 'download_quotation_reference_data') {
     header('Content-Type: text/csv; charset=UTF-8');
-    header('Content-Disposition: attachment; filename="quotation-reference-data.csv"');
+    header('Content-Disposition: attachment; filename="quotation-current-reference-data.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['type','id','name','segment','model_number','system_type','capacity_kwp','price']);
-    foreach ($templates as $tpl) { fputcsv($out, ['template_set',(string)($tpl['id']??''),(string)($tpl['name']??''),(string)($tpl['segment']??''),'','','','']); }
-    foreach ((array)($quoteDefaults['rate_chart']['on_grid'] ?? []) as $row) { fputcsv($out, ['rate_chart','','','',(string)($row['model_number']??''),'Ongrid',(string)($row['solar_size_kwp']??''),(string)($row['self_funded_price']??'')]); }
-    foreach ((array)($quoteDefaults['rate_chart']['hybrid'] ?? []) as $row) { fputcsv($out, ['rate_chart','','','',(string)($row['model_number']??''),'Hybrid',(string)($row['solar_size_kwp']??''),(string)($row['self_funded_price']??'')]); }
+    echo "\xEF\xBB\xBF";
+    $columns = documents_quote_import_reference_columns();
+    fputcsv($out, $columns);
+    foreach (documents_quote_import_reference_rows() as $row) {
+        $line = [];
+        foreach ($columns as $column) { $line[] = documents_quote_import_safe_csv_cell((string)($row[$column] ?? '')); }
+        fputcsv($out, $line);
+    }
     exit;
 }
 
