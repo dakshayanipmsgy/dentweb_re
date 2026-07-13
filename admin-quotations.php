@@ -70,6 +70,7 @@ documents_repair_broken_quote_revisions();
 require_once __DIR__ . '/includes/solar_finance_reports.php';
 require_once __DIR__ . '/includes/quotation_import_service.php';
 require_once __DIR__ . '/includes/quotation_reference_export.php';
+require_once __DIR__ . '/includes/quotation_bulk_actions.php';
 
 require_login_any_role(['admin', 'employee']);
 documents_ensure_structure();
@@ -1585,6 +1586,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $respondAction(false, 'Invalid share action.');
     }
 
+    if (in_array($action, ['bulk_print_quotations', 'bulk_download_quotation_pdfs'], true)) {
+        $user = current_user();
+        if (!is_array($user) || (string) ($user['role_name'] ?? '') !== 'admin') {
+            $redirectWith('error', 'Administrator access is required for quotation print/export.');
+        }
+        $selectedIds = quotation_bulk_normalize_selected_ids($_POST['selected_ids'] ?? []);
+        try {
+            $quotesForBulkOutput = quotation_bulk_resolve_quotes($selectedIds);
+            if ($action === 'bulk_print_quotations') {
+                while (ob_get_level() > 0) { ob_end_clean(); }
+                header('Content-Type: text/html; charset=UTF-8');
+                echo quotation_bulk_combined_print_html($quotesForBulkOutput, $quoteDefaults, documents_get_company_profile_for_quotes());
+                exit;
+            }
+
+            $companyForPdf = documents_get_company_profile_for_quotes();
+            $tempFiles = [];
+            try {
+                $usedNames = [];
+                $pdfFiles = [];
+                foreach ($quotesForBulkOutput as $quoteForPdf) {
+                    $pdfPath = quotation_bulk_temp_file('.pdf');
+                    $tempFiles[] = $pdfPath;
+                    quotation_bulk_render_pdf_file($quoteForPdf, $quoteDefaults, $companyForPdf, $pdfPath);
+                    $pdfFiles[] = ['path' => $pdfPath, 'name' => quotation_bulk_pdf_filename($quoteForPdf, $usedNames)];
+                }
+                while (ob_get_level() > 0) { ob_end_clean(); }
+                if (count($pdfFiles) === 1) {
+                    header('Content-Type: application/pdf');
+                    header('Content-Disposition: attachment; filename="' . $pdfFiles[0]['name'] . '"');
+                    header('Content-Length: ' . (string) filesize($pdfFiles[0]['path']));
+                    readfile($pdfFiles[0]['path']);
+                    quotation_bulk_delete_files($tempFiles);
+                    exit;
+                }
+                if (!class_exists('ZipArchive')) {
+                    throw new RuntimeException('ZIP downloads require the PHP ZipArchive extension.');
+                }
+                $zipPath = quotation_bulk_temp_file('.zip');
+                $tempFiles[] = $zipPath;
+                $zip = new ZipArchive();
+                if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+                    throw new RuntimeException('Unable to create the quotations ZIP archive.');
+                }
+                foreach ($pdfFiles as $pdfFile) {
+                    $zip->addFile($pdfFile['path'], $pdfFile['name']);
+                }
+                $zip->close();
+                $archiveName = 'quotations-' . date('Ymd-His') . '.zip';
+                header('Content-Type: application/zip');
+                header('Content-Disposition: attachment; filename="' . $archiveName . '"');
+                header('Content-Length: ' . (string) filesize($zipPath));
+                readfile($zipPath);
+                quotation_bulk_delete_files($tempFiles);
+                exit;
+            } catch (Throwable $e) {
+                quotation_bulk_delete_files($tempFiles);
+                throw $e;
+            }
+        } catch (Throwable $e) {
+            $redirectWith('error', $e->getMessage());
+        }
+    }
+
     if ($action === 'bulk_quote_action') {
         $bulkAction = safe_text($_POST['bulk_action'] ?? '');
         $selected = is_array($_POST['selected_ids'] ?? null) ? $_POST['selected_ids'] : [];
@@ -1983,13 +2048,12 @@ while (count($orientationObstructions) < 3) { $orientationObstructions[] = ['lab
 </tbody></table></div></section><?php endif; ?>
 <h3>Import batch history</h3><table><thead><tr><th>Batch</th><th>File</th><th>Time</th><th>Rows</th><th>Valid</th><th>Invalid</th><th>Created</th><th>Status</th><th>Actions</th></tr></thead><tbody><?php foreach ($importBatches as $b): ?><tr><td><?= htmlspecialchars((string)($b['batch_id']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($b['filename']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($b['created_at']??''), ENT_QUOTES) ?></td><td><?= (int)($b['total_rows']??0) ?></td><td><?= (int)($b['valid_rows']??0) ?></td><td><?= (int)($b['invalid_rows']??0) ?></td><td><?= (int)($b['created_rows']??0) ?></td><td><?= htmlspecialchars((string)($b['status']??'Validated'), ENT_QUOTES) ?></td><td><a class="btn secondary" href="admin-quotations.php?tab=bulk_create&amp;batch=<?= urlencode((string)($b['batch_id']??'')) ?>">Open</a></td></tr><?php endforeach; if(!$importBatches): ?><tr><td colspan="9">No import batches yet.</td></tr><?php endif; ?></tbody></table></div><?php endif; ?>
 <?php if ($tab === 'bulk'): ?>
-<div class="card workspace-panel active"><div class="editor-intro"><div><h2>Bulk Tools</h2><p class="muted">Apply one action to multiple quotations.</p></div><a class="btn secondary" href="admin-quotations.php?tab=quotations">Back to Manage Quotations</a></div>
-<form method="post">
+<div class="card workspace-panel active"><div class="editor-intro"><div><h2>Bulk Tools</h2><p class="muted">Apply status actions, print selected quotations, or download one PDF for a single selection and a ZIP for multiple selections. Export limit: <?= (int) QUOTATION_BULK_EXPORT_LIMIT ?> quotations.</p></div><a class="btn secondary" href="admin-quotations.php?tab=quotations">Back to Manage Quotations</a></div>
+<form method="post" id="quoteBulkForm">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
-<input type="hidden" name="action" value="bulk_quote_action">
-<div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:8px"><div><label>Action</label><select name="bulk_action"><option value="archive">Archive selected</option><option value="unarchive">Unarchive selected</option><option value="set_approved">Set status approved</option><option value="set_accepted">Set status accepted</option></select></div><button class="btn" type="submit">Apply</button></div>
-<table><thead><tr><th></th><th>Quote No</th><th>Customer</th><th>Status</th><th>Updated</th></tr></thead><tbody>
-<?php foreach ($allQuotes as $q): ?><tr><td><input type="checkbox" name="selected_ids[]" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"></td><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td></tr><?php endforeach; ?>
+<div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:8px"><div><label>Status/archive action</label><select name="bulk_action"><option value="archive">Archive selected</option><option value="unarchive">Unarchive selected</option><option value="set_approved">Set status approved</option><option value="set_accepted">Set status accepted</option></select></div><button class="btn" type="submit" name="action" value="bulk_quote_action">Apply</button><button class="btn secondary bulk-requires-selection" type="submit" name="action" value="bulk_print_quotations" formtarget="_blank">Print Selected</button><button class="btn secondary bulk-requires-selection" type="submit" name="action" value="bulk_download_quotation_pdfs">Download PDF(s)</button><span class="quote-meta" id="bulkSelectionHelp">Select quotations to enable print/download.</span></div>
+<table><thead><tr><th><input type="checkbox" id="bulkSelectAll" aria-label="Select all quotations"></th><th>Quote No</th><th>Customer</th><th>Status</th><th>Updated</th></tr></thead><tbody>
+<?php foreach ($allQuotes as $q): ?><tr><td><input class="bulk-row-check" type="checkbox" name="selected_ids[]" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"></td><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td></tr><?php endforeach; ?>
 </tbody></table>
 </form></div>
 <?php endif; ?>
@@ -2724,6 +2788,31 @@ window.quoteFormAutofillConfig = {
         if (mode) mode.value = 'auto';
         updateHybridItemDescriptionPreview();
     });
+})();
+
+(function(){
+  const form=document.getElementById('quoteBulkForm');
+  if(!form)return;
+  const all=document.getElementById('bulkSelectAll');
+  const checks=Array.from(form.querySelectorAll('.bulk-row-check'));
+  const gated=Array.from(form.querySelectorAll('.bulk-requires-selection'));
+  const help=document.getElementById('bulkSelectionHelp');
+  const update=()=>{
+    const selected=checks.filter(c=>c.checked).length;
+    if(all){all.checked=selected>0&&selected===checks.length;all.indeterminate=selected>0&&selected<checks.length;}
+    gated.forEach(btn=>btn.disabled=selected===0);
+    if(help)help.textContent=selected===0?'Select quotations to enable print/download.':(selected===1?'1 quotation selected: download creates one PDF.':`${selected} quotations selected: download creates a ZIP of PDFs.`);
+  };
+  all?.addEventListener('change',()=>{checks.forEach(c=>{c.checked=all.checked;});update();});
+  checks.forEach(c=>c.addEventListener('change',update));
+  form.addEventListener('submit',(event)=>{
+    const submitter=event.submitter;
+    if(submitter?.classList?.contains('bulk-requires-selection') && checks.every(c=>!c.checked)){
+      event.preventDefault();
+      alert('Select at least one quotation before printing or downloading.');
+    }
+  });
+  update();
 })();
 
 </script><?php if ($tab === 'editor'): ?><script src="assets/js/quotation-save-new-tab.js"></script><script src="assets/js/quote-panel-layout-designer.js"></script><script src="assets/js/quote-form-autofill.js"></script><?php endif; ?></main></body></html>
