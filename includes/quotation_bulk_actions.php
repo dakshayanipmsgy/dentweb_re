@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../admin/includes/documents_helpers.php';
 require_once __DIR__ . '/quotation_view_renderer.php';
-require_once __DIR__ . '/simple_pdf.php';
+require_once __DIR__ . '/quotation_browser_pdf.php';
 
 const QUOTATION_BULK_EXPORT_LIMIT = 25;
 
@@ -128,46 +128,70 @@ function quotation_bulk_combined_print_html(array $quotes, array $quoteDefaults,
 
 function quotation_bulk_render_pdf_file(array $quote, array $quoteDefaults, array $company, string $path): void
 {
-    if (!class_exists('DOMDocument')) {
-        throw new RuntimeException('PDF generation requires the PHP DOM extension.');
-    }
-    $html = quotation_render_to_html($quote, $quoteDefaults, $company, false, '', 'admin', 'pdf');
-    $pdf = new SimplePdfDocument();
-    $dom = new DOMDocument('1.0', 'UTF-8');
-    $old = libxml_use_internal_errors(true);
-    $dom->loadHTML('<?xml encoding="UTF-8">' . $html);
-    libxml_use_internal_errors($old);
-    $body = $dom->getElementsByTagName('body')->item(0);
-    $nodes = $body ? $body->childNodes : $dom->childNodes;
-    foreach ($nodes as $node) {
-        quotation_bulk_render_dom_node($pdf, $node);
-    }
-    $binary = $pdf->output();
-    if (strncmp($binary, '%PDF-', 5) !== 0 || file_put_contents($path, $binary, LOCK_EX) === false) {
-        throw new RuntimeException('Unable to generate a valid PDF for quotation ' . (string) ($quote['quote_no'] ?? $quote['id'] ?? ''));
+    $workDir = quotation_browser_pdf_create_private_temp_dir();
+    try {
+        $htmlPath = $workDir . DIRECTORY_SEPARATOR . 'quotation.html';
+        $html = quotation_render_to_html($quote, $quoteDefaults, $company, false, '', 'admin', 'pdf-export');
+        $html = quotation_bulk_prepare_browser_pdf_html($html);
+        if (file_put_contents($htmlPath, $html, LOCK_EX) === false) {
+            throw new RuntimeException('Unable to write temporary quotation HTML for PDF export.');
+        }
+        quotation_browser_pdf_render_html_file($htmlPath, $path, $workDir);
+    } finally {
+        quotation_browser_pdf_remove_tree($workDir);
     }
 }
 
-function quotation_bulk_render_dom_node(SimplePdfDocument $pdf, DOMNode $node): void
+function quotation_bulk_prepare_browser_pdf_html(string $html): string
 {
-    if ($node->nodeType === XML_TEXT_NODE) {
-        $text = trim(preg_replace('/\s+/u', ' ', (string) $node->nodeValue) ?? '');
-        if ($text !== '') { $pdf->addParagraph($text, 10.0, false, 0, 3); }
-        return;
+    $base = quotation_bulk_base_href();
+    $readiness = <<<'HTML'
+<script>
+(function(){
+  window.__quotationPdfReady=false;
+  const frame=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  const waitImages=()=>Promise.all(Array.from(document.images||[]).map(img=>{
+    if(img.complete) return Promise.resolve();
+    return new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});});
+  }));
+  const waitCharts=async()=>{
+    if(typeof window.buildChartPrintImages==='function'){window.buildChartPrintImages();}
+    await frame();
+    if(typeof window.buildChartPrintImages==='function'){window.buildChartPrintImages();}
+    const chartImgs=Array.from(document.querySelectorAll('.chart-print-img'));
+    await Promise.all(chartImgs.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});})));
+  };
+  const ready=async()=>{
+    try{
+      if(document.fonts&&document.fonts.ready){await document.fonts.ready;}
+      await waitImages();
+      await waitCharts();
+      await waitImages();
+      await frame();
+      window.__quotationPdfReady=true;
+      document.documentElement.setAttribute('data-quotation-pdf-ready','true');
+    }catch(e){window.__quotationPdfReady=false;window.__quotationPdfReadyError=String(e&&e.message?e.message:e);}
+  };
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',ready,{once:true});}else{ready();}
+})();
+</script>
+HTML;
+    if (stripos($html, '<head') !== false) {
+        $html = preg_replace('/<head([^>]*)>/i', '<head$1><base href="' . htmlspecialchars($base, ENT_QUOTES) . '">', $html, 1) ?? $html;
     }
-    if ($node->nodeType !== XML_ELEMENT_NODE) { return; }
-    $el = $node; $tag = strtolower($el->tagName);
-    if (in_array($tag, ['script','style','canvas'], true)) { return; }
-    if (in_array($tag, ['h1','h2'], true)) { $pdf->addParagraph(trim($el->textContent), 16, true, 4, 6); return; }
-    if ($tag === 'h3') { $pdf->addParagraph(trim($el->textContent), 13, true, 3, 5); return; }
-    if ($tag === 'img') {
-        $src = ltrim((string)$el->getAttribute('src'), '/');
-        $path = __DIR__ . '/../' . $src;
-        if (is_file($path)) { $pdf->addImage($path, 140); }
-        return;
+    if (stripos($html, '</body>') !== false) {
+        $html = str_ireplace('</body>', $readiness . '</body>', $html);
+    } else {
+        $html .= $readiness;
     }
-    if ($tag === 'tr') { $pdf->addParagraph(trim($el->textContent), 9, false, 0, 2); return; }
-    foreach ($el->childNodes as $child) { quotation_bulk_render_dom_node($pdf, $child); }
+    return $html;
+}
+
+function quotation_bulk_base_href(): string
+{
+    $root = realpath(__DIR__ . '/..') ?: dirname(__DIR__);
+    $root = rtrim(str_replace(DIRECTORY_SEPARATOR, '/', $root), '/') . '/';
+    return 'file://' . $root;
 }
 
 function quotation_bulk_temp_file(string $suffix): string
