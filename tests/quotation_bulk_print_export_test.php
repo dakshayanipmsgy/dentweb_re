@@ -39,6 +39,30 @@ try {
     $assert(str_ends_with($safeA, '.pdf') && !preg_match('/[\\\/\r\n"]/', $safeA), 'generated filenames are safe');
     $assert($safeA !== $safeB, 'generated filenames are collision-resistant');
 
+
+    $fakeChromium = quotation_bulk_temp_file('.sh');
+    $tempFiles[] = $fakeChromium;
+    file_put_contents($fakeChromium, <<<'SH'
+#!/bin/sh
+for arg in "$@"; do
+  case "$arg" in
+    --print-to-pdf=*) out="${arg#--print-to-pdf=}" ;;
+  esac
+done
+[ -n "$out" ] || exit 2
+printf '%s
+' '%PDF-1.4 fake browser pdf' > "$out"
+exit 0
+SH);
+    chmod($fakeChromium, 0700);
+    putenv('QUOTATION_CHROMIUM_PATH=' . $fakeChromium);
+    putenv('QUOTATION_PDF_TIMEOUT_SECONDS=5');
+    $assert(quotation_browser_pdf_chromium_path() === $fakeChromium, 'browser executable detection uses configured Chromium path');
+    $assert(quotation_browser_pdf_node_path() === '', 'Node dependency is not required for the PHP Chromium exporter');
+    $assert(quotation_browser_pdf_validate_executable($fakeChromium, 'Chromium') === $fakeChromium, 'valid browser executable paths are accepted');
+    try { quotation_browser_pdf_validate_executable('relative/chrome', 'Chromium'); $assert(false, 'relative browser path rejected'); }
+    catch (RuntimeException $e) { $assert(str_contains($e->getMessage(), 'absolute'), 'invalid configured executable paths are rejected'); }
+
     $defaults = documents_quote_defaults_settings();
     $company = documents_get_company_profile_for_quotes();
     $q1 = $quote('BULK-PRINT-1', 'QTN-A', 'First Customer');
@@ -52,6 +76,7 @@ try {
     quotation_bulk_render_pdf_file($q1, $defaults, $company, $pdfPath);
     $pdf = file_get_contents($pdfPath);
     $assert(is_string($pdf) && str_starts_with($pdf, '%PDF-'), 'PDF responses contain valid PDF signatures');
+    $assert(!str_contains(file_get_contents(__DIR__ . '/../includes/quotation_bulk_actions.php'), 'new SimplePdfDocument'), 'quotation export does not use SimplePdfDocument');
 
     if (class_exists('ZipArchive')) {
         $zipPath = quotation_bulk_temp_file('.zip');
