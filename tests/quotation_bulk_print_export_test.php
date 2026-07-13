@@ -44,6 +44,7 @@ try {
     $tempFiles[] = $fakeChromium;
     file_put_contents($fakeChromium, <<<'SH'
 #!/bin/sh
+if [ "$1" = "--version" ]; then echo "Chromium 120.0.0 test"; exit 0; fi
 for arg in "$@"; do
   case "$arg" in
     --print-to-pdf=*) out="${arg#--print-to-pdf=}" ;;
@@ -58,8 +59,44 @@ SH);
     putenv('QUOTATION_CHROMIUM_PATH=' . $fakeChromium);
     putenv('QUOTATION_PDF_TIMEOUT_SECONDS=5');
     $assert(quotation_browser_pdf_chromium_path() === $fakeChromium, 'browser executable detection uses configured Chromium path');
+    $disc = quotation_browser_pdf_discover(null, true);
+    $assert(!empty($disc['available']) && $disc['configured'] === true, 'explicit QUOTATION_CHROMIUM_PATH takes precedence');
+    putenv('QUOTATION_CHROMIUM_PATH=/definitely/not/a/browser');
+    $disc2 = quotation_browser_pdf_discover([['path' => '/definitely/not/a/browser', 'source' => 'configured', 'label' => 'QUOTATION_CHROMIUM_PATH', 'configured' => true], ['path' => $fakeChromium, 'source' => 'path', 'label' => 'PATH', 'configured' => false]], true);
+    $assert(!empty($disc2['available']) && $disc2['path'] === $fakeChromium && $disc2['configured'] === false && str_contains($disc2['warning'], 'QUOTATION_CHROMIUM_PATH'), 'invalid configured path falls through to automatic browser');
+    putenv('QUOTATION_CHROMIUM_PATH=' . $fakeChromium);
+
+    $pathDir = dirname($fakeChromium) . DIRECTORY_SEPARATOR . 'browser-path-' . bin2hex(random_bytes(4));
+    mkdir($pathDir, 0700);
+    $tempFiles[] = $pathDir . DIRECTORY_SEPARATOR . 'google-chrome';
+    copy($fakeChromium, $tempFiles[count($tempFiles)-1]); chmod($tempFiles[count($tempFiles)-1], 0700);
+    $oldPath = getenv('PATH') ?: '';
+    putenv('QUOTATION_CHROMIUM_PATH'); putenv('CHROME_PATH'); putenv('CHROMIUM_PATH'); putenv('PATH=' . $pathDir);
+    $pathDisc = quotation_browser_pdf_discover(null, true);
+    $assert(!empty($pathDisc['available']) && $pathDisc['source'] === 'path', 'browser detection scans executable names from PATH directories');
+    putenv('PATH=' . $oldPath);
+    $commonDisc = quotation_browser_pdf_discover([['path' => $fakeChromium, 'source' => 'common', 'label' => 'common location', 'configured' => false]], true);
+    $assert(!empty($commonDisc['available']) && $commonDisc['source'] === 'common', 'browser detection supports injectable common absolute locations');
+    $managedDisc = quotation_browser_pdf_discover([['path' => $fakeChromium, 'source' => 'repository-managed', 'label' => 'managed browser', 'configured' => false]], true);
+    $assert(!empty($managedDisc['available']) && $managedDisc['source'] === 'repository-managed', 'repository-managed browser detection is supported');
+    putenv('CHROME_PATH=' . $fakeChromium); $chromeDisc = quotation_browser_pdf_discover(null, true); $assert(!empty($chromeDisc['available']) && $chromeDisc['configured'] === true, 'CHROME_PATH remains supported'); putenv('CHROME_PATH');
+    putenv('CHROMIUM_PATH=' . $fakeChromium); $chromiumDisc = quotation_browser_pdf_discover(null, true); $assert(!empty($chromiumDisc['available']) && $chromiumDisc['configured'] === true, 'CHROMIUM_PATH remains supported'); putenv('CHROMIUM_PATH');
+    putenv('QUOTATION_CHROMIUM_PATH=' . $fakeChromium);
+    $nonFile = quotation_browser_pdf_discover([['path' => sys_get_temp_dir(), 'source' => 'configured', 'label' => 'directory', 'configured' => true]], true);
+    $assert(empty($nonFile['available']), 'non-files are rejected during browser discovery');
+    $nonExec = quotation_bulk_temp_file('.txt'); file_put_contents($nonExec, 'not executable'); $tempFiles[] = $nonExec;
+    $assert(empty(quotation_browser_pdf_discover([['path' => $nonExec, 'source' => 'configured', 'label' => 'non-exec', 'configured' => true]], true)['available']), 'non-executable files are rejected');
+    $badBrowser = quotation_bulk_temp_file('.sh'); file_put_contents($badBrowser, "#!/bin/sh
+echo not-a-browser
+exit 0
+"); chmod($badBrowser, 0700); $tempFiles[] = $badBrowser;
+    $assert(empty(quotation_browser_pdf_discover([['path' => $badBrowser, 'source' => 'configured', 'label' => 'bad', 'configured' => true]], true)['available']), 'executables failing Chrome version validation are rejected');
+    $none = quotation_browser_pdf_discover([], true);
+    $assert(empty($none['available']) && $none['status'] === 'not_found', 'no browser returns an unavailable capability result without an exception');
+
     $assert(quotation_browser_pdf_node_path() === '', 'Node dependency is not required for the PHP Chromium exporter');
     $assert(quotation_browser_pdf_validate_executable($fakeChromium, 'Chromium') === $fakeChromium, 'valid browser executable paths are accepted');
+    $assert(empty(quotation_browser_pdf_discover([['path' => 'relative/chrome', 'source' => 'configured', 'label' => 'relative', 'configured' => true]], true)['available']), 'relative browser paths are unavailable without throwing');
     try { quotation_browser_pdf_validate_executable('relative/chrome', 'Chromium'); $assert(false, 'relative browser path rejected'); }
     catch (RuntimeException $e) { $assert(str_contains($e->getMessage(), 'absolute'), 'invalid configured executable paths are rejected'); }
 
@@ -68,6 +105,8 @@ SH);
     $q1 = $quote('BULK-PRINT-1', 'QTN-A', 'First Customer');
     $q2 = $quote('BULK-PRINT-2', 'QTN-B', 'Second Customer');
     $combined = quotation_bulk_combined_print_html([$q1, $q2], $defaults, $company);
+    $fallback = quotation_bulk_browser_print_fallback_html([$q1, $q2], $defaults, $company);
+    $assert(str_contains($fallback, 'Save as PDF') && str_contains($fallback, 'one combined PDF'), 'missing server browser returns combined print Save as PDF fallback HTML');
     $assert(strpos($combined, 'First Customer') < strpos($combined, 'Second Customer'), 'print output preserves selection order');
     $assert(substr_count($combined, 'bulk-print-quotation') >= 2 && str_contains($combined, 'page-break-after:always'), 'multiple print output contains page breaks');
 
