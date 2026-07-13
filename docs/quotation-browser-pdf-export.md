@@ -1,86 +1,72 @@
 # Quotation browser PDF export
 
-Quotation **Download PDF(s)** uses the same `quotation_render_to_html(...)` output as quotation view and Print Selected, then renders it with headless Chrome or Chromium when a usable server-side browser is available. `SimplePdfDocument` is intentionally not used for quotation HTML exports.
+Quotation **Download PDF(s)** uses `quotation_render_to_html(...)` and headless Chrome/Chromium so exported PDFs keep the branded quotation header, colors/backgrounds, cards/grids, customer/site blocks, item/pricing/tax/finance sections, charts, QR codes, annexures, Unicode, rupee symbols, and print page breaks. `SimplePdfDocument` is intentionally not used for quotation exports.
 
-## Default behavior
+## Guaranteed export behavior
 
-No manual browser path is required for normal deployments. On each request the exporter performs a lightweight, cached discovery pass and uses the first valid Chrome/Chromium-family executable found in this order:
+* One unique selected quotation downloads one high-quality PDF.
+* Multiple unique selected quotations download one ZIP containing one separate high-quality PDF per quotation, in selection order.
+* Duplicate selected IDs are de-duplicated before export.
+* The application no longer treats one combined browser Save as PDF document as a successful replacement for a requested ZIP.
 
-1. Trusted explicit overrides: `QUOTATION_CHROMIUM_PATH`, `CHROME_PATH`, then `CHROMIUM_PATH`.
-2. Repository-managed private browser directory: `runtime/browsers/` below the application root. This directory is outside public assets and can be provisioned by deployment tooling.
-3. Executables in the process `PATH`, scanned directly by PHP without shell interpolation:
-   - `google-chrome`
-   - `google-chrome-stable`
-   - `chromium`
-   - `chromium-browser`
-   - `chrome`
-   - `chrome-headless-shell`
-4. Common Linux locations:
-   - `/usr/bin/google-chrome`
-   - `/usr/bin/google-chrome-stable`
-   - `/usr/bin/chromium`
-   - `/usr/bin/chromium-browser`
-   - `/snap/bin/chromium`
-   - `/opt/google/chrome/chrome`
-   - `/usr/local/bin/google-chrome`
-   - `/usr/local/bin/chromium`
-5. Approved Playwright/Chrome cache paths under the service user's home directory.
+If server export is unhealthy, Download PDF(s) opens a repair/retry page. The original selection is preserved in a short-lived authenticated admin-session token so the administrator does not need to reselect quotations. The emergency **Open combined Save as PDF** action remains secondary and is explicitly described as not equivalent to separate PDFs in a ZIP.
 
-Every candidate must be an absolute executable file and must successfully answer `--version` within a short timeout with Chrome/Chromium-family output. Candidates are launched with `proc_open()` argument arrays; no shell command string is built from a path.
+## Admin status and diagnostics
 
-## Optional administrator override
+On `admin-quotations.php?tab=bulk`, the status reports one of these states:
 
-If a deployment needs to pin a specific browser, set one of these trusted environment variables in server configuration:
+* **Separate PDF/ZIP export ready** when server rendering is healthy.
+* **PDF engine repair required — one-click repair available** when the platform can potentially be repaired.
+* **This hosting platform cannot run the server PDF engine** when PHP process execution is unavailable.
 
-```sh
-QUOTATION_CHROMIUM_PATH=/absolute/path/to/chromium
-```
+The admin-only diagnostics page includes CSRF-protected actions for:
 
-`CHROME_PATH` and `CHROMIUM_PATH` are still supported for compatibility. Explicit configuration has highest priority, but a broken configured path does not block exports when automatic discovery finds a valid browser. Administrators see only a safe warning; raw environment data and full browser logs are not displayed in the UI.
+* **Test PDF engine**
+* **Install PDF engine**
+* **Repair PDF engine**
+* **Update managed browser**
 
-Optional timeout:
+Diagnostics report browser detection/source, test PDF status, `proc_open` availability, temporary directory status, ZIP implementation, and managed-browser installation state. Normal UI messages hide raw browser logs, full paths, secrets, and unrestricted command output.
 
-```sh
-QUOTATION_PDF_TIMEOUT_SECONDS=45
-```
+## Managed browser install and repair
 
-## Download behavior
+One-click install/repair uses the private `runtime/browsers/` directory, never public assets. Ordinary quotation export requests never download a browser; installation is explicit, admin-only, and CSRF-protected.
 
-When Chrome/Chromium is available:
+The repository-controlled manifest is `includes/quotation_browser_manifest.php`. It pins the approved platform, CPU architecture, version, official HTTPS download URL, SHA-256 checksum, executable relative path, maximum archive size, and maximum extraction size. Approved hosts are allowlisted in the manifest.
 
-- one unique selected quotation returns a direct `application/pdf` response;
-- multiple unique selected quotations return a ZIP containing one Chromium-rendered PDF per quotation;
-- selected order, ID deduplication, safe filenames, export limits, admin checks, CSRF checks, and temporary cleanup are preserved.
+Current pinned package entry:
 
-The export pipeline writes private temporary HTML, launches Chromium with an isolated temporary profile, disables browser headers/footers, prints backgrounds, validates the `%PDF-` signature, and removes temporary HTML, PDF, ZIP, log, and profile data after success or failure.
+* Browser package/version: Chrome for Testing `126.0.6478.126` (`chrome-for-testing-126.0.6478.126`).
+* Supported platform in the committed manifest: Linux `x86_64`.
+* Official host: `storage.googleapis.com`.
 
-## Browser Save as PDF fallback
+Security controls include platform/architecture matching, approved-host enforcement, no form-supplied URLs/checksums/paths, SHA-256 verification before extraction, ZIP path-traversal rejection, private staging, minimum executable permissions, bounded `--version` probe, tiny test PDF validation, atomic switch after validation, previous installation preservation on failure, cleanup of downloads/staging/profiles/test PDFs, install lock file, and bounded download/extraction/rendering timeouts.
 
-If no usable server browser is available, or if Chromium cannot launch, times out, fails to produce a valid PDF, cannot create its temporary profile, or ZIP support is unavailable for multiple selections, **Download PDF(s)** opens the existing high-quality print document instead of showing a technical Chromium error.
+If the platform is unsupported or the hosting provider disables process execution, the UI explains the limitation without exposing raw command output. A host that blocks all process execution cannot be fixed fully in application code.
 
-The fallback page preserves quotation branding, colors, hero cards, customer details, pricing and tax tables, finance sections, charts, annexures, QR codes, Unicode, rupee symbols, and print page breaks. It displays this non-printing banner:
+## ZIP implementations
 
-> Server PDF download is not available on this hosting environment. Choose Save as PDF in the print window.
+Multiple-quotation export prefers PHP `ZipArchive`. If `ZipArchive` is unavailable, the repository pure-PHP ZIP writer (`includes/quotation_zip_writer.php`) creates a standards-compliant ZIP with CRC32 and central-directory records. It supports binary PDFs, preserves selection order, rejects unsafe or duplicate entry paths, avoids silently omitting quotations, and cleans temporary output on failure.
 
-For multiple quotations the fallback opens one combined print document with page breaks and explains that the browser will save one combined PDF; it does not claim that a ZIP was generated and it does not open a separate tab for every quotation.
+If any quotation fails to render, the whole batch fails, partial PDFs are deleted, and the administrator sees the repair/retry page with a safe failure category.
 
-## Bulk Tools status and diagnostics
+## Failure categories
 
-`admin-quotations.php?tab=bulk` shows an admin-only PDF engine status near the Print/Download controls:
+The export flow preserves typed safe failure codes:
 
-- `PDF engine ready — configured Chromium`
-- `PDF engine ready — Google Chrome detected automatically`
-- `Browser Save as PDF fallback active`
+* `browser_not_found`
+* `proc_open_unavailable`
+* `temp_unavailable`
+* `browser_launch_failure`
+* `browser_timeout`
+* `invalid_pdf_output`
+* `quotation_render_failure`
+* `zip_unavailable`
+* `zip_creation_failure`
+* `managed_browser_install_failure`
 
-The page also includes **Test PDF engine**, an authenticated CSRF-protected diagnostic action. It reports in plain language whether `proc_open` is available, whether the temporary directory is writable, whether `ZipArchive` is available, whether Chrome/Chromium was detected, the browser name/version and discovery source, whether a small test PDF was generated, and whether browser Save as PDF fallback is available. Normal diagnostics hide absolute browser paths, full environment contents, cookies, secrets, and raw unrestricted Chromium logs.
+For batch rendering, failures identify the safe quotation number or sequence, not raw browser logs or sensitive paths.
 
-## Hosting notes
+## Limitations
 
-No external PDF SaaS is used and the application does not automatically download and execute a browser during normal export requests. If a shared host blocks headless Chromium or `proc_open`, administrators can still use Download PDF(s); it will open the browser Print / Save as PDF fallback. Server PDF ZIP downloads require PHP `ZipArchive`; without it, multiple selections fall back to a single combined Save as PDF print document.
-
-## Troubleshooting
-
-- **Fallback active**: install Chrome/Chromium on the server or provision a verified browser under `runtime/browsers/` if direct PDF/ZIP downloads are required.
-- **Launch failure or timeout**: run **Test PDF engine** and confirm the web-server user can execute the browser and create directories below PHP's `sys_get_temp_dir()`.
-- **Missing system libraries**: install the Linux packages required by the chosen Chromium distribution.
-- **Blank images**: confirm quotation assets are readable from the application filesystem and paths resolve relative to the repository root.
+Server-generated separate PDFs require PHP process execution and a runnable Chrome/Chromium-compatible browser. If the hosting provider blocks `proc_open` or prohibits browser processes entirely, the application can only offer the secondary combined browser Save as PDF emergency action until hosting policy changes.
