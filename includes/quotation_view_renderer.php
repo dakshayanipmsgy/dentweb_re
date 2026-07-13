@@ -105,7 +105,7 @@ function compute_financial_clarity(array $quote, array $calc, array $snapshot): 
     return documents_quote_resolve_finance_scenarios_for_render($quote, $calc, $snapshot);
 }
 
-function quotation_render(array $quote, array $quoteDefaults, array $company, bool $showAdmin = false, string $shareUrl = '', string $viewerType = 'admin', string $viewerId = ''): void
+function quotation_render_to_html(array $quote, array $quoteDefaults, array $company, bool $showAdmin = false, string $shareUrl = '', string $viewerType = 'admin', string $viewerId = ''): string
 {
     ini_set('display_errors', '0');
     ob_start();
@@ -711,5 +711,10 @@ const tree25El=document.getElementById('tree25');if(tree25El){tree25El.textConte
 </body></html>
 <?php
     $output = ob_get_clean();
-    echo ltrim((string) $output);
+    return ltrim((string) $output);
+}
+
+function quotation_render(array $quote, array $quoteDefaults, array $company, bool $showAdmin = false, string $shareUrl = '', string $viewerType = 'admin', string $viewerId = ''): void
+{
+    echo quotation_render_to_html($quote, $quoteDefaults, $company, $showAdmin, $shareUrl, $viewerType, $viewerId);
 }
