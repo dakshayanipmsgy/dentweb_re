@@ -112,7 +112,7 @@ function quotation_bulk_extract_body_fragment(string $html): string
     return $out;
 }
 
-function quotation_bulk_combined_print_html(array $quotes, array $quoteDefaults, array $company): string
+function quotation_bulk_combined_print_html(array $quotes, array $quoteDefaults, array $company, string $bannerHtml = ''): string
 {
     $parts = [];
     $headAssets = '';
@@ -123,7 +123,52 @@ function quotation_bulk_combined_print_html(array $quotes, array $quoteDefaults,
         }
         $parts[] = '<section class="bulk-print-quotation">' . quotation_bulk_extract_body_fragment($html) . '</section>';
     }
-    return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Print Selected Quotations</title>' . $headAssets . '<style>.bulk-print-toolbar{position:sticky;top:0;z-index:9999;padding:10px;background:#fff;border-bottom:1px solid #ddd}.bulk-print-quotation{break-after:page;page-break-after:always}.bulk-print-quotation:last-child{break-after:auto;page-break-after:auto}@media print{.bulk-print-toolbar{display:none!important}}</style></head><body><div class="bulk-print-toolbar"><button onclick="window.print()">Print selected quotations</button></div>' . implode('', $parts) . '<script>window.addEventListener("load",()=>setTimeout(()=>window.print(),400));</script></body></html>';
+    return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Print Selected Quotations</title>' . $headAssets . '<style>.bulk-print-toolbar{position:sticky;top:0;z-index:9999;padding:10px;background:#fff;border-bottom:1px solid #ddd}.bulk-print-fallback-banner{padding:12px 14px;background:#fff7ed;border:1px solid #fdba74;border-radius:10px;margin:10px;color:#9a3412}.bulk-print-quotation{break-after:page;page-break-after:always}.bulk-print-quotation:last-child{break-after:auto;page-break-after:auto}@media print{.bulk-print-toolbar,.bulk-print-fallback-banner{display:none!important}}</style></head><body>' . $bannerHtml . '<div class="bulk-print-toolbar"><button onclick="window.print()">Print / Save as PDF</button></div>' . implode('', $parts) . '<script>(function(){const go=()=>setTimeout(()=>window.print(),400); if(window.__quotationPdfReady){go();}else{window.addEventListener("load",go); setTimeout(go,1600);}})();</script></body></html>';
+}
+
+
+function quotation_bulk_browser_print_fallback_html(array $quotes, array $quoteDefaults, array $company, string $reason = ''): string
+{
+    $multiple = count($quotes) > 1;
+    $message = 'Server PDF download is not available on this hosting environment. Choose Save as PDF in the print window.';
+    $extra = $multiple ? ' The browser will save one combined PDF for the selected quotations; no ZIP was generated.' : '';
+    $safeReason = trim($reason) !== '' ? '<br><small>' . htmlspecialchars($reason, ENT_QUOTES) . '</small>' : '';
+    $banner = '<div class="bulk-print-fallback-banner"><strong>' . htmlspecialchars($message, ENT_QUOTES) . '</strong>' . htmlspecialchars($extra, ENT_QUOTES) . $safeReason . '<div style="margin-top:8px"><button onclick="window.print()">Print / Save as PDF</button></div></div>';
+    return quotation_bulk_combined_print_html($quotes, $quoteDefaults, $company, $banner);
+}
+
+function quotation_bulk_pdf_engine_status_text(array $capabilities): string
+{
+    $browser = is_array($capabilities['browser'] ?? null) ? $capabilities['browser'] : [];
+    if (!empty($capabilities['server_pdf_available'])) {
+        return !empty($browser['configured']) ? 'PDF engine ready — configured Chromium' : 'PDF engine ready — ' . ((string) ($browser['name'] ?? 'Chrome')) . ' detected automatically';
+    }
+    return 'Browser Save as PDF fallback active';
+}
+
+function quotation_bulk_pdf_diagnostics(): array
+{
+    $cap = quotation_browser_pdf_capabilities();
+    $browser = is_array($cap['browser'] ?? null) ? $cap['browser'] : [];
+    $testOk = false;
+    $testMessage = 'Test PDF was not generated because server PDF generation is unavailable.';
+    if (!empty($cap['server_pdf_available'])) {
+        $dir = '';
+        try {
+            $dir = quotation_browser_pdf_create_private_temp_dir('dentweb-quote-diagnostic-');
+            $html = $dir . DIRECTORY_SEPARATOR . 'diagnostic.html';
+            $pdf = $dir . DIRECTORY_SEPARATOR . 'diagnostic.pdf';
+            file_put_contents($html, '<!doctype html><meta charset="utf-8"><title>PDF diagnostic</title><h1>PDF diagnostic</h1>');
+            quotation_browser_pdf_render_html_file($html, $pdf, $dir);
+            $testOk = is_file($pdf) && (string) file_get_contents($pdf, false, null, 0, 5) === '%PDF-';
+            $testMessage = $testOk ? 'A small test PDF was generated successfully.' : 'The test PDF was not valid.';
+        } catch (Throwable $e) {
+            $testMessage = 'The test PDF could not be generated; Save as PDF fallback remains available.';
+        } finally {
+            if ($dir !== '') { quotation_browser_pdf_remove_tree($dir); }
+        }
+    }
+    return ['capabilities' => $cap, 'summary' => !empty($cap['server_pdf_available']) && $testOk ? 'Everything is ready.' : 'Server PDF generation is unavailable, but Save as PDF will still work.', 'browser_message' => !empty($browser['available']) ? (((bool) ($browser['configured'] ?? false)) ? 'Chrome/Chromium is configured.' : 'Chrome was found automatically.') : 'Chrome/Chromium was not found.', 'test_ok' => $testOk, 'test_message' => $testMessage];
 }
 
 function quotation_bulk_render_pdf_file(array $quote, array $quoteDefaults, array $company, string $path): void

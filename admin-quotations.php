@@ -1586,6 +1586,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $respondAction(false, 'Invalid share action.');
     }
 
+    if ($action === 'quotation_pdf_diagnostics') {
+        $user = current_user();
+        if (!is_array($user) || (string) ($user['role_name'] ?? '') !== 'admin') {
+            $redirectWith('error', 'Administrator access is required for PDF diagnostics.');
+        }
+        $diagnostics = quotation_bulk_pdf_diagnostics();
+        $cap = $diagnostics['capabilities'];
+        $browser = is_array($cap['browser'] ?? null) ? $cap['browser'] : [];
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: text/html; charset=UTF-8');
+        echo '<!doctype html><html><head><meta charset="utf-8"><title>Quotation PDF diagnostics</title><style>body{font-family:system-ui,sans-serif;margin:24px;color:#0f172a}.card{max-width:760px;border:1px solid #e2e8f0;border-radius:14px;padding:18px}.ok{color:#15803d}.warn{color:#b45309}.muted{color:#64748b}.btn{display:inline-block;padding:8px 12px;border:1px solid #94a3b8;border-radius:8px;text-decoration:none;color:#0f172a}</style></head><body><div class="card">';
+        echo '<h1>Quotation PDF diagnostics</h1><p><strong>' . htmlspecialchars((string) $diagnostics['summary'], ENT_QUOTES) . '</strong></p>';
+        echo '<ul>';
+        echo '<li>proc_open: ' . (!empty($cap['proc_open']) ? '<span class="ok">available</span>' : '<span class="warn">unavailable</span>') . '</li>';
+        echo '<li>Temporary directory: ' . (!empty($cap['temp_writable']) ? '<span class="ok">writable</span>' : '<span class="warn">not writable</span>') . '</li>';
+        echo '<li>ZipArchive: ' . (!empty($cap['zip']) ? '<span class="ok">available</span>' : '<span class="warn">unavailable; combined Save as PDF fallback will be used for multiple selections</span>') . '</li>';
+        echo '<li>Browser detection: ' . htmlspecialchars((string) $diagnostics['browser_message'], ENT_QUOTES) . '</li>';
+        if (!empty($browser['available'])) { echo '<li>Browser: ' . htmlspecialchars((string) ($browser['name'] ?? 'Chrome'), ENT_QUOTES) . ' — ' . htmlspecialchars((string) ($browser['version'] ?? ''), ENT_QUOTES) . '</li><li>Discovery source: ' . htmlspecialchars((string) ($browser['source_label'] ?? $browser['source'] ?? ''), ENT_QUOTES) . '</li>'; }
+        echo '<li>Test PDF: ' . htmlspecialchars((string) $diagnostics['test_message'], ENT_QUOTES) . '</li>';
+        echo '<li>Browser Save as PDF fallback: <span class="ok">available</span></li>';
+        echo '</ul><p class="muted">Detailed server paths and raw browser logs are hidden from this normal diagnostic view.</p><p><a class="btn" href="admin-quotations.php?tab=bulk">Back to Bulk Tools</a></p></div></body></html>';
+        exit;
+    }
+
     if (in_array($action, ['bulk_print_quotations', 'bulk_download_quotation_pdfs'], true)) {
         $user = current_user();
         if (!is_array($user) || (string) ($user['role_name'] ?? '') !== 'admin') {
@@ -1604,6 +1628,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $companyForPdf = documents_get_company_profile_for_quotes();
             $tempFiles = [];
             try {
+                if (count($quotesForBulkOutput) > 1 && !class_exists('ZipArchive')) {
+                    throw new QuotationBrowserPdfException('ZIP downloads require the PHP ZipArchive extension.', 'zip_unavailable');
+                }
                 $usedNames = [];
                 $pdfFiles = [];
                 foreach ($quotesForBulkOutput as $quoteForPdf) {
@@ -1643,9 +1670,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             } catch (Throwable $e) {
                 quotation_bulk_delete_files($tempFiles);
-                throw $e;
+                while (ob_get_level() > 0) { ob_end_clean(); }
+                header('Content-Type: text/html; charset=UTF-8');
+                echo quotation_bulk_browser_print_fallback_html($quotesForBulkOutput, $quoteDefaults, $companyForPdf, 'Server PDF generation could not complete; Save as PDF fallback opened instead.');
+                exit;
             }
         } catch (Throwable $e) {
+            if ($action === 'bulk_download_quotation_pdfs' && isset($quotesForBulkOutput) && is_array($quotesForBulkOutput) && $quotesForBulkOutput !== []) {
+                while (ob_get_level() > 0) { ob_end_clean(); }
+                header('Content-Type: text/html; charset=UTF-8');
+                echo quotation_bulk_browser_print_fallback_html($quotesForBulkOutput, $quoteDefaults, documents_get_company_profile_for_quotes(), 'Server PDF generation is unavailable; Save as PDF fallback opened instead.');
+                exit;
+            }
             $redirectWith('error', $e->getMessage());
         }
     }
@@ -2048,10 +2084,11 @@ while (count($orientationObstructions) < 3) { $orientationObstructions[] = ['lab
 </tbody></table></div></section><?php endif; ?>
 <h3>Import batch history</h3><table><thead><tr><th>Batch</th><th>File</th><th>Time</th><th>Rows</th><th>Valid</th><th>Invalid</th><th>Created</th><th>Status</th><th>Actions</th></tr></thead><tbody><?php foreach ($importBatches as $b): ?><tr><td><?= htmlspecialchars((string)($b['batch_id']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($b['filename']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($b['created_at']??''), ENT_QUOTES) ?></td><td><?= (int)($b['total_rows']??0) ?></td><td><?= (int)($b['valid_rows']??0) ?></td><td><?= (int)($b['invalid_rows']??0) ?></td><td><?= (int)($b['created_rows']??0) ?></td><td><?= htmlspecialchars((string)($b['status']??'Validated'), ENT_QUOTES) ?></td><td><a class="btn secondary" href="admin-quotations.php?tab=bulk_create&amp;batch=<?= urlencode((string)($b['batch_id']??'')) ?>">Open</a></td></tr><?php endforeach; if(!$importBatches): ?><tr><td colspan="9">No import batches yet.</td></tr><?php endif; ?></tbody></table></div><?php endif; ?>
 <?php if ($tab === 'bulk'): ?>
+<?php $quotationPdfCapabilities = quotation_browser_pdf_capabilities(); $quotationPdfStatusText = quotation_bulk_pdf_engine_status_text($quotationPdfCapabilities); ?>
 <div class="card workspace-panel active"><div class="editor-intro"><div><h2>Bulk Tools</h2><p class="muted">Apply status actions, print selected quotations, or download one PDF for a single selection and a ZIP for multiple selections. Export limit: <?= (int) QUOTATION_BULK_EXPORT_LIMIT ?> quotations.</p></div><a class="btn secondary" href="admin-quotations.php?tab=quotations">Back to Manage Quotations</a></div>
 <form method="post" id="quoteBulkForm">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
-<div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:8px"><div><label>Status/archive action</label><select name="bulk_action"><option value="archive">Archive selected</option><option value="unarchive">Unarchive selected</option><option value="set_approved">Set status approved</option><option value="set_accepted">Set status accepted</option></select></div><button class="btn" type="submit" name="action" value="bulk_quote_action">Apply</button><button class="btn secondary bulk-requires-selection" type="submit" name="action" value="bulk_print_quotations" formtarget="_blank">Print Selected</button><button class="btn secondary bulk-requires-selection" type="submit" name="action" value="bulk_download_quotation_pdfs">Download PDF(s)</button><span class="quote-meta" id="bulkSelectionHelp">Select quotations to enable print/download.</span></div>
+<div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:8px"><div><label>Status/archive action</label><select name="bulk_action"><option value="archive">Archive selected</option><option value="unarchive">Unarchive selected</option><option value="set_approved">Set status approved</option><option value="set_accepted">Set status accepted</option></select></div><button class="btn" type="submit" name="action" value="bulk_quote_action">Apply</button><button class="btn secondary bulk-requires-selection" type="submit" name="action" value="bulk_print_quotations" formtarget="_blank">Print Selected</button><button class="btn secondary bulk-requires-selection" type="submit" name="action" value="bulk_download_quotation_pdfs" <?= empty($quotationPdfCapabilities["server_pdf_available"]) ? 'formtarget="_blank"' : "" ?>>Download PDF(s)</button><button class="btn secondary" type="submit" name="action" value="quotation_pdf_diagnostics" formtarget="_blank">Test PDF engine</button><span class="quote-meta" id="bulkSelectionHelp"><?= empty($quotationPdfCapabilities["server_pdf_available"]) ? "Select quotations to open browser Save as PDF fallback." : "Select quotations to enable print/download." ?></span></div><div class="quote-meta" style="margin-bottom:12px"><strong><?= htmlspecialchars($quotationPdfStatusText, ENT_QUOTES) ?></strong><?= !empty($quotationPdfCapabilities["browser"]["warning"]) ? " — " . htmlspecialchars((string)$quotationPdfCapabilities["browser"]["warning"], ENT_QUOTES) : "" ?></div>
 <table><thead><tr><th><input type="checkbox" id="bulkSelectAll" aria-label="Select all quotations"></th><th>Quote No</th><th>Customer</th><th>Status</th><th>Updated</th></tr></thead><tbody>
 <?php foreach ($allQuotes as $q): ?><tr><td><input class="bulk-row-check" type="checkbox" name="selected_ids[]" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"></td><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td></tr><?php endforeach; ?>
 </tbody></table>
