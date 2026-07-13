@@ -25,6 +25,17 @@ $redirectWith = static function (string $type, string $msg): void {
     header('Location: employee-quotations.php?' . http_build_query(['status' => $type, 'message' => $msg]));
     exit;
 };
+$isQuotationSaveAjax = strtolower((string) ($_SERVER['HTTP_X_QUOTATION_SAVE'] ?? '')) === '1';
+$respondQuotationSaveSuccess = static function (string $quoteId) use ($isQuotationSaveAjax): void {
+    $viewUrl = 'quotation-view.php?id=' . urlencode($quoteId) . '&ok=1';
+    if ($isQuotationSaveAjax) {
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode(['ok' => true, 'quote_id' => $quoteId, 'view_url' => $viewUrl]);
+        exit;
+    }
+    header('Location: ' . $viewUrl);
+    exit;
+};
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
@@ -227,8 +238,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectWith('error', 'Failed to save quotation.');
         }
 
-        header('Location: quotation-view.php?id=' . urlencode((string) $quote['id']) . '&ok=1');
-        exit;
+        $respondQuotationSaveSuccess((string) $quote['id']);
     }
 }
 
@@ -331,7 +341,7 @@ if ($lookup !== null) {
 <?php if ($prefillMessage !== ''): ?><div class="alert ok"><?= htmlspecialchars($prefillMessage, ENT_QUOTES) ?></div><?php endif; ?>
 <div class="card"><h2><?= $editing['id'] === '' ? 'Create Quotation' : 'Edit Quotation' ?></h2>
 <form method="get" style="margin-bottom:10px"><label>Customer Lookup by Mobile</label><div style="display:flex;gap:8px"><input type="text" name="lookup_mobile" value="<?= htmlspecialchars($lookupMobile, ENT_QUOTES) ?>"><button class="btn secondary" type="submit">Lookup</button></div></form>
-<form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$editing['id'], ENT_QUOTES) ?>">
+<form method="post" data-quotation-save-form="employee"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string)$editing['id'], ENT_QUOTES) ?>">
 <input type="hidden" name="source_type" value="<?= htmlspecialchars((string) ($editing['source']['type'] ?? ''), ENT_QUOTES) ?>">
 <input type="hidden" name="source_lead_id" value="<?= htmlspecialchars((string) ($editing['source']['lead_id'] ?? ''), ENT_QUOTES) ?>">
 <input type="hidden" name="source_lead_mobile" value="<?= htmlspecialchars((string) ($editing['source']['lead_mobile'] ?? ''), ENT_QUOTES) ?>">
@@ -379,5 +389,5 @@ if ($lookup !== null) {
 </div><br><button class="btn" type="submit">Save Quotation</button></form></div>
 <div class="card"><h2>My Quote List</h2><table><thead><tr><th>Quote No</th><th>Name</th><th>Status</th><th>Amount</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
 <?php foreach ($quotes as $q): ?><tr><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'employee'), ENT_QUOTES) ?></td><td>₹<?= number_format((float)$q['calc']['grand_total'],2) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td><td><a class="btn secondary" href="quotation-view.php?id=<?= urlencode((string)$q['id']) ?>">View</a> <?php if (documents_quote_can_edit($q, 'employee', (string) ($employee['id'] ?? ''))): ?><a class="btn secondary" href="employee-quotations.php?edit=<?= urlencode((string)$q['id']) ?>">Edit</a><?php endif; ?></td></tr><?php endforeach; if ($quotes===[]): ?><tr><td colspan="6">No quotations yet.</td></tr><?php endif; ?></tbody></table></div>
-<script>document.addEventListener('click',function(e){if(e.target&&e.target.id==='addItemBtn'){const tb=document.querySelector('#itemsTable tbody');if(!tb)return;const tr=document.createElement('tr');const dH='<?= htmlspecialchars((string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>';tr.innerHTML='<td></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="'+dH+'"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';tb.appendChild(tr);ren();}if(e.target&&e.target.classList.contains('rm-item')){e.target.closest('tr')?.remove();ren();}});function ren(){document.querySelectorAll('#itemsTable tbody tr').forEach((tr,i)=>{const td=tr.querySelector('td');if(td)td.textContent=String(i+1);});}ren();</script>
+<script>document.addEventListener('click',function(e){if(e.target&&e.target.id==='addItemBtn'){const tb=document.querySelector('#itemsTable tbody');if(!tb)return;const tr=document.createElement('tr');const dH='<?= htmlspecialchars((string)($quoteDefaults['defaults']['hsn_solar'] ?? '8541'), ENT_QUOTES) ?>';tr.innerHTML='<td></td><td><input name="item_name[]"></td><td><input name="item_description[]"></td><td><input name="item_hsn[]" value="'+dH+'"></td><td><input type="number" step="0.01" name="item_qty[]" value="1"></td><td><input name="item_unit[]" value="set"></td><td><button type="button" class="btn secondary rm-item">Remove</button></td>';tb.appendChild(tr);ren();}if(e.target&&e.target.classList.contains('rm-item')){e.target.closest('tr')?.remove();ren();}});function ren(){document.querySelectorAll('#itemsTable tbody tr').forEach((tr,i)=>{const td=tr.querySelector('td');if(td)td.textContent=String(i+1);});}ren();</script><script src="assets/js/quotation-save-new-tab.js"></script>
 <script>window.quoteFormAutofillConfig={settingsBySegment:<?= json_encode($autofillSegments, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,defaultEnergy:<?= json_encode((float)($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450)) ?>};</script><script src="assets/js/quote-form-autofill.js"></script></main></body></html>

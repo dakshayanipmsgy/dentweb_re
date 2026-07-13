@@ -125,6 +125,17 @@ $redirectWith = static function (string $type, string $msg): void {
     header('Location: admin-quotations.php?' . http_build_query(['status' => $type, 'message' => $msg]));
     exit;
 };
+$isQuotationSaveAjax = strtolower((string) ($_SERVER['HTTP_X_QUOTATION_SAVE'] ?? '')) === '1';
+$respondQuotationSaveSuccess = static function (string $quoteId) use ($isQuotationSaveAjax): void {
+    $viewUrl = 'quotation-view.php?id=' . urlencode($quoteId) . '&ok=1';
+    if ($isQuotationSaveAjax) {
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode(['ok' => true, 'quote_id' => $quoteId, 'view_url' => $viewUrl]);
+        exit;
+    }
+    header('Location: ' . $viewUrl);
+    exit;
+};
 
 $isAjaxRequest = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
     || strpos(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json') !== false
@@ -1220,8 +1231,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectWith('error', 'Failed to save quotation.');
         }
 
-        header('Location: quotation-view.php?id=' . urlencode((string) $quote['id']) . '&ok=1');
-        exit;
+        $respondQuotationSaveSuccess((string) $quote['id']);
     }
 
     if ($action === 'reopen_approved_quote') {
@@ -1838,7 +1848,7 @@ if ($savedAnnualGenerationForEdit === '') {
     <?php endif; ?>
 <?php endif; ?>
 </form>
-<form method="post">
+<form method="post" data-quotation-save-form="admin">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
 <input type="hidden" name="action" value="save_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string) $editing['id'], ENT_QUOTES) ?>">
 <input type="hidden" name="source_type" value="<?= htmlspecialchars((string) ($editing['source']['type'] ?? ($lookupResult['source']['type'] ?? '')), ENT_QUOTES) ?>">
@@ -2716,4 +2726,4 @@ window.quoteFormAutofillConfig = {
     });
 })();
 
-</script><?php if ($tab === 'editor'): ?><script src="assets/js/quote-panel-layout-designer.js"></script><script src="assets/js/quote-form-autofill.js"></script><?php endif; ?></main></body></html>
+</script><?php if ($tab === 'editor'): ?><script src="assets/js/quotation-save-new-tab.js"></script><script src="assets/js/quote-panel-layout-designer.js"></script><script src="assets/js/quote-form-autofill.js"></script><?php endif; ?></main></body></html>
