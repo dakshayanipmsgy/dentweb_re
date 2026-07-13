@@ -10,7 +10,8 @@ class QuotationBrowserPdfException extends RuntimeException
     public function __construct(string $message, string $code = 'runtime_failure')
     {
         parent::__construct($message);
-        $this->quotationPdfCode = $code;
+        $map = ['not_installed'=>'browser_not_found','browser_launch_failure'=>'browser_launch_failure','browser_timeout'=>'browser_timeout','invalid_pdf_output'=>'invalid_pdf_output'];
+        $this->quotationPdfCode = $map[$code] ?? $code;
     }
 }
 
@@ -92,7 +93,7 @@ function quotation_browser_pdf_probe_executable(string $path, int $timeout = QUO
     if ($path === '' || !quotation_browser_pdf_is_absolute_path($path)) { return ['ok' => false, 'reason' => 'Browser path must be absolute.']; }
     if (!is_file($path)) { return ['ok' => false, 'reason' => 'Browser path is not a file.']; }
     if (!is_executable($path)) { return ['ok' => false, 'reason' => 'Browser path is not executable.']; }
-    if (!function_exists('proc_open')) { return ['ok' => false, 'reason' => 'PHP proc_open is unavailable.']; }
+    if (!function_exists('proc_open')) { return ['ok' => false, 'reason' => 'PHP proc_open is unavailable.', 'code' => 'proc_open_unavailable']; }
     $desc = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
     $proc = @proc_open([$path, '--version'], $desc, $pipes, dirname($path));
     if (!is_resource($proc)) { return ['ok' => false, 'reason' => 'Browser could not be launched for version check.']; }
@@ -152,7 +153,7 @@ function quotation_browser_pdf_discover(?array $candidateFixtures = null, bool $
 function quotation_browser_pdf_capabilities(): array
 {
     $discovery = quotation_browser_pdf_discover();
-    return ['proc_open' => function_exists('proc_open'), 'temp_writable' => is_writable(sys_get_temp_dir()), 'zip' => class_exists('ZipArchive'), 'browser' => $discovery, 'server_pdf_available' => $discovery['available'] && function_exists('proc_open') && is_writable(sys_get_temp_dir()), 'fallback_available' => true];
+    return ['proc_open' => function_exists('proc_open'), 'temp_writable' => is_writable(sys_get_temp_dir()), 'zip' => class_exists('ZipArchive') || function_exists('quotation_zip_write'), 'zip_implementation' => class_exists('ZipArchive') ? 'ZipArchive' : 'pure-php', 'browser' => $discovery, 'server_pdf_available' => $discovery['available'] && function_exists('proc_open') && is_writable(sys_get_temp_dir()), 'fallback_available' => true];
 }
 
 function quotation_browser_pdf_is_available(): bool { return quotation_browser_pdf_capabilities()['server_pdf_available']; }
@@ -182,8 +183,9 @@ function quotation_browser_pdf_remove_tree(string $path): void
 
 function quotation_browser_pdf_render_html_file(string $htmlPath, string $pdfPath, ?string $workDir = null): void
 {
+    if (!function_exists('proc_open')) { throw new QuotationBrowserPdfException('Server PDF generation is unavailable because PHP process execution is disabled.', 'proc_open_unavailable'); }
     $discovery = quotation_browser_pdf_discover();
-    if (empty($discovery['available'])) { throw new QuotationBrowserPdfException('Server PDF generation is unavailable because Chrome or Chromium was not found.', 'not_installed'); }
+    if (empty($discovery['available'])) { throw new QuotationBrowserPdfException('Server PDF generation is unavailable because Chrome or Chromium was not found.', 'browser_not_found'); }
     $chromium = (string) $discovery['path'];
     $profileDir = ($workDir ?: dirname($htmlPath)) . DIRECTORY_SEPARATOR . 'chrome-profile-' . bin2hex(random_bytes(8));
     if (!@mkdir($profileDir, 0700, true) && !is_dir($profileDir)) { throw new QuotationBrowserPdfException('Unable to create an isolated Chromium profile directory.', 'temp_unavailable'); }
@@ -193,11 +195,11 @@ function quotation_browser_pdf_render_html_file(string $htmlPath, string $pdfPat
     $cmd = [$chromium,'--headless=new','--disable-gpu','--no-first-run','--no-default-browser-check','--disable-dev-shm-usage','--allow-file-access-from-files','--run-all-compositor-stages-before-draw','--virtual-time-budget=' . (string) ($timeout * 1000),'--user-data-dir=' . $profileDir,'--print-to-pdf=' . $pdfPath,'--print-to-pdf-no-header','--no-pdf-header-footer',$url];
     $descriptors = [0 => ['pipe', 'r'], 1 => ['file', $logPath, 'a'], 2 => ['file', $logPath, 'a']];
     $proc = @proc_open($cmd, $descriptors, $pipes, $workDir ?: dirname($htmlPath));
-    if (!is_resource($proc)) { quotation_browser_pdf_remove_tree($profileDir); throw new QuotationBrowserPdfException('Unable to launch Chromium for quotation PDF export.', 'launch_failure'); }
+    if (!is_resource($proc)) { quotation_browser_pdf_remove_tree($profileDir); throw new QuotationBrowserPdfException('Unable to launch Chromium for quotation PDF export.', 'browser_launch_failure'); }
     fclose($pipes[0]); $start = time();
-    do { $status = proc_get_status($proc); if (!$status['running']) { break; } if (time() - $start > $timeout) { proc_terminate($proc, 15); usleep(250000); $status = proc_get_status($proc); if ($status['running']) { proc_terminate($proc, 9); } proc_close($proc); quotation_browser_pdf_remove_tree($profileDir); throw new QuotationBrowserPdfException('Quotation PDF export timed out before Chromium finished rendering.', 'timeout'); } usleep(100000); } while (true);
+    do { $status = proc_get_status($proc); if (!$status['running']) { break; } if (time() - $start > $timeout) { proc_terminate($proc, 15); usleep(250000); $status = proc_get_status($proc); if ($status['running']) { proc_terminate($proc, 9); } proc_close($proc); quotation_browser_pdf_remove_tree($profileDir); throw new QuotationBrowserPdfException('Quotation PDF export timed out before Chromium finished rendering.', 'browser_timeout'); } usleep(100000); } while (true);
     $exit = proc_close($proc); quotation_browser_pdf_remove_tree($profileDir);
-    if ($exit !== 0) { throw new QuotationBrowserPdfException('Chromium failed to generate the quotation PDF.', 'launch_failure'); }
+    if ($exit !== 0) { throw new QuotationBrowserPdfException('Chromium failed to generate the quotation PDF.', 'browser_launch_failure'); }
     $signature = is_file($pdfPath) ? (string) file_get_contents($pdfPath, false, null, 0, 5) : '';
-    if ($signature !== '%PDF-') { throw new QuotationBrowserPdfException('Chromium did not produce a valid PDF for the quotation export.', 'invalid_output'); }
+    if ($signature !== '%PDF-') { throw new QuotationBrowserPdfException('Chromium did not produce a valid PDF for the quotation export.', 'invalid_pdf_output'); }
 }
