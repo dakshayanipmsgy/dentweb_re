@@ -505,7 +505,7 @@ function leads_render_row(array $lead, int $index, string $today, string $quotat
               <a class="lead-action action-more-item" data-action="whatsapp_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">WhatsApp Details</a>
               <a class="lead-action action-more-item" data-action="email_details" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="#">Email Details</a>
               <?php if ($canCreateQuotation): ?>
-                <a class="lead-action action-more-item" data-action="create_quotation" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="<?php echo leads_safe($quotationCreatePath . '?action=create&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
+                <a class="lead-action action-more-item" data-action="create_quotation" data-lead-id="<?php echo leads_safe((string) ($lead['id'] ?? '')); ?>" href="<?php echo leads_safe($quotationCreatePath . '?tab=editor&from_lead_id=' . urlencode((string) ($lead['id'] ?? ''))); ?>">Create Quotation</a>
               <?php else: ?>
                 <?php $quotationDisabledReason = $isArchived ? 'Archived lead' : 'Missing name/mobile'; ?>
                 <button type="button" class="action-more-item" disabled title="<?php echo leads_safe($quotationDisabledReason); ?>">Create Quotation</button>
