@@ -68,6 +68,7 @@ require_once __DIR__ . '/admin/includes/documents_helpers.php';
 require_once __DIR__ . '/includes/commercial_lifecycle.php';
 documents_repair_broken_quote_revisions();
 require_once __DIR__ . '/includes/solar_finance_reports.php';
+require_once __DIR__ . '/includes/quotation_import_service.php';
 
 require_login_any_role(['admin', 'employee']);
 documents_ensure_structure();
@@ -274,12 +275,99 @@ $quotationResolveWhatsappMessage = static function (array $quote, string $templa
     return trim(preg_replace('/[ 	]+/', ' ', $resolved) ?? $resolved);
 };
 
+
+if (safe_text($_GET['action'] ?? '') === 'download_quotation_csv_template') {
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="quotation-import-template.csv"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, documents_quote_import_template_headers());
+    fputcsv($out, array_map('documents_quote_import_safe_csv_cell', ['IMP-001','Sample Customer','9876543210','lead','pm surya ghar - residential (subsidy) (res)','Ongrid','MODEL-001','3','0',date('Y-m-d'),date('Y-m-d', strtotime('+7 days')),'180000','180000','180000']));
+    exit;
+}
+if (safe_text($_GET['action'] ?? '') === 'download_quotation_reference_data') {
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="quotation-reference-data.csv"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['type','id','name','segment','model_number','system_type','capacity_kwp','price']);
+    foreach ($templates as $tpl) { fputcsv($out, ['template_set',(string)($tpl['id']??''),(string)($tpl['name']??''),(string)($tpl['segment']??''),'','','','']); }
+    foreach ((array)($quoteDefaults['rate_chart']['on_grid'] ?? []) as $row) { fputcsv($out, ['rate_chart','','','',(string)($row['model_number']??''),'Ongrid',(string)($row['solar_size_kwp']??''),(string)($row['self_funded_price']??'')]); }
+    foreach ((array)($quoteDefaults['rate_chart']['hybrid'] ?? []) as $row) { fputcsv($out, ['rate_chart','','','',(string)($row['model_number']??''),'Hybrid',(string)($row['solar_size_kwp']??''),(string)($row['self_funded_price']??'')]); }
+    exit;
+}
+
+if (safe_text($_GET['action'] ?? '') === 'download_quotation_validation_results') {
+    $batch = documents_quote_import_load_batch(safe_text($_GET['batch'] ?? ''));
+    if (!$batch) { http_response_code(404); echo 'Batch not found'; exit; }
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="quotation-validation-' . safe_filename((string)$batch['batch_id']) . '.csv"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['source_row','import_key','customer_name','customer_mobile','template','system_type','selected_model_number','main_solar_kwp','non_dcr_kwp','total_capacity','primary_amount','structured_item_count','status','messages','commit_result']);
+    foreach ((array)($batch['rows'] ?? []) as $r) { $in=is_array($r['input']??null)?$r['input']:[]; $v=is_array($r['validation']??null)?$r['validation']:[]; $msgs=array_map(static fn($m): string => (string)($m['field']??'row').': '.(string)($m['message']??''), (array)($v['messages']??[])); fputcsv($out, array_map('documents_quote_import_safe_csv_cell', [(string)($r['source_row']??''),(string)($in['import_key']??''),(string)($in['customer_name']??''),(string)($in['customer_mobile']??''),(string)($in['template_set']??''),(string)($in['system_type']??''),(string)($in['selected_model_number']??''),(string)($in['main_solar_kwp']??''),(string)($in['non_dcr_kwp']??''),(string)(((float)($in['main_solar_kwp']??0))+((float)($in['non_dcr_kwp']??0))),(string)($in['scenario_price_self_funded']??''),'1',(string)($r['status']??''),implode('; ', $msgs),(string)($r['commit_result']??'')])); }
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
         $respondAction(false, 'Security validation failed.');
     }
 
     $action = safe_text($_POST['action'] ?? '');
+
+    if ($action === 'quotation_csv_upload') {
+        $user = current_user();
+        if ((string)($user['role_name'] ?? '') !== 'admin') { $redirectWith('error', 'Only administrators can bulk-create quotations.'); }
+        $file = $_FILES['quotation_csv'] ?? null;
+        if (!is_array($file) || (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) { $redirectWith('error', 'CSV upload failed.'); }
+        $name = safe_filename((string)($file['name'] ?? 'quotation-import.csv'));
+        if (strtolower(pathinfo($name, PATHINFO_EXTENSION)) !== 'csv') { $redirectWith('error', 'Upload a .csv file.'); }
+        if ((int)($file['size'] ?? 0) > 2 * 1024 * 1024) { $redirectWith('error', 'CSV file is too large. Maximum 2 MB.'); }
+        $fh = fopen((string)$file['tmp_name'], 'r');
+        if (!$fh) { $redirectWith('error', 'Unable to read CSV.'); }
+        $headers = fgetcsv($fh);
+        if (is_array($headers) && isset($headers[0])) { $headers[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$headers[0]); }
+        $headers = array_map(static fn($h): string => safe_text((string)$h), is_array($headers) ? $headers : []);
+        $missing = array_values(array_diff(documents_quote_import_required_columns(), $headers));
+        if ($missing) { fclose($fh); $redirectWith('error', 'Missing required CSV columns: ' . implode(', ', $missing)); }
+        $batchId = 'qimport_' . date('Ymd_His') . '_' . bin2hex(random_bytes(3));
+        $rows=[]; $rowNo=1; $valid=0; $invalid=0; $warning=0; $seenKeys=[]; $seenHashes=[];
+        while (($data = fgetcsv($fh)) !== false) {
+            $rowNo++; if ($rowNo > 501) { fclose($fh); $redirectWith('error', 'Maximum 500 data rows are allowed per import.'); }
+            $input=[]; foreach ($headers as $i=>$h) { if($h!=='') $input[$h]=(string)($data[$i] ?? ''); }
+            $result=documents_validate_quote_draft_input($input, ['source'=>'csv']);
+            $key=(string)($input['import_key']??''); if($key!=='' && isset($seenKeys[$key])) { $result['ok']=false; $result['status']='Error'; $result['messages'][]=['field'=>'import_key','message'=>'Duplicate import key inside this CSV.']; }
+            if(isset($seenHashes[$result['row_hash']])) { $result['ok']=false; $result['status']='Error'; $result['messages'][]=['field'=>'row_hash','message'=>'Duplicate row inside this CSV.']; }
+            $seenKeys[$key]=true; $seenHashes[$result['row_hash']]=true;
+            if($result['status']==='Error') $invalid++; elseif($result['status']==='Warning') { $warning++; $valid++; } else $valid++;
+            $rows[]=['source_row'=>$rowNo,'input'=>$input,'validation'=>$result,'status'=>$result['status']];
+        }
+        fclose($fh);
+        $batch=['batch_id'=>$batchId,'filename'=>$name,'created_at'=>date('c'),'actor'=>documents_quote_import_admin_snapshot(),'total_rows'=>count($rows),'valid_rows'=>$valid,'warning_rows'=>$warning,'invalid_rows'=>$invalid,'created_rows'=>0,'skipped_rows'=>0,'failed_rows'=>0,'created_quotation_ids'=>[],'rows'=>$rows,'status'=>'Validated','undo_state'=>'Not requested'];
+        documents_quote_import_save_batch($batch);
+        header('Location: admin-quotations.php?' . http_build_query(['tab'=>'bulk_create','batch'=>$batchId,'status'=>'success','message'=>'CSV validated. Review preview before confirming creation.']));
+        exit;
+    }
+    if ($action === 'quotation_csv_commit') {
+        $user=current_user(); if ((string)($user['role_name'] ?? '') !== 'admin') { $redirectWith('error', 'Only administrators can confirm CSV imports.'); }
+        $batchId=safe_text($_POST['batch_id'] ?? ''); $batch=documents_quote_import_load_batch($batchId); if(!$batch) $redirectWith('error','Import batch not found.');
+        if (($batch['status'] ?? '') === 'Committed') $redirectWith('error','This batch was already committed.');
+        $created=[]; $skipped=0; $failed=0; foreach ((array)$batch['rows'] as &$row) { $v=is_array($row['validation']??null)?$row['validation']:[]; if(($row['status']??'')==='Error') { $skipped++; $row['commit_result']='Skipped invalid row'; continue; } $v['input']=$row['input']; $res=documents_commit_quote_draft($v, ['batch_id'=>$batchId,'source_row'=>(int)($row['source_row']??0),'source_filename'=>(string)($batch['filename']??'')]); if(!empty($res['ok'])) { $created[]=(string)$res['quote_id']; $row['commit_result']='Created '.$res['quote_id']; } else { $failed++; $row['commit_result']='Failed: '.(string)($res['error']??''); } }
+        unset($row); $batch['created_rows']=count($created); $batch['skipped_rows']=$skipped; $batch['failed_rows']=$failed; $batch['created_quotation_ids']=$created; $batch['committed_at']=date('c'); $batch['status']=$failed?'Partially committed':'Committed'; documents_quote_import_save_batch($batch);
+        header('Location: admin-quotations.php?' . http_build_query(['tab'=>'bulk_create','batch'=>$batchId,'status'=>'success','message'=>'CSV import committed. Created '.count($created).' draft quotation(s).'])); exit;
+    }
+
+
+    if ($action === 'quotation_csv_undo') {
+        $user=current_user(); if ((string)($user['role_name'] ?? '') !== 'admin') { $redirectWith('error', 'Only administrators can undo CSV imports.'); }
+        $batchId=safe_text($_POST['batch_id'] ?? ''); $batch=documents_quote_import_load_batch($batchId); if(!$batch) $redirectWith('error','Import batch not found.');
+        if (in_array((string)($batch['undo_state'] ?? ''), ['Undone','Partially undone','Undo blocked'], true)) { $redirectWith('error','Undo was already processed for this batch.'); }
+        $undone=0; $skipped=0; $failed=0; $reasons=[]; foreach ((array)($batch['created_quotation_ids'] ?? []) as $qid) { $q=documents_get_quote((string)$qid); $reason=''; if(!$q) $reason='Missing'; else { $m=is_array($q['import_metadata']??null)?$q['import_metadata']:[]; $savedHash=(string)($m['post_import_hash']??''); $current=$q; unset($current['import_metadata']['post_import_hash']); $currentHash=hash('sha256', json_encode($current, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)); if(documents_is_archived($q)) $reason='Already undone or archived'; elseif(documents_quote_normalize_status((string)($q['status']??'')) !== 'draft' || documents_quote_is_locked($q) || !empty($q['public_share_enabled'])) $reason='Approved, accepted, locked or shared'; elseif(!empty($q['parent_quote_id']) || !empty($q['revision_parent_id'])) $reason='Revised'; elseif(function_exists('documents_quote_has_workflow_documents') && documents_quote_has_workflow_documents($q)) $reason='Linked to later commercial documents'; elseif($savedHash!=='' && !hash_equals($savedHash,$currentHash)) $reason='Changed since import'; }
+            if($reason!=='') { $skipped++; $reasons[(string)$qid]=$reason; continue; }
+            $q['archived_flag']=true; $q['archived_at']=date('c'); $q['archived_by']=documents_quote_import_admin_snapshot(); $q['import_undo']=['batch_id'=>$batchId,'undone_at'=>date('c'),'undone_by'=>documents_quote_import_admin_snapshot(),'reason'=>'CSV import batch undo']; $q['updated_at']=date('c'); $save=documents_save_quote($q); if(!empty($save['ok'])) $undone++; else { $failed++; $reasons[(string)$qid]='Failed to archive'; }
+        }
+        $batch['undo_state']=$undone>0 && $skipped===0 && $failed===0 ? 'Undone' : ($undone>0 ? 'Partially undone' : 'Undo blocked'); $batch['undo_result']=['eligible_count'=>$undone,'undone_count'=>$undone,'skipped_count'=>$skipped,'failed_count'=>$failed,'actor'=>documents_quote_import_admin_snapshot(),'time'=>date('c'),'skipped_reasons'=>$reasons]; documents_quote_import_save_batch($batch);
+        header('Location: admin-quotations.php?' . http_build_query(['tab'=>'bulk_create','batch'=>$batchId,'status'=>'success','message'=>'Undo processed. Undone '.$undone.', skipped '.$skipped.', failed '.$failed.'.'])); exit;
+    }
+
     if ($action === 'save_settings') {
         $d = load_quote_defaults();
         $decodeRateChart = static function (string $field, string $label, array $existing) use ($redirectWith): array {
@@ -1247,7 +1335,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
         }
 
-        header('Location: admin-quotations.php?edit=' . urlencode($newId) . '&status=success&message=' . urlencode('Revision created. You are editing the new draft version.'));
+        header('Location: admin-quotations.php?tab=editor&edit=' . urlencode($newId) . '&status=success&message=' . urlencode('Revision created. You are editing the new draft version.'));
         exit;
     }
 
@@ -1508,7 +1596,7 @@ documents_normalize_quotes_store();
 $allQuotes = documents_list_quotes();
 $statusFilter = safe_text($_GET['status_filter'] ?? '');
 $tab = safe_text($_GET['tab'] ?? 'editor');
-if (!in_array($tab, ['quotations','editor','archived','bulk','settings'], true)) { $tab = 'editor'; }
+if (!in_array($tab, ['quotations','editor','bulk_create','archived','bulk','settings'], true)) { $tab = 'editor'; }
 $isQuotationListPartialRequest = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'quotation-list'
     || safe_text((string) ($_GET['partial'] ?? '')) === 'quotation_list';
 if ($isQuotationListPartialRequest && $tab !== 'archived') {
@@ -1531,6 +1619,23 @@ if ($statusFilter !== '') {
         }
         return strtolower($status) === strtolower($statusFilter);
     }));
+}
+if (in_array($tab, ['quotations', 'archived'], true)) {
+    usort($allQuotes, static function (array $a, array $b): int {
+        $ad = (string) ($a['updated_at'] ?? $a['created_at'] ?? '');
+        $bd = (string) ($b['updated_at'] ?? $b['created_at'] ?? '');
+        $cmp = strcmp($bd, $ad);
+        if ($cmp !== 0) { return $cmp; }
+        return strcmp((string) ($b['id'] ?? ''), (string) ($a['id'] ?? ''));
+    });
+    $quotationListTotal = count($allQuotes);
+    $quotationListPerPage = 100;
+    $quotationListTotalPages = max(1, (int) ceil($quotationListTotal / $quotationListPerPage));
+    $quotationListPage = max(1, min($quotationListTotalPages, (int) ($_GET['page'] ?? 1)));
+    $quotationListOffset = ($quotationListPage - 1) * $quotationListPerPage;
+    $quotationListShowingFrom = $quotationListTotal === 0 ? 0 : $quotationListOffset + 1;
+    $quotationListShowingTo = min($quotationListTotal, $quotationListOffset + $quotationListPerPage);
+    $allQuotes = array_slice($allQuotes, $quotationListOffset, $quotationListPerPage);
 }
 if ($isQuotationListPartialRequest) {
     header('Content-Type: text/html; charset=UTF-8');
@@ -1693,18 +1798,20 @@ if ($savedAnnualGenerationForEdit === '') {
 <header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Quotations</h1><p class="muted">Build the customer offer, then continue it through agreement, delivery, invoice, and receipt.</p></div><nav class="commercial-header__actions" aria-label="Page actions"><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php">Document Center</a><a class="btn commercial-header__primary" href="admin-quotations.php">+ New Quotation</a></nav></header>
 <?= render_commercial_lifecycle('quotation') ?>
 <div data-workspace-root>
-<nav class="quotation-tabs workspace-tabs" data-workspace-tabs="fetch" aria-label="Quotation workspace">
+<nav class="quotation-tabs workspace-tabs" data-workspace-tabs="links" aria-label="Quotation workspace">
 <a class="<?= $tab === 'editor' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php">Create Quotation</a>
 <a class="<?= $tab === 'quotations' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=quotations">Manage Quotations</a>
-<a class="<?= $tab === 'archived' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=archived">Archived</a>
+<a class="<?= $tab === 'bulk_create' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=bulk_create">Bulk Create Quotations</a>
 <a class="<?= $tab === 'bulk' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=bulk">Bulk Tools</a>
+<a class="<?= $tab === 'archived' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=archived">Archived Quotations</a>
 <a class="<?= $tab === 'settings' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=settings">Settings</a>
 </nav>
 <?php if ($message !== ''): ?><div class="alert <?= $status === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
 <?php if ($editRestrictionMessage !== ''): ?><div class="alert err"><?= htmlspecialchars($editRestrictionMessage, ENT_QUOTES) ?></div><?php endif; ?>
 <?php if ($prefillMessage !== ''): ?><div class="alert ok"><?= htmlspecialchars($prefillMessage, ENT_QUOTES) ?></div><?php endif; ?>
 <div class="toast" id="uxToast" role="status" aria-live="polite"></div>
-<div id="quotationEditor" class="card workspace-panel <?= $tab === 'editor' ? 'active' : '' ?>">
+<?php if ($tab === 'editor'): ?>
+<div id="quotationEditor" class="card workspace-panel active">
 <div class="editor-intro"><div><h2><?= $editing['id'] === '' ? 'Create Quotation' : 'Edit Quotation' ?></h2><p class="muted">Start with customer and system details. Open advanced sections only when needed.</p></div><a class="btn secondary" href="admin-quotations.php?tab=quotations">Back to Manage Quotations</a></div>
 <form method="get" style="margin-bottom:10px"><input type="hidden" name="tab" value="editor">
 <label for="quoteLookupMobile">Mobile number</label><div class="lookup-controls"><input id="quoteLookupMobile" type="text" name="lookup_mobile" value="<?= htmlspecialchars($lookupMobile, ENT_QUOTES) ?>"><button class="btn" type="submit">Find customer / lead</button></div>
@@ -1831,9 +1938,27 @@ while (count($orientationObstructions) < 3) { $orientationObstructions[] = ['lab
 <?php endforeach; ?>
 </div><br><button class="btn" type="submit">Save Quotation</button>
 </form></div>
-<?php require __DIR__ . '/admin/partials/quotation-list.php'; ?>
+<?php endif; ?>
+<?php if (in_array($tab, ['quotations','archived'], true)) { require __DIR__ . '/admin/partials/quotation-list.php'; } ?>
 <?php if ($tab === "settings"): $d = $quoteDefaults; ?><div class="card workspace-panel active"><div class="editor-intro"><div><h2>Quotation Settings</h2><p class="muted">Defaults and helpers used when creating quotations.</p></div><a class="btn secondary" href="admin-quotations.php?tab=quotations">Back to Manage Quotations</a></div><form method="post" class="grid"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token'] ?? ""), ENT_QUOTES) ?>"><input type="hidden" name="action" value="save_settings"><div><label>Primary color</label><div style="display:flex;gap:6px"><input type="color" name="ui_primary" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="ui_primary_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['primary'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Accent color</label><div style="display:flex;gap:6px"><input type="color" name="ui_accent" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="ui_accent_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['accent'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"><input name="ui_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['text'] ?? "#0f172a"), ENT_QUOTES) ?>"></div></div><div><label>Muted text color</label><div style="display:flex;gap:6px"><input type="color" name="ui_muted_text" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"><input name="ui_muted_text_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['muted_text'] ?? "#475569"), ENT_QUOTES) ?>"></div></div><div><label>Page background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_page_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"><input name="ui_page_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['page_bg'] ?? "#f8fafc"), ENT_QUOTES) ?>"></div></div><div><label>Card background color</label><div style="display:flex;gap:6px"><input type="color" name="ui_card_bg" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="ui_card_bg_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['card_bg'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Border color</label><div style="display:flex;gap:6px"><input type="color" name="ui_border" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"><input name="ui_border_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['colors']['border'] ?? "#e2e8f0"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient A</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="header_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient B</label><div style="display:flex;gap:6px"><input type="color" name="header_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="header_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['header']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient A</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_a" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"><input name="footer_gradient_a_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['a'] ?? "#0ea5e9"), ENT_QUOTES) ?>"></div></div><div><label>Footer gradient B</label><div style="display:flex;gap:6px"><input type="color" name="footer_gradient_b" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"><input name="footer_gradient_b_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['gradients']['footer']['b'] ?? "#22c55e"), ENT_QUOTES) ?>"></div></div><div><label>Header font color</label><div style="display:flex;gap:6px"><input type="color" name="header_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="header_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['header_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Footer font color</label><div style="display:flex;gap:6px"><input type="color" name="footer_text_color" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"><input name="footer_text_color_hex" value="<?= htmlspecialchars((string)($d['global']['ui_tokens']['header_footer']['footer_text_color'] ?? "#ffffff"), ENT_QUOTES) ?>"></div></div><div><label>Header gradient direction</label><select name="header_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="header_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['header']['enabled'])?'checked':'' ?>> Enable header gradient</label></div><div><label>Footer gradient direction</label><select name="footer_gradient_direction"><option value="to right">left→right</option><option value="to bottom">top→bottom</option></select></div><div><label><input type="checkbox" name="footer_gradient_enabled" <?= !empty($d['global']['ui_tokens']['gradients']['footer']['enabled'])?'checked':'' ?>> Enable footer gradient</label></div><div><label>Default interest rate (%)</label><input type="number" step="0.01" name="res_interest_pct" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['interest_pct'] ?? 6), ENT_QUOTES) ?>"></div><div><label>Default loan tenure (years)</label><input type="number" name="res_tenure_years" value="<?= htmlspecialchars((string)($d['segments']['RES']['loan_bestcase']['tenure_years'] ?? 10), ENT_QUOTES) ?>"></div><div><label>Annual generation per kW</label><input type="number" min="0" step="0.01" name="annual_generation_per_kw" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450), ENT_QUOTES) ?>"></div><div><label>Emission factor (kg CO2/kWh)</label><input type="number" step="0.01" name="emission_factor_kg_per_kwh" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['emission_factor_kg_per_kwh'] ?? 0.82), ENT_QUOTES) ?>"></div><div><label>CO2 absorbed per tree per year (kg)</label><input type="number" step="0.01" name="tree_absorption_kg_per_tree_per_year" value="<?= htmlspecialchars((string)($d['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'] ?? 20), ENT_QUOTES) ?>"></div><div><label><input type="checkbox" name="show_decimals" <?= !empty($d['global']['quotation_ui']['show_decimals'])?'checked':'' ?>> Show INR decimals in quotation</label></div><div><label>QR target</label><select name="qr_target"><option value="quotation" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="quotation")?'selected':'' ?>>This quotation link</option><option value="website" <?= (($d['global']['quotation_ui']['qr_target'] ?? "quotation")==="website")?'selected':'' ?>>Company website</option></select></div><div style="grid-column:1/-1"><label>Why Dakshayani points (one per line)</label><textarea name="why_dakshayani_points"><?= htmlspecialchars(implode("\n", (array)($d['global']['quotation_ui']['why_dakshayani_points'] ?? [])), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Footer disclaimer</label><textarea name="footer_disclaimer"><?= htmlspecialchars((string)($d['global']['quotation_ui']['footer_disclaimer'] ?? ''), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>WhatsApp quotation message template</label><textarea name="whatsapp_message_template" placeholder="Use placeholders like {{name}}, {{city}}, {{system_size}}, {{system_type}}, {{price}}, {{quotation_link}}"><?= htmlspecialchars((string)($d['global']['quotation_ui']['whatsapp_message_template'] ?? $quotationDefaultWhatsappTemplate), ENT_QUOTES) ?></textarea><div class="muted">Supported placeholders: {{name}}, {{city}}, {{system_size}}, {{system_type}}, {{price}}, {{quotation_link}}</div></div><?php $importantSettings = documents_quote_normalize_important_points_settings(is_array($d['important_points'] ?? null) ? $d['important_points'] : []); $importantPreview = documents_quote_render_important_points($importantSettings); ?><section class="settings-card important-settings-card" style="grid-column:1/-1;padding:18px;border:1px solid #e2e8f0;border-radius:14px;background:#fffdf4"><h3>Important Quotation Points</h3><p class="muted">Manage the prominent customer attention notes shown in quotation HTML, public, and print views.</p><label><input type="checkbox" name="important_points_enabled" <?= !empty($importantSettings['enabled']) ? 'checked' : '' ?>> Show Important Points in quotations</label><div class="grid"><div><label>Section title</label><input name="important_points_title" value="<?= htmlspecialchars((string)($importantSettings['title'] ?? 'Important Points'), ENT_QUOTES) ?>"></div><div><label>Intro text (optional)</label><textarea name="important_points_intro"><?= htmlspecialchars((string)($importantSettings['intro'] ?? ''), ENT_QUOTES) ?></textarea></div></div><div class="table-wrap"><table id="importantPointsTable"><thead><tr><th>#</th><th>Active</th><th>Point text</th><th>Sort order</th><th>Actions</th></tr></thead><tbody><?php foreach ((array)$importantSettings['points'] as $idx => $point): ?><tr><td><?= (int)$idx + 1 ?><input type="hidden" name="important_points[<?= (int)$idx ?>][id]" value="<?= htmlspecialchars((string)($point['id'] ?? ''), ENT_QUOTES) ?>"></td><td class="center"><input type="checkbox" name="important_points[<?= (int)$idx ?>][active]" <?= !empty($point['active']) ? 'checked' : '' ?>></td><td><textarea name="important_points[<?= (int)$idx ?>][text]" maxlength="1000"><?= htmlspecialchars((string)($point['text'] ?? ''), ENT_QUOTES) ?></textarea></td><td><input type="number" name="important_points[<?= (int)$idx ?>][sort_order]" value="<?= (int)($point['sort_order'] ?? (($idx + 1) * 10)) ?>"></td><td><button class="btn secondary important-remove" type="button">Remove</button></td></tr><?php endforeach; ?></tbody></table></div><button class="btn secondary" type="button" id="addImportantPoint">+ Add Important Point</button><h4>Preview</h4><div class="quotation-preview"><?= $importantPreview ?></div></section><div style="grid-column:1/-1"><label>Rate chart — On-Grid (JSON)</label><textarea name="rate_chart_on_grid_json"><?= htmlspecialchars(json_encode((array)($d['rate_chart']['on_grid'] ?? []), JSON_PRETTY_PRINT), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><label>Rate chart — Hybrid (JSON)</label><textarea name="rate_chart_hybrid_json"><?= htmlspecialchars(json_encode((array)($d['rate_chart']['hybrid'] ?? []), JSON_PRETTY_PRINT), ENT_QUOTES) ?></textarea></div><div style="grid-column:1/-1"><button class="btn" type="submit">Save Settings</button></div></form></div><?php endif; ?>
-<div class="card workspace-panel <?= $tab === 'bulk' ? 'active' : '' ?>"><div class="editor-intro"><div><h2>Bulk Tools</h2><p class="muted">Apply one action to multiple quotations.</p></div><a class="btn secondary" href="admin-quotations.php?tab=quotations">Back to Manage Quotations</a></div>
+<?php if ($tab === 'bulk_create'): ?>
+<?php $importBatches = documents_quote_import_batches(); ?>
+<div class="card workspace-panel active"><div class="editor-intro"><div><h2>Bulk Create Quotations</h2><p class="muted">Upload, validate, preview, then confirm CSV quotation creation. Uploading never creates quotations.</p></div><a class="btn secondary" href="admin-quotations.php?tab=quotations">Back to Manage Quotations</a></div>
+<div class="quick-action-buttons"><a class="btn secondary" href="admin-quotations.php?tab=bulk_create&amp;action=download_quotation_csv_template">Download quotation CSV template</a><a class="btn secondary" href="admin-quotations.php?tab=bulk_create&amp;action=download_quotation_reference_data">Download current reference data</a></div>
+<form method="post" enctype="multipart/form-data" style="margin-top:16px"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="quotation_csv_upload"><label>Upload CSV for validation preview</label><input type="file" name="quotation_csv" accept=".csv,text/csv" required><button class="btn" type="submit">Validate and Preview</button></form>
+<?php $selectedImportBatch = safe_text($_GET['batch'] ?? '') !== '' ? documents_quote_import_load_batch(safe_text($_GET['batch'] ?? '')) : null; ?>
+<?php if (is_array($selectedImportBatch)): ?>
+<section class="section-card" style="margin-top:16px"><h3>Validation preview: <?= htmlspecialchars((string)$selectedImportBatch['batch_id'], ENT_QUOTES) ?></h3><div class="quick-action-buttons"><a class="btn secondary" href="admin-quotations.php?tab=bulk_create&amp;action=download_quotation_validation_results&amp;batch=<?= urlencode((string)$selectedImportBatch['batch_id']) ?>">Download validation results CSV</a><?php if ((int)($selectedImportBatch['created_rows']??0)>0 && !in_array((string)($selectedImportBatch['undo_state']??''), ['Undone','Partially undone','Undo blocked'], true)): ?><form method="post" onsubmit="return confirm('Archive eligible untouched draft quotations from this import batch? Quotation numbers will not be reused.');"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="quotation_csv_undo"><input type="hidden" name="batch_id" value="<?= htmlspecialchars((string)$selectedImportBatch['batch_id'], ENT_QUOTES) ?>"><button class="btn secondary" type="submit">Undo Batch</button></form><?php endif; ?></div>
+<p class="muted">Total <?= (int)($selectedImportBatch['total_rows']??0) ?> · Valid <?= (int)($selectedImportBatch['valid_rows']??0) ?> · Warning <?= (int)($selectedImportBatch['warning_rows']??0) ?> · Invalid <?= (int)($selectedImportBatch['invalid_rows']??0) ?> · Created <?= (int)($selectedImportBatch['created_rows']??0) ?></p>
+<?php if (($selectedImportBatch['status'] ?? '') === 'Validated' && (int)($selectedImportBatch['valid_rows']??0) > 0): ?><form method="post" onsubmit="return confirm('Create valid draft quotations from this validated CSV?');"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>"><input type="hidden" name="action" value="quotation_csv_commit"><input type="hidden" name="batch_id" value="<?= htmlspecialchars((string)$selectedImportBatch['batch_id'], ENT_QUOTES) ?>"><button class="btn" type="submit">Create Valid Draft Quotations</button></form><?php endif; ?>
+<div class="list-table-wrap"><table><thead><tr><th>Source row</th><th>Import key</th><th>Customer</th><th>Template</th><th>System/model</th><th>DCR</th><th>Non-DCR</th><th>Total</th><th>Primary amount</th><th>Items</th><th>Status</th><th>Messages</th><th>Result</th></tr></thead><tbody>
+<?php foreach ((array)$selectedImportBatch['rows'] as $r): $in=is_array($r['input']??null)?$r['input']:[]; $v=is_array($r['validation']??null)?$r['validation']:[]; $msgs=array_map(static fn($m): string => (string)($m['field']??'row').': '.(string)($m['message']??''), (array)($v['messages']??[])); $main=(float)($in['main_solar_kwp']??0); $non=(float)($in['non_dcr_kwp']??0); ?>
+<tr><td><?= (int)($r['source_row']??0) ?></td><td><?= htmlspecialchars((string)($in['import_key']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($in['customer_name']??''), ENT_QUOTES) ?><br><span class="quote-meta"><?= htmlspecialchars((string)($in['customer_mobile']??''), ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($in['template_set']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($in['system_type']??''), ENT_QUOTES) ?><br><?= htmlspecialchars((string)($in['selected_model_number']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($in['main_solar_kwp']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($in['non_dcr_kwp']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($main+$non), ENT_QUOTES) ?></td><td>₹<?= number_format((float)($in['scenario_price_self_funded']??0), 2) ?></td><td>1</td><td><span class="status-pill"><?= htmlspecialchars((string)($r['status']??''), ENT_QUOTES) ?></span></td><td><?= htmlspecialchars(implode('; ', $msgs), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($r['commit_result']??''), ENT_QUOTES) ?></td></tr>
+<?php endforeach; ?>
+</tbody></table></div></section><?php endif; ?>
+<h3>Import batch history</h3><table><thead><tr><th>Batch</th><th>File</th><th>Time</th><th>Rows</th><th>Valid</th><th>Invalid</th><th>Created</th><th>Status</th><th>Actions</th></tr></thead><tbody><?php foreach ($importBatches as $b): ?><tr><td><?= htmlspecialchars((string)($b['batch_id']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($b['filename']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($b['created_at']??''), ENT_QUOTES) ?></td><td><?= (int)($b['total_rows']??0) ?></td><td><?= (int)($b['valid_rows']??0) ?></td><td><?= (int)($b['invalid_rows']??0) ?></td><td><?= (int)($b['created_rows']??0) ?></td><td><?= htmlspecialchars((string)($b['status']??'Validated'), ENT_QUOTES) ?></td><td><a class="btn secondary" href="admin-quotations.php?tab=bulk_create&amp;batch=<?= urlencode((string)($b['batch_id']??'')) ?>">Open</a></td></tr><?php endforeach; if(!$importBatches): ?><tr><td colspan="9">No import batches yet.</td></tr><?php endif; ?></tbody></table></div><?php endif; ?>
+<?php if ($tab === 'bulk'): ?>
+<div class="card workspace-panel active"><div class="editor-intro"><div><h2>Bulk Tools</h2><p class="muted">Apply one action to multiple quotations.</p></div><a class="btn secondary" href="admin-quotations.php?tab=quotations">Back to Manage Quotations</a></div>
 <form method="post">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
 <input type="hidden" name="action" value="bulk_quote_action">
@@ -1842,6 +1967,7 @@ while (count($orientationObstructions) < 3) { $orientationObstructions[] = ['lab
 <?php foreach ($allQuotes as $q): ?><tr><td><input type="checkbox" name="selected_ids[]" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"></td><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td></tr><?php endforeach; ?>
 </tbody></table>
 </form></div>
+<?php endif; ?>
 </div>
 <div class="ux-backdrop" id="uxBackdrop"></div><div class="ux-modal" id="uxModal" aria-hidden="true"><div class="ux-modal-head"><strong id="uxModalTitle">Preview</strong><button class="btn secondary" type="button" id="uxModalClose">Close</button></div><iframe id="uxModalFrame" src="about:blank"></iframe></div>
 <script>
@@ -2575,4 +2701,4 @@ window.quoteFormAutofillConfig = {
     });
 })();
 
-</script><script src="assets/js/quote-panel-layout-designer.js"></script><script src="assets/js/quote-form-autofill.js"></script><script src="assets/js/admin-workspace-tabs.js"></script></main></body></html>
+</script><?php if ($tab === 'editor'): ?><script src="assets/js/quote-panel-layout-designer.js"></script><script src="assets/js/quote-form-autofill.js"></script><?php endif; ?></main></body></html>
