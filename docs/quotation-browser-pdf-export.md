@@ -1,72 +1,30 @@
-# Quotation browser PDF export
+# Quotation PDF/ZIP export
 
-Quotation **Download PDF(s)** uses `quotation_render_to_html(...)` and headless Chrome/Chromium so exported PDFs keep the branded quotation header, colors/backgrounds, cards/grids, customer/site blocks, item/pricing/tax/finance sections, charts, QR codes, annexures, Unicode, rupee symbols, and print page breaks. `SimplePdfDocument` is intentionally not used for quotation exports.
+Quotation export now has two paths:
 
-## Guaranteed export behavior
+* **Server export**: when a healthy Chrome/Chromium server engine is already available, **Download PDF(s)** can still create one PDF for one selected quotation, or one ZIP containing one separate PDF per unique selected quotation. The server path remains non-mutating and preserves selection order.
+* **Browser export**: **Download using browser** creates PDFs in the administrator's same-origin browser without Chrome/Chromium, `proc_open`, Node.js, `ZipArchive`, or external services on the web server. It creates one PDF for one selection and a ZIP with one PDF entry per selected quotation for multiple selections.
 
-* One unique selected quotation downloads one high-quality PDF.
-* Multiple unique selected quotations download one ZIP containing one separate high-quality PDF per quotation, in selection order.
-* Duplicate selected IDs are de-duplicated before export.
-* The application no longer treats one combined browser Save as PDF document as a successful replacement for a requested ZIP.
+Browser export is admin-only and starts with a CSRF-protected, short-lived, session-bound token. The render endpoint resolves each normalized quotation ID through `documents_get_quote()`, uses the shared `quotation_render_to_html(...)` renderer, never creates public quotation URLs, and returns a client-export view without admin controls or automatic `window.print()`.
 
-If server export is unhealthy, Download PDF(s) opens a repair/retry page. The original selection is preserved in a short-lived authenticated admin-session token so the administrator does not need to reselect quotations. The emergency **Open combined Save as PDF** action remains secondary and is explicitly described as not equivalent to separate PDFs in a ZIP.
+## Privacy and runtime dependencies
 
-## Admin status and diagnostics
+Customer quotation HTML stays on the same origin. The application does not send quotation content to a PDF SaaS and does not load export libraries from a CDN at runtime. Browser libraries are expected in `assets/vendor/browser-export/` with pinned versions documented there: Paged.js 0.4.3, html2canvas 1.4.1, jsPDF 2.5.1, and fflate 0.8.2.
 
-On `admin-quotations.php?tab=bulk`, the status reports one of these states:
+## Browser behavior and limits
 
-* **Separate PDF/ZIP export ready** when server rendering is healthy.
-* **PDF engine repair required — one-click repair available** when the platform can potentially be repaired.
-* **This hosting platform cannot run the server PDF engine** when PHP process execution is unavailable.
+The browser engine processes quotations sequentially to reduce memory pressure, loads one quotation in a hidden same-origin iframe, waits for `window.__quotationPdfReady === true`, waits for fonts/images/chart images, captures page-sized content page by page, then destroys the iframe and canvas before continuing. It does not capture an entire multi-page quotation into one tall canvas.
 
-The admin-only diagnostics page includes CSRF-protected actions for:
+The initial supported browser-side batch limit is **10 quotations**. This conservative limit is intended for Safari safety. Test 1, 3, 5, and 10 quotation batches before increasing it.
 
-* **Test PDF engine**
-* **Install PDF engine**
-* **Repair PDF engine**
-* **Update managed browser**
+Desktop Safari, Chrome, Edge, and Firefox are the target browsers. Browser-generated PDFs may rasterize complex cards, diagrams, gradients, charts, QR codes, and Unicode text; they can be larger and may differ slightly from native print/server PDFs.
 
-Diagnostics report browser detection/source, test PDF status, `proc_open` availability, temporary directory status, ZIP implementation, and managed-browser installation state. Normal UI messages hide raw browser logs, full paths, secrets, and unrestricted command output.
+## Failure and cancellation
 
-## Managed browser install and repair
+Progress text reports stages such as preparing each quotation, rendering each page, creating the ZIP, and download ready. Cancellation is honored between page/quotation steps. Failures identify the quotation being processed when possible, do not download a partial ZIP, and preserve the selection for retry. Blob URLs, iframes, and canvases are cleaned up.
 
-One-click install/repair uses the private `runtime/browsers/` directory, never public assets. Ordinary quotation export requests never download a browser; installation is explicit, admin-only, and CSRF-protected.
+**Print Selected** remains the secondary emergency path. It opens a combined print document only when the administrator explicitly chooses that option; it is not the normal multi-PDF ZIP export.
 
-The repository-controlled manifest is `includes/quotation_browser_manifest.php`. It pins the approved platform, CPU architecture, version, official HTTPS download URL, SHA-256 checksum, executable relative path, maximum archive size, and maximum extraction size. Approved hosts are allowlisted in the manifest.
+## Managed-browser correction
 
-Current pinned package entry:
-
-* Browser package/version: Chrome for Testing `126.0.6478.126` (`chrome-for-testing-126.0.6478.126`).
-* Supported platform in the committed manifest: Linux `x86_64`.
-* Official host: `storage.googleapis.com`.
-
-Security controls include platform/architecture matching, approved-host enforcement, no form-supplied URLs/checksums/paths, SHA-256 verification before extraction, ZIP path-traversal rejection, private staging, minimum executable permissions, bounded `--version` probe, tiny test PDF validation, atomic switch after validation, previous installation preservation on failure, cleanup of downloads/staging/profiles/test PDFs, install lock file, and bounded download/extraction/rendering timeouts.
-
-If the platform is unsupported or the hosting provider disables process execution, the UI explains the limitation without exposing raw command output. A host that blocks all process execution cannot be fixed fully in application code.
-
-## ZIP implementations
-
-Multiple-quotation export prefers PHP `ZipArchive`. If `ZipArchive` is unavailable, the repository pure-PHP ZIP writer (`includes/quotation_zip_writer.php`) creates a standards-compliant ZIP with CRC32 and central-directory records. It supports binary PDFs, preserves selection order, rejects unsafe or duplicate entry paths, avoids silently omitting quotations, and cleans temporary output on failure.
-
-If any quotation fails to render, the whole batch fails, partial PDFs are deleted, and the administrator sees the repair/retry page with a safe failure category.
-
-## Failure categories
-
-The export flow preserves typed safe failure codes:
-
-* `browser_not_found`
-* `proc_open_unavailable`
-* `temp_unavailable`
-* `browser_launch_failure`
-* `browser_timeout`
-* `invalid_pdf_output`
-* `quotation_render_failure`
-* `zip_unavailable`
-* `zip_creation_failure`
-* `managed_browser_install_failure`
-
-For batch rendering, failures identify the safe quotation number or sequence, not raw browser logs or sensitive paths.
-
-## Limitations
-
-Server-generated separate PDFs require PHP process execution and a runnable Chrome/Chromium-compatible browser. If the hosting provider blocks `proc_open` or prohibits browser processes entirely, the application can only offer the secondary combined browser Save as PDF emergency action until hosting policy changes.
+The committed managed-browser manifest currently contains an all-zero SHA-256 checksum. Until a real pinned checksum is committed and tested, Install/Repair PDF engine controls are hidden/disabled and the UI directs administrators to browser-side export instead. Existing server Chromium support remains available where a valid browser is already installed.

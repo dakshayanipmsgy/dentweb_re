@@ -7,6 +7,8 @@ require_once __DIR__ . '/quotation_browser_pdf.php';
 require_once __DIR__ . '/quotation_zip_writer.php';
 
 const QUOTATION_BULK_EXPORT_LIMIT = 25;
+const QUOTATION_BROWSER_EXPORT_LIMIT = 10;
+const QUOTATION_BROWSER_EXPORT_TOKEN_TTL = 600;
 
 function quotation_bulk_normalize_selected_ids($selected): array
 {
@@ -144,7 +146,7 @@ function quotation_bulk_pdf_engine_status_text(array $capabilities): string
         return 'Separate PDF/ZIP export ready';
     }
     if (empty($capabilities['proc_open'])) { return 'This hosting platform cannot run the server PDF engine'; }
-    return 'PDF engine repair required — one-click repair available';
+    return quotation_browser_managed_install_available() ? 'PDF engine repair required — one-click repair available' : 'Using browser PDF/ZIP export — no server setup required.';
 }
 
 function quotation_bulk_pdf_diagnostics(): array
@@ -309,7 +311,67 @@ function quotation_bulk_repair_html(array $quotes, array $quoteDefaults, array $
     $tok = htmlspecialchars($token, ENT_QUOTES);
     $n = count($quotes);
     $emergency = quotation_bulk_combined_print_html($quotes, $quoteDefaults, $company, '<div class="bulk-print-fallback-banner"><strong>Emergency combined Save as PDF.</strong> This is not equivalent to separate PDFs in a ZIP.</div>');
-    return '<!doctype html><html><head><meta charset="utf-8"><title>Repair quotation PDF export</title><style>body{font-family:system-ui,sans-serif;margin:24px;color:#0f172a}.card{max-width:820px;border:1px solid #e2e8f0;border-radius:14px;padding:20px}.btn{display:inline-block;margin:6px 6px 6px 0;padding:10px 14px;border-radius:8px;border:1px solid #2563eb;background:#2563eb;color:#fff;text-decoration:none}.secondary{background:#fff;color:#0f172a;border-color:#94a3b8}.muted{color:#64748b}</style></head><body><div class="card"><h1>PDF engine repair required</h1><p><strong>' . $safe . '</strong></p><p>The original selection of ' . (int)$n . ' unique quotation(s) is securely preserved. A multi-quotation request will retry as a ZIP with one separate PDF per quotation.</p><form method="post"><input type="hidden" name="csrf_token" value="'.$csrf.'"><input type="hidden" name="action" value="quotation_pdf_engine_repair"><input type="hidden" name="retry_token" value="'.$tok.'"><button class="btn" type="submit">Repair PDF engine and retry</button></form><form method="post"><input type="hidden" name="csrf_token" value="'.$csrf.'"><input type="hidden" name="action" value="bulk_download_quotation_pdfs"><input type="hidden" name="retry_token" value="'.$tok.'"><button class="btn secondary" type="submit">Retry ZIP download</button></form><details><summary>Secondary emergency action: Open combined Save as PDF</summary><p class="muted">This produces one combined browser print document only; it is not the promised separate-PDF ZIP.</p>'.$emergency.'</details></div></body></html>';
+    $repairForm = quotation_browser_managed_install_available() ? '<form method="post"><input type="hidden" name="csrf_token" value="'.$csrf.'"><input type="hidden" name="action" value="quotation_pdf_engine_repair"><input type="hidden" name="retry_token" value="'.$tok.'"><button class="btn" type="submit">Repair PDF engine and retry</button></form>' : '<p class="muted">Managed server-browser repair is disabled until a real pinned checksum is committed. Use browser PDF/ZIP export instead.</p>';
+    return '<!doctype html><html><head><meta charset="utf-8"><title>Quotation PDF export fallback</title><style>body{font-family:system-ui,sans-serif;margin:24px;color:#0f172a}.card{max-width:820px;border:1px solid #e2e8f0;border-radius:14px;padding:20px}.btn{display:inline-block;margin:6px 6px 6px 0;padding:10px 14px;border-radius:8px;border:1px solid #2563eb;background:#2563eb;color:#fff;text-decoration:none}.secondary{background:#fff;color:#0f172a;border-color:#94a3b8}.muted{color:#64748b}</style></head><body><div class="card"><h1>Use browser PDF/ZIP export</h1><p><strong>' . $safe . '</strong></p><p>The original selection of ' . (int)$n . ' unique quotation(s) is securely preserved. Return to Bulk Tools and choose Download using browser to create one PDF per quotation without Chrome, proc_open, Node.js, or ZipArchive on the server.</p>'.$repairForm.'<form method="post"><input type="hidden" name="csrf_token" value="'.$csrf.'"><input type="hidden" name="action" value="bulk_download_quotation_pdfs"><input type="hidden" name="retry_token" value="'.$tok.'"><button class="btn secondary" type="submit">Retry server download</button></form><details><summary>Secondary emergency action: Open combined Save as PDF</summary><p class="muted">This produces one combined browser print document only; it is not the promised separate-PDF ZIP.</p>'.$emergency.'</details></div></body></html>';
+}
+
+function quotation_browser_export_user_key(): string
+{
+    $user = current_user();
+    return (string)($user['id'] ?? $user['username'] ?? $user['role_name'] ?? 'admin');
+}
+
+function quotation_browser_export_create_token(array $ids): array
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) { @session_start(); }
+    $ids = quotation_bulk_normalize_selected_ids($ids);
+    if ($ids === [] || count($ids) > QUOTATION_BROWSER_EXPORT_LIMIT) {
+        throw new RuntimeException('Select between 1 and ' . QUOTATION_BROWSER_EXPORT_LIMIT . ' quotations for browser export.');
+    }
+    $quotes = quotation_bulk_resolve_quotes($ids);
+    $used = [];
+    $items = [];
+    foreach ($quotes as $quote) {
+        $items[] = [
+            'id' => (string)($quote['id'] ?? ''),
+            'label' => (string)($quote['quote_no'] ?? $quote['id'] ?? 'quotation'),
+            'filename' => quotation_bulk_pdf_filename($quote, $used),
+        ];
+    }
+    $token = bin2hex(random_bytes(24));
+    $_SESSION['quotation_browser_export'][$token] = ['ids'=>$ids,'created'=>time(),'user'=>quotation_browser_export_user_key(),'csrf'=>(string)($_SESSION['csrf_token'] ?? '')];
+    return ['token'=>$token,'expires_in'=>QUOTATION_BROWSER_EXPORT_TOKEN_TTL,'limit'=>QUOTATION_BROWSER_EXPORT_LIMIT,'items'=>$items];
+}
+
+function quotation_browser_export_token_ids(string $token): array
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) { @session_start(); }
+    $state = $_SESSION['quotation_browser_export'][$token] ?? null;
+    if (!is_array($state) || time() - (int)($state['created'] ?? 0) > QUOTATION_BROWSER_EXPORT_TOKEN_TTL || !hash_equals((string)($state['csrf'] ?? ''), (string)($_SESSION['csrf_token'] ?? '')) || !hash_equals((string)($state['user'] ?? ''), quotation_browser_export_user_key())) {
+        unset($_SESSION['quotation_browser_export'][$token]);
+        return [];
+    }
+    return quotation_bulk_normalize_selected_ids($state['ids'] ?? []);
+}
+
+function quotation_browser_export_render_html(array $quote, array $quoteDefaults, array $company): string
+{
+    $html = quotation_render_to_html($quote, $quoteDefaults, $company, false, '', 'admin', 'browser-client-export');
+    $html = quotation_bulk_prepare_browser_pdf_html($html);
+    $extra = '<style>@page{size:A4;margin:0}html,body{background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.admin-toolbar,.sticky-toolbar,.bulk-print-toolbar{display:none!important}.quotation-page,.quote-page{break-after:page;page-break-after:always}</style>';
+    return str_ireplace('</head>', $extra . '</head>', $html);
+}
+
+function quotation_browser_managed_install_available(?array $manifest = null): bool
+{
+    $manifest = $manifest ?: quotation_browser_managed_manifest();
+    foreach ((array)($manifest['packages'] ?? []) as $pkg) {
+        $sha = strtolower((string)($pkg['sha256'] ?? ''));
+        if ($sha === '' || $sha === str_repeat('0', 64) || !preg_match('/^[a-f0-9]{64}$/', $sha)) {
+            return false;
+        }
+    }
+    return !empty($manifest['packages']);
 }
 
 function quotation_bulk_temp_file(string $suffix): string
@@ -350,6 +412,9 @@ function quotation_browser_managed_package(?array $manifest = null): array
 function quotation_browser_managed_install(?array $manifest = null, ?string $fixtureArchive = null): array
 {
     $manifest = $manifest ?: quotation_browser_managed_manifest();
+    if (!quotation_browser_managed_install_available($manifest)) {
+        throw new QuotationBrowserPdfException('Managed browser installation is disabled until a real pinned checksum is committed.', 'managed_browser_install_failure');
+    }
     $pkg = quotation_browser_managed_package($manifest);
     $url = (string)($pkg['url'] ?? ''); $host = parse_url($url, PHP_URL_HOST);
     if (!is_string($host) || !in_array($host, (array)($manifest['allow_hosts'] ?? []), true) || parse_url($url, PHP_URL_SCHEME) !== 'https') {
