@@ -18,11 +18,14 @@ $assert(str_contains($bulk, 'paginator_load_timeout') && str_contains($bulk, 'pa
 $assert(str_contains($bulk, 'paginator_api_mismatch'), 'API mismatch has dedicated code');
 $assert(!str_contains($bulk, "__quotationPdfError='pagination_failed: "), 'iframe does not prefix string errors');
 $assert(substr_count($js, "replace(/^pagination_failed") === 1, 'parent strips legacy duplicate prefix once');
-foreach ([50,60,70,80,90,100] as $pct) { $assert(quotation_browser_export_normalize_scale($pct) === $pct, "$pct percent accepted"); }
+foreach ([50,60,70,75,80,90,100] as $pct) { $assert(quotation_browser_export_normalize_scale($pct) === $pct, "$pct percent accepted"); }
 $assert(quotation_browser_export_normalize_scale(49) === 50, 'below range normalized');
 $assert(quotation_browser_export_normalize_scale(101) === 100, 'above range normalized');
 $assert(quotation_browser_export_normalize_scale('abc') === 100, 'non numeric scale defaults safely');
 $assert(str_contains($admin, 'Export content size') && str_contains($admin, 'quotationBrowserExportScale'), 'bulk UI exposes scale control');
+$assert(str_contains($admin, 'Print content size') && str_contains($admin, 'quotationPrintScale') && str_contains($admin, "name=\"print_scale_percent\""), 'bulk UI exposes print scale control submitted with Print Selected');
+$assert(str_contains($admin, 'quotation_output_scale_percent($_POST') && str_contains($admin, 'bulk_print_quotations'), 'server validates submitted print percentage before rendering');
+$assert(str_contains($js, 'quotationPrintScalePercent') && str_contains($js, 'initPrintScale'), 'print scale is remembered locally without depending on storage availability');
 $assert(str_contains($js, 'localStorage') && str_contains($js, 'export_scale_percent'), 'scale is remembered locally and posted to session');
 $assert(str_contains($bulk, "'scale_percent'=>") && str_contains($bulk, 'quotation_browser_export_token_scale'), 'scale is bound to export token');
 $assert(str_contains($bulk, 'quotation-export-scale-root') && str_contains($bulk, 'fontSize=scalePercent'), 'scale changes layout before pagination');

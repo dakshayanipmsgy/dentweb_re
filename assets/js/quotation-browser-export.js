@@ -1,6 +1,6 @@
 (function(){
   'use strict';
-  const DESKTOP_LIMIT=10, MOBILE_LIMIT=3, READY_TIMEOUT=30000, SCALE_KEY='quotationBrowserExportScalePercent';
+  const DESKTOP_LIMIT=10, MOBILE_LIMIT=3, READY_TIMEOUT=30000, SCALE_KEY='quotationBrowserExportScalePercent', PRINT_SCALE_KEY='quotationPrintScalePercent';
   const $=(s,r=document)=>r.querySelector(s);
   const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
   const mobile=()=>matchMedia('(pointer:coarse)').matches||Math.min(screen.width,innerWidth)<900;
@@ -9,9 +9,13 @@
   function setStatus(msg){ const el=$('#quotationBrowserExportStatus'); if(el) el.textContent=msg; }
   function code(c,m,diagnostics){ const e=new Error(m); e.code=c; if(diagnostics) e.diagnostics=diagnostics; return e; }
   function scaleSelect(){return $('#quotationBrowserExportScale');}
-  function validScale(v){ const n=parseInt(v,10); return [50,60,70,80,90,100].includes(n)?n:100; }
-  function selectedScale(){ return validScale(scaleSelect()?.value||localStorage.getItem(SCALE_KEY)||100); }
-  function initScale(){ const el=scaleSelect(); if(!el) return; el.value=String(validScale(localStorage.getItem(SCALE_KEY)||el.value||100)); el.addEventListener('change',()=>localStorage.setItem(SCALE_KEY,String(validScale(el.value)))); }
+  function printScaleSelect(){return $('#quotationPrintScale');}
+  function validScale(v){ const n=parseInt(v,10); return [50,60,70,75,80,90,100].includes(n)?n:100; }
+  function selectedScale(){ return validScale(scaleSelect()?.value||safeGet(SCALE_KEY)||100); }
+  function safeGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+  function safeSet(k,v){try{localStorage.setItem(k,String(v));}catch(e){}}
+  function initScale(){ const el=scaleSelect(); if(!el) return; el.value=String(validScale(safeGet(SCALE_KEY)||el.value||100)); el.addEventListener('change',()=>safeSet(SCALE_KEY,validScale(el.value))); }
+  function initPrintScale(){ const el=printScaleSelect(); if(!el) return; el.value=String(validScale(safeGet(PRINT_SCALE_KEY)||el.value||100)); el.addEventListener('change',()=>safeSet(PRINT_SCALE_KEY,validScale(el.value))); }
   function selectedIds(form){ const seen=new Set(), out=[]; $$('.bulk-row-check',form).forEach(c=>{ if(c.checked&&!seen.has(c.value)){seen.add(c.value); out.push(c.value);} }); return out; }
   function canvasOk(){ const c=document.createElement('canvas'); return !!(c.getContext&&c.getContext('2d')&&(c.toBlob||c.toDataURL)); }
   function requireSupport(){
@@ -87,7 +91,7 @@
     finally { if(cancel) cancel.hidden=true; cancel?.removeEventListener('click',onCancel); }
   }
   document.addEventListener('error',e=>{ if(e.target?.tagName==='SCRIPT'&&/browser-export/.test(e.target.src||'')) setStatus('asset_load_failed: Browser export asset failed to load.'); }, true);
-  initScale();
+  initScale(); initPrintScale();
   document.addEventListener('click',e=>{ const btn=e.target.closest('[data-browser-quotation-export]'); if(!btn) return; e.preventDefault(); const form=$('#quoteBulkForm'); if(form) run(form); });
   document.addEventListener('submit',e=>{ const submitter=e.submitter; if(submitter?.name==='action'&&submitter.value==='bulk_download_quotation_pdfs'&&submitter.dataset.serverPdfAvailable==='0'){ e.preventDefault(); const form=$('#quoteBulkForm'); if(form) run(form); } });
   window.addEventListener('pagehide',cleanupDownload);
