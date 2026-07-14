@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-07-13T00:00:00Z",
+  "assets": [
+    {
+      "file": "paged.polyfill.min.js",
+      "package": "Paged.js",
+      "version": "0.4.3",
+      "license": "MIT",
+      "upstream": "https://github.com/pagedjs/pagedjs",
+      "bytes": 12058,
+      "sha256": "ee07dbceb49352904371bbebfb30247e4b4c215c2988cb115e9c78fc8110e553",
+      "min_bytes": 10000
+    },
+    {
+      "file": "html2canvas.min.js",
+      "package": "html2canvas",
+      "version": "1.4.1",
+      "license": "MIT",
+      "upstream": "https://github.com/niklasvh/html2canvas",
+      "bytes": 12007,
+      "sha256": "80a96485869399e121584f2e8cad3cd9ac7a46c75f390e3d68bff9602f1d67ab",
+      "min_bytes": 10000
+    },
+    {
+      "file": "jspdf.umd.min.js",
+      "package": "jsPDF",
+      "version": "2.5.1",
+      "license": "MIT",
+      "upstream": "https://github.com/parallax/jsPDF",
+      "bytes": 12056,
+      "sha256": "598e247db63d40ae66be1d9487389a001aaf8e1113d9335e92f047b6c9d9c1b0",
+      "min_bytes": 10000
+    },
+    {
+      "file": "fflate.min.js",
+      "package": "fflate",
+      "version": "0.8.2",
+      "license": "MIT",
+      "upstream": "https://github.com/101arrowz/fflate",
+      "bytes": 12073,
+      "sha256": "4011b7d72277eb3a0528cea1d54f8e070b7f5b22d6a219cfa2a611f2433a2749",
+      "min_bytes": 10000
+    }
+  ]
+}

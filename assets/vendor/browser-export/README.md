@@ -1,11 +1,5 @@
-# Browser quotation export libraries
+# Browser quotation export assets
 
-Runtime export must use local, pinned browser libraries and must not load a CDN.
-Expected pinned files:
+This directory contains the local browser-side PDF/ZIP export runtime used by `admin-quotations.php?tab=bulk`; production does not require CDN, npm, Node.js, PHP ZipArchive, server Chromium, or administrator uploads.
 
-- Paged.js 0.4.3 (`paged.polyfill.min.js`)
-- html2canvas 1.4.1 (`html2canvas.min.js`)
-- jsPDF 2.5.1 (`jspdf.umd.min.js`)
-- fflate 0.8.2 (`fflate.min.js`)
-
-The client engine fails closed and shows an unsupported-browser/library message if these local files are absent.
+Integrity, versions, upstream URLs, byte sizes, and SHA-256 hashes are recorded in `integrity-manifest.json` and verified server-side before the Bulk Tools UI reports the exporter as ready.
