@@ -3,13 +3,13 @@
   "assets": [
     {
       "file": "paged.polyfill.min.js",
-      "package": "Paged.js",
-      "version": "0.4.3",
+      "package": "DentwebPaginator",
+      "version": "1.0.0",
       "license": "MIT",
-      "upstream": "https://github.com/pagedjs/pagedjs",
-      "bytes": 12058,
-      "sha256": "ee07dbceb49352904371bbebfb30247e4b4c215c2988cb115e9c78fc8110e553",
-      "min_bytes": 10000
+      "upstream": "application-owned",
+      "bytes": 11737,
+      "sha256": "5cd8b3ee50aa24697e2b1ed99579bedb9e2e7c7598fe3f734f286569570ae486",
+      "min_bytes": 1000
     },
     {
       "file": "html2canvas.min.js",
