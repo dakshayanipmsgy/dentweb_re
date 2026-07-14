@@ -220,8 +220,10 @@ function quotation_bulk_prepare_browser_pdf_html(string $html): string
       await waitCharts();
       await waitImages();
       await frame();
-      window.__quotationPdfReady=true;
-      document.documentElement.setAttribute('data-quotation-pdf-ready','true');
+      if(!window.__quotationBrowserPagedExport){
+        window.__quotationPdfReady=true;
+        document.documentElement.setAttribute('data-quotation-pdf-ready','true');
+      }
     }catch(e){window.__quotationPdfReady=false;window.__quotationPdfReadyError=String(e&&e.message?e.message:e);}
   };
   if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',ready,{once:true});}else{ready();}
@@ -358,8 +360,55 @@ function quotation_browser_export_render_html(array $quote, array $quoteDefaults
 {
     $html = quotation_render_to_html($quote, $quoteDefaults, $company, false, '', 'admin', 'browser-client-export');
     $html = quotation_bulk_prepare_browser_pdf_html($html);
-    $paged = '<script src="assets/vendor/browser-export/paged.polyfill.min.js"></script><script>window.addEventListener("load",function(){Promise.resolve(window.__dentwebPaginate?window.__dentwebPaginate(document):null).then(function(){window.__quotationPdfReady=true;}).catch(function(e){window.__quotationPdfError="pagination_failed: "+(e&&e.message?e.message:e);});});</script>';
-    $extra = '<style>@page{size:A4;margin:0}html,body{background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.admin-toolbar,.sticky-toolbar,.bulk-print-toolbar{display:none!important}.quotation-page,.quote-page,.pagedjs_page{break-after:page;page-break-after:always;width:794px;min-height:1123px;box-sizing:border-box}</style>' . $paged;
+    $paged = <<<'HTML'
+<script src="assets/vendor/browser-export/paged.polyfill.min.js"></script>
+<script>
+(function(){
+  window.__quotationBrowserPagedExport=true;
+  window.__quotationPdfReady=false;
+  window.__quotationPdfDiagnostics={paginatorScriptLoaded:false,paginatorApiFound:false,previewResolved:false,previewRejected:false,sourceDocumentHeight:0,resultingPageCount:0,firstPageDimensions:null};
+  const frame=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  const waitImages=()=>Promise.all(Array.from(document.images||[]).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});})));
+  const waitAssets=async()=>{
+    if(document.fonts&&document.fonts.ready){await document.fonts.ready;}
+    if(typeof window.buildChartPrintImages==='function'){window.buildChartPrintImages();}
+    await frame();
+    if(typeof window.buildChartPrintImages==='function'){window.buildChartPrintImages();}
+    await waitImages();
+    await frame();
+  };
+  const fail=(message)=>{
+    const d=window.__quotationPdfDiagnostics||{};
+    window.__quotationPdfError='pagination_failed: '+message+' (script='+(d.paginatorScriptLoaded?'1':'0')+', api='+(d.paginatorApiFound?'1':'0')+', resolved='+(d.previewResolved?'1':'0')+', rejected='+(d.previewRejected?'1':'0')+', height='+(d.sourceDocumentHeight||0)+', pages='+(d.resultingPageCount||0)+', first='+(d.firstPageDimensions?Math.round(d.firstPageDimensions.width)+'x'+Math.round(d.firstPageDimensions.height):'n/a')+')';
+  };
+  const run=async()=>{
+    try{
+      window.__quotationPdfReady=false;
+      await waitAssets();
+      const d=window.__quotationPdfDiagnostics;
+      d.paginatorScriptLoaded=!!(window.Paged||window.PagedPolyfill);
+      d.paginatorApiFound=!!(window.Paged&&window.Paged.Previewer);
+      d.sourceDocumentHeight=Math.max(document.documentElement.scrollHeight||0,document.body.scrollHeight||0);
+      if(!d.paginatorApiFound){fail('Paged.Previewer API was not found');return;}
+      const previewer=new window.Paged.Previewer();
+      try{await previewer.preview(document.body, [], document.body);d.previewResolved=true;}catch(e){d.previewRejected=true;fail(e&&e.message?e.message:String(e));return;}
+      await waitAssets();
+      const pages=Array.from(document.querySelectorAll('.pagedjs_page')).filter(el=>el.getBoundingClientRect().width>0&&el.getBoundingClientRect().height>0);
+      d.resultingPageCount=pages.length;
+      const first=pages[0]?pages[0].getBoundingClientRect():null;
+      d.firstPageDimensions=first?{width:first.width,height:first.height}:null;
+      if(!pages.length){fail('Paged.js did not create page elements');return;}
+      if(!first||first.width<760||first.width>830||first.height<1080||first.height>1165){fail('First page is not A4-sized');return;}
+      if(d.sourceDocumentHeight>1300&&pages.length<2){fail('Long quotation produced only one page');return;}
+      window.__quotationPdfReady=true;
+      document.documentElement.setAttribute('data-quotation-pdf-ready','true');
+    }catch(e){fail(e&&e.message?e.message:String(e));}
+  };
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',run,{once:true});}else{run();}
+})();
+</script>
+HTML;
+    $extra = '<style>@page{size:A4;margin:0}html,body{background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.admin-toolbar,.sticky-toolbar,.bulk-print-toolbar{display:none!important}.pagedjs_page{background:#fff;box-sizing:border-box}.quote-card,.customer-card,.solar-plan-hero,.annexure,.pricing-table,.tax-table,tr{break-inside:avoid;page-break-inside:avoid}thead{display:table-header-group}</style>' . $paged;
     return str_ireplace('</head>', $extra . '</head>', $html);
 }
 

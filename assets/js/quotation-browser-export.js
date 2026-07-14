@@ -37,7 +37,9 @@
     }
     throw code('pagination_failed','Readiness timeout while waiting for quotation pagination, fonts, charts, and images.');
   }
-  function pageElements(doc){ const explicit=$$('.pagedjs_page, .quotation-page, .quote-page',doc).filter(e=>e.offsetWidth&&e.offsetHeight); if(explicit.length>1||doc.body.scrollHeight<=1300) return explicit; throw code('pagination_failed','Pagination did not produce A4 page elements for this long quotation.'); }
+  function pageElements(doc){ const pages=$$('.pagedjs_page',doc).filter(e=>e.offsetWidth&&e.offsetHeight); if(!pages.length) throw code('pagination_failed','Pagination did not produce page elements.'); pages.forEach((page,i)=>{ const r=page.getBoundingClientRect(); if(r.width<760||r.width>830||r.height<1080||r.height>1165) throw code('pagination_failed',`Page ${i+1} is not a usable A4 page (${Math.round(r.width)}x${Math.round(r.height)}px).`); }); const h=Math.max(doc.documentElement.scrollHeight,doc.body.scrollHeight); if(h>1300&&pages.length<2) throw code('pagination_failed','Long quotation produced only one page after pagination.'); return pages; }
+  async function blobBytes(blob){ return new Uint8Array(await blob.arrayBuffer()); }
+  async function validatePdfBlob(blob, expectedPages){ const bytes=await blobBytes(blob); const header=new TextDecoder('ascii').decode(bytes.slice(0,5)); if(header!=='%PDF-') throw code('pdf_validation_failed','Generated file is not a PDF.'); const text=new TextDecoder('latin1').decode(bytes.slice(0, Math.min(bytes.length, 2000000))); const pageMatches=text.match(/\/Type\s*\/Page(?!s)/g)||[]; if(pageMatches.length!==expectedPages) throw code('pdf_validation_failed',`PDF page count ${pageMatches.length} did not match paginator page count ${expectedPages}.`); if(/Quotation PDF page/.test(text)) throw code('pdf_validation_failed','Placeholder PDF output was detected.'); if(!/\/Image\b/.test(text)) throw code('pdf_validation_failed','Rendered page images were not embedded in the PDF.'); return bytes; }
   function offscreenFrame(){ const frame=document.createElement('iframe'); frame.setAttribute('aria-hidden','true'); frame.style.cssText='position:fixed;left:-12000px;top:0;width:794px;height:1123px;border:0;opacity:0.01;pointer-events:none;background:#fff'; return frame; }
   async function renderPdf(item, token, index, total, cancelled){
     if(cancelled()) throw code('download_failed','Export cancelled.');
@@ -54,7 +56,7 @@
         const canvas=await window.html2canvas(pages[p],{scale,useCORS:true,backgroundColor:'#ffffff',logging:false,windowWidth:794,windowHeight:1123}).catch(e=>{throw code('render_failed',e?.message||'Page rendering failed.');});
         const img=canvas.toDataURL('image/jpeg',quality); if(p>0) pdf.addPage('a4','portrait'); pdf.addImage(img,'JPEG',0,0,210,297,undefined,'FAST'); canvas.width=canvas.height=0;
       }
-      return pdf.output('blob');
+      const blob=pdf.output('blob'); await validatePdfBlob(blob,pages.length); return blob;
     } finally { frame.src='about:blank'; frame.remove(); }
   }
   function cleanupDownload(){ if(activeUrl){ URL.revokeObjectURL(activeUrl); activeUrl=null; } finalBlob=null; finalName=''; const box=$('#quotationBrowserExportDownload'); if(box) box.remove(); }
@@ -72,11 +74,11 @@
     try{
       requireSupport(); const ids=selectedIds(form), max=limit(); if(!ids.length) throw code('download_failed','Select at least one quotation.'); if(ids.length>max) throw code('download_failed',`Browser export limit on this device is ${max} quotations. Select fewer quotations before export.`);
       setStatus(`Browser PDF/ZIP exporter ready. Limit on this device: ${max} quotation(s).`);
-      const session=await postSession(form,ids), files={}, order=[];
-      for(let i=0;i<session.items.length;i++){ const item=session.items[i]; const blob=await renderPdf(item,session.token,i,session.items.length,()=>cancelled); files[item.filename]=new Uint8Array(await blob.arrayBuffer()); order.push(item.filename); }
+      const session=await postSession(form,ids), rendered=[], files={};
+      for(let i=0;i<session.items.length;i++){ const item=session.items[i]; const blob=await renderPdf(item,session.token,i,session.items.length,()=>cancelled); rendered.push({name:item.filename, bytes:await blobBytes(blob)}); }
       if(cancelled) throw code('download_failed','Export cancelled.');
-      if(session.items.length===1){ showDownload(new Blob([files[order[0]]],{type:'application/pdf'}),order[0]); return; }
-      setStatus('Creating ZIP'); const zipped=window.fflate.zipSync(files,{level:6}); showDownload(new Blob([zipped],{type:'application/zip'}),`quotations-browser-${new Date().toISOString().replace(/[:.]/g,'-')}.zip`);
+      if(session.items.length===1){ const single=rendered[0]; showDownload(new Blob([files[single.name]=single.bytes],{type:'application/pdf'}),single.name); return; }
+      setStatus('Creating ZIP'); rendered.forEach(file=>{ files[file.name]=file.bytes; }); const zipped=window.fflate.zipSync(files,{level:6}); showDownload(new Blob([zipped],{type:'application/zip'}),`quotations-browser-${new Date().toISOString().replace(/[:.]/g,'-')}.zip`);
     } catch(e){ setStatus(`${e?.code||'download_failed'}: ${e?.message||e}. Selection preserved for retry.`); }
     finally { if(cancel) cancel.hidden=true; cancel?.removeEventListener('click',onCancel); }
   }
