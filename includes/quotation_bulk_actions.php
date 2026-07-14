@@ -358,8 +358,31 @@ function quotation_browser_export_render_html(array $quote, array $quoteDefaults
 {
     $html = quotation_render_to_html($quote, $quoteDefaults, $company, false, '', 'admin', 'browser-client-export');
     $html = quotation_bulk_prepare_browser_pdf_html($html);
-    $extra = '<style>@page{size:A4;margin:0}html,body{background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.admin-toolbar,.sticky-toolbar,.bulk-print-toolbar{display:none!important}.quotation-page,.quote-page{break-after:page;page-break-after:always}</style>';
+    $paged = '<script src="assets/vendor/browser-export/paged.polyfill.min.js"></script><script>window.addEventListener("load",function(){Promise.resolve(window.__dentwebPaginate?window.__dentwebPaginate(document):null).then(function(){window.__quotationPdfReady=true;}).catch(function(e){window.__quotationPdfError="pagination_failed: "+(e&&e.message?e.message:e);});});</script>';
+    $extra = '<style>@page{size:A4;margin:0}html,body{background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.admin-toolbar,.sticky-toolbar,.bulk-print-toolbar{display:none!important}.quotation-page,.quote-page,.pagedjs_page{break-after:page;page-break-after:always;width:794px;min-height:1123px;box-sizing:border-box}</style>' . $paged;
     return str_ireplace('</head>', $extra . '</head>', $html);
+}
+
+function quotation_browser_export_asset_status(?string $dir = null): array
+{
+    $dir = $dir ?: dirname(__DIR__) . '/assets/vendor/browser-export';
+    $manifestPath = $dir . '/integrity-manifest.json';
+    $fail = static fn(string $message): array => ['ok'=>false,'message'=>$message,'assets'=>[]];
+    if (!is_file($manifestPath) || !is_readable($manifestPath)) { return $fail('Browser export assets are missing from this deployment'); }
+    $manifest = json_decode((string)file_get_contents($manifestPath), true);
+    if (!is_array($manifest) || !is_array($manifest['assets'] ?? null)) { return $fail('Browser export assets are missing from this deployment'); }
+    $assets = [];
+    foreach ($manifest['assets'] as $asset) {
+        $file = basename((string)($asset['file'] ?? ''));
+        $path = $dir . '/' . $file;
+        $min = (int)($asset['min_bytes'] ?? 10000);
+        if ($file === '' || !is_file($path) || !is_readable($path) || filesize($path) < $min) { return $fail('Browser export assets are missing from this deployment'); }
+        $bytes = filesize($path);
+        $sha = hash_file('sha256', $path);
+        if ($bytes !== (int)($asset['bytes'] ?? -1) || !hash_equals(strtolower((string)($asset['sha256'] ?? '')), $sha)) { return $fail('Browser export assets are missing from this deployment'); }
+        $assets[] = ['file'=>$file,'bytes'=>$bytes,'sha256'=>$sha,'version'=>(string)($asset['version'] ?? '')];
+    }
+    return ['ok'=>true,'message'=>'Browser PDF/ZIP exporter ready','assets'=>$assets];
 }
 
 function quotation_browser_managed_install_available(?array $manifest = null): bool
