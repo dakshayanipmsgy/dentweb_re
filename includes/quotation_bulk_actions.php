@@ -184,7 +184,7 @@ function quotation_bulk_render_pdf_file(array $quote, array $quoteDefaults, arra
         } catch (Throwable $e) {
             throw new QuotationBrowserPdfException('Quotation HTML rendering failed before PDF export.', 'quotation_render_failure');
         }
-        $html = quotation_bulk_prepare_browser_pdf_html($html);
+        $html = quotation_prepare_server_browser_pdf_html($html);
         if (file_put_contents($htmlPath, $html, LOCK_EX) === false) {
             throw new RuntimeException('Unable to write temporary quotation HTML for PDF export.');
         }
@@ -194,7 +194,7 @@ function quotation_bulk_render_pdf_file(array $quote, array $quoteDefaults, arra
     }
 }
 
-function quotation_bulk_prepare_browser_pdf_html(string $html): string
+function quotation_prepare_server_browser_pdf_html(string $html): string
 {
     $base = quotation_bulk_base_href();
     $readiness = <<<'HTML'
@@ -237,6 +237,34 @@ HTML;
         $html = str_ireplace('</body>', $readiness . '</body>', $html);
     } else {
         $html .= $readiness;
+    }
+    return $html;
+}
+
+function quotation_bulk_prepare_browser_pdf_html(string $html): string
+{
+    return quotation_prepare_server_browser_pdf_html($html);
+}
+
+function quotation_browser_export_normalize_scale($value): int
+{
+    if (is_array($value)) { $value = reset($value); }
+    if (!is_numeric($value)) { return 100; }
+    $scale = (int) round((float) $value);
+    if ($scale < 50) { return 50; }
+    if ($scale > 100) { return 100; }
+    return $scale;
+}
+
+function quotation_prepare_client_browser_export_html(string $html, int $scalePercent = 100): string
+{
+    $scalePercent = quotation_browser_export_normalize_scale($scalePercent);
+    $assetBase = 'assets/vendor/browser-export/';
+    $config = '<script>window.__quotationBrowserExportConfig={scalePercent:' . $scalePercent . ',paginatorScript:' . json_encode($assetBase . 'paged.polyfill.min.js') . '};</script>';
+    if (stripos($html, '<head') !== false) {
+        $html = preg_replace('/<head([^>]*)>/i', '<head$1>' . $config, $html, 1) ?? $html;
+    } else {
+        $html = $config . $html;
     }
     return $html;
 }
@@ -323,13 +351,14 @@ function quotation_browser_export_user_key(): string
     return (string)($user['id'] ?? $user['username'] ?? $user['role_name'] ?? 'admin');
 }
 
-function quotation_browser_export_create_token(array $ids): array
+function quotation_browser_export_create_token(array $ids, $scalePercent = 100): array
 {
     if (session_status() !== PHP_SESSION_ACTIVE) { @session_start(); }
     $ids = quotation_bulk_normalize_selected_ids($ids);
     if ($ids === [] || count($ids) > QUOTATION_BROWSER_EXPORT_LIMIT) {
         throw new RuntimeException('Select between 1 and ' . QUOTATION_BROWSER_EXPORT_LIMIT . ' quotations for browser export.');
     }
+    $scalePercent = quotation_browser_export_normalize_scale($scalePercent);
     $quotes = quotation_bulk_resolve_quotes($ids);
     $used = [];
     $items = [];
@@ -341,11 +370,11 @@ function quotation_browser_export_create_token(array $ids): array
         ];
     }
     $token = bin2hex(random_bytes(24));
-    $_SESSION['quotation_browser_export'][$token] = ['ids'=>$ids,'created'=>time(),'user'=>quotation_browser_export_user_key(),'csrf'=>(string)($_SESSION['csrf_token'] ?? '')];
-    return ['token'=>$token,'expires_in'=>QUOTATION_BROWSER_EXPORT_TOKEN_TTL,'limit'=>QUOTATION_BROWSER_EXPORT_LIMIT,'items'=>$items];
+    $_SESSION['quotation_browser_export'][$token] = ['ids'=>$ids,'scale_percent'=>$scalePercent,'created'=>time(),'user'=>quotation_browser_export_user_key(),'csrf'=>(string)($_SESSION['csrf_token'] ?? '')];
+    return ['token'=>$token,'expires_in'=>QUOTATION_BROWSER_EXPORT_TOKEN_TTL,'limit'=>QUOTATION_BROWSER_EXPORT_LIMIT,'scale_percent'=>$scalePercent,'items'=>$items];
 }
 
-function quotation_browser_export_token_ids(string $token): array
+function quotation_browser_export_token_state(string $token): array
 {
     if (session_status() !== PHP_SESSION_ACTIVE) { @session_start(); }
     $state = $_SESSION['quotation_browser_export'][$token] ?? null;
@@ -353,62 +382,47 @@ function quotation_browser_export_token_ids(string $token): array
         unset($_SESSION['quotation_browser_export'][$token]);
         return [];
     }
+    return ['ids'=>quotation_bulk_normalize_selected_ids($state['ids'] ?? []),'scale_percent'=>quotation_browser_export_normalize_scale($state['scale_percent'] ?? 100)];
+}
+
+function quotation_browser_export_token_ids(string $token): array
+{
+    $state = quotation_browser_export_token_state($token);
     return quotation_bulk_normalize_selected_ids($state['ids'] ?? []);
 }
 
-function quotation_browser_export_render_html(array $quote, array $quoteDefaults, array $company): string
+function quotation_browser_export_token_scale(string $token): int
 {
+    $state = quotation_browser_export_token_state($token);
+    return quotation_browser_export_normalize_scale($state['scale_percent'] ?? 100);
+}
+
+function quotation_browser_export_render_html(array $quote, array $quoteDefaults, array $company, int $scalePercent = 100): string
+{
+    $scalePercent = quotation_browser_export_normalize_scale($scalePercent);
     $html = quotation_render_to_html($quote, $quoteDefaults, $company, false, '', 'admin', 'browser-client-export');
-    $html = quotation_bulk_prepare_browser_pdf_html($html);
+    $html = quotation_prepare_client_browser_export_html($html, $scalePercent);
     $paged = <<<'HTML'
-<script src="assets/vendor/browser-export/paged.polyfill.min.js"></script>
 <script>
 (function(){
   window.__quotationBrowserPagedExport=true;
   window.__quotationPdfReady=false;
-  window.__quotationPdfDiagnostics={paginatorScriptLoaded:false,paginatorApiFound:false,previewResolved:false,previewRejected:false,sourceDocumentHeight:0,resultingPageCount:0,firstPageDimensions:null};
+  const cfg=window.__quotationBrowserExportConfig||{};
+  const scalePercent=Math.max(50,Math.min(100,parseInt(cfg.scalePercent||100,10)||100));
+  const diag=window.__quotationPdfDiagnostics={scriptRequested:'',scriptLoaded:false,apiFound:false,previewResolved:false,previewRejected:false,scalePercent:scalePercent,sourceHeight:0,scaledHeight:0,pageCount:0,firstPageDimensions:null};
   const frame=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  const safeError=(code,message,extra)=>{window.__quotationPdfError={code:code,message:message,diagnostics:Object.assign({},diag,extra||{})};};
   const waitImages=()=>Promise.all(Array.from(document.images||[]).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});})));
-  const waitAssets=async()=>{
-    if(document.fonts&&document.fonts.ready){await document.fonts.ready;}
-    if(typeof window.buildChartPrintImages==='function'){window.buildChartPrintImages();}
-    await frame();
-    if(typeof window.buildChartPrintImages==='function'){window.buildChartPrintImages();}
-    await waitImages();
-    await frame();
-  };
-  const fail=(message)=>{
-    const d=window.__quotationPdfDiagnostics||{};
-    window.__quotationPdfError='pagination_failed: '+message+' (script='+(d.paginatorScriptLoaded?'1':'0')+', api='+(d.paginatorApiFound?'1':'0')+', resolved='+(d.previewResolved?'1':'0')+', rejected='+(d.previewRejected?'1':'0')+', height='+(d.sourceDocumentHeight||0)+', pages='+(d.resultingPageCount||0)+', first='+(d.firstPageDimensions?Math.round(d.firstPageDimensions.width)+'x'+Math.round(d.firstPageDimensions.height):'n/a')+')';
-  };
-  const run=async()=>{
-    try{
-      window.__quotationPdfReady=false;
-      await waitAssets();
-      const d=window.__quotationPdfDiagnostics;
-      d.paginatorScriptLoaded=!!(window.Paged||window.PagedPolyfill);
-      d.paginatorApiFound=!!(window.Paged&&window.Paged.Previewer);
-      d.sourceDocumentHeight=Math.max(document.documentElement.scrollHeight||0,document.body.scrollHeight||0);
-      if(!d.paginatorApiFound){fail('Paged.Previewer API was not found');return;}
-      const previewer=new window.Paged.Previewer();
-      try{await previewer.preview(document.body, [], document.body);d.previewResolved=true;}catch(e){d.previewRejected=true;fail(e&&e.message?e.message:String(e));return;}
-      await waitAssets();
-      const pages=Array.from(document.querySelectorAll('.pagedjs_page')).filter(el=>el.getBoundingClientRect().width>0&&el.getBoundingClientRect().height>0);
-      d.resultingPageCount=pages.length;
-      const first=pages[0]?pages[0].getBoundingClientRect():null;
-      d.firstPageDimensions=first?{width:first.width,height:first.height}:null;
-      if(!pages.length){fail('Paged.js did not create page elements');return;}
-      if(!first||first.width<760||first.width>830||first.height<1080||first.height>1165){fail('First page is not A4-sized');return;}
-      if(d.sourceDocumentHeight>1300&&pages.length<2){fail('Long quotation produced only one page');return;}
-      window.__quotationPdfReady=true;
-      document.documentElement.setAttribute('data-quotation-pdf-ready','true');
-    }catch(e){fail(e&&e.message?e.message:String(e));}
-  };
+  const waitAssets=async()=>{if(document.fonts&&document.fonts.ready){await document.fonts.ready;} if(typeof window.buildChartPrintImages==='function'){window.buildChartPrintImages();} await frame(); if(typeof window.buildChartPrintImages==='function'){window.buildChartPrintImages();} await waitImages(); await frame();};
+  const paginatorUrl=()=>new URL(String(cfg.paginatorScript||'assets/vendor/browser-export/paged.polyfill.min.js'), window.location.href).href;
+  const loadPaginator=()=>new Promise((resolve,reject)=>{ if(window.DentwebPaginator&&typeof window.DentwebPaginator.paginate==='function'){diag.scriptLoaded=true;return resolve();} const src=paginatorUrl(); diag.scriptRequested=src; const script=document.createElement('script'); let done=false; const timer=setTimeout(()=>{if(done)return;done=true;script.remove();reject({code:'paginator_load_timeout',message:'Paginator script load timed out.'});},12000); script.onload=()=>{if(done)return;done=true;clearTimeout(timer);diag.scriptLoaded=true;resolve();}; script.onerror=()=>{if(done)return;done=true;clearTimeout(timer);reject({code:'paginator_asset_load_failed',message:'Paginator script could not be loaded.'});}; script.src=src; document.head.appendChild(script); });
+  const applyScale=()=>{let root=document.querySelector('.quotation-export-scale-root'); if(!root){root=document.createElement('div'); root.className='quotation-export-scale-root'; while(document.body.firstChild){root.appendChild(document.body.firstChild);} document.body.appendChild(root);} root.style.setProperty('--quotation-export-scale', String(scalePercent/100)); root.style.fontSize=scalePercent+'%'; root.setAttribute('data-export-scale-percent',String(scalePercent)); return root;};
+  const run=async()=>{try{await waitAssets(); diag.sourceHeight=Math.max(document.documentElement.scrollHeight||0,document.body.scrollHeight||0); const root=applyScale(); await frame(); diag.scaledHeight=Math.max(root.scrollHeight||0,root.getBoundingClientRect().height||0); await loadPaginator(); diag.apiFound=!!(window.DentwebPaginator&&typeof window.DentwebPaginator.paginate==='function'); if(!diag.apiFound){safeError('paginator_api_mismatch','Paginator loaded but the expected API was unavailable.');return;} let pages; try{pages=await window.DentwebPaginator.paginate(root,{pageSelector:'.pagedjs_page'});diag.previewResolved=true;}catch(e){diag.previewRejected=true;safeError('paginator_preview_rejected',e&&e.message?e.message:'Paginator rejected the quotation preview.');return;} await waitAssets(); pages=Array.from(document.querySelectorAll('.pagedjs_page')).filter(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.height>0;}); diag.pageCount=pages.length; const first=pages[0]?pages[0].getBoundingClientRect():null; diag.firstPageDimensions=first?{width:first.width,height:first.height}:null; if(!pages.length){safeError('paginator_output_invalid','Paginator did not create any A4 page elements.');return;} if(!first||first.width<760||first.width>830||first.height<1080||first.height>1165){safeError('paginator_output_invalid','Paginator output did not match A4 page dimensions.');return;} if(diag.scaledHeight>1300&&pages.length<2){safeError('paginator_output_invalid','Long quotation produced only one A4 page.');return;} window.__quotationPdfReady=true; document.documentElement.setAttribute('data-quotation-pdf-ready','true');}catch(e){safeError(e&&e.code?e.code:'paginator_preview_rejected',e&&e.message?e.message:String(e));}};
   if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',run,{once:true});}else{run();}
 })();
 </script>
 HTML;
-    $extra = '<style>@page{size:A4;margin:0}html,body{background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.admin-toolbar,.sticky-toolbar,.bulk-print-toolbar{display:none!important}.pagedjs_page{background:#fff;box-sizing:border-box}.quote-card,.customer-card,.solar-plan-hero,.annexure,.pricing-table,.tax-table,tr{break-inside:avoid;page-break-inside:avoid}thead{display:table-header-group}</style>' . $paged;
+    $extra = '<style>@page{size:A4;margin:0}html,body{background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.admin-toolbar,.sticky-toolbar,.bulk-print-toolbar{display:none!important}.pagedjs_page{background:#fff;box-sizing:border-box}.quotation-export-scale-root{font-size:var(--quotation-export-scale,1em)}.quotation-export-scale-root *{max-width:100%}.quote-card,.customer-card,.solar-plan-hero,.annexure,.pricing-table,.tax-table,tr{break-inside:avoid;page-break-inside:avoid}thead{display:table-header-group}</style>' . $paged;
     return str_ireplace('</head>', $extra . '</head>', $html);
 }
 

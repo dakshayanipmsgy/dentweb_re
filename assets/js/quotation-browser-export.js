@@ -1,13 +1,17 @@
 (function(){
   'use strict';
-  const DESKTOP_LIMIT=10, MOBILE_LIMIT=3, READY_TIMEOUT=30000;
+  const DESKTOP_LIMIT=10, MOBILE_LIMIT=3, READY_TIMEOUT=30000, SCALE_KEY='quotationBrowserExportScalePercent';
   const $=(s,r=document)=>r.querySelector(s);
   const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
   const mobile=()=>matchMedia('(pointer:coarse)').matches||Math.min(screen.width,innerWidth)<900;
   const limit=()=>mobile()?MOBILE_LIMIT:DESKTOP_LIMIT;
   let activeUrl=null, finalBlob=null, finalName='';
   function setStatus(msg){ const el=$('#quotationBrowserExportStatus'); if(el) el.textContent=msg; }
-  function code(c,m){ const e=new Error(m); e.code=c; return e; }
+  function code(c,m,diagnostics){ const e=new Error(m); e.code=c; if(diagnostics) e.diagnostics=diagnostics; return e; }
+  function scaleSelect(){return $('#quotationBrowserExportScale');}
+  function validScale(v){ const n=parseInt(v,10); return [50,60,70,80,90,100].includes(n)?n:100; }
+  function selectedScale(){ return validScale(scaleSelect()?.value||localStorage.getItem(SCALE_KEY)||100); }
+  function initScale(){ const el=scaleSelect(); if(!el) return; el.value=String(validScale(localStorage.getItem(SCALE_KEY)||el.value||100)); el.addEventListener('change',()=>localStorage.setItem(SCALE_KEY,String(validScale(el.value)))); }
   function selectedIds(form){ const seen=new Set(), out=[]; $$('.bulk-row-check',form).forEach(c=>{ if(c.checked&&!seen.has(c.value)){seen.add(c.value); out.push(c.value);} }); return out; }
   function canvasOk(){ const c=document.createElement('canvas'); return !!(c.getContext&&c.getContext('2d')&&(c.toBlob||c.toDataURL)); }
   function requireSupport(){
@@ -18,7 +22,7 @@
     if(missing.length) throw code('browser_feature_unsupported','This browser lacks a required file, canvas, Blob, or download API.');
   }
   async function postSession(form, ids){
-    const fd=new FormData(); fd.set('action','quotation_browser_export_session'); fd.set('csrf_token',form.querySelector('[name=csrf_token]')?.value||''); ids.forEach(id=>fd.append('selected_ids[]',id));
+    const fd=new FormData(); fd.set('action','quotation_browser_export_session'); fd.set('csrf_token',form.querySelector('[name=csrf_token]')?.value||''); ids.forEach(id=>fd.append('selected_ids[]',id)); fd.set('export_scale_percent', String(selectedScale()));
     const res=await fetch('admin-quotations.php',{method:'POST',credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'},body:fd});
     const data=await res.json().catch(()=>null); if(!res.ok||!data?.ok) throw code('asset_load_failed',data?.message||'Unable to create browser export session.'); return data;
   }
@@ -27,7 +31,7 @@
     const start=Date.now();
     while(Date.now()-start<READY_TIMEOUT){
       const w=frame.contentWindow, d=frame.contentDocument;
-      if(w?.__quotationPdfError) throw code('pagination_failed',w.__quotationPdfError);
+      if(w?.__quotationPdfError){ const er=w.__quotationPdfError; if(typeof er==='object') throw code(er.code||'pagination_failed',er.message||'Quotation pagination failed.',er.diagnostics||{}); throw code('pagination_failed',String(er).replace(/^pagination_failed:\s*/i,'')); }
       if(w&&d&&w.__quotationPdfReady===true){
         if(d.fonts?.ready) await d.fonts.ready;
         await Promise.all($$('img',d).map(img=>img.complete?Promise.resolve():new Promise(r=>{img.addEventListener('load',r,{once:true});img.addEventListener('error',r,{once:true});})));
@@ -35,7 +39,7 @@
       }
       await wait(150);
     }
-    throw code('pagination_failed','Readiness timeout while waiting for quotation pagination, fonts, charts, and images.');
+    throw code('paginator_load_timeout','Readiness timeout while waiting for quotation pagination, fonts, charts, and images.');
   }
   function pageElements(doc){ const pages=$$('.pagedjs_page',doc).filter(e=>e.offsetWidth&&e.offsetHeight); if(!pages.length) throw code('pagination_failed','Pagination did not produce page elements.'); pages.forEach((page,i)=>{ const r=page.getBoundingClientRect(); if(r.width<760||r.width>830||r.height<1080||r.height>1165) throw code('pagination_failed',`Page ${i+1} is not a usable A4 page (${Math.round(r.width)}x${Math.round(r.height)}px).`); }); const h=Math.max(doc.documentElement.scrollHeight,doc.body.scrollHeight); if(h>1300&&pages.length<2) throw code('pagination_failed','Long quotation produced only one page after pagination.'); return pages; }
   async function blobBytes(blob){ return new Uint8Array(await blob.arrayBuffer()); }
@@ -43,7 +47,7 @@
   function offscreenFrame(){ const frame=document.createElement('iframe'); frame.setAttribute('aria-hidden','true'); frame.style.cssText='position:fixed;left:-12000px;top:0;width:794px;height:1123px;border:0;opacity:0.01;pointer-events:none;background:#fff'; return frame; }
   async function renderPdf(item, token, index, total, cancelled){
     if(cancelled()) throw code('download_failed','Export cancelled.');
-    setStatus(`Preparing quotation ${index+1} of ${total}`);
+    const pct=selectedScale(); setStatus(`Preparing quotation ${index+1} of ${total} at ${pct}%`);
     const frame=offscreenFrame(); document.body.appendChild(frame);
     try{
       await new Promise((resolve,reject)=>{ frame.onload=resolve; frame.onerror=()=>reject(code('asset_load_failed','Unable to load quotation iframe.')); frame.src=`admin-quotations.php?action=quotation_browser_export_render&token=${encodeURIComponent(token)}&id=${encodeURIComponent(item.id)}`; });
@@ -73,8 +77,8 @@
     let cancelled=false; cleanupDownload(); const cancel=$('#quotationBrowserExportCancel'); if(cancel) cancel.hidden=false; const onCancel=()=>{cancelled=true;}; cancel?.addEventListener('click',onCancel,{once:true});
     try{
       requireSupport(); const ids=selectedIds(form), max=limit(); if(!ids.length) throw code('download_failed','Select at least one quotation.'); if(ids.length>max) throw code('download_failed',`Browser export limit on this device is ${max} quotations. Select fewer quotations before export.`);
-      setStatus(`Browser PDF/ZIP exporter ready. Limit on this device: ${max} quotation(s).`);
-      const session=await postSession(form,ids), rendered=[], files={};
+      setStatus(`Browser PDF/ZIP exporter ready at ${selectedScale()}%. Limit on this device: ${max} quotation(s).`);
+      const session=await postSession(form,ids), rendered=[], files={}; if(session.scale_percent) localStorage.setItem(SCALE_KEY,String(validScale(session.scale_percent)));
       for(let i=0;i<session.items.length;i++){ const item=session.items[i]; const blob=await renderPdf(item,session.token,i,session.items.length,()=>cancelled); rendered.push({name:item.filename, bytes:await blobBytes(blob)}); }
       if(cancelled) throw code('download_failed','Export cancelled.');
       if(session.items.length===1){ const single=rendered[0]; showDownload(new Blob([files[single.name]=single.bytes],{type:'application/pdf'}),single.name); return; }
@@ -83,6 +87,7 @@
     finally { if(cancel) cancel.hidden=true; cancel?.removeEventListener('click',onCancel); }
   }
   document.addEventListener('error',e=>{ if(e.target?.tagName==='SCRIPT'&&/browser-export/.test(e.target.src||'')) setStatus('asset_load_failed: Browser export asset failed to load.'); }, true);
+  initScale();
   document.addEventListener('click',e=>{ const btn=e.target.closest('[data-browser-quotation-export]'); if(!btn) return; e.preventDefault(); const form=$('#quoteBulkForm'); if(form) run(form); });
   document.addEventListener('submit',e=>{ const submitter=e.submitter; if(submitter?.name==='action'&&submitter.value==='bulk_download_quotation_pdfs'&&submitter.dataset.serverPdfAvailable==='0'){ e.preventDefault(); const form=$('#quoteBulkForm'); if(form) run(form); } });
   window.addEventListener('pagehide',cleanupDownload);

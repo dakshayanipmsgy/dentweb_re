@@ -28,3 +28,17 @@ Progress text reports stages such as preparing each quotation, rendering each pa
 ## Managed-browser correction
 
 The committed managed-browser manifest currently contains an all-zero SHA-256 checksum. Until a real pinned checksum is committed and tested, Install/Repair PDF engine controls are hidden/disabled and the UI directs administrators to browser-side export instead. Existing server Chromium support remains available where a valid browser is already installed.
+
+## Issue #775 browser paginator and export size behavior
+
+The export code now uses explicit preparation paths. Server Chromium export calls `quotation_prepare_server_browser_pdf_html(...)`, which may add a `file://` base URL for temporary local HTML. Authenticated browser-client export calls `quotation_prepare_client_browser_export_html(...)`, which never adds a `file://` base URL or server filesystem path; assets are resolved as same-origin relative URLs so installations at the web root or in a subdirectory can load fonts, images, charts, QR assets, and the paginator from the application origin.
+
+The client paginator asset is `assets/vendor/browser-export/paged.polyfill.min.js`, pinned in the integrity manifest as `DentwebPaginator` 1.0.0. It exposes the application-owned API `window.DentwebPaginator.paginate(...)`; the browser export no longer expects `window.Paged.Previewer`. The iframe sets `onload` and `onerror` before assigning `script.src`, applies a bounded timeout, verifies the API, and only then paginates. Structured error codes include `paginator_asset_load_failed`, `paginator_load_timeout`, `paginator_api_mismatch`, `paginator_preview_rejected`, and `paginator_output_invalid`; the parent renders each code once.
+
+Bulk Tools includes **Export content size** with supported values 50%, 60%, 70%, 80%, 90%, and 100%. The default is 100%, and the administrator's last choice is stored in device-local `localStorage`. The selected percentage is sent through the CSRF-protected browser-export session, validated on the server to the inclusive 50-100 range, and bound to the short-lived token so every quotation in the same ZIP batch uses the same scale.
+
+The percentage is applied before pagination by wrapping the quotation in `.quotation-export-scale-root` and reducing the content font/layout scale. This affects text, headings, cards, tables, spacing, logos, images, charts, diagrams, QR/payment blocks, annexures, badges, and labels while keeping each physical page at A4 dimensions. It is intentionally separate from html2canvas raster scale, which is used only for output resolution. At very small text sizes such as 50%, dense tables and unusually tall unbreakable content may still need careful manual review, but the paginator splits long content rather than capturing one extremely tall page.
+
+The browser export remains non-mutating: it does not alter quotation records, saved typography, style overrides, normal quotation views, or public quotation views. One selected quotation produces one PDF. Multiple unique selections produce one ZIP containing one separate PDF per quotation in submitted order, and no partial ZIP is offered after a render or paginator failure.
+
+Device considerations: iPad Safari, Android Chrome, and Windows Edge use the same same-origin asset loading and explicit Download / Save-Share flow. Diagnostics intentionally exclude customer content, raw HTML, cookies, tokens, secrets, and server paths.
