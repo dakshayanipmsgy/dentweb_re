@@ -100,15 +100,26 @@ exit 0
     try { quotation_browser_pdf_validate_executable('relative/chrome', 'Chromium'); $assert(false, 'relative browser path rejected'); }
     catch (RuntimeException $e) { $assert(str_contains($e->getMessage(), 'absolute'), 'invalid configured executable paths are rejected'); }
 
+    foreach ([50,60,70,75,80,90,100] as $pct) { $assert(quotation_output_scale_percent($pct) === $pct, "print scale $pct percent accepted"); }
+    $assert(quotation_output_scale_percent(null) === 100, 'print scale defaults to 100 percent');
+    $assert(quotation_output_scale_percent(49) === 50, 'print scale below 50 is normalized safely');
+    $assert(quotation_output_scale_percent(101) === 100, 'print scale above 100 is normalized safely');
+    $assert(quotation_output_scale_percent('75%;color:red') === 100, 'print scale rejects CSS injection strings');
+    $assert(quotation_output_scale_percent('abc') === 100, 'print scale rejects non-numeric input');
+
     $defaults = documents_quote_defaults_settings();
     $company = documents_get_company_profile_for_quotes();
     $q1 = $quote('BULK-PRINT-1', 'QTN-A', 'First Customer');
     $q2 = $quote('BULK-PRINT-2', 'QTN-B', 'Second Customer');
-    $combined = quotation_bulk_combined_print_html([$q1, $q2], $defaults, $company);
+    $combined = quotation_bulk_combined_print_html([$q1, $q2], $defaults, $company, '', 75);
     $fallback = quotation_bulk_browser_print_fallback_html([$q1, $q2], $defaults, $company);
     $assert(str_contains($fallback, 'Save as PDF') && str_contains($fallback, 'one combined PDF'), 'missing server browser returns combined print Save as PDF fallback HTML');
     $assert(strpos($combined, 'First Customer') < strpos($combined, 'Second Customer'), 'print output preserves selection order');
     $assert(substr_count($combined, 'bulk-print-quotation') >= 2 && str_contains($combined, 'page-break-after:always'), 'multiple print output contains page breaks');
+    $assert(str_contains($combined, 'data-print-scale-percent="75"') && str_contains($combined, 'quotation-print-scale') && str_contains($combined, 'quotationPrintScaleSelect'), 'combined print HTML receives and exposes validated print percentage');
+    $assert(str_contains($combined, '@page{size:A4') && str_contains($combined, 'zoom:var(--quotation-print-scale)') && !str_contains($combined, '75%;color'), 'A4 page and safe flow scaling CSS are emitted');
+    $assert(str_contains($combined, 'document.fonts.ready') && str_contains($combined, 'requestAnimationFrame(()=>requestAnimationFrame') && str_contains($combined, 'window.print()'), 'print readiness waits for fonts, images, and two animation frames before printing');
+    $assert(str_contains($combined, '@media print{.bulk-print-toolbar,.bulk-print-fallback-banner{display:none!important}'), 'print toolbar is excluded from printed output');
 
     $pdfPath = quotation_bulk_temp_file('.pdf');
     $tempFiles[] = $pdfPath;

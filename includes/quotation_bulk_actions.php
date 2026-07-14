@@ -10,6 +10,18 @@ const QUOTATION_BULK_EXPORT_LIMIT = 25;
 const QUOTATION_BROWSER_EXPORT_LIMIT = 10;
 const QUOTATION_BROWSER_EXPORT_TOKEN_TTL = 600;
 
+function quotation_output_scale_percent($value, int $default = 100): int
+{
+    $default = max(50, min(100, $default));
+    if (is_int($value) || is_float($value) || (is_string($value) && preg_match('/^\s*\d+(?:\.0+)?\s*$/', $value))) {
+        $scale = (int) round((float) $value);
+        if ($scale < 50) { return 50; }
+        if ($scale > 100) { return 100; }
+        return $scale;
+    }
+    return $default;
+}
+
 function quotation_bulk_normalize_selected_ids($selected): array
 {
     $raw = is_array($selected) ? $selected : [];
@@ -115,8 +127,10 @@ function quotation_bulk_extract_body_fragment(string $html): string
     return $out;
 }
 
-function quotation_bulk_combined_print_html(array $quotes, array $quoteDefaults, array $company, string $bannerHtml = ''): string
+function quotation_bulk_combined_print_html(array $quotes, array $quoteDefaults, array $company, string $bannerHtml = '', int $printScalePercent = 100): string
 {
+    $printScalePercent = quotation_output_scale_percent($printScalePercent);
+    $scaleDecimal = rtrim(rtrim(number_format($printScalePercent / 100, 4, '.', ''), '0'), '.');
     $parts = [];
     $headAssets = '';
     foreach ($quotes as $quote) {
@@ -124,20 +138,26 @@ function quotation_bulk_combined_print_html(array $quotes, array $quoteDefaults,
         if ($headAssets === '') {
             $headAssets = quotation_bulk_extract_head_assets($html);
         }
-        $parts[] = '<section class="bulk-print-quotation">' . quotation_bulk_extract_body_fragment($html) . '</section>';
+        $parts[] = '<section class="bulk-print-quotation"><div class="quotation-print-scale">' . quotation_bulk_extract_body_fragment($html) . '</div></section>';
     }
-    return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Print Selected Quotations</title>' . $headAssets . '<style>.bulk-print-toolbar{position:sticky;top:0;z-index:9999;padding:10px;background:#fff;border-bottom:1px solid #ddd}.bulk-print-fallback-banner{padding:12px 14px;background:#fff7ed;border:1px solid #fdba74;border-radius:10px;margin:10px;color:#9a3412}.bulk-print-quotation{break-after:page;page-break-after:always}.bulk-print-quotation:last-child{break-after:auto;page-break-after:auto}@media print{.bulk-print-toolbar,.bulk-print-fallback-banner{display:none!important}}</style></head><body>' . $bannerHtml . '<div class="bulk-print-toolbar"><button onclick="window.print()">Print / Save as PDF</button></div>' . implode('', $parts) . '<script>(function(){const go=()=>setTimeout(()=>window.print(),400); if(window.__quotationPdfReady){go();}else{window.addEventListener("load",go); setTimeout(go,1600);}})();</script></body></html>';
+    $options = '';
+    foreach ([100, 90, 80, 75, 70, 60, 50] as $pct) {
+        $options .= '<option value="' . $pct . '"' . ($pct === $printScalePercent ? ' selected' : '') . '>' . $pct . '%</option>';
+    }
+    $toolbar = '<div class="bulk-print-toolbar" role="region" aria-label="Quotation print controls"><strong>Current print percentage: <span id="quotationPrintScaleCurrent">' . $printScalePercent . '%</span></strong><label> Print content size <select id="quotationPrintScaleSelect">' . $options . '</select></label><button type="button" id="quotationApplyPrint">Apply and Print</button><button type="button" id="quotationPrintReset">Reset to 100%</button><span id="quotationPrintStatus" class="bulk-print-status" aria-live="polite"></span></div>';
+    $css = '<style>@page{size:A4}.bulk-print-toolbar{position:sticky;top:0;z-index:9999;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px;background:#fff;border-bottom:1px solid #ddd;font-family:system-ui,sans-serif}.bulk-print-toolbar button,.bulk-print-toolbar select{font:inherit;padding:6px 10px}.bulk-print-status{color:#475569}.bulk-print-fallback-banner{padding:12px 14px;background:#fff7ed;border:1px solid #fdba74;border-radius:10px;margin:10px;color:#9a3412}.bulk-print-quotation{break-after:page;page-break-after:always}.bulk-print-quotation:last-child{break-after:auto;page-break-after:auto}.quotation-print-scale{--quotation-print-scale:' . $scaleDecimal . ';zoom:var(--quotation-print-scale);transform-origin:top left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.quotation-print-scale *{max-width:100%;box-sizing:border-box}.quote-card,.customer-card,.solar-plan-hero,.annexure,.pricing-table,.tax-table,tr{break-inside:auto;page-break-inside:auto}thead{display:table-header-group}@media print{.bulk-print-toolbar,.bulk-print-fallback-banner{display:none!important}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.bulk-print-quotation{break-after:page;page-break-after:always}.bulk-print-quotation:last-child{break-after:auto;page-break-after:auto}}</style>';
+    $js = '<script>(function(){"use strict";const KEY="quotationPrintScalePercent";const clamp=v=>{const n=parseInt(v,10);return Number.isFinite(n)?Math.max(50,Math.min(100,n)):100};const valid=v=>/^\\s*\\d+\\s*$/.test(String(v||""))?clamp(v):100;const sel=document.getElementById("quotationPrintScaleSelect"),cur=document.getElementById("quotationPrintScaleCurrent"),st=document.getElementById("quotationPrintStatus");const frame=()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const imgs=()=>Promise.all(Array.from(document.images||[]).map(i=>i.complete?Promise.resolve():new Promise(r=>{i.addEventListener("load",r,{once:true});i.addEventListener("error",r,{once:true});})));function save(p){try{localStorage.setItem(KEY,String(p));}catch(e){}}function apply(p){p=valid(p);document.documentElement.style.setProperty("--quotation-print-scale",String(p/100));document.documentElement.setAttribute("data-print-scale-percent",String(p));document.querySelectorAll(".quotation-print-scale").forEach(el=>{el.style.setProperty("--quotation-print-scale",String(p/100));el.setAttribute("data-print-scale-percent",String(p));});if(sel)sel.value=String(p);if(cur)cur.textContent=p+"%";save(p);return p;}async function ready(p){p=apply(p);if(st)st.textContent="Preparing layout at "+p+"%…";await frame();if(document.fonts&&document.fonts.ready)await Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,3000))]);await Promise.race([imgs(),new Promise(r=>setTimeout(r,5000))]);await frame();const h=Math.max(document.body.scrollHeight||0,document.documentElement.scrollHeight||0);window.__quotationPrintDiagnostics={printScalePercent:p,quotationCount:document.querySelectorAll(".bulk-print-quotation").length,sourceContentHeight:h,scaledContentHeight:Math.round(h*p/100),readinessCompleted:true,targetPageSize:"A4"};if(!h)throw new Error("Printable content is not measurable");if(st)st.textContent="Ready to print at "+p+"%.";}async function printNow(){try{await ready(sel?sel.value:' . $printScalePercent . ');window.__quotationPrintDiagnostics.printInvocationCompleted=true;window.print();}catch(e){if(st)st.textContent=e.message||"Unable to prepare print layout.";}}document.getElementById("quotationApplyPrint")?.addEventListener("click",printNow);document.getElementById("quotationPrintReset")?.addEventListener("click",()=>apply(100));sel?.addEventListener("change",()=>apply(sel.value));try{const stored=localStorage.getItem(KEY);if(stored!==null)apply(stored);else apply(' . $printScalePercent . ');}catch(e){apply(' . $printScalePercent . ');}if(document.readyState==="complete")ready(' . $printScalePercent . ').then(()=>window.print());else window.addEventListener("load",()=>ready(' . $printScalePercent . ').then(()=>window.print()),{once:true});})();</script>';
+    return '<!doctype html><html data-print-scale-percent="' . $printScalePercent . '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Print Selected Quotations</title>' . $headAssets . $css . '</head><body>' . $bannerHtml . $toolbar . implode('', $parts) . $js . '</body></html>';
 }
 
-
-function quotation_bulk_browser_print_fallback_html(array $quotes, array $quoteDefaults, array $company, string $reason = ''): string
+function quotation_bulk_browser_print_fallback_html(array $quotes, array $quoteDefaults, array $company, string $reason = '', int $printScalePercent = 100): string
 {
     $multiple = count($quotes) > 1;
     $message = 'Server PDF download is not available on this hosting environment. Choose Save as PDF in the print window.';
     $extra = $multiple ? ' The browser will save one combined PDF for the selected quotations; no ZIP was generated.' : '';
     $safeReason = trim($reason) !== '' ? '<br><small>' . htmlspecialchars($reason, ENT_QUOTES) . '</small>' : '';
     $banner = '<div class="bulk-print-fallback-banner"><strong>' . htmlspecialchars($message, ENT_QUOTES) . '</strong>' . htmlspecialchars($extra, ENT_QUOTES) . $safeReason . '<div style="margin-top:8px"><button onclick="window.print()">Print / Save as PDF</button></div></div>';
-    return quotation_bulk_combined_print_html($quotes, $quoteDefaults, $company, $banner);
+    return quotation_bulk_combined_print_html($quotes, $quoteDefaults, $company, $banner, $printScalePercent);
 }
 
 function quotation_bulk_pdf_engine_status_text(array $capabilities): string
@@ -334,13 +354,14 @@ function quotation_bulk_retry_consume(string $token, bool $consume = false): arr
     return quotation_bulk_normalize_selected_ids($state['ids'] ?? []);
 }
 
-function quotation_bulk_repair_html(array $quotes, array $quoteDefaults, array $company, string $code, string $token): string
+function quotation_bulk_repair_html(array $quotes, array $quoteDefaults, array $company, string $code, string $token, int $printScalePercent = 100): string
 {
     $safe = htmlspecialchars(quotation_bulk_failure_message($code), ENT_QUOTES);
     $csrf = htmlspecialchars((string)($_SESSION['csrf_token'] ?? ''), ENT_QUOTES);
     $tok = htmlspecialchars($token, ENT_QUOTES);
     $n = count($quotes);
-    $emergency = quotation_bulk_combined_print_html($quotes, $quoteDefaults, $company, '<div class="bulk-print-fallback-banner"><strong>Emergency combined Save as PDF.</strong> This is not equivalent to separate PDFs in a ZIP.</div>');
+    $printScalePercent = quotation_output_scale_percent($printScalePercent);
+    $emergency = quotation_bulk_combined_print_html($quotes, $quoteDefaults, $company, '<div class="bulk-print-fallback-banner"><strong>Emergency combined Save as PDF.</strong> Combined browser printing at ' . (int)$printScalePercent . '%. This produces one combined document and not separate PDFs in a ZIP.</div>', $printScalePercent);
     $repairForm = quotation_browser_managed_install_available() ? '<form method="post"><input type="hidden" name="csrf_token" value="'.$csrf.'"><input type="hidden" name="action" value="quotation_pdf_engine_repair"><input type="hidden" name="retry_token" value="'.$tok.'"><button class="btn" type="submit">Repair PDF engine and retry</button></form>' : '<p class="muted">Managed server-browser repair is disabled until a real pinned checksum is committed. Use browser PDF/ZIP export instead.</p>';
     return '<!doctype html><html><head><meta charset="utf-8"><title>Quotation PDF export fallback</title><style>body{font-family:system-ui,sans-serif;margin:24px;color:#0f172a}.card{max-width:820px;border:1px solid #e2e8f0;border-radius:14px;padding:20px}.btn{display:inline-block;margin:6px 6px 6px 0;padding:10px 14px;border-radius:8px;border:1px solid #2563eb;background:#2563eb;color:#fff;text-decoration:none}.secondary{background:#fff;color:#0f172a;border-color:#94a3b8}.muted{color:#64748b}</style></head><body><div class="card"><h1>Use browser PDF/ZIP export</h1><p><strong>' . $safe . '</strong></p><p>The original selection of ' . (int)$n . ' unique quotation(s) is securely preserved. Return to Bulk Tools and choose Download using browser to create one PDF per quotation without Chrome, proc_open, Node.js, or ZipArchive on the server.</p>'.$repairForm.'<form method="post"><input type="hidden" name="csrf_token" value="'.$csrf.'"><input type="hidden" name="action" value="bulk_download_quotation_pdfs"><input type="hidden" name="retry_token" value="'.$tok.'"><button class="btn secondary" type="submit">Retry server download</button></form><details><summary>Secondary emergency action: Open combined Save as PDF</summary><p class="muted">This produces one combined browser print document only; it is not the promised separate-PDF ZIP.</p>'.$emergency.'</details></div></body></html>';
 }
