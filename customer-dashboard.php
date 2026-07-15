@@ -95,7 +95,7 @@ foreach ($customerQuotes as $quote) {
         if (!is_array($row) || (string) ($row['linked_quote_id'] ?? $row['quotation_id'] ?? '') !== $quoteId || documents_is_archived($row)) {
             continue;
         }
-        $invoice = array_merge(documents_invoice_defaults(), $row);
+        $invoice = documents_invoice_normalize_date(array_merge(documents_invoice_defaults(), $row));
         if (!in_array((string) ($invoice['id'] ?? ''), array_map(static fn(array $i): string => (string) ($i['id'] ?? ''), $invoices), true)) {
             $invoices[] = $invoice;
         }

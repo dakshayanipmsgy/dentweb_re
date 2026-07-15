@@ -1389,6 +1389,8 @@ function documents_invoice_defaults(): array
     return [
         'id' => '',
         'invoice_no' => '',
+        'invoice_date' => '',
+        'invoice_date_source' => '',
         'status' => 'draft',
         'revision_no' => 0,
         'finalized_at' => '',
@@ -3457,8 +3459,73 @@ function documents_invoice_recalculate_pricing(array $invoice, float $requestedF
     return ['ok' => true, 'invoice' => $invoice, 'pricing' => $invoice['pricing'], 'calc' => $invoice['calc'], 'tax_breakdown' => $taxBreakdown, 'reconciliation' => ['final_total' => $final, 'item_gross_sum' => $final]];
 }
 
+
+function documents_invoice_date_validate(string $date, bool $allowFuture = false): array
+{
+    $date = trim($date);
+    if ($date === '') { return ['ok' => false, 'error' => 'Set a valid invoice date before finalizing this invoice.']; }
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) { return ['ok' => false, 'error' => 'Invoice date must use YYYY-MM-DD format.']; }
+    [$y, $m, $d] = array_map('intval', explode('-', $date));
+    if (!checkdate($m, $d, $y)) { return ['ok' => false, 'error' => 'Invoice date must be a real calendar date.']; }
+    if (!$allowFuture && $date > date('Y-m-d')) { return ['ok' => false, 'error' => 'Invoice date cannot be in the future.']; }
+    return ['ok' => true, 'date' => $date, 'error' => ''];
+}
+
+function documents_invoice_date_is_valid(string $date): bool
+{
+    return !empty(documents_invoice_date_validate($date, true)['ok']);
+}
+
+function documents_invoice_authoritative_date(array $invoice): string
+{
+    $ownDate = (string)($invoice['invoice_date'] ?? '');
+    if (documents_invoice_is_draft($invoice) && $ownDate !== '' && documents_invoice_date_is_valid($ownDate)) { return $ownDate; }
+    $snapDate = (string)($invoice['finalized_snapshot']['invoice_date'] ?? '');
+    if ($snapDate !== '' && documents_invoice_date_is_valid($snapDate)) { return $snapDate; }
+    if ($ownDate !== '' && documents_invoice_date_is_valid($ownDate)) { return $ownDate; }
+    $created = substr((string)($invoice['created_at'] ?? ''), 0, 10);
+    return documents_invoice_date_is_valid($created) ? $created : date('Y-m-d');
+}
+
+function documents_invoice_normalize_date(array $invoice): array
+{
+    $date = (string)($invoice['invoice_date'] ?? '');
+    if ($date !== '' && documents_invoice_date_is_valid($date)) {
+        $invoice['invoice_date'] = $date;
+        $invoice['invoice_date_source'] = (string)($invoice['invoice_date_source'] ?? 'explicit') ?: 'explicit';
+        return $invoice;
+    }
+    foreach (['document_date', 'date', 'created_at'] as $key) {
+        $candidate = substr((string)($invoice[$key] ?? ''), 0, 10);
+        if ($candidate !== '' && documents_invoice_date_is_valid($candidate)) {
+            $invoice['invoice_date'] = $candidate;
+            $invoice['invoice_date_source'] = $key === 'created_at' ? 'legacy_created_at_fallback' : 'legacy_' . $key;
+            return $invoice;
+        }
+    }
+    $invoice['invoice_date'] = date('Y-m-d');
+    $invoice['invoice_date_source'] = 'legacy_current_date_fallback';
+    return $invoice;
+}
+
+function documents_invoice_set_date(array $invoice, string $date, array $actor = []): array
+{
+    $valid = documents_invoice_date_validate($date, false);
+    if (empty($valid['ok'])) { return ['ok' => false, 'error' => $valid['error'], 'invoice' => $invoice]; }
+    $previous = documents_invoice_authoritative_date($invoice);
+    $invoice['invoice_date'] = $valid['date'];
+    $invoice['invoice_date_source'] = 'explicit';
+    if ($previous !== $valid['date']) {
+        $events = is_array($invoice['audit_events'] ?? null) ? $invoice['audit_events'] : [];
+        $events[] = ['invoice_id'=>(string)($invoice['id']??''),'revision_no'=>(int)($invoice['revision_no']??0),'event_type'=>'invoice_date_changed','previous_invoice_date'=>$previous,'new_invoice_date'=>$valid['date'],'actor_id'=>(string)($actor['id']??''),'actor_name'=>(string)($actor['name']??$actor['full_name']??'Admin'),'timestamp'=>date('c')];
+        $invoice['audit_events'] = $events;
+    }
+    return ['ok' => true, 'invoice' => $invoice, 'date' => $valid['date']];
+}
+
 function documents_invoice_normalize_commercial_snapshot(array $invoice): array
 {
+    $invoice = documents_invoice_normalize_date($invoice);
     if (is_array($invoice['pricing'] ?? null) && isset($invoice['pricing']['final_invoice_total_incl_gst'])) { return $invoice; }
     $requested = documents_invoice_final_total($invoice, false);
     if ($requested <= 0) { $requested = documents_invoice_quotation_reference_total($invoice); }
@@ -3562,16 +3629,16 @@ function documents_invoice_payment_summary(array $invoice): array
 function documents_invoice_payment_status(array $invoice): string { return (string)documents_invoice_payment_summary($invoice)['payment_status']; }
 
 function documents_invoice_append_audit_event(array $invoice, string $type, array $actor, string $reason = '', array $previous = []): array
-{ $summary=documents_invoice_payment_summary($invoice); $events=is_array($invoice['audit_events']??null)?$invoice['audit_events']:[]; $events[]=['invoice_id'=>(string)($invoice['id']??''),'revision_no'=>(int)($invoice['revision_no']??1),'event_type'=>$type,'previous_document_status'=>(string)($previous['status']??''),'new_document_status'=>documents_invoice_normalize_status((string)($invoice['status']??'draft')),'previous_payment_status'=>(string)($previous['payment_status']??''),'new_payment_status'=>$summary['payment_status'],'invoice_total'=>$summary['invoice_total'],'total_received'=>$summary['total_received'],'outstanding'=>$summary['outstanding'],'overpayment'=>$summary['overpayment'],'reason'=>safe_multiline_text($reason),'actor_id'=>(string)($actor['id']??''),'actor_name'=>(string)($actor['name']??$actor['full_name']??'Admin'),'timestamp'=>date('c')]; $invoice['audit_events']=$events; return $invoice; }
+{ $summary=documents_invoice_payment_summary($invoice); $events=is_array($invoice['audit_events']??null)?$invoice['audit_events']:[]; $events[]=['invoice_id'=>(string)($invoice['id']??''),'revision_no'=>(int)($invoice['revision_no']??1),'event_type'=>$type,'previous_document_status'=>(string)($previous['status']??''),'new_document_status'=>documents_invoice_normalize_status((string)($invoice['status']??'draft')),'previous_payment_status'=>(string)($previous['payment_status']??''),'new_payment_status'=>$summary['payment_status'],'previous_invoice_date'=>(string)($previous['invoice_date']??''),'new_invoice_date'=>documents_invoice_authoritative_date($invoice),'invoice_total'=>$summary['invoice_total'],'total_received'=>$summary['total_received'],'outstanding'=>$summary['outstanding'],'overpayment'=>$summary['overpayment'],'reason'=>safe_multiline_text($reason),'actor_id'=>(string)($actor['id']??''),'actor_name'=>(string)($actor['name']??$actor['full_name']??'Admin'),'timestamp'=>date('c')]; $invoice['audit_events']=$events; return $invoice; }
 
 function documents_invoice_can_finalize(array $invoice): array
-{ $errors=[]; if(!documents_invoice_is_draft($invoice))$errors[]='Invoice is not Draft.'; if(documents_is_archived($invoice))$errors[]='Archived invoices cannot be finalized.'; if(trim((string)($invoice['invoice_no']??''))==='')$errors[]='Invoice number is required.'; if(documents_invoice_final_total($invoice)<0)$errors[]='Invoice total must be non-negative.'; documents_invoice_payment_summary($invoice); return ['ok'=>$errors===[], 'errors'=>$errors]; }
+{ $errors=[]; if(!documents_invoice_is_draft($invoice))$errors[]='Invoice is not Draft.'; if(documents_is_archived($invoice))$errors[]='Archived invoices cannot be finalized.'; if(trim((string)($invoice['invoice_no']??''))==='')$errors[]='Invoice number is required.'; $dateCheck=documents_invoice_date_validate((string)($invoice['invoice_date']??''), false); if(empty($dateCheck['ok']))$errors[]='Set a valid invoice date before finalizing this invoice.'; if(documents_invoice_final_total($invoice)<0)$errors[]='Invoice total must be non-negative.'; documents_invoice_payment_summary($invoice); return ['ok'=>$errors===[], 'errors'=>$errors]; }
 
 function documents_invoice_finalize(array $invoice, array $actor): array
-{ $can=documents_invoice_can_finalize($invoice); if(empty($can['ok'])) return ['ok'=>false,'errors'=>$can['errors'],'invoice'=>$invoice]; $prev=['status'=>(string)($invoice['status']??'draft'),'payment_status'=>documents_invoice_payment_status($invoice)]; $rev=max(1,(int)($invoice['revision_no']??0)); $invoice['status']='finalized'; $invoice['revision_no']=$rev; $invoice['finalized_at']=date('c'); $invoice['finalized_by']=['id'=>(string)($actor['id']??''),'name'=>(string)($actor['name']??$actor['full_name']??'Admin')]; $invoice['finalized_snapshot']=['revision_no'=>$rev,'finalized_at'=>$invoice['finalized_at'],'finalized_by'=>$invoice['finalized_by'],'invoice_no'=>(string)($invoice['invoice_no']??''),'invoice_date'=>(string)($invoice['invoice_date']??''),'customer_snapshot'=>$invoice['customer_snapshot']??[],'pricing'=>$invoice['pricing']??[],'calc'=>$invoice['calc']??[],'tax_breakdown'=>$invoice['tax_breakdown']??[],'commercial_items'=>$invoice['commercial_items']??[],'quotation_reference'=>['quotation_id'=>(string)($invoice['linked_quote_id']??$invoice['quotation_id']??''),'quotation_no'=>(string)($invoice['quotation_no']??'')],'payment_summary_at_finalization'=>documents_invoice_payment_summary($invoice)]; $invoice=documents_invoice_append_audit_event($invoice,'invoice_finalized',$actor,'',$prev); $invoice['updated_at']=date('c'); return ['ok'=>true,'invoice'=>$invoice]; }
+{ $can=documents_invoice_can_finalize($invoice); if(empty($can['ok'])) return ['ok'=>false,'errors'=>$can['errors'],'invoice'=>$invoice]; $invoice=documents_invoice_normalize_date($invoice); $prev=['status'=>(string)($invoice['status']??'draft'),'payment_status'=>documents_invoice_payment_status($invoice),'invoice_date'=>(string)($invoice['invoice_date']??documents_invoice_authoritative_date($invoice))]; $rev=max(1,(int)($invoice['revision_no']??0)); $invoice['status']='finalized'; $invoice['revision_no']=$rev; $invoice['finalized_at']=date('c'); $invoice['finalized_by']=['id'=>(string)($actor['id']??''),'name'=>(string)($actor['name']??$actor['full_name']??'Admin')]; $invoice['finalized_snapshot']=['revision_no'=>$rev,'finalized_at'=>$invoice['finalized_at'],'finalized_by'=>$invoice['finalized_by'],'invoice_no'=>(string)($invoice['invoice_no']??''),'invoice_date'=>(string)($invoice['invoice_date']??documents_invoice_authoritative_date($invoice)),'customer_snapshot'=>$invoice['customer_snapshot']??[],'pricing'=>$invoice['pricing']??[],'calc'=>$invoice['calc']??[],'tax_breakdown'=>$invoice['tax_breakdown']??[],'commercial_items'=>$invoice['commercial_items']??[],'quotation_reference'=>['quotation_id'=>(string)($invoice['linked_quote_id']??$invoice['quotation_id']??''),'quotation_no'=>(string)($invoice['quotation_no']??'')],'payment_summary_at_finalization'=>documents_invoice_payment_summary($invoice)]; $invoice=documents_invoice_append_audit_event($invoice,'invoice_finalized',$actor,'',$prev); $invoice['updated_at']=date('c'); return ['ok'=>true,'invoice'=>$invoice]; }
 
 function documents_invoice_start_revision(array $invoice, array $actor, string $reason): array
-{ $reason=safe_multiline_text($reason); if($reason==='') return ['ok'=>false,'error'=>'Revision reason is required.','invoice'=>$invoice]; if(!documents_invoice_is_finalized($invoice)) return ['ok'=>false,'error'=>'Only finalized invoices can be revised.','invoice'=>$invoice]; $prev=$invoice['finalized_snapshot']??$invoice; $revs=is_array($invoice['revisions']??null)?$invoice['revisions']:[]; $revs[]=['revision_no'=>(int)($invoice['revision_no']??1),'status'=>'finalized','snapshot'=>$prev,'finalized_at'=>(string)($invoice['finalized_at']??''),'finalized_by'=>$invoice['finalized_by']??[]]; $invoice['revisions']=$revs; $invoice['status']='draft'; $invoice['revision_no']=(int)($invoice['revision_no']??1)+1; $invoice['revision_parent_no']=$invoice['revision_no']-1; $invoice['revision_reason']=$reason; $invoice['revision_started_at']=date('c'); $invoice['revision_started_by']=['id'=>(string)($actor['id']??''),'name'=>(string)($actor['name']??$actor['full_name']??'Admin')]; $invoice=documents_invoice_append_audit_event($invoice,'invoice_revision_started',$actor,$reason,['status'=>'finalized']); $invoice['updated_at']=date('c'); return ['ok'=>true,'invoice'=>$invoice]; }
+{ $reason=safe_multiline_text($reason); if($reason==='') return ['ok'=>false,'error'=>'Revision reason is required.','invoice'=>$invoice]; if(!documents_invoice_is_finalized($invoice)) return ['ok'=>false,'error'=>'Only finalized invoices can be revised.','invoice'=>$invoice]; $invoice=documents_invoice_normalize_date($invoice); $prev=$invoice['finalized_snapshot']??$invoice; $revs=is_array($invoice['revisions']??null)?$invoice['revisions']:[]; $revs[]=['revision_no'=>(int)($invoice['revision_no']??1),'status'=>'finalized','snapshot'=>$prev,'finalized_at'=>(string)($invoice['finalized_at']??''),'finalized_by'=>$invoice['finalized_by']??[]]; $invoice['revisions']=$revs; $invoice['status']='draft'; $invoice['revision_no']=(int)($invoice['revision_no']??1)+1; $invoice['revision_parent_no']=$invoice['revision_no']-1; $invoice['revision_reason']=$reason; $invoice['revision_started_at']=date('c'); $invoice['revision_started_by']=['id'=>(string)($actor['id']??''),'name'=>(string)($actor['name']??$actor['full_name']??'Admin')]; $invoice=documents_invoice_append_audit_event($invoice,'invoice_revision_started',$actor,$reason,['status'=>'finalized','invoice_date'=>(string)($prev['invoice_date']??'')]); $invoice['updated_at']=date('c'); return ['ok'=>true,'invoice'=>$invoice]; }
 
 function documents_invoice_cancel(array $invoice, array $actor, string $reason): array
 { $reason=safe_multiline_text($reason); if($reason==='') return ['ok'=>false,'error'=>'Cancellation reason is required.','invoice'=>$invoice]; $prev=['status'=>(string)($invoice['status']??''),'payment_status'=>documents_invoice_payment_status($invoice)]; $invoice['status']='cancelled'; $invoice['cancelled_at']=date('c'); $invoice['cancelled_by']=['id'=>(string)($actor['id']??''),'name'=>(string)($actor['name']??$actor['full_name']??'Admin')]; $invoice['cancellation_reason']=$reason; $invoice=documents_invoice_append_audit_event($invoice,'invoice_cancelled',$actor,$reason,$prev); $invoice['updated_at']=date('c'); return ['ok'=>true,'invoice'=>$invoice]; }
@@ -3590,7 +3657,7 @@ function documents_get_invoice(string $id): ?array
     if (!is_array($row)) {
         return null;
     }
-    $doc = array_merge(documents_invoice_defaults(), $row);
+    $doc = documents_invoice_normalize_date(array_merge(documents_invoice_defaults(), $row));
     $doc['status'] = documents_invoice_normalize_status((string) ($doc['status'] ?? 'draft'));
     $resolvedInvoiceNo = documents_first_non_empty_string([
         $doc['invoice_no'] ?? '',
@@ -3616,7 +3683,7 @@ function documents_save_invoice(array $doc): array
     if ($id === '') {
         return ['ok' => false, 'error' => 'Missing invoice ID'];
     }
-    $doc = documents_invoice_normalize_commercial_snapshot($doc);
+    $doc = documents_invoice_normalize_date(documents_invoice_normalize_commercial_snapshot($doc));
     $doc['status'] = documents_invoice_normalize_status((string) ($doc['status'] ?? 'draft'));
     return json_save(documents_invoices_dir() . '/' . $id . '.json', $doc);
 }
@@ -4009,8 +4076,10 @@ function documents_create_invoice_from_quote(array $quote): array
     $doc['calc'] = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
     $doc['quotation_snapshot'] = documents_invoice_quote_snapshot($quote);
     $doc['tax_breakdown'] = is_array($doc['quotation_snapshot']['tax_breakdown'] ?? null) ? $doc['quotation_snapshot']['tax_breakdown'] : [];
-    $doc = documents_invoice_normalize_commercial_snapshot($doc);
+    $doc = documents_invoice_normalize_date(documents_invoice_normalize_commercial_snapshot($doc));
     $doc['created_at'] = date('c');
+    $doc['invoice_date'] = date('Y-m-d');
+    $doc['invoice_date_source'] = 'explicit';
     $doc['updated_at'] = date('c');
     $delivery = documents_update_draft_invoice_delivery($doc, $quoteId);
     $doc = $delivery['invoice'];
