@@ -3331,26 +3331,18 @@ foreach ($quotes as $quote) {
     if ($acceptedSearch !== '' && !str_contains($hay, $acceptedSearch)) {
         continue;
     }
-    $quotationAmount = (float) ($quote['calc']['gross_payable'] ?? $quote['calc']['final_price_incl_gst'] ?? $quote['calc']['grand_total'] ?? 0);
-    $received = 0.0;
-    foreach (($receiptsByQuote[(string) ($quote['id'] ?? '')] ?? []) as $receipt) {
-        if ($isArchivedRecord($receipt)) {
-            continue;
-        }
-        $receiptStatus = strtolower(trim((string) ($receipt['status'] ?? '')));
-        if ($receiptStatus !== 'final') {
-            continue;
-        }
-        $received += (float) ($receipt['amount_rs'] ?? $receipt['amount_received'] ?? $receipt['amount'] ?? 0);
-    }
-    $receivable = $quotationAmount - $received;
+    $presentation = documents_project_financial_presentation($quote, $receiptsByQuote[(string) ($quote['id'] ?? '')] ?? []);
+    $quotationAmount = (float) $presentation['project_amount'];
+    $received = (float) $presentation['received_amount'];
+    $receivable = (float) $presentation['outstanding_amount'];
     $paymentSummary = documents_payment_summary_for_quote($quote, $receiptsByQuote[(string) ($quote['id'] ?? '')] ?? []);
     $acceptedRows[] = [
         'quote' => $quote,
         'quotation_amount' => $quotationAmount,
         'payment_received' => $received,
         'receivables' => $receivable,
-        'advance' => $received > $quotationAmount,
+        'advance' => (float)$presentation['customer_credit'] > 0,
+        'finance_presentation' => $presentation,
         'is_archived' => $isArchived,
         'payment_summary' => $paymentSummary,
     ];
@@ -3699,10 +3691,10 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             }
             $packQuoteAmount = (float) ($packQuote['calc']['gross_payable'] ?? $packQuote['calc']['final_price_incl_gst'] ?? $packQuote['calc']['grand_total'] ?? 0);
             $packRemainingReceivable = $packQuoteAmount - $packFinalReceived;
-            $packProjectSummary = documents_project_financial_summary($packQuote, $packReceiptsActive);
+            $packProjectSummary = documents_project_financial_presentation($packQuote, $packReceiptsActive);
             $packPaymentSummary = documents_payment_summary_for_quote($packQuote, $packReceiptsActive);
             $packPaymentRequests = documents_payment_requests_by_quote($packQuoteId);
-            $packCanRequestPayment = documents_quote_normalize_status((string)($packQuote['status'] ?? 'draft')) === 'accepted' && !empty($packQuote['is_current_version']) && !documents_is_archived($packQuote);
+            $packCanRequestPayment = documents_quote_normalize_status((string)($packQuote['status'] ?? 'draft')) === 'accepted' && !empty($packQuote['is_current_version']) && !documents_is_archived($packQuote) && (float)($packProjectSummary['outstanding_amount'] ?? 0) > 0.009;
             $editingPaymentRequest = ($packAction === 'request_payment' && $packCanRequestPayment) ? documents_payment_request_defaults() : null;
             $editingReceipt = null;
             if ($packAction === 'edit_receipt' && $packReceiptId !== '') {
@@ -3753,7 +3745,10 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
               <div><strong>Paid:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['total_payment_received']), ENT_QUOTES) ?></div>
               <div><strong>Basis:</strong> <?= htmlspecialchars((string)$packProjectSummary['calculation_basis'] . ' / ' . (string)$packProjectSummary['basis_status'], ENT_QUOTES) ?></div>
               <div><strong>Final reference:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['calculation_reference_amount']), ENT_QUOTES) ?></div>
+              <div><strong><?= htmlspecialchars((string)$packProjectSummary['quotation_to_invoice_difference_label'], ENT_QUOTES) ?>:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['quotation_to_invoice_difference']), ENT_QUOTES) ?></div>
             </div>
+            <?php if ((string)$packProjectSummary['needs_reconfirmation_warning'] !== ''): ?><div class="alert warn"><?= htmlspecialchars((string)$packProjectSummary['needs_reconfirmation_warning'], ENT_QUOTES) ?></div><?php endif; ?>
+            <?php if ((float)$packProjectSummary['quotation_to_invoice_difference'] > 0): ?><p class="muted"><?= htmlspecialchars((string)$packProjectSummary['quotation_to_invoice_difference_note'], ENT_QUOTES) ?></p><?php endif; ?>
             <?php if ($isAdmin): ?>
               <form method="post" class="inline-form" style="display:grid;gap:.5rem;max-width:720px;">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
@@ -3778,9 +3773,9 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           </section>
 
 
-            <?php $packCollectionPct=business_pulse_collection_pct($packFinalReceived,$packQuoteAmount); $packDueSince=$packRemainingReceivable>0 ? (business_pulse_date($packQuote) ?: '—') : '—'; $packLastRequest=$packPaymentRequests[0] ?? null; $packLastPaymentDate=''; foreach($packReceipts as $r){ if(!$isArchivedRecord($r) && strtolower((string)($r['status']??''))==='final'){ $d=business_pulse_date($r,['date_received','receipt_date','created_at']); if($d>$packLastPaymentDate)$packLastPaymentDate=$d; }} $packDocStatus=['Agreement'=>$packAgreements!==[],'Dispatch Advice'=>$packDispatchAdvices!==[],'Challan'=>$packChallans!==[],'Invoice'=>$packInvoices!==[]]; ?>
+            <?php $packQuoteAmount=(float)$packProjectSummary['project_amount']; $packFinalReceived=(float)$packProjectSummary['received_amount']; $packRemainingReceivable=(float)$packProjectSummary['outstanding_amount']; $packCollectionPct=$packProjectSummary['collection_pct']; $packDueSince=((string)$packProjectSummary['due_since'] !== '') ? (string)$packProjectSummary['due_since'] : '—'; $packLastRequest=$packPaymentRequests[0] ?? null; $packLastPaymentDate=''; foreach($packReceipts as $r){ if(!$isArchivedRecord($r) && strtolower((string)($r['status']??''))==='final'){ $d=business_pulse_date($r,['date_received','receipt_date','created_at']); if($d>$packLastPaymentDate)$packLastPaymentDate=$d; }} $packDocStatus=['Agreement'=>$packAgreements!==[],'Dispatch Advice'=>$packDispatchAdvices!==[],'Challan'=>$packChallans!==[],'Invoice'=>$packInvoices!==[]]; ?>
             <div class="workbench-command" aria-label="Accepted customer command center">
-              <?php foreach ([['Project Amount',$inr($packQuoteAmount)],['Received',$inr($packFinalReceived)],['Outstanding',$inr(max(0,$packRemainingReceivable))],['Collection %',business_pulse_format_pct($packCollectionPct)],['Due Since',$packDueSince],['Last Payment Date',$packLastPaymentDate ?: '—'],['Last Payment Request',is_array($packLastRequest)?(string)($packLastRequest['created_at'] ?? $packLastRequest['id'] ?? '—'):'—'],['Next Follow-up Date',is_array($packLastRequest)?((string)($packLastRequest['follow_up_date'] ?? '') ?: '—'):'—'],['Document Status',implode(' · ',array_map(fn($k,$v)=>$k.': '.($v?'Done':'Pending'),array_keys($packDocStatus),$packDocStatus))],['Open Complaints','—'],['Pending Tasks','—']] as $m): ?><div class="summary-card"><span><?= htmlspecialchars($m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach; ?>
+              <?php foreach ([['Project Amount',$inr((float)$packProjectSummary['project_amount'])],['Received',$inr((float)$packProjectSummary['received_amount'])],['Outstanding',$inr((float)$packProjectSummary['outstanding_amount'])],['Collection %',business_pulse_format_pct($packCollectionPct)],['Due Since',$packDueSince],['Last Payment Date',$packLastPaymentDate ?: '—'],['Last Payment Request',is_array($packLastRequest)?(string)($packLastRequest['created_at'] ?? $packLastRequest['id'] ?? '—'):'—'],['Next Follow-up Date',is_array($packLastRequest)?((string)($packLastRequest['follow_up_date'] ?? '') ?: '—'):'—'],['Document Status',implode(' · ',array_map(fn($k,$v)=>$k.': '.($v?'Done':'Pending'),array_keys($packDocStatus),$packDocStatus))],['Open Complaints','—'],['Pending Tasks','—']] as $m): ?><div class="summary-card"><span><?= htmlspecialchars($m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach; ?>
             </div>
           <div class="accepted-summary">
           <section class="accepted-summary__card">
@@ -3857,7 +3852,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             <div><strong>Outstanding:</strong> <?= htmlspecialchars($inr((float)$packPaymentSummary['outstanding']), ENT_QUOTES) ?></div>
             <div><strong>Active requests:</strong> <?= (int)$packPaymentSummary['active_request_count'] ?></div>
           </div>
-          <?php if ($packCanRequestPayment): ?><p><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$packQuoteId,'action'=>'request_payment']), ENT_QUOTES) ?>">Request Payment</a></p><?php else: ?><p class="muted">Payment requests are available only for current accepted quotations.</p><?php endif; ?>
+          <?php if ($packCanRequestPayment): ?><p><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$packQuoteId,'action'=>'request_payment']), ENT_QUOTES) ?>">Request Payment</a></p><?php else: ?><p class="muted">Payment requests are available only for current accepted quotations with a selected-basis outstanding balance.</p><?php endif; ?>
           <?php if ($editingPaymentRequest !== null): ?>
             <div class="card" style="padding:12px;margin-bottom:12px;">
               <h4 style="margin:0 0 8px 0;">New Payment Request</h4>
@@ -3904,7 +3899,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           <h3>Payment receipts</h3>
           <div class="commercial-card-metrics">
             <div><strong>Total received (final):</strong> <?= htmlspecialchars($inr($packFinalReceived), ENT_QUOTES) ?></div>
-            <div><strong>Remaining receivable:</strong> <?= htmlspecialchars($inr($packRemainingReceivable), ENT_QUOTES) ?></div>
+            <div><strong>Remaining receivable:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['outstanding_amount']), ENT_QUOTES) ?></div><?php if ((float)$packProjectSummary['customer_credit'] > 0): ?><div><strong>Customer credit:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['customer_credit']), ENT_QUOTES) ?></div><?php endif; ?>
           </div>
           <form method="post" data-accepted-ajax-form="1" class="inline-form" style="margin-bottom:0.75rem;">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
@@ -4063,7 +4058,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           </div>
           <form method="get" class="filter-grid list-toolbar"><input type="hidden" name="tab" value="accepted_customers" /><div><label>Search customer / mobile</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div><div><label>Archive visibility</label><label class="checkbox-field"><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived</label></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form>
           <div class="responsive-table accepted-customers-table-wrap"><table class="accepted-customers-table"><thead><tr><th>Accepted Quotation</th><th>Customer</th><th>System</th><th>Finance</th><th>Dues Since</th><th>Documents</th><th>Complaints/Tasks</th><th>Actions</th></tr></thead><tbody>
-          <?php foreach ($acceptedRows as $row): $quote=$row['quote']; $qid=(string)($quote['id']??''); $paymentSummary=is_array($row['payment_summary']??null)?$row['payment_summary']:[]; $activePaymentRequests=(int)($paymentSummary['active_request_count']??0); $collectionPct=business_pulse_collection_pct((float)($row['payment_received']??0),(float)($row['quotation_amount']??0)); $acceptedDate=business_pulse_date($quote); $dueSince=((float)($row['receivables']??0)>0&&$acceptedDate!=='')?$acceptedDate:'—'; $workflow=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Dispatch Advice'=>array_values(array_filter(documents_dispatch_advices_for_quote($qid), static fn(array $row): bool => !documents_is_archived($row)))!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[]]; ?>
+          <?php foreach ($acceptedRows as $row): $quote=$row['quote']; $qid=(string)($quote['id']??''); $paymentSummary=is_array($row['payment_summary']??null)?$row['payment_summary']:[]; $finance=is_array($row['finance_presentation']??null)?$row['finance_presentation']:documents_project_financial_presentation($quote); $activePaymentRequests=(int)($paymentSummary['active_request_count']??0); $collectionPct=$finance['collection_pct']; $dueSince=((string)($finance['due_since']??'')!=='')?(string)$finance['due_since']:'—'; $workflow=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Dispatch Advice'=>array_values(array_filter(documents_dispatch_advices_for_quote($qid), static fn(array $row): bool => !documents_is_archived($row)))!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[]]; ?>
           <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td><div class="accepted-finance"><div class="accepted-finance__row"><span class="accepted-finance__label">Total</span><span class="accepted-finance__value"><?= htmlspecialchars($inr((float)($row['quotation_amount']??0)),ENT_QUOTES) ?></span></div><div class="accepted-finance__row"><span class="accepted-finance__label">Received</span><span class="accepted-finance__value"><?= htmlspecialchars($inr((float)($row['payment_received']??0)),ENT_QUOTES) ?></span></div><div class="accepted-finance__row"><span class="accepted-finance__label">Due</span><span class="accepted-finance__value"><?= htmlspecialchars($inr(max(0,(float)($row['receivables']??0))),ENT_QUOTES) ?></span></div><?php if(!empty($row['advance'])):?><span class="pill warn">Overpaid / advance <?= htmlspecialchars($inr(abs((float)($row['receivables']??0))),ENT_QUOTES) ?></span><?php endif;?><?php if($activePaymentRequests>0):?><span class="pill"><?= $activePaymentRequests ?> active request<?= $activePaymentRequests===1?'':'s' ?></span><?php endif;?><div class="accepted-finance__row"><span class="accepted-finance__label">Collection</span><span class="accepted-finance__value"><?= htmlspecialchars(business_pulse_format_pct($collectionPct),ENT_QUOTES) ?></span></div></div></td><td><span class="due-age"><?= htmlspecialchars($dueSince,ENT_QUOTES) ?></span></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><span class="muted">Reliable matching unavailable</span></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Enter</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php foreach ([['create_agreement','Create/Open Agreement'],['create_dispatch_advice','Create/Open Dispatch Advice'],['create_delivery_challan','Create/Open Challan'],['create_invoice','Create/Open Invoice']] as $docAction): ?><form method="post" data-accepted-ajax-form="1" action="<?= htmlspecialchars($documentActionEndpoint, ENT_QUOTES) ?>" class="document-action-form" data-document-action="1" data-document-label="<?= htmlspecialchars($docAction[1], ENT_QUOTES) ?>" data-quote-no="<?= htmlspecialchars((string)($quote['quote_no']??$qid), ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($quote['customer_name']??''), ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars((string)($quote['customer_mobile']??''), ENT_QUOTES) ?>"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="<?= htmlspecialchars($docAction[0], ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><input type="hidden" name="response_format" value="json"><button class="btn secondary" type="submit"><?= htmlspecialchars($docAction[1], ENT_QUOTES) ?></button></form><?php endforeach; ?><?php if($isAdmin && empty($row['is_archived'])):?><form method="post" data-accepted-ajax-form="1"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
           <?php endforeach; if($acceptedRows===[]):?><tr><td colspan="8" class="empty-state">No accepted customers found.</td></tr><?php endif;?></tbody></table></div>
         <?php endif; ?>

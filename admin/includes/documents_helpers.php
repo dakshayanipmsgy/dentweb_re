@@ -3738,6 +3738,48 @@ function documents_project_financial_summary(array $quote, array $receipts = nul
     return ['quotation_amount'=>documents_invoice_paise_to_money($quotePaise),'active_finalized_invoice_total'=>documents_invoice_paise_to_money($invoicePaise),'active_finalized_invoice_ids'=>$snapshot['ids'],'active_finalized_invoice_revisions'=>$snapshot['revisions'],'active_finalized_invoice_set_hash'=>$snapshot['hash'],'total_payment_received'=>documents_invoice_paise_to_money($paidPaise),'allocated_payment_received'=>documents_invoice_paise_to_money($allocatedPaise),'unallocated_payment_received'=>documents_invoice_paise_to_money(max(0,$paidPaise-$allocatedPaise)),'remaining_by_quotation'=>documents_invoice_paise_to_money(max(0,$quotePaise-$paidPaise)),'remaining_by_finalized_invoices'=>documents_invoice_paise_to_money(max(0,$invoicePaise-$paidPaise)),'calculation_basis'=>$basis,'calculation_reference_amount'=>documents_invoice_paise_to_money($refPaise),'remaining_amount'=>documents_invoice_paise_to_money(max(0,$diff)),'overpayment'=>documents_invoice_paise_to_money(max(0,-$diff)),'basis_status'=>$status,'settlement'=>$settlement];
 }
 
+
+function documents_project_financial_due_date(array $quote): string
+{
+    foreach (['accepted_at','approved_at','updated_at','created_at'] as $key) {
+        $value = substr((string)($quote[$key] ?? ''), 0, 10);
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) { return $value; }
+    }
+    return '';
+}
+
+function documents_project_financial_presentation(array $quote, array $receipts = null): array
+{
+    $summary = documents_project_financial_summary($quote, $receipts);
+    $reference = (float)$summary['calculation_reference_amount'];
+    $received = (float)$summary['total_payment_received'];
+    $outstanding = (float)$summary['remaining_amount'];
+    $overpayment = (float)$summary['overpayment'];
+    $basis = (string)$summary['calculation_basis'];
+    $status = (string)$summary['basis_status'];
+    $quotation = (float)$summary['quotation_amount'];
+    $invoiceTotal = (float)$summary['active_finalized_invoice_total'];
+    $adjustment = round($quotation - $invoiceTotal, 2);
+    $hasReceivable = $outstanding > 0.009;
+    $collectionPct = $reference > 0 ? round(min($received, $reference) / $reference * 100, 1) : null;
+    return array_merge($summary, [
+        'project_amount' => $reference,
+        'received_amount' => $received,
+        'outstanding_amount' => $outstanding,
+        'customer_credit' => $overpayment,
+        'collection_pct' => $collectionPct,
+        'basis_label' => ucwords(str_replace('_', ' ', $basis)),
+        'basis_status_label' => ucwords(str_replace('_', ' ', $status)),
+        'has_receivable' => $hasReceivable,
+        'due_since' => $hasReceivable ? documents_project_financial_due_date($quote) : '',
+        'quotation_to_invoice_difference' => abs($adjustment),
+        'quotation_to_invoice_difference_signed' => $adjustment,
+        'quotation_to_invoice_difference_label' => $adjustment >= 0 ? 'Quotation-to-invoice reduction' : 'Invoice increase over quotation',
+        'quotation_to_invoice_difference_note' => ($basis === 'finalized_invoices' && in_array($status, ['confirmed','needs_reconfirmation'], true)) ? 'Excluded from payment calculations because finalized invoices are the confirmed project basis.' : 'Shown for comparison only; payment calculations follow the selected project basis.',
+        'needs_reconfirmation_warning' => ($basis === 'finalized_invoices' && $status === 'needs_reconfirmation') ? 'Finalized invoice set changed after confirmation. Values below preserve the prior confirmed snapshot until an administrator reconfirms.' : '',
+    ]);
+}
+
 function documents_project_reference_amount(array $quote): float { return (float) documents_project_financial_summary($quote)['calculation_reference_amount']; }
 
 function documents_project_confirm_calculation_basis(array $quote, string $basis, array $actor, string $reason, string $expectedHash): array
