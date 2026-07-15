@@ -729,7 +729,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Multiple active invoices per quotation are supported; each invoice reconciles via explicit receipt allocations.
 
 
-            $created = documents_create_invoice_from_quote($quote);
+            $invoiceOptions = [
+                'idempotency_key' => safe_text((string)($_POST['invoice_create_token'] ?? '')),
+                'replacement_for_invoice_id' => safe_text((string)($_POST['replacement_for_invoice_id'] ?? '')),
+                'exceed_reason' => safe_multiline_text((string)($_POST['exceed_reason'] ?? '')),
+                'actor' => $viewer,
+            ];
+            $quote = documents_quote_repair_invoice_workflow($quote);
+            $created = documents_create_invoice_from_quote($quote, $invoiceOptions);
             if (!($created['ok'] ?? false)) {
                 $failDocumentAction((string) ($created['error'] ?? 'Unable to create invoice.'));
             }
@@ -764,6 +771,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             documents_quote_link_workflow_doc($quote, 'invoice', $invoiceId);
+            if ($invoiceOptions['idempotency_key'] !== '') {
+                $quote['workflow']['invoice_creation_tokens'][$invoiceOptions['idempotency_key']] = $invoiceId;
+            }
+            $quote = documents_quote_repair_invoice_workflow($quote);
             $quote['updated_at'] = date('c');
             documents_save_quote($quote);
             $finishDocumentAction('invoice', $invoiceId, true, 'Invoice draft created.');
@@ -3978,10 +3989,14 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
             <input type="hidden" name="return_tab" value="accepted_customers" />
             <input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
-            <button class="btn" type="submit">Create Invoice</button>
+            <input type="hidden" name="invoice_create_token" value="<?= htmlspecialchars(bin2hex(random_bytes(8)), ENT_QUOTES) ?>" />
+            <?php $packInvoicePolicy = documents_quote_can_create_invoice($packQuote); $packInvoiceSummary = $packInvoicePolicy['summary']; ?>
+            <div class="muted-helper">Quotation total: <?= htmlspecialchars($inr((float)$packInvoiceSummary['quotation_total']), ENT_QUOTES) ?> · Active invoiced: <?= htmlspecialchars($inr((float)$packInvoiceSummary['active_invoice_total']), ENT_QUOTES) ?> · Remaining: <?= htmlspecialchars($inr((float)$packInvoiceSummary['remaining_uninvoiced']), ENT_QUOTES) ?></div>
+            <?php if (!empty($packInvoiceSummary['would_exceed'])): ?><label class="muted-helper">Over-invoice reason required <input name="exceed_reason" required /></label><?php endif; ?>
+            <button class="btn" type="submit"><?= $packInvoices === [] ? 'Create Invoice' : 'Create another invoice' ?></button>
           </form>
           <table><thead><tr><th>ID</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-          <?php foreach ($packInvoices as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td><td><?= htmlspecialchars(documents_invoice_authoritative_date($row), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string) ($row['status'] ?? 'draft'), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="admin-invoices.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">Open/Edit</a><a class="btn secondary" href="invoice-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View/Print</a><?php if ($isAdmin): ?><form class="inline-form" method="post" data-accepted-ajax-form="1"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="invoice" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
+          <?php foreach ($packInvoices as $row): ?><tr><td><?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?> <?= documents_invoice_is_cancelled($row) ? '<span class="pill warn">CANCELLED</span>' : '' ?></td><td><?= htmlspecialchars(documents_invoice_authoritative_date($row), ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_invoice_status_label((string) ($row['status'] ?? 'draft')), ENT_QUOTES) ?></td><td class="row-actions"><a class="btn secondary" href="admin-invoices.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">Open/Edit</a><a class="btn secondary" href="invoice-view.php?id=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View/Print</a><?php if (documents_invoice_is_cancelled($row)): ?><form class="inline-form" method="post" data-accepted-ajax-form="1"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="create_invoice" /><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><input type="hidden" name="replacement_for_invoice_id" value="<?= htmlspecialchars((string)($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="invoice_create_token" value="<?= htmlspecialchars(bin2hex(random_bytes(8)), ENT_QUOTES) ?>" /><button class="btn secondary" type="submit">Create replacement invoice</button></form><?php endif; ?><?php if ($isAdmin): ?><form class="inline-form" method="post" data-accepted-ajax-form="1"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="invoice" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form><?php endif; ?></td></tr><?php endforeach; ?>
           <?php if ($packInvoices === []): ?><tr><td colspan="4"><div class="empty-card-state">No invoice exists yet. Create one when the customer is ready for billing.</div></td></tr><?php endif; ?>
           </tbody></table>
           </section>
