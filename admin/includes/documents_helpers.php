@@ -3684,6 +3684,89 @@ function documents_invoice_payment_summary(array $invoice): array
     return ['invoice_id'=>$iid,'invoice_total'=>documents_invoice_paise_to_money($totalPaise),'total_received'=>documents_invoice_paise_to_money($received),'outstanding'=>documents_invoice_paise_to_money(max(0,$diff)),'overpayment'=>documents_invoice_paise_to_money(max(0,-$diff)),'payment_status'=>$status,'receipt_count'=>count($receipts),'receipts'=>$receipts,'unallocated_receipts'=>$unallocated,'last_payment_at'=>$last];
 }
 
+
+function documents_project_quotation_amount(array $quote): float
+{
+    foreach ([$quote['calc']['gross_payable'] ?? null, $quote['calc']['final_price_incl_gst'] ?? null, $quote['calc']['grand_total'] ?? null, $quote['input_total_gst_inclusive'] ?? null] as $value) {
+        if (is_numeric($value)) { return documents_invoice_paise_to_money(documents_invoice_money_to_paise((float) $value)); }
+    }
+    return 0.0;
+}
+
+function documents_project_active_finalized_invoices(array $quote): array
+{
+    $seen = []; $latest = [];
+    foreach (documents_invoices_for_quote((string)($quote['id'] ?? ''), true) as $invoice) {
+        $id = (string)($invoice['id'] ?? '');
+        if ($id === '' || isset($seen[$id]) || !documents_invoice_is_finalized($invoice) || documents_is_archived($invoice) || documents_invoice_is_cancelled($invoice) || !empty($invoice['superseded_by_invoice_id']) || !empty($invoice['replaced_by_invoice_id'])) { continue; }
+        $seen[$id] = true; $latest[$id] = $invoice;
+    }
+    return array_values($latest);
+}
+
+function documents_project_invoice_set_snapshot(array $quote): array
+{
+    $rows = []; $total = 0;
+    foreach (documents_project_active_finalized_invoices($quote) as $invoice) {
+        $amountPaise = documents_invoice_money_to_paise(documents_invoice_final_total($invoice));
+        $row = ['id'=>(string)($invoice['id'] ?? ''), 'revision_no'=>(int)($invoice['revision_no'] ?? 1), 'amount_paise'=>$amountPaise];
+        $rows[] = $row; $total += $amountPaise;
+    }
+    usort($rows, static fn(array $a, array $b): int => strcmp($a['id'].'#'.$a['revision_no'], $b['id'].'#'.$b['revision_no']));
+    return ['rows'=>$rows, 'ids'=>array_column($rows, 'id'), 'revisions'=>array_column($rows, 'revision_no'), 'total_paise'=>$total, 'total'=>documents_invoice_paise_to_money($total), 'hash'=>hash('sha256', json_encode($rows, JSON_UNESCAPED_SLASHES) ?: '')];
+}
+
+function documents_project_financial_summary(array $quote, array $receipts = null): array
+{
+    $quoteAmount = documents_project_quotation_amount($quote); $quotePaise = documents_invoice_money_to_paise($quoteAmount);
+    $snapshot = documents_project_invoice_set_snapshot($quote); $invoicePaise = (int)$snapshot['total_paise'];
+    $paidPaise = 0; $allocatedPaise = 0; $receiptIds = [];
+    foreach (($receipts ?? documents_final_receipts_for_quote((string)($quote['id'] ?? ''))) as $receipt) {
+        if (!is_array($receipt) || !documents_receipt_is_finalized_active($receipt)) { continue; }
+        $rid = (string)($receipt['id'] ?? $receipt['receipt_id'] ?? md5(json_encode($receipt)));
+        if (isset($receiptIds[$rid])) { continue; }
+        $receiptIds[$rid] = true; $amountPaise = documents_invoice_money_to_paise(documents_receipt_amount_total($receipt)); $paidPaise += $amountPaise;
+        foreach ((array)($receipt['allocations'] ?? []) as $allocation) { if (is_array($allocation)) { $allocatedPaise += min($amountPaise, documents_invoice_money_to_paise((float)($allocation['amount_rs'] ?? $allocation['amount'] ?? 0))); } }
+    }
+    $settlement = is_array($quote['commercial_settlement'] ?? null) ? $quote['commercial_settlement'] : [];
+    $basis = in_array((string)($settlement['basis'] ?? 'quotation'), ['quotation','finalized_invoices'], true) ? (string)($settlement['basis'] ?? 'quotation') : 'quotation';
+    $status = (string)($settlement['status'] ?? 'not_confirmed');
+    if ($basis === 'finalized_invoices' && $status === 'confirmed' && (string)($settlement['invoice_set_hash'] ?? '') !== (string)$snapshot['hash']) { $status = 'needs_reconfirmation'; }
+    if (!in_array($status, ['not_confirmed','confirmed','needs_reconfirmation'], true)) { $status = 'not_confirmed'; }
+    $refPaise = $basis === 'finalized_invoices' && in_array($status, ['confirmed','needs_reconfirmation'], true) ? documents_invoice_money_to_paise((float)($settlement['confirmed_reference_amount'] ?? 0)) : $quotePaise;
+    $diff = $refPaise - $paidPaise;
+    return ['quotation_amount'=>documents_invoice_paise_to_money($quotePaise),'active_finalized_invoice_total'=>documents_invoice_paise_to_money($invoicePaise),'active_finalized_invoice_ids'=>$snapshot['ids'],'active_finalized_invoice_revisions'=>$snapshot['revisions'],'active_finalized_invoice_set_hash'=>$snapshot['hash'],'total_payment_received'=>documents_invoice_paise_to_money($paidPaise),'allocated_payment_received'=>documents_invoice_paise_to_money($allocatedPaise),'unallocated_payment_received'=>documents_invoice_paise_to_money(max(0,$paidPaise-$allocatedPaise)),'remaining_by_quotation'=>documents_invoice_paise_to_money(max(0,$quotePaise-$paidPaise)),'remaining_by_finalized_invoices'=>documents_invoice_paise_to_money(max(0,$invoicePaise-$paidPaise)),'calculation_basis'=>$basis,'calculation_reference_amount'=>documents_invoice_paise_to_money($refPaise),'remaining_amount'=>documents_invoice_paise_to_money(max(0,$diff)),'overpayment'=>documents_invoice_paise_to_money(max(0,-$diff)),'basis_status'=>$status,'settlement'=>$settlement];
+}
+
+function documents_project_reference_amount(array $quote): float { return (float) documents_project_financial_summary($quote)['calculation_reference_amount']; }
+
+function documents_project_confirm_calculation_basis(array $quote, string $basis, array $actor, string $reason, string $expectedHash): array
+{
+    $basis = safe_text($basis); $reason = safe_multiline_text($reason); $summary = documents_project_financial_summary($quote); $snap = documents_project_invoice_set_snapshot($quote);
+    if (!in_array($basis, ['quotation','finalized_invoices'], true)) return ['ok'=>false,'error'=>'Unsupported calculation basis.','quote'=>$quote,'summary'=>$summary];
+    if ($basis === 'finalized_invoices' && (string)$snap['hash'] !== $expectedHash) return ['ok'=>false,'error'=>'Finalized invoice set changed. Refresh and confirm again.','quote'=>$quote,'summary'=>$summary];
+    if ($basis === 'quotation' && $reason === '' && (string)($summary['calculation_basis'] ?? '') === 'finalized_invoices') return ['ok'=>false,'error'=>'Reason is required to switch back to quotation basis.','quote'=>$quote,'summary'=>$summary];
+    $previous = is_array($quote['commercial_settlement'] ?? null) ? $quote['commercial_settlement'] : [];
+    $amount = $basis === 'finalized_invoices' ? (float)$snap['total'] : (float)$summary['quotation_amount'];
+    $quote['commercial_settlement'] = ['basis'=>$basis,'status'=>$basis === 'finalized_invoices' ? 'confirmed' : 'not_confirmed','confirmed_reference_amount'=>$amount,'finalized_invoice_total_at_confirmation'=>(float)$snap['total'],'included_invoice_ids'=>$snap['ids'],'included_invoice_revisions'=>$snap['revisions'],'invoice_set_hash'=>(string)$snap['hash'],'confirmed_at'=>date('c'),'confirmed_by'=>['id'=>(string)($actor['id']??''),'name'=>(string)($actor['name']??$actor['full_name']??'Admin')],'confirmation_reason'=>$reason];
+    $events = is_array($quote['commercial_settlement_audit'] ?? null) ? $quote['commercial_settlement_audit'] : [];
+    $events[] = ['event'=>$basis === 'quotation' ? 'calculation_basis_switched_to_quotation' : ((string)($previous['basis'] ?? '') === 'finalized_invoices' ? 'calculation_basis_reconfirmed' : 'calculation_basis_confirmed'),'previous_basis'=>(string)($previous['basis'] ?? 'quotation'),'new_basis'=>$basis,'previous_amount'=>(float)($previous['confirmed_reference_amount'] ?? $summary['quotation_amount']),'new_amount'=>$amount,'invoice_ids'=>$snap['ids'],'invoice_revisions'=>$snap['revisions'],'invoice_set_hash'=>(string)$snap['hash'],'quotation_amount'=>(float)$summary['quotation_amount'],'paid_amount'=>(float)$summary['total_payment_received'],'remaining_amount'=>max(0,$amount-(float)$summary['total_payment_received']),'overpayment'=>max(0,(float)$summary['total_payment_received']-$amount),'reason'=>$reason,'actor_id'=>(string)($actor['id']??''),'actor_name'=>(string)($actor['name']??$actor['full_name']??'Admin'),'timestamp'=>date('c')];
+    $quote['commercial_settlement_audit'] = $events; $quote['updated_at'] = date('c');
+    return ['ok'=>true,'quote'=>$quote,'summary'=>documents_project_financial_summary($quote),'error'=>''];
+}
+
+function documents_project_mark_basis_reconfirmation_if_needed(array $quote, string $reason = 'invoice_set_changed'): array
+{
+    $summary = documents_project_financial_summary($quote);
+    if (($summary['calculation_basis'] ?? '') === 'finalized_invoices' && ($summary['basis_status'] ?? '') === 'needs_reconfirmation') {
+        $quote['commercial_settlement']['status'] = 'needs_reconfirmation';
+        $events = is_array($quote['commercial_settlement_audit'] ?? null) ? $quote['commercial_settlement_audit'] : [];
+        $events[] = ['event'=>'calculation_basis_needs_reconfirmation','reason'=>$reason,'invoice_set_hash'=>(string)($summary['active_finalized_invoice_set_hash'] ?? ''),'timestamp'=>date('c')];
+        $quote['commercial_settlement_audit'] = $events;
+    }
+    return $quote;
+}
+
 function documents_invoice_payment_status(array $invoice): string { return (string)documents_invoice_payment_summary($invoice)['payment_status']; }
 
 function documents_invoice_append_audit_event(array $invoice, string $type, array $actor, string $reason = '', array $previous = []): array
@@ -3743,7 +3826,16 @@ function documents_save_invoice(array $doc): array
     }
     $doc = documents_invoice_normalize_date(documents_invoice_normalize_commercial_snapshot($doc));
     $doc['status'] = documents_invoice_normalize_status((string) ($doc['status'] ?? 'draft'));
-    return json_save(documents_invoices_dir() . '/' . $id . '.json', $doc);
+    $saved = json_save(documents_invoices_dir() . '/' . $id . '.json', $doc);
+    if (!empty($saved['ok'])) {
+        $quoteId = (string)($doc['linked_quote_id'] ?? $doc['quotation_id'] ?? '');
+        $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
+        if (is_array($quote)) {
+            $updated = documents_project_mark_basis_reconfirmation_if_needed($quote, 'invoice_saved');
+            if ($updated !== $quote) { documents_save_quote($updated); }
+        }
+    }
+    return $saved;
 }
 
 function documents_generate_proforma_number(string $segment): array
@@ -7964,10 +8056,11 @@ function documents_payment_request_refresh_from_receipts(array $request): array
 
 function documents_payment_summary_for_quote(array $quote, array $receipts = null): array
 {
-    $quoteId = (string)($quote['id'] ?? ''); $amount = (float)($quote['calc']['gross_payable'] ?? $quote['calc']['final_price_incl_gst'] ?? $quote['calc']['grand_total'] ?? 0); foreach (documents_list_sales_documents('invoice') as $invSale) { if ((string)($invSale['quotation_id'] ?? '') === $quoteId && empty($invSale['archived_flag']) && is_numeric($invSale['amount'] ?? null)) { $amount = (float) $invSale['amount']; break; } } $received = 0.0;
-    foreach (($receipts ?? documents_final_receipts_for_quote($quoteId)) as $r) { if (strtolower(trim((string)($r['status'] ?? ''))) === 'final' && empty($r['archived_flag']) && empty($r['archived'])) { $received += (float)($r['amount_rs'] ?? $r['amount_received'] ?? $r['amount'] ?? 0); } }
-    $requests = documents_payment_requests_by_quote($quoteId); $active = array_values(array_filter($requests, static fn(array $r): bool => empty($r['archived_flag']) && !in_array(strtolower((string)($r['status'] ?? '')), ['cancelled','paid'], true)));
-    return ['quotation_amount'=>$amount,'total_received'=>$received,'outstanding'=>max(0,$amount-$received),'requests'=>$requests,'active_request_count'=>count($active),'last_request'=>$requests[0] ?? null];
+    $project = documents_project_financial_summary($quote, $receipts);
+    $quoteId = (string)($quote['id'] ?? '');
+    $requests = documents_payment_requests_by_quote($quoteId);
+    $active = array_values(array_filter($requests, static fn(array $r): bool => empty($r['archived_flag']) && !in_array(strtolower((string)($r['status'] ?? '')), ['cancelled','paid'], true)));
+    return array_merge($project, ['quotation_amount'=>$project['calculation_reference_amount'], 'project_quotation_amount'=>$project['quotation_amount'], 'total_received'=>$project['total_payment_received'], 'outstanding'=>$project['remaining_amount'], 'requests'=>$requests, 'active_request_count'=>count($active), 'last_request'=>$requests[0] ?? null]);
 }
 
 function documents_payment_request_reason_label(array $request): string
