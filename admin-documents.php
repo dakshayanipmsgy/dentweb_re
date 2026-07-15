@@ -756,7 +756,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $salesInvoice['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
             $salesInvoice['invoice_no'] = (string) ($invoiceDoc['invoice_no'] ?? '');
             $salesInvoice['invoice_date'] = date('Y-m-d');
-            $salesInvoice['amount'] = (float) ($invoiceDoc['input_total_gst_inclusive'] ?? 0);
+            $salesInvoice['amount'] = documents_invoice_final_total($invoiceDoc);
             $salesInvoice['tax_profile_id'] = (string) ($quote['tax_profile_id'] ?? '');
             $salesInvoice['tax_breakdown'] = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : (array) ($quote['calc']['tax_breakdown'] ?? []);
             $salesInvoice['status'] = 'draft';
