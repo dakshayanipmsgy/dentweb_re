@@ -1416,6 +1416,8 @@ function documents_invoice_defaults(): array
         'input_total_gst_inclusive' => 0,
         'calc' => [],
         'quotation_snapshot' => [],
+        'replacement_for_invoice_id' => '',
+        'replaced_by_invoice_id' => '',
         'created_at' => '',
         'updated_at' => '',
     ];
@@ -3590,6 +3592,62 @@ function documents_all_invoices(): array
     return $out;
 }
 
+
+function documents_invoice_is_active_for_quote(array $invoice): bool
+{
+    $status = documents_invoice_normalize_status((string)($invoice['status'] ?? 'draft'));
+    return in_array($status, ['draft', 'finalized'], true) && !documents_is_archived($invoice) && empty($invoice['superseded_by_invoice_id']);
+}
+
+function documents_invoices_for_quote(string $quoteId, bool $includeCancelled = true): array
+{
+    $quoteId = safe_text($quoteId); if ($quoteId === '') return [];
+    $out = [];
+    foreach (documents_all_invoices() as $inv) {
+        if ((string)($inv['linked_quote_id'] ?? $inv['quotation_id'] ?? '') !== $quoteId) continue;
+        if (!$includeCancelled && documents_invoice_is_cancelled($inv)) continue;
+        $out[] = $inv;
+    }
+    usort($out, static fn(array $a, array $b): int => strcmp((string)($a['created_at'] ?? '').(string)($a['id'] ?? ''), (string)($b['created_at'] ?? '').(string)($b['id'] ?? '')));
+    return $out;
+}
+
+function documents_active_invoices_for_quote(string $quoteId): array
+{
+    return array_values(array_filter(documents_invoices_for_quote($quoteId, true), 'documents_invoice_is_active_for_quote'));
+}
+
+function documents_quote_invoice_totals_summary(array $quote, ?float $proposedTotal = null): array
+{
+    $quoteTotal = documents_invoice_quotation_reference_total(['quotation_snapshot' => documents_invoice_quote_snapshot($quote), 'calc' => $quote['calc'] ?? [], 'input_total_gst_inclusive' => $quote['input_total_gst_inclusive'] ?? 0]);
+    $active = documents_active_invoices_for_quote((string)($quote['id'] ?? ''));
+    $cancelled = array_values(array_filter(documents_invoices_for_quote((string)($quote['id'] ?? ''), true), 'documents_invoice_is_cancelled'));
+    $activeTotal = 0.0; foreach ($active as $inv) $activeTotal += documents_invoice_final_total($inv);
+    $proposed = $proposedTotal ?? $quoteTotal;
+    return ['quotation_total'=>$quoteTotal,'active_invoice_total'=>$activeTotal,'proposed_invoice_total'=>$proposed,'remaining_uninvoiced'=>round($quoteTotal-$activeTotal,2),'would_exceed'=>($activeTotal+$proposed) > ($quoteTotal + DOCUMENTS_INVOICE_MONEY_TOLERANCE),'active_invoices'=>$active,'cancelled_invoices'=>$cancelled];
+}
+
+function documents_quote_can_create_invoice(array $quote): array
+{
+    if (!documents_dispatch_quote_eligible($quote)) return ['ok'=>false,'errors'=>['Invoice requires an accepted current quotation.'],'summary'=>documents_quote_invoice_totals_summary($quote)];
+    return ['ok'=>true,'errors'=>[],'summary'=>documents_quote_invoice_totals_summary($quote)];
+}
+
+function documents_quote_repair_invoice_workflow(array $quote): array
+{
+    $quote = documents_quote_prepare($quote); $qid=(string)($quote['id']??''); $ids=[];
+    foreach ([(string)($quote['workflow']['invoice_id']??''), (string)($quote['links']['invoice_id']??'')] as $id) if($id!=='') $ids[]=$id;
+    foreach ((array)($quote['workflow']['invoice_ids']??[]) as $id) if((string)$id!=='') $ids[]=(string)$id;
+    foreach (documents_invoices_for_quote($qid, true) as $inv) $ids[]=(string)($inv['id']??'');
+    $ids=array_values(array_unique(array_filter($ids, static fn($id)=>documents_get_invoice((string)$id)!==null)));
+    $active=[]; foreach($ids as $id){ $inv=documents_get_invoice((string)$id); if($inv && documents_invoice_is_active_for_quote($inv)) $active[]=$id; }
+    $quote['workflow']['invoice_ids']=$ids; $quote['workflow']['active_invoice_ids']=array_values(array_unique($active));
+    $latest=end($active); if(!$latest) $latest=end($ids) ?: '';
+    $quote['workflow']['latest_invoice_id']=(string)$latest; $quote['workflow']['invoice_id']=(string)$latest;
+    $quote['links']['invoice_id']=(string)$latest;
+    return $quote;
+}
+
 function documents_receipt_allocations_normalize(array $receipt, array $invoices = null): array
 {
     $invoices = $invoices ?? documents_all_invoices(); $byId=[]; foreach($invoices as $inv){ $byId[(string)($inv['id']??'')]=$inv; }
@@ -4024,73 +4082,41 @@ function documents_invoice_quote_snapshot(array $quote): array
     ];
 }
 
-function documents_create_invoice_from_quote(array $quote): array
+function documents_create_invoice_from_quote(array $quote, array $options = []): array
 {
+    $quote = documents_quote_repair_invoice_workflow($quote);
     $quoteId = safe_text((string) ($quote['id'] ?? ''));
-    if (!documents_dispatch_quote_eligible($quote)) {
-        return ['ok' => false, 'error' => 'Invoice requires an accepted current quotation.'];
+    $can = documents_quote_can_create_invoice($quote);
+    if (empty($can['ok'])) return ['ok' => false, 'error' => implode(' ', $can['errors'])];
+    $token = safe_text((string)($options['idempotency_key'] ?? ''));
+    if ($token !== '') {
+        $tokens = is_array($quote['workflow']['invoice_creation_tokens'] ?? null) ? $quote['workflow']['invoice_creation_tokens'] : [];
+        if (!empty($tokens[$token]) && documents_get_invoice((string)$tokens[$token]) !== null) return ['ok'=>true,'invoice_id'=>(string)$tokens[$token],'deduplicated'=>true,'error'=>''];
     }
-    $links = is_array($quote['links'] ?? null) ? $quote['links'] : [];
-    $existingId = safe_text((string) ($links['invoice_id'] ?? ''));
-    if ($existingId === '') {
-        foreach (glob(documents_invoices_dir() . '/*.json') ?: [] as $file) {
-            $candidate = json_load($file, []);
-            if (is_array($candidate) && (string) ($candidate['linked_quote_id'] ?? $candidate['quotation_id'] ?? '') === $quoteId && strtolower((string) ($candidate['status'] ?? 'draft')) === 'draft') {
-                $existingId = (string) ($candidate['id'] ?? '');
-                break;
-            }
-        }
-    }
-    if ($existingId !== '' && documents_get_invoice($existingId) !== null) {
-        $updated = documents_update_draft_invoice_delivery((array) documents_get_invoice($existingId), $quoteId);
-        if (!empty($updated['ok'])) {
-            documents_save_invoice($updated['invoice']);
-        }
-        return ['ok' => true, 'invoice_id' => $existingId, 'error' => ''];
-    }
-
+    $reason = safe_multiline_text((string)($options['exceed_reason'] ?? ''));
+    $replacementFor = safe_text((string)($options['replacement_for_invoice_id'] ?? ''));
+    $summary = documents_quote_invoice_totals_summary($quote);
+    if (!empty($summary['would_exceed']) && $reason === '') return ['ok'=>false,'error'=>'Reason is required when active invoice totals exceed the quotation amount.','summary'=>$summary];
     $segment = safe_text((string) ($quote['segment'] ?? 'RES')) ?: 'RES';
     $number = documents_generate_invoice_public_number($segment);
-    if (!$number['ok']) {
-        documents_log('numbering rule missing for invoice_public quote ' . (string) ($quote['id'] ?? ''));
-        return ['ok' => false, 'error' => (string) ($number['error'] ?? 'Unable to generate invoice number.')];
-    }
-
-    $snapshot = documents_quote_resolve_snapshot($quote);
-    $doc = documents_invoice_defaults();
+    if (!$number['ok']) { documents_log('numbering rule missing for invoice_public quote ' . $quoteId); return ['ok'=>false,'error'=>(string)($number['error'] ?? 'Unable to generate invoice number.')]; }
+    $snapshot = documents_quote_resolve_snapshot($quote); $doc = documents_invoice_defaults();
     $doc['id'] = 'inv_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
-    $doc['invoice_no'] = (string) ($number['invoice_no'] ?? '');
-    $doc['status'] = 'Draft';
-    $doc['invoice_kind'] = 'public';
-    $doc['linked_quote_id'] = safe_text((string) ($quote['id'] ?? ''));
-    $doc['quotation_id'] = $doc['linked_quote_id'];
-    $doc['quotation_no'] = safe_text((string) ($quote['quote_no'] ?? ''));
+    $doc['invoice_no'] = (string) ($number['invoice_no'] ?? ''); $doc['status'] = 'draft'; $doc['invoice_kind'] = 'public';
+    $doc['linked_quote_id'] = $quoteId; $doc['quotation_id'] = $quoteId; $doc['quotation_no'] = safe_text((string) ($quote['quote_no'] ?? ''));
     $doc['source_quote_version'] = max(1, (int) ($quote['version'] ?? $quote['revision_no'] ?? 1));
     $doc['commercial_items'] = is_array($quote['items'] ?? null) ? $quote['items'] : (array) ($quote['quote_items'] ?? []);
     $doc['source_quote_hash'] = hash('sha256', json_encode([$doc['commercial_items'], $quote['calc'] ?? [], $quote['input_total_gst_inclusive'] ?? 0], JSON_UNESCAPED_SLASHES) ?: '');
-    $doc['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
-    $doc['customer_snapshot'] = $snapshot;
-    $doc['capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? ''));
-    $doc['pricing_mode'] = safe_text((string) ($quote['pricing_mode'] ?? 'solar_split_70_30'));
-    $doc['input_total_gst_inclusive'] = (float) ($quote['input_total_gst_inclusive'] ?? 0);
-    $doc['calc'] = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
-    $doc['quotation_snapshot'] = documents_invoice_quote_snapshot($quote);
-    $doc['tax_breakdown'] = is_array($doc['quotation_snapshot']['tax_breakdown'] ?? null) ? $doc['quotation_snapshot']['tax_breakdown'] : [];
-    $doc = documents_invoice_normalize_date(documents_invoice_normalize_commercial_snapshot($doc));
-    $doc['created_at'] = date('c');
-    $doc['invoice_date'] = date('Y-m-d');
-    $doc['invoice_date_source'] = 'explicit';
-    $doc['updated_at'] = date('c');
-    $delivery = documents_update_draft_invoice_delivery($doc, $quoteId);
-    $doc = $delivery['invoice'];
-
-    $saved = documents_save_invoice($doc);
-    if (!$saved['ok']) {
-        documents_log('file save failed for invoice quote ' . (string) ($quote['id'] ?? ''));
-        return ['ok' => false, 'error' => 'Failed to create invoice draft.'];
-    }
-
-    return ['ok' => true, 'invoice_id' => (string) $doc['id'], 'error' => ''];
+    $doc['customer_mobile'] = normalize_customer_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? '')); $doc['customer_snapshot'] = $snapshot;
+    $doc['capacity_kwp'] = safe_text((string) ($quote['capacity_kwp'] ?? '')); $doc['pricing_mode'] = safe_text((string) ($quote['pricing_mode'] ?? 'solar_split_70_30'));
+    $doc['input_total_gst_inclusive'] = (float) ($quote['input_total_gst_inclusive'] ?? 0); $doc['calc'] = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
+    $doc['quotation_snapshot'] = documents_invoice_quote_snapshot($quote); $doc['tax_breakdown'] = is_array($doc['quotation_snapshot']['tax_breakdown'] ?? null) ? $doc['quotation_snapshot']['tax_breakdown'] : [];
+    $doc['replacement_for_invoice_id'] = $replacementFor; if ($reason !== '') $doc['invoice_creation_reason'] = $reason;
+    $doc = documents_invoice_normalize_date(documents_invoice_normalize_commercial_snapshot($doc)); $doc['created_at'] = date('c'); $doc['invoice_date'] = date('Y-m-d'); $doc['invoice_date_source'] = 'explicit'; $doc['updated_at'] = date('c');
+    $delivery = documents_update_draft_invoice_delivery($doc, $quoteId); $doc = $delivery['invoice'];
+    $saved = documents_save_invoice($doc); if (!$saved['ok']) { documents_log('file save failed for invoice quote ' . $quoteId); return ['ok'=>false,'error'=>'Failed to create invoice draft.']; }
+    if ($replacementFor !== '') { $old=documents_get_invoice($replacementFor); if($old){ $old['replaced_by_invoice_id']=(string)$doc['id']; $old=documents_invoice_append_audit_event($old,'invoice_replacement_linked',(array)($options['actor']??[]),'Replacement invoice created'); documents_save_invoice($old); } }
+    return ['ok'=>true,'invoice_id'=>(string)$doc['id'],'error'=>'','summary'=>$summary];
 }
 
 function documents_generate_quote_number(string $segment): array

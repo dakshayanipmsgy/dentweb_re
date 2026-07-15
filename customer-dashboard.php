@@ -79,35 +79,17 @@ foreach ($customerQuotes as $quote) {
     $agreements = array_values(array_filter(documents_list_agreements(), static fn(array $row): bool => (string) ($row['linked_quote_id'] ?? '') === $quoteId && !documents_is_archived($row)));
     $dispatchAdvices = documents_dispatch_advices_for_quote($quoteId);
     $challans = documents_challans_for_quote($quoteId);
-    $invoiceIds = array_values(array_unique(array_filter(array_merge(
-        [(string) ($quote['workflow']['invoice_id'] ?? '')],
-        array_map('strval', (array) ($quote['workflow']['invoice_ids'] ?? []))
-    ))));
-    $invoices = [];
-    foreach ($invoiceIds as $invoiceId) {
-        $invoice = documents_get_invoice($invoiceId);
-        if (is_array($invoice) && !documents_is_archived($invoice)) {
-            $invoices[] = $invoice;
-        }
-    }
-    foreach (glob(documents_invoices_dir() . '/*.json') ?: [] as $file) {
-        $row = json_load($file, []);
-        if (!is_array($row) || (string) ($row['linked_quote_id'] ?? $row['quotation_id'] ?? '') !== $quoteId || documents_is_archived($row)) {
-            continue;
-        }
-        $invoice = documents_invoice_normalize_date(array_merge(documents_invoice_defaults(), $row));
-        if (!in_array((string) ($invoice['id'] ?? ''), array_map(static fn(array $i): string => (string) ($i['id'] ?? ''), $invoices), true)) {
-            $invoices[] = $invoice;
-        }
-    }
+    $invoices = documents_invoices_for_quote($quoteId, true);
     $paymentSummary = documents_payment_summary_for_quote($quote);
     $paymentRequests = array_values(array_filter($paymentSummary['requests'], static function (array $request): bool {
         return !empty($request['visibility_to_customer']) && empty($request['archived_flag']) && !in_array(strtolower((string) ($request['status'] ?? '')), ['cancelled'], true);
     }));
     $receipts = documents_final_receipts_for_quote($quoteId);
     $invoiceValue = 0.0;
-    foreach ($invoices as $invoice) {
-        $invoiceValue += documents_invoice_final_total($invoice);
+    foreach (documents_active_invoices_for_quote($quoteId) as $invoice) {
+        if (documents_invoice_is_finalized($invoice)) {
+            $invoiceValue += documents_invoice_final_total($invoice);
+        }
     }
     $taxSummary = customer_dashboard_quote_tax_summary($quote);
     $gstTotal = (float) ($taxSummary['gst'] ?? 0);
