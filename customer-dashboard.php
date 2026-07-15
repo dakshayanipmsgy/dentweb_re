@@ -107,7 +107,7 @@ foreach ($customerQuotes as $quote) {
     $receipts = documents_final_receipts_for_quote($quoteId);
     $invoiceValue = 0.0;
     foreach ($invoices as $invoice) {
-        $invoiceValue += (float) ($invoice['input_total_gst_inclusive'] ?? $invoice['calc']['grand_total'] ?? $invoice['calc']['gross_payable'] ?? 0);
+        $invoiceValue += documents_invoice_final_total($invoice);
     }
     $taxSummary = customer_dashboard_quote_tax_summary($quote);
     $gstTotal = (float) ($taxSummary['gst'] ?? 0);

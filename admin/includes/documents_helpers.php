@@ -3299,6 +3299,178 @@ function documents_save_proforma(array $doc): array
     return json_save(documents_proformas_dir() . '/' . $id . '.json', $doc);
 }
 
+
+const DOCUMENTS_INVOICE_ADJUSTMENT_NONE = 'none';
+const DOCUMENTS_INVOICE_ADJUSTMENT_DISCOUNT = 'discount';
+const DOCUMENTS_INVOICE_ADJUSTMENT_SURCHARGE = 'surcharge';
+const DOCUMENTS_INVOICE_MONEY_TOLERANCE = 0.01;
+
+function documents_invoice_money_to_paise(float $amount): int
+{
+    return (int) round($amount * 100);
+}
+
+function documents_invoice_paise_to_money(int $paise): float
+{
+    return round($paise / 100, 2);
+}
+
+function documents_invoice_parse_money($value): array
+{
+    $text = trim((string) $value);
+    if ($text === '' || !preg_match('/^\d+(?:\.\d{1,2})?$/', $text)) {
+        return ['ok' => false, 'value' => 0.0, 'error' => 'Final invoice total must be a valid non-negative amount with up to two decimals.'];
+    }
+    $float = (float) $text;
+    if (!is_finite($float) || $float < 0) {
+        return ['ok' => false, 'value' => 0.0, 'error' => 'Final invoice total must be finite and non-negative.'];
+    }
+    return ['ok' => true, 'value' => documents_invoice_paise_to_money(documents_invoice_money_to_paise($float)), 'error' => ''];
+}
+
+function documents_invoice_quotation_reference_total(array $invoice): float
+{
+    if (isset($invoice['pricing']['quotation_total_incl_gst']) && is_numeric($invoice['pricing']['quotation_total_incl_gst'])) {
+        return documents_invoice_paise_to_money(documents_invoice_money_to_paise((float) $invoice['pricing']['quotation_total_incl_gst']));
+    }
+    $snap = is_array($invoice['quotation_snapshot'] ?? null) ? $invoice['quotation_snapshot'] : [];
+    foreach ([$snap['input_total_gst_inclusive'] ?? null, $snap['calc']['gross_payable'] ?? null, $snap['calc']['grand_total'] ?? null, $snap['tax_breakdown']['gross_incl_gst'] ?? null] as $value) {
+        if (is_numeric($value)) { return documents_invoice_paise_to_money(documents_invoice_money_to_paise((float) $value)); }
+    }
+    return documents_invoice_final_total($invoice, false);
+}
+
+function documents_invoice_final_total(array $invoice, bool $allowQuotationFallback = true): float
+{
+    $sources = [
+        $invoice['pricing']['final_invoice_total_incl_gst'] ?? null,
+        $invoice['calc']['gross_payable'] ?? null,
+        $invoice['calc']['grand_total'] ?? null,
+        $invoice['input_total_gst_inclusive'] ?? null,
+        $invoice['amount'] ?? null,
+        $invoice['total'] ?? null,
+    ];
+    if ($allowQuotationFallback) {
+        $snap = is_array($invoice['quotation_snapshot'] ?? null) ? $invoice['quotation_snapshot'] : [];
+        $sources[] = $snap['input_total_gst_inclusive'] ?? null;
+        $sources[] = $snap['calc']['gross_payable'] ?? null;
+        $sources[] = $snap['calc']['grand_total'] ?? null;
+    }
+    foreach ($sources as $value) {
+        if (is_numeric($value)) { return documents_invoice_paise_to_money(documents_invoice_money_to_paise((float) $value)); }
+    }
+    return 0.0;
+}
+
+function documents_invoice_adjustment_type(array $invoice): string
+{
+    $type = (string) ($invoice['pricing']['adjustment_type'] ?? DOCUMENTS_INVOICE_ADJUSTMENT_NONE);
+    return in_array($type, [DOCUMENTS_INVOICE_ADJUSTMENT_NONE, DOCUMENTS_INVOICE_ADJUSTMENT_DISCOUNT, DOCUMENTS_INVOICE_ADJUSTMENT_SURCHARGE], true) ? $type : DOCUMENTS_INVOICE_ADJUSTMENT_NONE;
+}
+
+function documents_invoice_adjustment_amount(array $invoice): float
+{
+    return documents_invoice_paise_to_money(documents_invoice_money_to_paise((float) ($invoice['pricing']['adjustment_amount_incl_gst'] ?? 0)));
+}
+
+function documents_invoice_has_price_adjustment(array $invoice): bool
+{
+    return documents_invoice_adjustment_type($invoice) !== DOCUMENTS_INVOICE_ADJUSTMENT_NONE && documents_invoice_adjustment_amount($invoice) > DOCUMENTS_INVOICE_MONEY_TOLERANCE;
+}
+
+function documents_invoice_amount_due(array $invoice, array $receipts = []): float
+{
+    $paid = 0.0;
+    foreach ($receipts as $receipt) {
+        if (is_array($receipt) && strtolower(trim((string) ($receipt['status'] ?? ''))) === 'final' && empty($receipt['archived_flag']) && empty($receipt['archived'])) {
+            $paid += (float) ($receipt['amount_rs'] ?? $receipt['amount_received'] ?? $receipt['amount'] ?? 0);
+        }
+    }
+    return documents_invoice_paise_to_money(documents_invoice_money_to_paise(documents_invoice_final_total($invoice) - $paid));
+}
+
+function documents_invoice_source_tax_items(array $invoice): array
+{
+    $tax = is_array($invoice['tax_breakdown'] ?? null) ? $invoice['tax_breakdown'] : [];
+    if (!empty($tax['items']) && is_array($tax['items'])) { return array_values(array_filter($tax['items'], 'is_array')); }
+    $snap = is_array($invoice['quotation_snapshot'] ?? null) ? $invoice['quotation_snapshot'] : [];
+    $snapTax = is_array($snap['tax_breakdown'] ?? null) ? $snap['tax_breakdown'] : [];
+    if (!empty($snapTax['items']) && is_array($snapTax['items'])) { return array_values(array_filter($snapTax['items'], 'is_array')); }
+    return [[
+        'name' => 'Invoice value', 'hsn' => '', 'taxable_value' => (float) (($snapTax['basic_total'] ?? 0) ?: 0),
+        'gst_amount' => (float) (($snapTax['gst_total'] ?? 0) ?: 0), 'gross_incl_gst' => documents_invoice_quotation_reference_total($invoice),
+        'slabs' => $snapTax['slabs'] ?? [['share_pct' => 100, 'rate_pct' => 18]],
+    ]];
+}
+
+function documents_invoice_recalculate_pricing(array $invoice, float $requestedFinalTotal, string $adjustmentReason): array
+{
+    $finalPaise = max(0, documents_invoice_money_to_paise($requestedFinalTotal));
+    $final = documents_invoice_paise_to_money($finalPaise);
+    $quote = documents_invoice_quotation_reference_total($invoice);
+    $quotePaise = documents_invoice_money_to_paise($quote);
+    $diffPaise = $finalPaise - $quotePaise;
+    $type = abs($diffPaise) <= 1 ? DOCUMENTS_INVOICE_ADJUSTMENT_NONE : ($diffPaise < 0 ? DOCUMENTS_INVOICE_ADJUSTMENT_DISCOUNT : DOCUMENTS_INVOICE_ADJUSTMENT_SURCHARGE);
+    $adjustPaise = abs($diffPaise) <= 1 ? 0 : abs($diffPaise);
+
+    $sourceItems = documents_invoice_source_tax_items($invoice);
+    $weights = [];
+    $totalWeight = 0;
+    foreach ($sourceItems as $i => $item) {
+        $w = max(0, documents_invoice_money_to_paise((float) ($item['gross_incl_gst'] ?? 0)));
+        $weights[$i] = $w; $totalWeight += $w;
+    }
+    if ($totalWeight <= 0 && $sourceItems !== []) { $weights = array_fill(0, count($sourceItems), 1); $totalWeight = count($sourceItems); }
+    $alloc = array_fill(0, count($sourceItems), 0); $used = 0;
+    foreach ($sourceItems as $i => $_) { $alloc[$i] = intdiv($finalPaise * $weights[$i], $totalWeight ?: 1); $used += $alloc[$i]; }
+    $remainder = $finalPaise - $used;
+    arsort($weights, SORT_NUMERIC);
+    foreach (array_keys($weights) as $i) { if ($remainder === 0) break; $alloc[$i] += $remainder > 0 ? 1 : -1; $remainder += $remainder > 0 ? -1 : 1; }
+
+    $items = []; $basicPaise = 0; $gstPaise = 0;
+    foreach ($sourceItems as $i => $item) {
+        $grossPaise = max(0, $alloc[$i]);
+        $slabs = is_array($item['slabs'] ?? null) ? $item['slabs'] : [['share_pct' => 100, 'rate_pct' => 0]];
+        $factor = 0.0;
+        foreach ($slabs as $slab) { if (is_array($slab)) { $factor += ((float)($slab['share_pct'] ?? 100) / 100) * (1 + ((float)($slab['rate_pct'] ?? 0) / 100)); } }
+        if ($factor <= 0) { $factor = 1; }
+        $taxablePaise = (int) round($grossPaise / $factor);
+        $gstItemPaise = $grossPaise - $taxablePaise;
+        $basicPaise += $taxablePaise; $gstPaise += $gstItemPaise;
+        $items[] = array_merge($item, [
+            'taxable_value' => documents_invoice_paise_to_money($taxablePaise),
+            'gst_amount' => documents_invoice_paise_to_money($gstItemPaise),
+            'gross_incl_gst' => documents_invoice_paise_to_money($grossPaise),
+        ]);
+    }
+    $taxBreakdown = ['basic_total' => documents_invoice_paise_to_money($basicPaise), 'gst_total' => documents_invoice_paise_to_money($gstPaise), 'gross_incl_gst' => $final, 'items' => $items, 'rounding_rule' => 'Amounts are allocated in paise proportionally by original gross line value; any remainder is applied to the largest line with stable index tie-break.'];
+    $invoice['pricing'] = ['quotation_total_incl_gst' => $quote, 'final_invoice_total_incl_gst' => $final, 'adjustment_type' => $type, 'adjustment_amount_incl_gst' => documents_invoice_paise_to_money($adjustPaise), 'adjustment_percent' => $quotePaise > 0 ? round(($adjustPaise / $quotePaise) * 100, 4) : 0.0, 'adjustment_reason' => safe_multiline_text($adjustmentReason), 'currency' => 'INR'];
+    $invoice['input_total_gst_inclusive'] = $final;
+    $invoice['calc'] = array_merge(is_array($invoice['calc'] ?? null) ? $invoice['calc'] : [], ['gross_payable' => $final, 'grand_total' => $final, 'final_price_incl_gst' => $final, 'tax_breakdown' => $taxBreakdown]);
+    $invoice['tax_breakdown'] = $taxBreakdown;
+    $invoice['amount_due'] = documents_invoice_amount_due($invoice);
+    return ['ok' => true, 'invoice' => $invoice, 'pricing' => $invoice['pricing'], 'calc' => $invoice['calc'], 'tax_breakdown' => $taxBreakdown, 'reconciliation' => ['final_total' => $final, 'item_gross_sum' => $final]];
+}
+
+function documents_invoice_normalize_commercial_snapshot(array $invoice): array
+{
+    if (is_array($invoice['pricing'] ?? null) && isset($invoice['pricing']['final_invoice_total_incl_gst'])) { return $invoice; }
+    $requested = documents_invoice_final_total($invoice, false);
+    if ($requested <= 0) { $requested = documents_invoice_quotation_reference_total($invoice); }
+    $result = documents_invoice_recalculate_pricing($invoice, $requested, (string) ($invoice['pricing']['adjustment_reason'] ?? ''));
+    return (array) ($result['invoice'] ?? $invoice);
+}
+
+function documents_invoice_record_pricing_history(array $invoice, float $previousTotal, array $actor, string $reason): array
+{
+    $newTotal = documents_invoice_final_total($invoice);
+    if (abs($newTotal - $previousTotal) <= DOCUMENTS_INVOICE_MONEY_TOLERANCE) { return $invoice; }
+    $entry = ['event' => 'invoice_pricing_changed', 'invoice_id' => (string)($invoice['id'] ?? ''), 'previous_final_total' => round($previousTotal,2), 'new_final_total' => round($newTotal,2), 'quotation_reference_total' => documents_invoice_quotation_reference_total($invoice), 'adjustment_type' => documents_invoice_adjustment_type($invoice), 'adjustment_amount' => documents_invoice_adjustment_amount($invoice), 'adjustment_percent' => (float)($invoice['pricing']['adjustment_percent'] ?? 0), 'reason' => safe_multiline_text($reason), 'actor_id' => (string)($actor['id'] ?? ''), 'actor_name' => (string)($actor['name'] ?? $actor['full_name'] ?? 'Admin'), 'timestamp' => date('c')];
+    $history = is_array($invoice['pricing_history'] ?? null) ? $invoice['pricing_history'] : [];
+    $history[] = $entry; $invoice['pricing_history'] = $history;
+    return $invoice;
+}
+
 function documents_get_invoice(string $id): ?array
 {
     $id = safe_filename($id);
@@ -3324,6 +3496,11 @@ function documents_get_invoice(string $id): ?array
         json_save($path, $doc);
     }
     $doc['customer_snapshot'] = array_merge(documents_customer_snapshot_defaults(), is_array($doc['customer_snapshot'] ?? null) ? $doc['customer_snapshot'] : []);
+    $normalized = documents_invoice_normalize_commercial_snapshot($doc);
+    if ($normalized !== $doc) {
+        json_save($path, $normalized);
+        $doc = $normalized;
+    }
     return $doc;
 }
 
@@ -3333,6 +3510,7 @@ function documents_save_invoice(array $doc): array
     if ($id === '') {
         return ['ok' => false, 'error' => 'Missing invoice ID'];
     }
+    $doc = documents_invoice_normalize_commercial_snapshot($doc);
     return json_save(documents_invoices_dir() . '/' . $id . '.json', $doc);
 }
 
@@ -3724,6 +3902,7 @@ function documents_create_invoice_from_quote(array $quote): array
     $doc['calc'] = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
     $doc['quotation_snapshot'] = documents_invoice_quote_snapshot($quote);
     $doc['tax_breakdown'] = is_array($doc['quotation_snapshot']['tax_breakdown'] ?? null) ? $doc['quotation_snapshot']['tax_breakdown'] : [];
+    $doc = documents_invoice_normalize_commercial_snapshot($doc);
     $doc['created_at'] = date('c');
     $doc['updated_at'] = date('c');
     $delivery = documents_update_draft_invoice_delivery($doc, $quoteId);
@@ -4877,6 +5056,7 @@ function documents_update_draft_invoice_delivery(array $invoice, string $quoteId
         if (is_array($quote)) {
             $invoice['quotation_snapshot'] = documents_invoice_quote_snapshot($quote);
             $invoice['tax_breakdown'] = is_array($invoice['quotation_snapshot']['tax_breakdown'] ?? null) ? $invoice['quotation_snapshot']['tax_breakdown'] : [];
+            $invoice = documents_invoice_normalize_commercial_snapshot($invoice);
         }
     }
     $invoice['updated_at'] = date('c');
@@ -7582,7 +7762,7 @@ function documents_payment_request_refresh_from_receipts(array $request): array
 
 function documents_payment_summary_for_quote(array $quote, array $receipts = null): array
 {
-    $quoteId = (string)($quote['id'] ?? ''); $amount = (float)($quote['calc']['gross_payable'] ?? $quote['calc']['final_price_incl_gst'] ?? $quote['calc']['grand_total'] ?? 0); $received = 0.0;
+    $quoteId = (string)($quote['id'] ?? ''); $amount = (float)($quote['calc']['gross_payable'] ?? $quote['calc']['final_price_incl_gst'] ?? $quote['calc']['grand_total'] ?? 0); foreach (documents_list_sales_documents('invoice') as $invSale) { if ((string)($invSale['quotation_id'] ?? '') === $quoteId && empty($invSale['archived_flag']) && is_numeric($invSale['amount'] ?? null)) { $amount = (float) $invSale['amount']; break; } } $received = 0.0;
     foreach (($receipts ?? documents_final_receipts_for_quote($quoteId)) as $r) { if (strtolower(trim((string)($r['status'] ?? ''))) === 'final' && empty($r['archived_flag']) && empty($r['archived'])) { $received += (float)($r['amount_rs'] ?? $r['amount_received'] ?? $r['amount'] ?? 0); } }
     $requests = documents_payment_requests_by_quote($quoteId); $active = array_values(array_filter($requests, static fn(array $r): bool => empty($r['archived_flag']) && !in_array(strtolower((string)($r['status'] ?? '')), ['cancelled','paid'], true)));
     return ['quotation_amount'=>$amount,'total_received'=>$received,'outstanding'=>max(0,$amount-$received),'requests'=>$requests,'active_request_count'=>count($active),'last_request'=>$requests[0] ?? null];

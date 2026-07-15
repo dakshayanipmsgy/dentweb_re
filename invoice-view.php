@@ -49,13 +49,15 @@ if ($quoteSnapshot === [] && is_array($quote)) {
     $quoteSnapshot = documents_invoice_quote_snapshot($quote);
 }
 $snapshot = $invoice !== null ? array_merge(documents_customer_snapshot_defaults(), is_array($invoice['customer_snapshot'] ?? null) ? $invoice['customer_snapshot'] : []) : documents_customer_snapshot_defaults();
-$items = is_array($quoteSnapshot['item_summary'] ?? null) ? $quoteSnapshot['item_summary'] : [];
-if ($items === [] && $invoice !== null && is_array($invoice['commercial_items'] ?? null)) {
-    $items = $invoice['commercial_items'];
-}
-$calc = is_array($quoteSnapshot['calc'] ?? null) && $quoteSnapshot['calc'] !== [] ? $quoteSnapshot['calc'] : ($invoice !== null && is_array($invoice['calc'] ?? null) ? $invoice['calc'] : []);
-$taxBreakdown = is_array($quoteSnapshot['tax_breakdown'] ?? null) && $quoteSnapshot['tax_breakdown'] !== [] ? $quoteSnapshot['tax_breakdown'] : (is_array($invoice['tax_breakdown'] ?? null) ? $invoice['tax_breakdown'] : (is_array($calc['tax_breakdown'] ?? null) ? $calc['tax_breakdown'] : []));
-$grandTotal = $invoice !== null ? (float) ($quoteSnapshot['input_total_gst_inclusive'] ?? $invoice['input_total_gst_inclusive'] ?? $calc['gross_payable'] ?? $calc['grand_total'] ?? $calc['final_price_incl_gst'] ?? 0) : 0.0;
+$items = $invoice !== null && is_array($invoice['commercial_items'] ?? null) && $invoice['commercial_items'] !== [] ? $invoice['commercial_items'] : (is_array($quoteSnapshot['item_summary'] ?? null) ? $quoteSnapshot['item_summary'] : []);
+$calc = $invoice !== null && is_array($invoice['calc'] ?? null) ? $invoice['calc'] : [];
+$taxBreakdown = $invoice !== null && is_array($invoice['tax_breakdown'] ?? null) && $invoice['tax_breakdown'] !== [] ? $invoice['tax_breakdown'] : (is_array($calc['tax_breakdown'] ?? null) ? $calc['tax_breakdown'] : []);
+$grandTotal = $invoice !== null ? documents_invoice_final_total($invoice) : 0.0;
+$quotationReferenceTotal = $invoice !== null ? documents_invoice_quotation_reference_total($invoice) : 0.0;
+$adjustmentType = $invoice !== null ? documents_invoice_adjustment_type($invoice) : DOCUMENTS_INVOICE_ADJUSTMENT_NONE;
+$adjustmentAmount = $invoice !== null ? documents_invoice_adjustment_amount($invoice) : 0.0;
+$adjustmentPercent = $invoice !== null ? (float) ($invoice['pricing']['adjustment_percent'] ?? 0) : 0.0;
+$adjustmentReason = $invoice !== null ? (string) ($invoice['pricing']['adjustment_reason'] ?? '') : '';
 $invoiceDate = $invoice !== null ? $first([$invoice['invoice_date'] ?? '', substr((string) ($invoice['created_at'] ?? ''), 0, 10)]) : '';
 $customerFields = is_array($quoteSnapshot['customer_site_fields'] ?? null) ? $quoteSnapshot['customer_site_fields'] : [];
 if ($customerFields === [] && is_array($quote)) {
@@ -69,16 +71,16 @@ $addPricingRow = static function (string $label, $value, bool $negative = false,
     if (abs($amount) < 0.005) { return; }
     $pricingRows[] = ['label' => $label, 'amount' => $negative ? -abs($amount) : $amount, 'note' => $note];
 };
-$systemPrice = (float) ($calc['grand_total'] ?? $calc['final_price_incl_gst'] ?? $taxBreakdown['gross_incl_gst'] ?? $grandTotal);
-$addPricingRow('Total system price incl GST', $systemPrice);
-$addPricingRow('Transportation', $calc['transportation_rs'] ?? null);
-$addPricingRow('Discount', $calc['discount_rs'] ?? null, true, (string) ($calc['discount_note'] ?? ''));
-$addPricingRow('Gross payable', $calc['gross_payable'] ?? null);
-$addPricingRow('Subsidy expected', $calc['subsidy_expected_rs'] ?? null);
-$addPricingRow('Net Investment/Cost After Subsidy Credit', $calc['net_after_subsidy'] ?? null);
-if ($pricingRows === []) {
-    $addPricingRow('Grand total', $grandTotal);
+$addPricingRow('Quotation reference total incl GST', $quotationReferenceTotal);
+if ($adjustmentType === DOCUMENTS_INVOICE_ADJUSTMENT_DISCOUNT) {
+    $addPricingRow('Final discount' . ($adjustmentPercent > 0 ? ' (' . number_format($adjustmentPercent, 2) . '%)' : ''), $adjustmentAmount, true, $adjustmentReason);
+} elseif ($adjustmentType === DOCUMENTS_INVOICE_ADJUSTMENT_SURCHARGE) {
+    $addPricingRow('Additional charge' . ($adjustmentPercent > 0 ? ' (' . number_format($adjustmentPercent, 2) . '%)' : ''), $adjustmentAmount, false, $adjustmentReason);
 }
+$addPricingRow('Final invoice total incl GST', $grandTotal);
+$addPricingRow('Basic value', $taxBreakdown['basic_total'] ?? 0);
+$addPricingRow('Total GST', $taxBreakdown['gst_total'] ?? 0);
+$addPricingRow('Amount payable', $grandTotal);
 $hsnFallbacks = array_values(array_filter(array_map(static fn($row): string => trim((string) ($row['hsn'] ?? $row['hsn_snapshot'] ?? '')), $items)));
 $taxItems = is_array($taxBreakdown['items'] ?? null) ? array_values(array_filter((array) $taxBreakdown['items'], static fn($row): bool => is_array($row))) : [];
 foreach ($taxItems as $idx => &$taxItem) {
