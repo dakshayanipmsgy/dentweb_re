@@ -10,11 +10,10 @@ function business_pulse_collection_pct(float $received,float $total): ?float { r
 function business_pulse_format_pct(?float $pct): string { return $pct === null ? '—' : number_format($pct,1).'%'; }
 
 function business_pulse_accepted_rows(): array {
-    $invoicesByQuote=[]; foreach(documents_all_invoices() as $inv){ if(!is_array($inv)||documents_is_archived($inv)||!documents_invoice_is_finalized($inv)) continue; $qid=(string)($inv['linked_quote_id']??$inv['quotation_id']??''); if($qid!=='') $invoicesByQuote[$qid][]=$inv; }
-    $rows=[]; foreach(documents_list_quotes() as $q){ if(!is_array($q)||!business_pulse_is_current_accepted_quote($q)) continue; $qid=(string)($q['id']??''); $active=$invoicesByQuote[$qid]??[]; $amount=0.0; $received=0.0; $lastPay=''; $source='quotation_pre_invoice';
-        if($active!==[]){ $source='active_finalized_invoice'; foreach($active as $inv){ $ps=documents_invoice_payment_summary($inv); $amount+=(float)$ps['invoice_total']; $received+=(float)$ps['total_received']; if((string)$ps['last_payment_at']>$lastPay)$lastPay=(string)$ps['last_payment_at']; } }
-        else { $amount=business_pulse_quote_amount($q); foreach(documents_final_receipts_for_quote($qid) as $r){ $received+=(float)($r['amount_rs']??$r['amount_received']??$r['amount']??0); $d=business_pulse_date($r,['date_received','receipt_date','created_at']); if($d>$lastPay)$lastPay=$d; } }
-        $due=$amount-$received; $rows[]=['quote'=>$q,'qid'=>$qid,'amount'=>$amount,'received'=>$received,'due'=>$due,'pct'=>business_pulse_collection_pct($received,$amount),'accepted_date'=>business_pulse_date($q),'last_payment_date'=>$lastPay,'value_source'=>$source]; }
+    $rows=[]; foreach(documents_list_quotes() as $q){ if(!is_array($q)||!business_pulse_is_current_accepted_quote($q)) continue; $qid=(string)($q['id']??''); $summary=documents_project_financial_summary($q); $lastPay='';
+        foreach(documents_final_receipts_for_quote($qid) as $r){ $d=business_pulse_date($r,['date_received','receipt_date','created_at']); if($d>$lastPay)$lastPay=$d; }
+        $amount=(float)$summary['calculation_reference_amount']; $received=(float)$summary['total_payment_received']; $due=(float)$summary['remaining_amount'] - (float)$summary['overpayment'];
+        $rows[]=['quote'=>$q,'qid'=>$qid,'amount'=>$amount,'received'=>$received,'due'=>$due,'pct'=>business_pulse_collection_pct($received,$amount),'accepted_date'=>business_pulse_date($q),'last_payment_date'=>$lastPay,'value_source'=>(string)$summary['calculation_basis'],'basis_status'=>(string)$summary['basis_status']]; }
     return $rows;
 }
 

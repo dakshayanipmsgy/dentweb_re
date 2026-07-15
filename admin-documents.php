@@ -359,6 +359,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
 
+    if (in_array($action, ['confirm_project_invoice_basis', 'use_project_quotation_basis'], true)) {
+        $tab = 'accepted_customers';
+        $qid = safe_text($_POST['quotation_id'] ?? $_POST['return_view'] ?? '');
+        $quote = $qid !== '' ? documents_get_quote($qid) : null;
+        if ($quote === null) { $redirectDocuments($tab, 'error', 'Accepted quotation not found.'); }
+        $basis = $action === 'confirm_project_invoice_basis' ? 'finalized_invoices' : 'quotation';
+        $reason = safe_multiline_text((string)($_POST['confirmation_reason'] ?? $_POST['reason'] ?? ''));
+        $expectedHash = safe_text((string)($_POST['invoice_set_hash'] ?? ''));
+        $viewer = ['role' => 'admin', 'id' => (string) ($user['id'] ?? ''), 'name' => (string) ($user['full_name'] ?? 'Admin')];
+        $result = documents_project_confirm_calculation_basis($quote, $basis, $viewer, $reason, $expectedHash);
+        if (empty($result['ok'])) { $redirectDocuments($tab, 'error', (string)($result['error'] ?? 'Unable to update calculation basis.'), ['view' => $qid]); }
+        $saved = documents_save_quote((array)$result['quote']);
+        $redirectDocuments($tab, ($saved['ok'] ?? false) ? 'success' : 'error', ($saved['ok'] ?? false) ? 'Project calculation basis updated.' : 'Unable to save calculation basis.', ['view' => $qid]);
+    }
+
     if (in_array($action, ['create_payment_request', 'cancel_payment_request', 'mark_payment_request_sent', 'archive_payment_request', 'unarchive_payment_request'], true)) {
         $tab = 'accepted_customers';
         $view = safe_text($_POST['quotation_id'] ?? $_POST['return_view'] ?? '');
@@ -3684,6 +3699,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             }
             $packQuoteAmount = (float) ($packQuote['calc']['gross_payable'] ?? $packQuote['calc']['final_price_incl_gst'] ?? $packQuote['calc']['grand_total'] ?? 0);
             $packRemainingReceivable = $packQuoteAmount - $packFinalReceived;
+            $packProjectSummary = documents_project_financial_summary($packQuote, $packReceiptsActive);
             $packPaymentSummary = documents_payment_summary_for_quote($packQuote, $packReceiptsActive);
             $packPaymentRequests = documents_payment_requests_by_quote($packQuoteId);
             $packCanRequestPayment = documents_quote_normalize_status((string)($packQuote['status'] ?? 'draft')) === 'accepted' && !empty($packQuote['is_current_version']) && !documents_is_archived($packQuote);
@@ -3703,10 +3719,15 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             <h2 style="margin-top:0;">Accepted Customer Commercial Summary: <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></h2>
             <div class="accepted-context__meta">
               <span><strong>Quotation:</strong> <?= htmlspecialchars((string) ($packQuote['quote_no'] ?? $packQuoteId), ENT_QUOTES) ?></span>
-              <span><strong>Amount:</strong> <?= htmlspecialchars($inr($packQuoteAmount), ENT_QUOTES) ?></span>
+              <span><strong>Quotation amount:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['quotation_amount']), ENT_QUOTES) ?></span>
+              <span><strong>Finalized invoice total:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['active_finalized_invoice_total']), ENT_QUOTES) ?></span>
+              <span><strong>Final reference amount:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['calculation_reference_amount']), ENT_QUOTES) ?></span>
               <span><strong>Status:</strong> <span class="pill"><?= htmlspecialchars(ucwords(str_replace('_', ' ', documents_quote_normalize_status((string) ($packQuote['status'] ?? 'draft')))), ENT_QUOTES) ?></span></span>
-              <span><strong>Received:</strong> <?= htmlspecialchars($inr($packFinalReceived), ENT_QUOTES) ?></span>
-              <span><strong>Outstanding:</strong> <?= htmlspecialchars($inr($packRemainingReceivable), ENT_QUOTES) ?></span>
+              <span><strong>Total qualifying payment received:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['total_payment_received']), ENT_QUOTES) ?></span>
+              <span><strong>Remaining by quotation:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['remaining_by_quotation']), ENT_QUOTES) ?></span>
+              <span><strong>Remaining by finalized invoices:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['remaining_by_finalized_invoices']), ENT_QUOTES) ?></span>
+              <span><strong>Current calculation basis:</strong> <?= htmlspecialchars(ucwords(str_replace('_',' ',(string)$packProjectSummary['calculation_basis'])) . ' / ' . ucwords(str_replace('_',' ',(string)$packProjectSummary['basis_status'])), ENT_QUOTES) ?></span>
+              <span><strong>Remaining/Credit:</strong> <?= htmlspecialchars(((float)$packProjectSummary['overpayment'] > 0 ? 'Credit ' : 'Remaining ') . $inr((float)(((float)$packProjectSummary['overpayment'] > 0) ? $packProjectSummary['overpayment'] : $packProjectSummary['remaining_amount'])), ENT_QUOTES) ?></span>
             </div>
           </section>
           <div class="document-pack-flow" aria-label="Document pack lifecycle">
@@ -3723,6 +3744,38 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             <input type="hidden" name="view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
             <label><input type="checkbox" name="include_archived_pack" value="1" <?= $includeArchivedPack ? 'checked' : '' ?> /> Include Archived in Pack</label> <button class="btn secondary" type="submit">Apply</button>
           </form>
+
+          <section class="accepted-summary__card accepted-summary__card--wide" style="margin-bottom:1rem;">
+            <h3>Project calculation basis</h3>
+            <div class="commercial-card-metrics">
+              <div><strong>Quotation amount:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['quotation_amount']), ENT_QUOTES) ?></div>
+              <div><strong>Active finalized invoices:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['active_finalized_invoice_total']), ENT_QUOTES) ?></div>
+              <div><strong>Paid:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['total_payment_received']), ENT_QUOTES) ?></div>
+              <div><strong>Basis:</strong> <?= htmlspecialchars((string)$packProjectSummary['calculation_basis'] . ' / ' . (string)$packProjectSummary['basis_status'], ENT_QUOTES) ?></div>
+              <div><strong>Final reference:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['calculation_reference_amount']), ENT_QUOTES) ?></div>
+            </div>
+            <?php if ($isAdmin): ?>
+              <form method="post" class="inline-form" style="display:grid;gap:.5rem;max-width:720px;">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                <input type="hidden" name="action" value="confirm_project_invoice_basis" />
+                <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+                <input type="hidden" name="invoice_set_hash" value="<?= htmlspecialchars((string)$packProjectSummary['active_finalized_invoice_set_hash'], ENT_QUOTES) ?>" />
+                <p class="muted">I confirm that the total of the active finalized invoices is the final project amount to use for remaining-payment calculations, payment requests, customer balance, dashboards and reports.</p>
+                <label>Reason / note<input name="confirmation_reason" value="Finalized invoice total confirmed by administrator"></label>
+                <button class="btn" type="submit"><?= ($packProjectSummary['basis_status'] ?? '') === 'needs_reconfirmation' ? 'Reconfirm final project amount' : 'Confirm finalized invoice total as final project amount' ?></button>
+              </form>
+              <?php if (($packProjectSummary['calculation_basis'] ?? '') === 'finalized_invoices'): ?>
+                <form method="post" class="inline-form" style="margin-top:.75rem;display:grid;gap:.5rem;max-width:720px;">
+                  <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
+                  <input type="hidden" name="action" value="use_project_quotation_basis" />
+                  <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
+                  <input type="hidden" name="invoice_set_hash" value="<?= htmlspecialchars((string)$packProjectSummary['active_finalized_invoice_set_hash'], ENT_QUOTES) ?>" />
+                  <label>Reason required to switch back to quotation basis<input name="reason" required></label>
+                  <button class="btn secondary" type="submit">Use quotation amount for calculations</button>
+                </form>
+              <?php endif; ?>
+            <?php endif; ?>
+          </section>
 
 
             <?php $packCollectionPct=business_pulse_collection_pct($packFinalReceived,$packQuoteAmount); $packDueSince=$packRemainingReceivable>0 ? (business_pulse_date($packQuote) ?: '—') : '—'; $packLastRequest=$packPaymentRequests[0] ?? null; $packLastPaymentDate=''; foreach($packReceipts as $r){ if(!$isArchivedRecord($r) && strtolower((string)($r['status']??''))==='final'){ $d=business_pulse_date($r,['date_received','receipt_date','created_at']); if($d>$packLastPaymentDate)$packLastPaymentDate=$d; }} $packDocStatus=['Agreement'=>$packAgreements!==[],'Dispatch Advice'=>$packDispatchAdvices!==[],'Challan'=>$packChallans!==[],'Invoice'=>$packInvoices!==[]]; ?>
