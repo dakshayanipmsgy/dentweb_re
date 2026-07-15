@@ -726,18 +726,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($action === 'create_invoice') {
-            $existingId = safe_text((string) ($quote['workflow']['invoice_id'] ?? ''));
-            if ($existingId !== '') {
-                $existing = documents_get_sales_document('invoice', $existingId);
-                if ($existing !== null && !documents_is_archived($existing)) {
-                    $finishDocumentAction('invoice', $existingId, false, 'Invoice already exists.');
-                }
-            }
-            foreach (documents_list_sales_documents('invoice') as $existingInvoice) {
-                if ((string) ($existingInvoice['quotation_id'] ?? '') === (string) ($quote['id'] ?? '') && !documents_is_archived($existingInvoice)) {
-                    $finishDocumentAction('invoice', (string) ($existingInvoice['id'] ?? ''), false, 'Invoice already exists.');
-                }
-            }
+            // Multiple active invoices per quotation are supported; each invoice reconciles via explicit receipt allocations.
+
 
             $created = documents_create_invoice_from_quote($quote);
             if (!($created['ok'] ?? false)) {
@@ -756,7 +746,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $salesInvoice['customer_name'] = safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? ''));
             $salesInvoice['invoice_no'] = (string) ($invoiceDoc['invoice_no'] ?? '');
             $salesInvoice['invoice_date'] = date('Y-m-d');
-            $salesInvoice['amount'] = documents_invoice_final_total($invoiceDoc);
+            $invoiceSummary = documents_invoice_payment_summary($invoiceDoc);
+            $salesInvoice['amount'] = $invoiceSummary['invoice_total'];
+            $salesInvoice['document_status'] = documents_invoice_normalize_status((string)($invoiceDoc['status'] ?? 'draft'));
+            $salesInvoice['payment_status'] = $invoiceSummary['payment_status'];
+            $salesInvoice['received_total'] = $invoiceSummary['total_received'];
+            $salesInvoice['outstanding'] = $invoiceSummary['outstanding'];
+            $salesInvoice['overpayment'] = $invoiceSummary['overpayment'];
             $salesInvoice['tax_profile_id'] = (string) ($quote['tax_profile_id'] ?? '');
             $salesInvoice['tax_breakdown'] = is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : (array) ($quote['calc']['tax_breakdown'] ?? []);
             $salesInvoice['status'] = 'draft';
@@ -1048,6 +1044,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $receipt['notes'] = $notes;
         $receipt['payment_request_id'] = $linkedPaymentRequestId;
         $receipt['status'] = ($action === 'finalize_receipt') ? 'final' : 'draft';
+        if ($action === 'finalize_receipt') {
+            $activeInvoices = array_values(array_filter(documents_all_invoices(), static fn(array $inv): bool => (string)($inv['linked_quote_id'] ?? $inv['quotation_id'] ?? '') === (string)($quote['id'] ?? '') && !documents_is_archived($inv) && !documents_invoice_is_cancelled($inv)));
+            if (!is_array($receipt['allocations'] ?? null) && count($activeInvoices) === 1) {
+                $receipt['allocations'] = [['invoice_id' => (string)$activeInvoices[0]['id'], 'amount_rs' => round($amount, 2)]];
+            }
+            $normAlloc = documents_receipt_allocations_normalize($receipt, $activeInvoices);
+            if (empty($normAlloc['ok'])) { $redirectDocuments($tab, 'error', 'Invalid receipt allocation: ' . implode(', ', (array)$normAlloc['errors']), ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => $receiptId]); }
+            $receipt['allocations'] = $normAlloc['allocations'];
+        }
 
         $saved = documents_save_sales_document('receipt', $receipt);
         if (!$saved['ok']) {

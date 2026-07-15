@@ -1389,7 +1389,13 @@ function documents_invoice_defaults(): array
     return [
         'id' => '',
         'invoice_no' => '',
-        'status' => 'Draft',
+        'status' => 'draft',
+        'revision_no' => 0,
+        'finalized_at' => '',
+        'finalized_by' => [],
+        'finalized_snapshot' => [],
+        'revisions' => [],
+        'audit_events' => [],
         'invoice_kind' => 'public',
         'linked_quote_id' => '',
         'quotation_id' => '',
@@ -3380,11 +3386,10 @@ function documents_invoice_has_price_adjustment(array $invoice): bool
 
 function documents_invoice_amount_due(array $invoice, array $receipts = []): float
 {
+    if ($receipts === []) { return documents_invoice_final_total($invoice); }
     $paid = 0.0;
     foreach ($receipts as $receipt) {
-        if (is_array($receipt) && strtolower(trim((string) ($receipt['status'] ?? ''))) === 'final' && empty($receipt['archived_flag']) && empty($receipt['archived'])) {
-            $paid += (float) ($receipt['amount_rs'] ?? $receipt['amount_received'] ?? $receipt['amount'] ?? 0);
-        }
+        if (is_array($receipt) && documents_receipt_is_finalized_active($receipt)) { $paid += documents_receipt_amount_total($receipt); }
     }
     return documents_invoice_paise_to_money(documents_invoice_money_to_paise(documents_invoice_final_total($invoice) - $paid));
 }
@@ -3471,6 +3476,106 @@ function documents_invoice_record_pricing_history(array $invoice, float $previou
     return $invoice;
 }
 
+
+
+function documents_invoice_normalize_status(string $status): string
+{
+    $s = strtolower(trim($status));
+    $s = str_replace([' ', '-'], '_', $s);
+    if (in_array($s, ['final', 'issued', 'active', 'completed', 'finalized'], true)) { return 'finalized'; }
+    if (in_array($s, ['cancelled', 'canceled'], true)) { return 'cancelled'; }
+    if (in_array($s, ['superseded', 'revised'], true)) { return 'superseded'; }
+    return 'draft';
+}
+
+function documents_invoice_status_label(string $status): string
+{
+    return ['draft'=>'Draft','finalized'=>'Finalized','superseded'=>'Superseded','cancelled'=>'Cancelled'][documents_invoice_normalize_status($status)] ?? 'Draft';
+}
+
+function documents_invoice_is_draft(array $invoice): bool { return documents_invoice_normalize_status((string)($invoice['status'] ?? 'draft')) === 'draft'; }
+function documents_invoice_is_finalized(array $invoice): bool { return documents_invoice_normalize_status((string)($invoice['status'] ?? 'draft')) === 'finalized'; }
+function documents_invoice_is_cancelled(array $invoice): bool { return documents_invoice_normalize_status((string)($invoice['status'] ?? 'draft')) === 'cancelled'; }
+
+function documents_invoice_payment_status_label(string $status): string
+{
+    return ['not_applicable'=>'Not applicable','unpaid'=>'Unpaid','partially_paid'=>'Partially paid','paid'=>'Paid','overpaid'=>'Overpaid'][$status] ?? 'Unpaid';
+}
+
+function documents_receipt_is_finalized_active(array $receipt): bool
+{
+    $status = strtolower(trim((string)($receipt['status'] ?? '')));
+    return in_array($status, ['final','finalized','posted','paid'], true)
+        && !in_array($status, ['draft','cancelled','canceled','reversed','voided','archived'], true)
+        && empty($receipt['archived_flag']) && empty($receipt['archived']) && empty($receipt['voided']) && empty($receipt['reversed']);
+}
+
+function documents_receipt_amount_total(array $receipt): float
+{
+    foreach (['amount_rs','amount_received','amount','total_received'] as $k) { if (is_numeric($receipt[$k] ?? null)) return documents_invoice_paise_to_money(documents_invoice_money_to_paise((float)$receipt[$k])); }
+    return 0.0;
+}
+
+function documents_all_invoices(): array
+{
+    documents_ensure_structure(); $out=[];
+    foreach (glob(documents_invoices_dir().'/*.json') ?: [] as $file) { $row=json_load((string)$file, []); if (is_array($row)) { $out[]=documents_invoice_normalize_commercial_snapshot(array_merge(documents_invoice_defaults(), $row)); } }
+    return $out;
+}
+
+function documents_receipt_allocations_normalize(array $receipt, array $invoices = null): array
+{
+    $invoices = $invoices ?? documents_all_invoices(); $byId=[]; foreach($invoices as $inv){ $byId[(string)($inv['id']??'')]=$inv; }
+    $receiptTotal = documents_invoice_money_to_paise(documents_receipt_amount_total($receipt)); $allocs=[]; $seen=[]; $errors=[];
+    $raw = is_array($receipt['allocations'] ?? null) ? $receipt['allocations'] : [];
+    if ($raw === [] && (string)($receipt['invoice_id'] ?? '') !== '') { $raw[]=['invoice_id'=>(string)$receipt['invoice_id'],'amount_rs'=>documents_receipt_amount_total($receipt)]; }
+    if ($raw === [] && (string)($receipt['quotation_id'] ?? '') !== '') {
+        $qid=(string)$receipt['quotation_id']; $eligible=array_values(array_filter($invoices, static fn($i):bool => (string)($i['linked_quote_id']??$i['quotation_id']??'')===$qid && in_array(documents_invoice_normalize_status((string)($i['status']??'draft')), ['draft','finalized'], true) && !documents_is_archived($i)));
+        if (count($eligible) === 1) { $raw[]=['invoice_id'=>(string)$eligible[0]['id'], 'amount_rs'=>documents_receipt_amount_total($receipt), 'migrated_from'=>'quotation']; }
+    }
+    $sum=0;
+    foreach($raw as $a){ if(!is_array($a)) continue; $iid=(string)($a['invoice_id']??''); $paise=documents_invoice_money_to_paise((float)($a['amount_rs']??$a['amount']??0)); if($iid===''||!isset($byId[$iid])){$errors[]='invalid_invoice_id'; continue;} if($paise<0){$errors[]='negative_allocation'; continue;} $key=$iid.':'.$paise; if(isset($seen[$key])) continue; $seen[$key]=true; $inv=$byId[$iid]; $rc=(string)($receipt['customer_mobile']??''); $ic=(string)($inv['customer_mobile']??$inv['customer_snapshot']['mobile']??''); if($rc!==''&&$ic!==''&&normalize_customer_mobile($rc)!==normalize_customer_mobile($ic) && empty($a['authorized_override'])){$errors[]='cross_customer_allocation'; continue;} $sum+=$paise; $allocs[]=['invoice_id'=>$iid,'amount_rs'=>documents_invoice_paise_to_money($paise)]; }
+    if($sum>$receiptTotal){ $errors[]='allocation_exceeds_receipt'; return ['ok'=>false,'allocations'=>[],'errors'=>array_values(array_unique($errors))]; }
+    return ['ok'=>$errors===[], 'allocations'=>$allocs, 'errors'=>array_values(array_unique($errors))];
+}
+
+function documents_receipt_allocation_for_invoice(array $receipt, string $invoiceId, array $invoices = null): float
+{
+    if (!documents_receipt_is_finalized_active($receipt)) return 0.0;
+    $norm=documents_receipt_allocations_normalize($receipt,$invoices); if(empty($norm['ok'])) return 0.0; $sum=0;
+    foreach($norm['allocations'] as $a){ if((string)$a['invoice_id']===$invoiceId) $sum += documents_invoice_money_to_paise((float)$a['amount_rs']); }
+    return documents_invoice_paise_to_money($sum);
+}
+
+function documents_invoice_payment_summary(array $invoice): array
+{
+    $invoice=documents_invoice_normalize_commercial_snapshot($invoice); $iid=(string)($invoice['id']??''); $invoices=documents_all_invoices(); if($iid!=='' && !isset(array_column($invoices,null,'id')[$iid])) $invoices[]=$invoice;
+    $totalPaise=documents_invoice_money_to_paise(documents_invoice_final_total($invoice)); $received=0; $receipts=[]; $unallocated=[]; $last=''; $seen=[]; $qid=(string)($invoice['linked_quote_id']??$invoice['quotation_id']??'');
+    foreach(documents_list_sales_documents('receipt') as $r){ if(!is_array($r)||!documents_receipt_is_finalized_active($r)) continue; $rid=(string)($r['id']??$r['receipt_id']??$r['receipt_number']??''); if(isset($seen[$rid])) continue; $seen[$rid]=true; $norm=documents_receipt_allocations_normalize($r,$invoices); $amt=0; if(!empty($norm['ok'])) foreach($norm['allocations'] as $a){ if((string)$a['invoice_id']===$iid) $amt += documents_invoice_money_to_paise((float)$a['amount_rs']); }
+        $date=(string)($r['date_received']??$r['receipt_date']??$r['created_at']??''); if($amt>0){$received+=$amt; if(substr($date,0,10)>$last)$last=substr($date,0,10); $receipts[]=['id'=>$rid,'receipt_number'=>(string)($r['receipt_number']??$rid),'date'=>$date,'amount_rs'=>documents_invoice_paise_to_money($amt)];}
+        elseif($qid!=='' && (string)($r['quotation_id']??'')===$qid && (is_array($r['allocations']??null)?$r['allocations']:[])===[]) $unallocated[]=['id'=>$rid,'receipt_number'=>(string)($r['receipt_number']??$rid),'date'=>$date,'amount_rs'=>documents_receipt_amount_total($r)]; }
+    usort($receipts, static fn($a,$b)=>strcmp(($a['date']??'').($a['id']??''),($b['date']??'').($b['id']??''))); usort($unallocated, static fn($a,$b)=>strcmp(($a['date']??'').($a['id']??''),($b['date']??'').($b['id']??'')));
+    $diff=$totalPaise-$received; $tol=1; $status=$totalPaise<=0?'not_applicable':($received===0?'unpaid':(abs($diff)<=$tol?'paid':($diff>0?'partially_paid':'overpaid')));
+    return ['invoice_id'=>$iid,'invoice_total'=>documents_invoice_paise_to_money($totalPaise),'total_received'=>documents_invoice_paise_to_money($received),'outstanding'=>documents_invoice_paise_to_money(max(0,$diff)),'overpayment'=>documents_invoice_paise_to_money(max(0,-$diff)),'payment_status'=>$status,'receipt_count'=>count($receipts),'receipts'=>$receipts,'unallocated_receipts'=>$unallocated,'last_payment_at'=>$last];
+}
+
+function documents_invoice_payment_status(array $invoice): string { return (string)documents_invoice_payment_summary($invoice)['payment_status']; }
+
+function documents_invoice_append_audit_event(array $invoice, string $type, array $actor, string $reason = '', array $previous = []): array
+{ $summary=documents_invoice_payment_summary($invoice); $events=is_array($invoice['audit_events']??null)?$invoice['audit_events']:[]; $events[]=['invoice_id'=>(string)($invoice['id']??''),'revision_no'=>(int)($invoice['revision_no']??1),'event_type'=>$type,'previous_document_status'=>(string)($previous['status']??''),'new_document_status'=>documents_invoice_normalize_status((string)($invoice['status']??'draft')),'previous_payment_status'=>(string)($previous['payment_status']??''),'new_payment_status'=>$summary['payment_status'],'invoice_total'=>$summary['invoice_total'],'total_received'=>$summary['total_received'],'outstanding'=>$summary['outstanding'],'overpayment'=>$summary['overpayment'],'reason'=>safe_multiline_text($reason),'actor_id'=>(string)($actor['id']??''),'actor_name'=>(string)($actor['name']??$actor['full_name']??'Admin'),'timestamp'=>date('c')]; $invoice['audit_events']=$events; return $invoice; }
+
+function documents_invoice_can_finalize(array $invoice): array
+{ $errors=[]; if(!documents_invoice_is_draft($invoice))$errors[]='Invoice is not Draft.'; if(documents_is_archived($invoice))$errors[]='Archived invoices cannot be finalized.'; if(trim((string)($invoice['invoice_no']??''))==='')$errors[]='Invoice number is required.'; if(documents_invoice_final_total($invoice)<0)$errors[]='Invoice total must be non-negative.'; documents_invoice_payment_summary($invoice); return ['ok'=>$errors===[], 'errors'=>$errors]; }
+
+function documents_invoice_finalize(array $invoice, array $actor): array
+{ $can=documents_invoice_can_finalize($invoice); if(empty($can['ok'])) return ['ok'=>false,'errors'=>$can['errors'],'invoice'=>$invoice]; $prev=['status'=>(string)($invoice['status']??'draft'),'payment_status'=>documents_invoice_payment_status($invoice)]; $rev=max(1,(int)($invoice['revision_no']??0)); $invoice['status']='finalized'; $invoice['revision_no']=$rev; $invoice['finalized_at']=date('c'); $invoice['finalized_by']=['id'=>(string)($actor['id']??''),'name'=>(string)($actor['name']??$actor['full_name']??'Admin')]; $invoice['finalized_snapshot']=['revision_no'=>$rev,'finalized_at'=>$invoice['finalized_at'],'finalized_by'=>$invoice['finalized_by'],'invoice_no'=>(string)($invoice['invoice_no']??''),'invoice_date'=>(string)($invoice['invoice_date']??''),'customer_snapshot'=>$invoice['customer_snapshot']??[],'pricing'=>$invoice['pricing']??[],'calc'=>$invoice['calc']??[],'tax_breakdown'=>$invoice['tax_breakdown']??[],'commercial_items'=>$invoice['commercial_items']??[],'quotation_reference'=>['quotation_id'=>(string)($invoice['linked_quote_id']??$invoice['quotation_id']??''),'quotation_no'=>(string)($invoice['quotation_no']??'')],'payment_summary_at_finalization'=>documents_invoice_payment_summary($invoice)]; $invoice=documents_invoice_append_audit_event($invoice,'invoice_finalized',$actor,'',$prev); $invoice['updated_at']=date('c'); return ['ok'=>true,'invoice'=>$invoice]; }
+
+function documents_invoice_start_revision(array $invoice, array $actor, string $reason): array
+{ $reason=safe_multiline_text($reason); if($reason==='') return ['ok'=>false,'error'=>'Revision reason is required.','invoice'=>$invoice]; if(!documents_invoice_is_finalized($invoice)) return ['ok'=>false,'error'=>'Only finalized invoices can be revised.','invoice'=>$invoice]; $prev=$invoice['finalized_snapshot']??$invoice; $revs=is_array($invoice['revisions']??null)?$invoice['revisions']:[]; $revs[]=['revision_no'=>(int)($invoice['revision_no']??1),'status'=>'finalized','snapshot'=>$prev,'finalized_at'=>(string)($invoice['finalized_at']??''),'finalized_by'=>$invoice['finalized_by']??[]]; $invoice['revisions']=$revs; $invoice['status']='draft'; $invoice['revision_no']=(int)($invoice['revision_no']??1)+1; $invoice['revision_parent_no']=$invoice['revision_no']-1; $invoice['revision_reason']=$reason; $invoice['revision_started_at']=date('c'); $invoice['revision_started_by']=['id'=>(string)($actor['id']??''),'name'=>(string)($actor['name']??$actor['full_name']??'Admin')]; $invoice=documents_invoice_append_audit_event($invoice,'invoice_revision_started',$actor,$reason,['status'=>'finalized']); $invoice['updated_at']=date('c'); return ['ok'=>true,'invoice'=>$invoice]; }
+
+function documents_invoice_cancel(array $invoice, array $actor, string $reason): array
+{ $reason=safe_multiline_text($reason); if($reason==='') return ['ok'=>false,'error'=>'Cancellation reason is required.','invoice'=>$invoice]; $prev=['status'=>(string)($invoice['status']??''),'payment_status'=>documents_invoice_payment_status($invoice)]; $invoice['status']='cancelled'; $invoice['cancelled_at']=date('c'); $invoice['cancelled_by']=['id'=>(string)($actor['id']??''),'name'=>(string)($actor['name']??$actor['full_name']??'Admin')]; $invoice['cancellation_reason']=$reason; $invoice=documents_invoice_append_audit_event($invoice,'invoice_cancelled',$actor,$reason,$prev); $invoice['updated_at']=date('c'); return ['ok'=>true,'invoice'=>$invoice]; }
+
 function documents_get_invoice(string $id): ?array
 {
     $id = safe_filename($id);
@@ -3486,6 +3591,7 @@ function documents_get_invoice(string $id): ?array
         return null;
     }
     $doc = array_merge(documents_invoice_defaults(), $row);
+    $doc['status'] = documents_invoice_normalize_status((string) ($doc['status'] ?? 'draft'));
     $resolvedInvoiceNo = documents_first_non_empty_string([
         $doc['invoice_no'] ?? '',
         $row['invoice_number'] ?? '',
@@ -3511,6 +3617,7 @@ function documents_save_invoice(array $doc): array
         return ['ok' => false, 'error' => 'Missing invoice ID'];
     }
     $doc = documents_invoice_normalize_commercial_snapshot($doc);
+    $doc['status'] = documents_invoice_normalize_status((string) ($doc['status'] ?? 'draft'));
     return json_save(documents_invoices_dir() . '/' . $id . '.json', $doc);
 }
 
