@@ -59,7 +59,7 @@ $adjustmentType = $invoice !== null ? documents_invoice_adjustment_type($invoice
 $adjustmentAmount = $invoice !== null ? documents_invoice_adjustment_amount($invoice) : 0.0;
 $adjustmentPercent = $invoice !== null ? (float) ($invoice['pricing']['adjustment_percent'] ?? 0) : 0.0;
 $adjustmentReason = $invoice !== null ? (string) ($invoice['pricing']['adjustment_reason'] ?? '') : '';
-$invoiceDate = $invoice !== null ? $first([$invoice['invoice_date'] ?? '', substr((string) ($invoice['created_at'] ?? ''), 0, 10)]) : '';
+$invoiceDate = $invoice !== null ? documents_invoice_authoritative_date($invoice) : '';
 $customerFields = is_array($quoteSnapshot['customer_site_fields'] ?? null) ? $quoteSnapshot['customer_site_fields'] : [];
 if ($customerFields === [] && is_array($quote)) {
     $customerFields = documents_quote_invoice_customer_fields($quote);
