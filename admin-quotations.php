@@ -1098,6 +1098,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['special_requests_override_note'] = true;
         $quote['annexures_overrides'] = $annexure;
         $quote['cover_notes_html_snapshot'] = trim((string) ($annexure['cover_notes'] ?? ''));
+        $quote = documents_quote_snapshot_cover_note_presentation($quote);
         $quote['template_attachments'] = (($templateBlocks[$templateSetId]['attachments'] ?? null) && is_array($templateBlocks[$templateSetId]['attachments'])) ? $templateBlocks[$templateSetId]['attachments'] : documents_template_attachment_defaults();
         $quote['finance_inputs']['monthly_bill_rs'] = safe_text((string) $requestValue('monthly_bill_rs', $savedFinanceInputs['monthly_bill_rs'] ?? ''));
         $quote['finance_inputs']['unit_rate_rs_per_kwh'] = safe_text((string) $requestValue('unit_rate_rs_per_kwh', $savedFinanceInputs['unit_rate_rs_per_kwh'] ?? ''));
@@ -1363,6 +1364,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = current_user();
         $newQuote['created_by_id'] = (string) ($user['id'] ?? '');
         $newQuote['created_by_name'] = (string) ($user['full_name'] ?? 'Admin');
+        $newQuote = documents_quote_snapshot_cover_note_presentation($newQuote);
 
         $original = documents_quote_prepare($original);
         $original['status'] = 'accepted';

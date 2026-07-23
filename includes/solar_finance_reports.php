@@ -451,6 +451,7 @@ function solar_finance_apply_template_snapshot_to_quote(array $quote, bool $isCr
     }
     $quote['annexures_overrides'] = $annexure;
     $quote['cover_notes_html_snapshot'] = trim((string) ($annexure['cover_notes'] ?? ''));
+    $quote = documents_quote_snapshot_cover_note_presentation($quote);
 
     $templateAttachments = (($templateEntry['attachments'] ?? null) && is_array($templateEntry['attachments']))
         ? $templateEntry['attachments']

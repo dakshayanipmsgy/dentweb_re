@@ -429,6 +429,13 @@ function documents_quote_defaults_settings(): array
             'hsn_solar' => '8541',
             'quotation_tax_profile_id' => '',
             'cover_note_template' => '<p>Namaste! Thank you for considering Dakshayani Enterprises for your rooftop solar journey.</p><p>As a Jharkhand-based EPC partner, we handle complete design, installation, and support with local execution accountability.</p><p>Our team will also guide you through DISCOM approvals, net-metering paperwork, and PM Surya Ghar process steps so your transition stays smooth and transparent.</p>',
+            'cover_note_presentations' => [
+                'RES' => ['kicker'=>'A note for your home', 'heading'=>'Dear Homeowner'],
+                'COM' => ['kicker'=>'A note for your business', 'heading'=>'Dear Business Customer'],
+                'IND' => ['kicker'=>'A note for your facility', 'heading'=>'Dear Industrial Customer'],
+                'INST' => ['kicker'=>'A note for your organization', 'heading'=>'Dear Organization'],
+                'PROD' => ['kicker'=>'A note for you', 'heading'=>'Dear Customer'],
+            ],
         ],
         'segments' => [
             'RES' => [
@@ -1142,6 +1149,7 @@ function documents_quote_defaults(): array
         ],
         'cover_note_text' => '',
         'cover_notes_html_snapshot' => '',
+        'cover_note_presentation_snapshot' => [],
         'special_requests_text' => '',
         'special_requests_inclusive' => '',
         'items' => [],
@@ -2642,6 +2650,25 @@ function documents_template_block_defaults(): array
         'transportation' => '',
         'terms_conditions' => '',
     ];
+}
+
+/** Presentation labels stored with new quotations; cover-note content is deliberately untouched. */
+function documents_quote_cover_note_labels(string $segment): array
+{
+    $segment = strtoupper(trim($segment));
+    $labels = [
+        'RES' => ['kicker' => 'A note for your home', 'heading' => 'Dear Homeowner'],
+        'COM' => ['kicker' => 'A note for your business', 'heading' => 'Dear Business Customer'],
+        'IND' => ['kicker' => 'A note for your facility', 'heading' => 'Dear Industrial Customer'],
+        'INST' => ['kicker' => 'A note for your organization', 'heading' => 'Dear Organization'],
+    ];
+    return $labels[$segment] ?? ['kicker' => 'A note for you', 'heading' => 'Dear Customer'];
+}
+
+function documents_quote_snapshot_cover_note_presentation(array $quote): array
+{
+    $quote['cover_note_presentation_snapshot'] = documents_quote_cover_note_labels((string) ($quote['segment'] ?? ''));
+    return $quote;
 }
 
 function documents_template_attachment_defaults(): array
@@ -5039,6 +5066,7 @@ function documents_quote_reset_clone_state(array $quote, string $newId): array
     $quote['public_share_created_at']=''; $quote['public_share_revoked_at']=null; $quote['public_share_expires_at']=null;
     $quote['quote_series_id']=$newId; $quote['version_no']=1; $quote['is_current_version']=true;
     $quote['revised_from_quote_id']=null; $quote['revision_reason']=null; $quote['revision_child_ids']=[];
+    $quote = documents_quote_snapshot_cover_note_presentation($quote);
     return documents_quote_normalize_editable_finance_values($quote);
 }
 
