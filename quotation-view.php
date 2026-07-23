@@ -31,14 +31,6 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
  $action=safe_text($_POST['action'] ?? '');
  $quote = documents_get_quote($id) ?? $quote;
 
- if($action==='repair_segment_template' && $viewerType==='admin'){
-    $repair = documents_repair_quote_segment_template($quote, safe_text((string)($_POST['template_set_id'] ?? '')), ['type'=>$viewerType,'id'=>$viewerId,'name'=>$viewerName]);
-    if(empty($repair['ok'])) $redirect('error',(string)($repair['error'] ?? 'Unable to create a safe repair revision.'));
-    $repaired = is_array($repair['quote'] ?? null) ? $repair['quote'] : [];
-    $newId = safe_text((string)($repaired['id'] ?? $id));
-    header('Location: quotation-view.php?'.http_build_query(['id'=>$newId,'status'=>'success','message'=>'Segment-safe repair saved with an audit entry.'])); exit;
- }
-
  if(in_array($action, ['approve_quote','mark_accepted','archive_quote','unarchive_quote'], true) && $viewerType==='admin'){
     $targets = ['approve_quote'=>'approved','mark_accepted'=>'accepted','archive_quote'=>'archived','unarchive_quote'=>'unarchived'];
     $messages = [
@@ -56,10 +48,6 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
  }
 
  if($action==='share_update'){
-    if (isset($_POST['public_share_enabled'])) {
-        $templateCheck = documents_quote_template_compatibility($quote);
-        if (empty($templateCheck['ok'])) $redirect('error', (string)$templateCheck['error']);
-    }
     $quote['public_share_enabled']=isset($_POST['public_share_enabled']);
     if(isset($_POST['generate_token']) || (string)($quote['public_share_token'] ?? '')===''){
         $quote['public_share_token']=documents_generate_quote_public_share_token();

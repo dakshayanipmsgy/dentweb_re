@@ -108,13 +108,12 @@ function compute_financial_clarity(array $quote, array $calc, array $snapshot): 
 
 function quotation_financial_presentation_model(array $quote, array $calc, array $savingsSnapshot, array $quoteDefaults): array
 {
-    $allowSubsidy = !empty(documents_quote_segment_render_profile($quote)['allow_subsidy']);
     $finance = compute_financial_clarity($quote, $calc, $savingsSnapshot);
     $showDecimals = !empty($quoteDefaults['global']['quotation_ui']['show_decimals']);
     $num = static fn($v): float => is_numeric($v) ? (float) $v : 0.0;
     $fmt = static fn(float $v): string => quotation_format_inr_indian($v, $showDecimals);
     $units = static fn(float $v): string => number_format(max(0, $v), 0, '.', ',');
-    $scenarioOrder = $allowSubsidy ? ['self_funded','loan_upto_2_lacs_subsidy_to_loan','loan_upto_2_lacs_subsidy_not_to_loan','loan_above_2_lacs_subsidy_to_loan','loan_above_2_lacs_subsidy_not_to_loan'] : ['self_funded'];
+    $scenarioOrder = ['self_funded','loan_upto_2_lacs_subsidy_to_loan','loan_upto_2_lacs_subsidy_not_to_loan','loan_above_2_lacs_subsidy_to_loan','loan_above_2_lacs_subsidy_not_to_loan'];
     $scenarioColors = ['self_funded'=>'#f59e0b','loan_upto_2_lacs_subsidy_to_loan'=>'#0f766e','loan_upto_2_lacs_subsidy_not_to_loan'=>'#14b8a6','loan_above_2_lacs_subsidy_to_loan'=>'#1d4ed8','loan_above_2_lacs_subsidy_not_to_loan'=>'#6366f1'];
     $scenarios = is_array($finance['finance_scenarios'] ?? null) ? $finance['finance_scenarios'] : [];
     $applicable = [];
@@ -150,7 +149,7 @@ function quotation_financial_presentation_model(array $quote, array $calc, array
     foreach ($applicable as $s) { $monthly[] = ['label'=>$s['label'],'value'=>max(0,$num($s['row']['monthly_outflow_rs'] ?? 0)),'color'=>$s['color']]; }
     $years = range(0,25); $series = [['label'=>'No Solar','color'=>'#6b7280','data'=>array_map(fn($y)=>$y*12*$monthlyBill,$years)]];
     foreach ($applicable as $s) { $data = is_array($s['row']['cumulative_series'] ?? null) ? array_values($s['row']['cumulative_series']) : array_fill(0,26,0); $series[]=['label'=>$s['label'],'color'=>$s['color'],'data'=>array_map(fn($v)=>max(0,$num($v)),$data)]; }
-    return ['finance'=>$finance,'scenarios'=>$applicable,'glance'=>$glance,'monthly_chart'=>$monthly,'years'=>$years,'cumulative_series'=>$series,'show_decimals'=>$showDecimals,'format_inr'=>$fmt,'allow_subsidy'=>$allowSubsidy];
+    return ['finance'=>$finance,'scenarios'=>$applicable,'glance'=>$glance,'monthly_chart'=>$monthly,'years'=>$years,'cumulative_series'=>$series,'show_decimals'=>$showDecimals,'format_inr'=>$fmt];
 }
 
 function quotation_svg_money_label(float $v): string { if ($v >= 10000000) return '₹'.rtrim(rtrim(number_format($v/10000000,1), '0'), '.').'Cr'; if ($v >= 100000) return '₹'.rtrim(rtrim(number_format($v/100000,1), '0'), '.').'L'; if ($v >= 1000) return '₹'.rtrim(rtrim(number_format($v/1000,1), '0'), '.').'K'; return '₹'.number_format($v,0); }
@@ -183,10 +182,10 @@ function quotation_render_cumulative_expense_svg(array $model): string
 function quotation_render_financial_sections(array $model): array
 {
     $fmt=$model['format_inr']; $sc=$model['scenarios']; $finance=$model['finance']; $num=static fn($v): float => is_numeric($v)?(float)$v:0.0; $dash='—';
-    $rows=[['Margin Money','margin'],['Loan Amount','loan'],['Interest Rate','interest'],['Tenure','tenure'],['EMI','emi'],['Monthly Outflow','outflow'],['Payback Time','payback']]; if (!empty($model['allow_subsidy'])) { array_splice($rows,1,0,[['Margin Money - Subsidy','margin_subsidy']]); array_splice($rows,3,0,[['Loan - Subsidy','loan_subsidy']]); }
+    $rows=[['Margin Money','margin'],['Margin Money - Subsidy','margin_subsidy'],['Loan Amount','loan'],['Loan - Subsidy','loan_subsidy'],['Interest Rate','interest'],['Tenure','tenure'],['EMI','emi'],['Monthly Outflow','outflow'],['Payback Time','payback']];
     $head=''; foreach($sc as $s){$head.='<th>'.quotation_svg_text($s['label']).'</th>';}
     $body=''; foreach($rows as [$label,$key]){ $body.='<tr><th scope="row">'.quotation_svg_text($label).'</th>'; foreach($sc as $s){$r=$s['row']; $isSelf=$s['key']==='self_funded'; $v=$dash; if($key==='margin')$v=$isSelf?$dash:$fmt($num($r['margin_money_rs']??0)); if($key==='margin_subsidy')$v=$fmt($num(($isSelf?$r['net_investment_after_subsidy']:($r['initial_investment_after_subsidy_credit_rs']??$r['net_own_investment_after_subsidy']))??0)); if($key==='loan')$v=$isSelf?$dash:$fmt($num($r['loan_amount_rs']??0)); if($key==='loan_subsidy')$v=$isSelf?$dash:$fmt($num($r['effective_loan_principal_rs']??0)); if($key==='interest')$v=$isSelf?$dash:number_format($num($r['interest_pct']??0),1).'%'; if($key==='tenure')$v=$isSelf?$dash:number_format($num($r['tenure_years']??0),1).' years'; if($key==='emi')$v=$isSelf?$dash:$fmt($num($r['emi_rs']??0)); if($key==='outflow')$v=$fmt($num($r['monthly_outflow_rs']??0)); if($key==='payback')$v=(string)($r['payback_display']??$dash); $body.='<td><b>'.quotation_svg_text($v).'</b></td>'; } $body.='</tr>';}
-    $any=$sc[0]['row']??[]; $summary='<div class="sf-finance-summary">'.(!empty($model['allow_subsidy'])?'<div class="sf-finance-line"><strong>Subsidy:</strong> '.$fmt($num($finance['subsidy']??0)).'</div>':'').'<div class="sf-finance-line"><strong>Residual Bill:</strong> '.$fmt($num($finance['residual_bill']??0)).'/month</div><div class="sf-finance-line"><strong>Unit Rate of Electricity:</strong> ₹'.number_format($num($finance['unit_rate_rs_per_kwh']??0),1).'/kWh</div><div class="sf-finance-line"><strong>Generation per kW of Solar:</strong> '.number_format($num($finance['annual_generation_kwh_per_kw']??0),0).' kWh/year</div></div>';
+    $any=$sc[0]['row']??[]; $summary='<div class="sf-finance-summary"><div class="sf-finance-line"><strong>Subsidy:</strong> '.$fmt($num($finance['subsidy']??0)).'</div><div class="sf-finance-line"><strong>Residual Bill:</strong> '.$fmt($num($finance['residual_bill']??0)).'/month</div><div class="sf-finance-line"><strong>Unit Rate of Electricity:</strong> ₹'.number_format($num($finance['unit_rate_rs_per_kwh']??0),1).'/kWh</div><div class="sf-finance-line"><strong>Generation per kW of Solar:</strong> '.number_format($num($finance['annual_generation_kwh_per_kw']??0),0).' kWh/year</div></div>';
     $financeHtml=$summary.'<div class="sf-finance-table-wrap"><table class="sf-finance-table"><thead><tr><th>Metric</th>'.$head.'</tr></thead><tbody>'.$body.'</tbody></table></div>';
     $glance='<div class="sf-glance-grid">'; foreach($model['glance'] as $g){$glance.='<article class="sf-glance-group"><h3>'.quotation_svg_text($g['title']).'</h3><div class="sf-glance-list">'; foreach($g['rows'] as $row){$glance.='<div class="sf-glance-item"><span class="sf-glance-label">'.quotation_svg_text((string)$row[0]).'</span><span class="sf-glance-value">'.quotation_svg_text((string)$row[1]).'</span></div>'; } $glance.='</div></article>'; } $glance.='</div>';
     $meters='<div class="sf-kpis">'; foreach($sc as $s){$pct=max(0,min(100,(float)$s['payback_pct']));$meters.='<div class="sf-metric"><strong>Payback meter ('.quotation_svg_text($s['label']).')</strong><div>'.quotation_svg_text((string)($s['row']['payback_display']??'—')).'</div><div class="payback-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'.number_format($pct,1,'.','').'" aria-label="'.quotation_svg_text($s['label']).' payback uses '.number_format($pct,1).'% of 25 years"><div class="payback-meter-fill" style="width:'.number_format($pct,1,'.','').'%"></div></div></div>'; } $meters.='</div>';
@@ -198,22 +197,10 @@ function quotation_render_to_html(array $quote, array $quoteDefaults, array $com
     ini_set('display_errors', '0');
     ob_start();
 
-    $renderProfile = documents_quote_segment_render_profile($quote);
-    if (empty($renderProfile['compatible'])) {
-        $message = $viewerType === 'public' ? 'This quotation is unavailable. Please request a corrected revision.' : (string) $renderProfile['error'];
-        $repairForm = '';
-        if ($viewerType === 'admin' && $renderProfile['segment'] !== '') {
-            $options = '';
-            foreach (documents_list_quotation_templates(false, (string)$renderProfile['segment']) as $template) $options .= '<option value="'.htmlspecialchars((string)$template['id'], ENT_QUOTES).'">'.htmlspecialchars((string)$template['name'], ENT_QUOTES).'</option>';
-            if ($options !== '') $repairForm = '<form method="post"><input type="hidden" name="csrf_token" value="'.htmlspecialchars((string)($_SESSION['csrf_token'] ?? ''), ENT_QUOTES).'"><input type="hidden" name="action" value="repair_segment_template"><label>Compatible replacement template <select name="template_set_id" required>'.$options.'</select></label><button type="submit">Create audited repair / revision</button></form><p>Finalized quotations are never rewritten; repair creates a draft revision.</p>';
-        }
-        return '<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow,noarchive"><title>Quotation unavailable</title></head><body><main class="quotation-segment-blocked"><h1>Quotation unavailable</h1><p>'.htmlspecialchars($message, ENT_QUOTES).'</p>'.$repairForm.'</main></body></html>';
-    }
-
     $segment = (string) ($quote['segment'] ?? 'RES');
     $segmentDefaults = is_array($quoteDefaults['segments'][$segment] ?? null) ? $quoteDefaults['segments'][$segment] : [];
     $transport = (float) ($quote['calc']['transportation_rs'] ?? $quote['finance_inputs']['transportation_rs'] ?? 0);
-    $subsidy = !empty($renderProfile['allow_subsidy']) ? (float) ($quote['calc']['subsidy_expected_rs'] ?? $quote['finance_inputs']['subsidy_expected_rs'] ?? 0) : 0.0;
+    $subsidy = (float) ($quote['calc']['subsidy_expected_rs'] ?? $quote['finance_inputs']['subsidy_expected_rs'] ?? 0);
     $calc = is_array($quote['calc'] ?? null) && !empty($quote['calc'])
         ? (array) $quote['calc']
         : documents_calc_quote_pricing_with_tax_profile($quote, $transport, $subsidy, (float) ($quote['input_total_gst_inclusive'] ?? 0), $quoteDefaults);
@@ -304,7 +291,7 @@ function quotation_render_to_html(array $quote, array $quoteDefaults, array $com
     }
     $coverNote = $coverNoteSnapshot
         ?: $coverNoteLiveTemplate
-        ?: '';
+        ?: trim((string) ($quoteDefaults['defaults']['cover_note_template'] ?? ''));
     $specialReq = trim((string) ($quote['special_requests_text'] ?? $quote['special_requests_inclusive'] ?? ''));
 
     $tokens = is_array($quoteDefaults['global']['ui_tokens'] ?? null) ? $quoteDefaults['global']['ui_tokens'] : [];
@@ -345,7 +332,7 @@ function quotation_render_to_html(array $quote, array $quoteDefaults, array $com
     $emissionFactor = (float) ($quoteDefaults['global']['energy_defaults']['emission_factor_kg_per_kwh'] ?? 0.82);
     $treeAbsorption = (float) ($quoteDefaults['global']['energy_defaults']['tree_absorption_kg_per_tree_per_year'] ?? 20);
 
-    $rawSubsidyInput = !empty($renderProfile['allow_subsidy']) ? ($quote['finance_inputs']['subsidy_expected_rs'] ?? $quote['calc']['subsidy_expected_rs'] ?? null) : null;
+    $rawSubsidyInput = $quote['finance_inputs']['subsidy_expected_rs'] ?? $quote['calc']['subsidy_expected_rs'] ?? null;
     $subsidyProvided = !( $rawSubsidyInput === null || (is_string($rawSubsidyInput) && trim($rawSubsidyInput) === ''));
 
     $companyName = (string) ($company['brand_name'] ?: ($company['company_name'] ?? 'Dakshayani Enterprises'));
@@ -565,12 +552,12 @@ $scenarioRows = is_array($financialClarity['finance_scenarios'] ?? null) ? $fina
 <div class="chart-grid"><section class="card chart-responsive-card"><div class="h sec">Monthly Outflow Comparison</div><?= $financialSections['monthly_svg'] ?><canvas id="monthlyChart" height="260" class="screen-chart-canvas"></canvas><img id="monthlyChartPrint" class="chart-print-img" alt="Monthly outflow chart for print"></section><section class="card chart-responsive-card cumulative-chart-card"><div class="h sec">Cumulative Expense Over 25 Years</div><?= $financialSections['cumulative_svg'] ?><canvas id="cumulativeChart" height="360" class="screen-chart-canvas"></canvas><img id="cumulativeChartPrint" class="chart-print-img" alt="Cumulative expense chart for print"></section></div>
 <section class="card"><div class="h sec">Payback Meters</div><div class="paybackMeters"><?= $financialSections['meters'] ?></div></section>
 <section class="card proof-card"><div class="section-kicker" style="color:#bfe9df">Local capability. Professional delivery.</div><div class="h sec">Why <?= htmlspecialchars($companyName, ENT_QUOTES) ?></div><div class="proof-grid"><?php foreach ($whyPoints as $point): ?><div class="proof-point"><?= htmlspecialchars((string)$point, ENT_QUOTES) ?></div><?php endforeach; ?></div><?php if ($registrationProofs !== []): ?><div class="registration-row"><?php foreach ($registrationProofs as $proof): ?><span class="registration-chip"><?= htmlspecialchars((string)$proof['label'], ENT_QUOTES) ?> · <?= htmlspecialchars((string)$proof['value'], ENT_QUOTES) ?></span><?php endforeach; ?></div><?php endif; ?></section>
-<section class="card annexure-shell"><div class="section-kicker">Proposal details</div><div class="h sec">Annexures</div><div class="annexure-stack"><?php $annexureDisplay = ['warranty'=>['Warranty','01'],'system_inclusions'=>['System Inclusions','02'],'pm_subsidy_info'=>['PM Subsidy Information','03'],'completion_milestones'=>['Completion Milestones','04'],'payment_terms'=>['Payment Terms','05'],'system_type_explainer'=>['System Type Explainer','06'],'transportation'=>['Transportation','07'],'terms_conditions'=>['Terms and Conditions','08']]; foreach($annexureDisplay as $k=>$meta): if ($k === 'pm_subsidy_info' && empty($renderProfile['allow_residential_annexures'])) { continue; } $annVal = trim((string)($ann[$k] ?? '')); if ($annVal === '') { continue; } ?><article class="annexure-card <?= in_array($k, ['system_inclusions','terms_conditions'], true) ? 'wide' : '' ?>"><div class="annexure-title"><span><?= htmlspecialchars($meta[1], ENT_QUOTES) ?></span><?= htmlspecialchars($meta[0], ENT_QUOTES) ?></div><div><?= quotation_sanitize_html($annVal) ?></div></article><?php endforeach; ?></div></section>
+<section class="card annexure-shell"><div class="section-kicker">Proposal details</div><div class="h sec">Annexures</div><div class="annexure-stack"><?php $annexureDisplay = ['warranty'=>['Warranty','01'],'system_inclusions'=>['System Inclusions','02'],'pm_subsidy_info'=>['PM Subsidy Information','03'],'completion_milestones'=>['Completion Milestones','04'],'payment_terms'=>['Payment Terms','05'],'system_type_explainer'=>['System Type Explainer','06'],'transportation'=>['Transportation','07'],'terms_conditions'=>['Terms and Conditions','08']]; foreach($annexureDisplay as $k=>$meta): $annVal = trim((string)($ann[$k] ?? '')); if ($annVal === '') { continue; } ?><article class="annexure-card <?= in_array($k, ['system_inclusions','terms_conditions'], true) ? 'wide' : '' ?>"><div class="annexure-title"><span><?= htmlspecialchars($meta[1], ENT_QUOTES) ?></span><?= htmlspecialchars($meta[0], ENT_QUOTES) ?></div><div><?= quotation_sanitize_html($annVal) ?></div></article><?php endforeach; ?></div></section>
 <?php $nextStepsHtml = trim((string)($ann['next_steps'] ?? '')); if ($nextStepsHtml !== ''): ?><section class="card next-steps"><div class="section-kicker">Ready when you are</div><div class="h sec">Next Steps</div><div><?= quotation_sanitize_html($nextStepsHtml) ?></div><div class="proceed-note">To proceed, confirm the quotation and pay the token advance as per payment terms.</div></section><?php endif; ?>
 <section class="card bank-card" id="quotation-payment-options"><div class="section-kicker">Secure payment information</div><div class="h sec">Payment Options</div><?php if ($bankFields !== []): ?><div class="bank-grid"><?php foreach ($bankFields as $bankField): ?><div class="metric"><span class="metric-label"><?= htmlspecialchars((string)$bankField['label'], ENT_QUOTES) ?></span><div><?= htmlspecialchars((string)$bankField['value'], ENT_QUOTES) ?></div></div><?php endforeach; ?></div><?php endif; ?><div class="upi-payment-grid"><article class="upi-option"><img src="assets/images/payments/upi-advance-10000.svg" alt="Scan UPI QR to pay fixed ₹10,000 booking advance"><div><h3>₹10,000 booking advance</h3><p>Scan this fixed-amount QR to pay the booking/token advance.</p><p class="upi-id">UPI ID: <?= htmlspecialchars($upiId, ENT_QUOTES) ?></p><a class="btn screen-only" href="<?= htmlspecialchars($upiAdvanceUrl, ENT_QUOTES) ?>">Pay ₹10,000 by UPI</a></div></article><article class="upi-option"><img src="assets/images/payments/upi-any-amount.svg" alt="Scan UPI QR to pay any amount"><div><h3>Pay any amount</h3><p>Use this QR for another agreed payment amount.</p><p class="upi-id">UPI ID: <?= htmlspecialchars($upiId, ENT_QUOTES) ?></p><a class="btn screen-only" href="<?= htmlspecialchars($upiAnyAmountUrl, ENT_QUOTES) ?>">Open UPI app</a></div></article></div><p class="payment-note">After payment, share the transaction reference with our team. A receipt is issued only after payment verification.</p><div class="payment-warning">Please verify the payee and UPI ID before payment. Payments should be made only to <?= htmlspecialchars($companyName, ENT_QUOTES) ?>.</div></section>
 <footer class="card footer"><div class="footer-brand-row"><?php if ($hasLogo): ?><div class="footer-logo"><img src="<?= htmlspecialchars($logoSrc, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($companyName, ENT_QUOTES) ?> logo"></div><?php endif; ?><div class="footer-brand-name"><?= htmlspecialchars($companyName, ENT_QUOTES) ?></div></div><div class="footer-details"><div>Registered office: <?= htmlspecialchars((string)($company['address_line'] ?? ''), ENT_QUOTES) ?></div><div><?= htmlspecialchars((string)($company['phone_primary'] ?? ''), ENT_QUOTES) ?><?= $whatsappDisplay !== '' ? ' · WhatsApp ' . htmlspecialchars($whatsappDisplay, ENT_QUOTES) : '' ?> · <?= htmlspecialchars((string)($company['email_primary'] ?? ''), ENT_QUOTES) ?><?= $website !== '' ? ' · ' . htmlspecialchars($website, ENT_QUOTES) : '' ?></div><div>GSTIN: <?= htmlspecialchars((string)($company['gstin'] ?? ''), ENT_QUOTES) ?> · UDYAM: <?= htmlspecialchars((string)($company['udyam'] ?? ''), ENT_QUOTES) ?> · PAN: <?= htmlspecialchars((string)($company['pan'] ?? ''), ENT_QUOTES) ?> · JREDA: <?= htmlspecialchars((string)($company['jreda_license'] ?? ''), ENT_QUOTES) ?> · DWSD: <?= htmlspecialchars((string)($company['dwsd_license'] ?? ''), ENT_QUOTES) ?></div><div><small><?= htmlspecialchars((string)($quoteDefaults['global']['quotation_ui']['footer_disclaimer'] ?? 'Values are indicative and subject to site conditions, DISCOM approvals, and policy updates.'), ENT_QUOTES) ?></small></div></div></footer>
 </div>
-<?php if (!empty($renderProfile['allow_residential_finance_scenarios'])): ?><script>
+<script>
 const finance=<?= json_encode($financialClarity, JSON_UNESCAPED_UNICODE) ?>;
 const showDecimals=<?= json_encode($showDecimals) ?>;
 const r=x=>'₹'+Number(x||0).toLocaleString('en-IN',{minimumFractionDigits:showDecimals?2:0,maximumFractionDigits:showDecimals?2:0});
@@ -815,7 +802,7 @@ const co2YearEl=document.getElementById('co2y');if(co2YearEl){co2YearEl.textCont
 const treeYearEl=document.getElementById('treey');if(treeYearEl){treeYearEl.textContent=annualTrees.toFixed(1);}
 const co225El=document.getElementById('co225');if(co225El){co225El.textContent=co225.toFixed(0)+' kg';}
 const tree25El=document.getElementById('tree25');if(tree25El){tree25El.textContent=trees25.toFixed(1);}
-</script><?php endif; ?>
+</script>
 </body></html>
 <?php
     $output = ob_get_clean();

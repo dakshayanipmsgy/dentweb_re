@@ -945,98 +945,6 @@ function documents_template_starters(): array
     return $out;
 }
 
-/** Canonical quotation market segments. Do not duplicate this list in UI/import code. */
-function documents_quotation_segments(): array
-{
-    return [
-        'RES' => ['label' => 'Residential', 'residential' => true],
-        'COM' => ['label' => 'Commercial', 'residential' => false],
-        'IND' => ['label' => 'Industrial', 'residential' => false],
-        'INST' => ['label' => 'Institutional', 'residential' => false],
-        'PROD' => ['label' => 'Product', 'residential' => false],
-    ];
-}
-
-function documents_normalize_quotation_segment(string $segment): string
-{
-    $segment = strtoupper(trim($segment));
-    return isset(documents_quotation_segments()[$segment]) ? $segment : '';
-}
-
-function documents_list_quotation_templates(bool $includeArchived = false, string $segment = ''): array
-{
-    $rows = json_load(documents_templates_dir() . '/template_sets.json', []);
-    $segment = documents_normalize_quotation_segment($segment);
-    return array_values(array_filter(is_array($rows) ? $rows : [], static function ($row) use ($includeArchived, $segment): bool {
-        if (!is_array($row) || safe_text((string) ($row['id'] ?? '')) === '') return false;
-        if (!$includeArchived && !empty($row['archived_flag'])) return false;
-        $templateSegment = documents_normalize_quotation_segment((string) ($row['segment'] ?? ''));
-        return $templateSegment !== '' && ($segment === '' || $templateSegment === $segment);
-    }));
-}
-
-function documents_resolve_default_template_for_segment(string $segment): ?array
-{
-    $templates = documents_list_quotation_templates(false, $segment);
-    foreach ($templates as $template) if (!empty($template['is_default'])) return $template;
-    return $templates[0] ?? null;
-}
-
-/** Shared validation choke point for save/workflow/share/render operations. */
-function documents_quote_template_compatibility(array $quote): array
-{
-    $segment = documents_normalize_quotation_segment((string) ($quote['segment'] ?? ''));
-    $templateId = safe_text((string) ($quote['template_set_id'] ?? ''));
-    if ($segment === '') return ['ok' => false, 'code' => 'invalid_segment', 'error' => 'Select a valid quotation segment.'];
-    if ($templateId === '') return ['ok' => false, 'code' => 'missing_template', 'error' => 'Select an active template for the quotation segment.'];
-    $found = null;
-    foreach (documents_list_quotation_templates(true) as $template) if ((string) $template['id'] === $templateId) { $found = $template; break; }
-    if ($found === null) return ['ok' => false, 'code' => 'missing_template', 'error' => 'The selected quotation template no longer exists.'];
-    if (!empty($found['archived_flag'])) return ['ok' => false, 'code' => 'archived_template', 'error' => 'The selected quotation template is archived.'];
-    if (documents_normalize_quotation_segment((string) ($found['segment'] ?? '')) !== $segment) {
-        return ['ok' => false, 'code' => 'segment_mismatch', 'error' => 'The selected template is incompatible with the quotation segment.'];
-    }
-    return ['ok' => true, 'code' => 'ok', 'error' => '', 'segment' => $segment, 'template' => $found];
-}
-
-/** One profile controls every quotation renderer and content/snapshot source. */
-function documents_quote_segment_render_profile(array $quote): array
-{
-    $compatibility = documents_quote_template_compatibility($quote);
-    $segment = documents_normalize_quotation_segment((string) ($quote['segment'] ?? ''));
-    $residential = $segment === 'RES';
-    return [
-        'segment' => $segment,
-        'compatible' => !empty($compatibility['ok']),
-        'error' => (string) ($compatibility['error'] ?? ''),
-        'allow_public_render' => !empty($compatibility['ok']),
-        'allow_residential_content' => $residential && !empty($compatibility['ok']),
-        'allow_subsidy' => $residential && !empty($compatibility['ok']),
-        'allow_residential_finance_scenarios' => $residential && !empty($compatibility['ok']),
-        'allow_residential_annexures' => $residential && !empty($compatibility['ok']),
-        'allow_residential_diagrams' => $residential && !empty($compatibility['ok']),
-        'template' => $compatibility['template'] ?? null,
-    ];
-}
-
-/** Audited, draft-only repair. Finalized history is preserved by creating a revision. */
-function documents_repair_quote_segment_template(array $quote, string $templateId, array $actor = []): array
-{
-    $status = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
-    if ($status !== 'draft' || documents_quote_is_locked($quote)) {
-        $revision = documents_create_quote_revision($quote, 'Segment/template compatibility repair');
-        if (empty($revision['ok']) || !is_array($revision['quote'] ?? null)) return $revision;
-        $quote = $revision['quote'];
-    }
-    $before = ['segment' => $quote['segment'] ?? '', 'template_set_id' => $quote['template_set_id'] ?? ''];
-    $quote['template_set_id'] = safe_text($templateId);
-    $check = documents_quote_template_compatibility($quote);
-    if (empty($check['ok'])) return ['ok' => false, 'error' => $check['error'], 'quote' => $quote];
-    $quote = documents_quote_admin_history_add($quote, 'segment_template_repair', 'Quotation template compatibility repaired.', ['before' => $before, 'after' => ['segment' => $quote['segment'], 'template_set_id' => $templateId], 'actor' => $actor]);
-    $saved = documents_save_quote($quote);
-    return ['ok' => !empty($saved['ok']), 'error' => (string) ($saved['error'] ?? ''), 'quote' => $quote];
-}
-
 function documents_seed_template_sets_if_empty(): void
 {
     $path = documents_templates_dir() . '/template_sets.json';
@@ -3309,8 +3217,6 @@ function documents_quote_apply_admin_status_transition(array $quote, string $tar
     $now = date('c');
 
     if ($targetStatus === 'approved') {
-        $templateCheck = documents_quote_template_compatibility($quote);
-        if (empty($templateCheck['ok'])) return ['ok' => false, 'error' => (string) $templateCheck['error'], 'quote' => $quote];
         if (documents_quote_is_locked($quote) || $currentStatus === 'accepted') {
             return ['ok' => false, 'error' => 'Accepted or locked quotations cannot be approved.', 'quote' => $quote];
         }
@@ -3356,10 +3262,6 @@ function documents_quote_apply_admin_status_transition(array $quote, string $tar
         $quote['status'] = $restoredStatus;
     } else {
         return ['ok' => false, 'error' => 'Unsupported quotation status transition.', 'quote' => $quote];
-    }
-    if ($targetStatus === 'accepted') {
-        $templateCheck = documents_quote_template_compatibility($quote);
-        if (empty($templateCheck['ok'])) return ['ok' => false, 'error' => (string) $templateCheck['error'], 'quote' => $quote];
     }
 
     $quote['updated_at'] = $now;

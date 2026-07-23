@@ -15,8 +15,7 @@ $quote = $token !== '' ? documents_get_quote_by_public_share_token($token) : nul
 
 $isValid = $quote !== null
     && !empty($quote['public_share_enabled'])
-    && (string) ($quote['public_share_token'] ?? '') !== ''
-    && !empty(documents_quote_segment_render_profile($quote)['allow_public_render']);
+    && (string) ($quote['public_share_token'] ?? '') !== '';
 
 $expiresAt = safe_text((string) ($quote['public_share_expires_at'] ?? ''));
 if ($isValid && $expiresAt !== '') {

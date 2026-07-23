@@ -807,6 +807,7 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
     $segments = is_array($quoteDefaults['segments'] ?? null) ? $quoteDefaults['segments'] : [];
     $segmentCode = strtoupper(trim((string) ($quote['segment'] ?? 'RES')));
     $segmentDefaults = is_array($segments[$segmentCode] ?? null) ? $segments[$segmentCode] : [];
+    $fallbackResDefaults = is_array($segments['RES'] ?? null) ? $segments['RES'] : [];
     $grossFallback = max(0, $toFloat($calc['gross_payable'] ?? ($calc['gross_payable_before_discount'] ?? 0)));
     $subsidy = max(0, $toFloat($calc['subsidy_expected_rs'] ?? 0));
     $capacityPrimary = $resolvePreferredFloat([
@@ -828,6 +829,7 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         $customerSavingsInputs['unit_rate_rs_per_kwh'] ?? null,
         $financeInputs['unit_rate_rs_per_kwh'] ?? null,
         $segmentDefaults['unit_rate_rs_per_kwh'] ?? null,
+        $fallbackResDefaults['unit_rate_rs_per_kwh'] ?? null,
     ], 1.0) ?? 1.0;
     $resolvedAnnualGeneration = $resolvePreferredFloat([
         $snapshot['annual_generation_kwh_per_kw'] ?? null,
