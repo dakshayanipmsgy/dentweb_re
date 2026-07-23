@@ -3782,6 +3782,68 @@ function documents_project_financial_presentation(array $quote, array $receipts 
 
 function documents_project_reference_amount(array $quote): float { return (float) documents_project_financial_summary($quote)['calculation_reference_amount']; }
 
+/** Explicit project lifecycle state. Payment settlement never changes this value. */
+function documents_project_completion_state(array $quote): string
+{
+    $state = (string)($quote['project_completion']['state'] ?? 'pending');
+    return in_array($state, ['pending', 'completed', 'reopened'], true) ? $state : 'pending';
+}
+
+function documents_project_completion_review(array $quote, array $receipts = null): array
+{
+    $summary = documents_project_financial_summary($quote, $receipts);
+    $completion = is_array($quote['project_completion'] ?? null) ? $quote['project_completion'] : [];
+    $snapshot = is_array($completion['snapshot'] ?? null) ? $completion['snapshot'] : [];
+    $currentInvoiceSnapshot = documents_project_invoice_set_snapshot($quote);
+    $basis = (string)($summary['calculation_basis'] ?? '');
+    $basisStatus = (string)($summary['basis_status'] ?? '');
+    $reference = (float)($summary['calculation_reference_amount'] ?? 0);
+    $outstanding = (float)($summary['remaining_amount'] ?? 0);
+    $active = documents_quote_normalize_status((string)($quote['status'] ?? 'draft')) === 'accepted'
+        && !empty($quote['is_current_version']) && !documents_is_archived($quote);
+    $basisValid = in_array($basis, ['quotation', 'finalized_invoices'], true)
+        && is_finite($reference) && $reference >= 0
+        && !($basis === 'finalized_invoices' && $basisStatus !== 'confirmed');
+    $changed = documents_project_completion_state($quote) === 'completed' && $snapshot !== [] && (
+        abs((float)($snapshot['reference_amount'] ?? 0) - $reference) > 0.01
+        || abs((float)($snapshot['paid_amount'] ?? 0) - (float)($summary['total_payment_received'] ?? 0)) > 0.01
+        || (string)($snapshot['calculation_basis'] ?? '') !== $basis
+        || (string)($snapshot['active_invoice_snapshot']['hash'] ?? '') !== (string)$currentInvoiceSnapshot['hash']
+    );
+    return ['summary'=>$summary, 'completion'=>$completion, 'basis_valid'=>$basisValid,
+        'can_complete'=>$active && $basisValid && $basisStatus !== 'needs_reconfirmation' && abs($outstanding) <= 0.01,
+        'financial_data_changed'=>$changed, 'active'=>$active];
+}
+
+function documents_project_mark_completed(array $quote, array $actor, string $note = ''): array
+{
+    if (documents_project_completion_state($quote) === 'completed') return ['ok'=>false,'error'=>'Project is already completed.','quote'=>$quote];
+    $review = documents_project_completion_review($quote);
+    if (empty($review['can_complete'])) return ['ok'=>false,'error'=>'Project must be active, have a valid confirmed calculation basis, and have no outstanding amount.','quote'=>$quote];
+    $summary = $review['summary']; $at = date('c');
+    $snapshot = ['active_invoice_snapshot'=>documents_project_invoice_set_snapshot($quote),
+        'calculation_basis'=>(string)$summary['calculation_basis'], 'basis_status'=>(string)$summary['basis_status'],
+        'reference_amount'=>(float)$summary['calculation_reference_amount'], 'paid_amount'=>(float)$summary['total_payment_received'],
+        'outstanding'=>(float)$summary['remaining_amount'], 'overpayment'=>(float)$summary['overpayment']];
+    $event = ['event'=>'project_completed','timestamp'=>$at,'actor_id'=>(string)($actor['id']??''),'actor_name'=>(string)($actor['name']??$actor['full_name']??'Admin'),'note'=>safe_multiline_text($note),'snapshot'=>$snapshot];
+    $audit = is_array($quote['project_completion_audit']??null)?$quote['project_completion_audit']:[]; $audit[]=$event;
+    $quote['project_completion']=['state'=>'completed','completed_at'=>$at,'completed_by'=>['id'=>$event['actor_id'],'name'=>$event['actor_name']],'note'=>$event['note'],'snapshot'=>$snapshot];
+    $quote['project_completion_audit']=$audit; $quote['updated_at']=$at;
+    return ['ok'=>true,'error'=>'','quote'=>$quote];
+}
+
+function documents_project_reopen(array $quote, array $actor, string $reason): array
+{
+    $reason=safe_multiline_text($reason);
+    if (documents_project_completion_state($quote)!=='completed') return ['ok'=>false,'error'=>'Only completed projects can be reopened.','quote'=>$quote];
+    if ($reason==='') return ['ok'=>false,'error'=>'A reopening reason is required.','quote'=>$quote];
+    $at=date('c'); $audit=is_array($quote['project_completion_audit']??null)?$quote['project_completion_audit']:[];
+    $audit[]=['event'=>'project_reopened','timestamp'=>$at,'actor_id'=>(string)($actor['id']??''),'actor_name'=>(string)($actor['name']??$actor['full_name']??'Admin'),'reason'=>$reason,'completion_snapshot'=>$quote['project_completion']['snapshot']??[]];
+    $quote['project_completion']['state']='reopened'; $quote['project_completion']['reopened_at']=$at; $quote['project_completion']['reopened_by']=['id'=>(string)($actor['id']??''),'name'=>(string)($actor['name']??$actor['full_name']??'Admin')]; $quote['project_completion']['reopen_reason']=$reason;
+    $quote['project_completion_audit']=$audit; $quote['updated_at']=$at;
+    return ['ok'=>true,'error'=>'','quote'=>$quote];
+}
+
 function documents_project_confirm_calculation_basis(array $quote, string $basis, array $actor, string $reason, string $expectedHash): array
 {
     $basis = safe_text($basis); $reason = safe_multiline_text($reason); $summary = documents_project_financial_summary($quote); $snap = documents_project_invoice_set_snapshot($quote);
