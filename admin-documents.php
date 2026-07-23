@@ -374,6 +374,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $redirectDocuments($tab, ($saved['ok'] ?? false) ? 'success' : 'error', ($saved['ok'] ?? false) ? 'Project calculation basis updated.' : 'Unable to save calculation basis.', ['view' => $qid]);
     }
 
+    if (in_array($action, ['mark_site_completed', 'reopen_project'], true)) {
+        if (!$isAdmin) { $redirectDocuments('accepted_customers', 'error', 'Administrator access is required.'); }
+        $qid = safe_text($_POST['quotation_id'] ?? '');
+        $quote = $qid !== '' ? documents_get_quote($qid) : null;
+        if ($quote === null) { $redirectDocuments('accepted_customers', 'error', 'Accepted quotation not found.'); }
+        $actor = ['id'=>(string)($user['id']??''), 'name'=>(string)($user['full_name']??'Admin')];
+        if ($action === 'mark_site_completed') {
+            $result = documents_project_mark_completed($quote, $actor, (string)($_POST['completion_note']??''));
+            $returnTab = 'completed_customers'; $success = 'Site marked completed.';
+        } else {
+            $result = documents_project_reopen($quote, $actor, (string)($_POST['reopen_reason']??''));
+            $returnTab = 'accepted_customers'; $success = 'Project reopened for review.';
+        }
+        if (empty($result['ok'])) { $redirectDocuments(documents_project_completion_state($quote)==='completed'?'completed_customers':'accepted_customers', 'error', (string)($result['error']??'Unable to update project.'), ['view'=>$qid]); }
+        $saved = documents_save_quote((array)$result['quote']);
+        $redirectDocuments($returnTab, empty($saved['ok'])?'error':'success', empty($saved['ok'])?'Unable to save project state.':$success, empty($saved['ok'])?['view'=>$qid]:[]);
+    }
+
     if (in_array($action, ['create_payment_request', 'cancel_payment_request', 'mark_payment_request_sent', 'archive_payment_request', 'unarchive_payment_request'], true)) {
         $tab = 'accepted_customers';
         $view = safe_text($_POST['quotation_id'] ?? $_POST['return_view'] ?? '');
@@ -2933,7 +2951,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $activeTab = safe_text($_GET['tab'] ?? 'company');
-if (!in_array($activeTab, ['company', 'numbering', 'templates', 'accepted_customers', 'items', 'archived'], true)) {
+if (!in_array($activeTab, ['company', 'numbering', 'templates', 'accepted_customers', 'completed_customers', 'items', 'archived'], true)) {
     $activeTab = 'company';
 }
 
@@ -3313,6 +3331,7 @@ foreach ($salesReceipts as $receipt) {
 }
 
 $acceptedRows = [];
+$completedRows = [];
 foreach ($quotes as $quote) {
     if (!is_array($quote)) {
         continue;
@@ -3322,6 +3341,12 @@ foreach ($quotes as $quote) {
         continue;
     }
     $isArchived = $isArchivedRecord($quote);
+    $completionState = documents_project_completion_state($quote);
+    if ($completionState === 'completed') {
+        $review = documents_project_completion_review($quote, $receiptsByQuote[(string)($quote['id']??'')]??[]);
+        $completedRows[] = ['quote'=>$quote, 'review'=>$review, 'completion'=>(array)($quote['project_completion']??[])];
+        continue;
+    }
     if ($isArchived && !$includeArchivedAccepted) {
         continue;
     }
@@ -3349,6 +3374,11 @@ foreach ($quotes as $quote) {
 }
 
 $acceptedSummary = business_pulse_summary();
+$acceptedKpis = ['count'=>count($acceptedRows),'business'=>0.0,'received'=>0.0,'dues'=>0.0,'with_dues'=>0];
+foreach ($acceptedRows as $row) { $acceptedKpis['business']+=(float)$row['quotation_amount']; $acceptedKpis['received']+=(float)$row['payment_received']; $acceptedKpis['dues']+=(float)$row['receivables']; if((float)$row['receivables']>0.01)$acceptedKpis['with_dues']++; }
+$acceptedKpis['collection_pct']=$acceptedKpis['business']>0?min(100,$acceptedKpis['received']/$acceptedKpis['business']*100):null;
+$completedKpis=['count'=>count($completedRows),'business'=>0.0,'received'=>0.0,'changed'=>0];
+foreach($completedRows as $row){$snap=(array)($row['completion']['snapshot']??[]);$completedKpis['business']+=(float)($snap['reference_amount']??0);$completedKpis['received']+=(float)($snap['paid_amount']??0);if(!empty($row['review']['financial_data_changed']))$completedKpis['changed']++;}
 $packQuote = null;
 $packVersions = [];
 $packCurrentVersionNo = 1;
@@ -3459,6 +3489,7 @@ $workspaceDetails = [
     'numbering' => ['Numbering rules', 'Manage consistent document references without changing existing records.'],
     'templates' => ['Template sets', 'Maintain reusable wording and layouts for document creation.'],
     'accepted_customers' => ['Accepted customers', 'Manage accepted quotations, payment requests, and receipts without adding receipts to the commercial lifecycle.'],
+    'completed_customers' => ['Completed customers', 'Review explicitly completed sites and reopen projects when financial or operational review is required.'],
     'items' => ['Items & inventory', 'Maintain catalogue, kits, stock movements, and verification in one workspace.'],
     'archived' => ['Archived records', 'Review retained records without mixing them into active work.'],
 ];
@@ -3663,6 +3694,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
       <a data-workspace-tab class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering"<?= $activeTab === 'numbering' ? ' aria-current="page"' : '' ?>>Numbering Rules</a>
       <a data-workspace-tab class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates"<?= $activeTab === 'templates' ? ' aria-current="page"' : '' ?>>Template Sets</a>
       <a data-workspace-tab class="tab <?= $activeTab === 'accepted_customers' ? 'active' : '' ?>" href="?tab=accepted_customers"<?= $activeTab === 'accepted_customers' ? ' aria-current="page"' : '' ?>>Accepted Customers</a>
+      <a data-workspace-tab class="tab <?= $activeTab === 'completed_customers' ? 'active' : '' ?>" href="?tab=completed_customers"<?= $activeTab === 'completed_customers' ? ' aria-current="page"' : '' ?>>Completed Customers</a>
       <a data-workspace-tab data-workspace-mode="reload" class="tab <?= $activeTab === 'items' ? 'active' : '' ?>" href="?tab=items"<?= $activeTab === 'items' ? ' aria-current="page"' : '' ?>>Items</a>
       <a data-workspace-tab class="tab <?= $activeTab === 'archived' ? 'active' : '' ?>" href="?tab=archived"<?= $activeTab === 'archived' ? ' aria-current="page"' : '' ?>>Archived</a>
       <a class="tab" href="admin-templates.php">Template Blocks &amp; Media</a>
@@ -3692,6 +3724,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             $packQuoteAmount = (float) ($packQuote['calc']['gross_payable'] ?? $packQuote['calc']['final_price_incl_gst'] ?? $packQuote['calc']['grand_total'] ?? 0);
             $packRemainingReceivable = $packQuoteAmount - $packFinalReceived;
             $packProjectSummary = documents_project_financial_presentation($packQuote, $packReceiptsActive);
+            $packCompletionReview = documents_project_completion_review($packQuote, $packReceiptsActive);
             $packPaymentSummary = documents_payment_summary_for_quote($packQuote, $packReceiptsActive);
             $packPaymentRequests = documents_payment_requests_by_quote($packQuoteId);
             $packCanRequestPayment = documents_quote_normalize_status((string)($packQuote['status'] ?? 'draft')) === 'accepted' && !empty($packQuote['is_current_version']) && !documents_is_archived($packQuote) && (float)($packProjectSummary['outstanding_amount'] ?? 0) > 0.009;
@@ -3778,6 +3811,14 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
               <?php foreach ([['Project Amount',$inr((float)$packProjectSummary['project_amount'])],['Received',$inr((float)$packProjectSummary['received_amount'])],['Outstanding',$inr((float)$packProjectSummary['outstanding_amount'])],['Collection %',business_pulse_format_pct($packCollectionPct)],['Due Since',$packDueSince],['Last Payment Date',$packLastPaymentDate ?: '—'],['Last Payment Request',is_array($packLastRequest)?(string)($packLastRequest['created_at'] ?? $packLastRequest['id'] ?? '—'):'—'],['Next Follow-up Date',is_array($packLastRequest)?((string)($packLastRequest['follow_up_date'] ?? '') ?: '—'):'—'],['Document Status',implode(' · ',array_map(fn($k,$v)=>$k.': '.($v?'Done':'Pending'),array_keys($packDocStatus),$packDocStatus))],['Open Complaints','—'],['Pending Tasks','—']] as $m): ?><div class="summary-card"><span><?= htmlspecialchars($m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach; ?>
             </div>
           <div class="accepted-summary">
+          <section class="accepted-summary__card accepted-summary__card--wide">
+            <h3>Site Completion</h3>
+            <p><strong>State:</strong> <?= htmlspecialchars(ucfirst(documents_project_completion_state($packQuote)), ENT_QUOTES) ?></p>
+            <?php if (!empty($packCompletionReview['financial_data_changed'])): ?><div class="banner error">Financial data changed after completion. The stored completion snapshot has not been changed. Review the changes and reopen the project before continuing.</div><?php endif; ?>
+            <?php if ($isAdmin && !empty($packCompletionReview['can_complete']) && documents_project_completion_state($packQuote)!=='completed'): ?>
+              <form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="mark_site_completed"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId,ENT_QUOTES) ?>"><label>Completion note (optional)<textarea name="completion_note"></textarea></label><button class="btn" type="submit">Mark Site Completed</button></form>
+            <?php elseif (documents_project_completion_state($packQuote)!=='completed'): ?><p class="muted">Site completion is available only for an active project with a valid selected basis, no basis reconfirmation warning, and outstanding of ₹0.00 (₹0.01 tolerance).</p><?php endif; ?>
+          </section>
           <section class="accepted-summary__card">
           <h3>Quotation</h3>
           <div class="commercial-card-metrics">
@@ -4054,7 +4095,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           <div class="commercial-toolbar"><div><h2>Accepted Customers</h2><p class="muted-helper">Enter an accepted customer workbench to manage payment requests, receipts, summaries, and lifecycle documents.</p></div></div>
 
           <div class="summary-cards" aria-label="Accepted customer summary">
-            <?php foreach ([['Accepted Customers',number_format($acceptedSummary['accepted_count'])],['Total Accepted Business',$inr($acceptedSummary['total_business'])],['Total Received',$inr($acceptedSummary['total_received'])],['Total Dues',$inr($acceptedSummary['total_dues'])],['Collection %',business_pulse_format_pct($acceptedSummary['collection_pct'])],['Customers With Dues',number_format($acceptedSummary['customers_with_dues'])],['Pending Agreement',number_format($acceptedSummary['pending']['agreement'])],['Pending Dispatch Advice',number_format($acceptedSummary['pending']['dispatch'])],['Pending Challan',number_format($acceptedSummary['pending']['challan'])],['Pending Invoice',number_format($acceptedSummary['pending']['invoice'])]] as $m): ?><div class="summary-card"><span><?= htmlspecialchars($m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach; ?>
+            <?php foreach ([['Active Projects',number_format($acceptedKpis['count'])],['Active Business',$inr($acceptedKpis['business'])],['Total Received',$inr($acceptedKpis['received'])],['Total Dues',$inr($acceptedKpis['dues'])],['Collection %',business_pulse_format_pct($acceptedKpis['collection_pct'])],['Customers With Dues',number_format($acceptedKpis['with_dues'])]] as $m): ?><div class="summary-card"><span><?= htmlspecialchars($m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach; ?>
           </div>
           <form method="get" class="filter-grid list-toolbar"><input type="hidden" name="tab" value="accepted_customers" /><div><label>Search customer / mobile</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div><div><label>Archive visibility</label><label class="checkbox-field"><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived</label></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form>
           <div class="responsive-table accepted-customers-table-wrap"><table class="accepted-customers-table"><thead><tr><th>Accepted Quotation</th><th>Customer</th><th>System</th><th>Finance</th><th>Dues Since</th><th>Documents</th><th>Complaints/Tasks</th><th>Actions</th></tr></thead><tbody>
@@ -4062,6 +4103,17 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td><div class="accepted-finance"><div class="accepted-finance__row"><span class="accepted-finance__label">Total</span><span class="accepted-finance__value"><?= htmlspecialchars($inr((float)($row['quotation_amount']??0)),ENT_QUOTES) ?></span></div><div class="accepted-finance__row"><span class="accepted-finance__label">Received</span><span class="accepted-finance__value"><?= htmlspecialchars($inr((float)($row['payment_received']??0)),ENT_QUOTES) ?></span></div><div class="accepted-finance__row"><span class="accepted-finance__label">Due</span><span class="accepted-finance__value"><?= htmlspecialchars($inr(max(0,(float)($row['receivables']??0))),ENT_QUOTES) ?></span></div><?php if(!empty($row['advance'])):?><span class="pill warn">Overpaid / advance <?= htmlspecialchars($inr(abs((float)($row['receivables']??0))),ENT_QUOTES) ?></span><?php endif;?><?php if($activePaymentRequests>0):?><span class="pill"><?= $activePaymentRequests ?> active request<?= $activePaymentRequests===1?'':'s' ?></span><?php endif;?><div class="accepted-finance__row"><span class="accepted-finance__label">Collection</span><span class="accepted-finance__value"><?= htmlspecialchars(business_pulse_format_pct($collectionPct),ENT_QUOTES) ?></span></div></div></td><td><span class="due-age"><?= htmlspecialchars($dueSince,ENT_QUOTES) ?></span></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><span class="muted">Reliable matching unavailable</span></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Enter</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php foreach ([['create_agreement','Create/Open Agreement'],['create_dispatch_advice','Create/Open Dispatch Advice'],['create_delivery_challan','Create/Open Challan'],['create_invoice','Create/Open Invoice']] as $docAction): ?><form method="post" data-accepted-ajax-form="1" action="<?= htmlspecialchars($documentActionEndpoint, ENT_QUOTES) ?>" class="document-action-form" data-document-action="1" data-document-label="<?= htmlspecialchars($docAction[1], ENT_QUOTES) ?>" data-quote-no="<?= htmlspecialchars((string)($quote['quote_no']??$qid), ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($quote['customer_name']??''), ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars((string)($quote['customer_mobile']??''), ENT_QUOTES) ?>"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="<?= htmlspecialchars($docAction[0], ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><input type="hidden" name="response_format" value="json"><button class="btn secondary" type="submit"><?= htmlspecialchars($docAction[1], ENT_QUOTES) ?></button></form><?php endforeach; ?><?php if($isAdmin && empty($row['is_archived'])):?><form method="post" data-accepted-ajax-form="1"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
           <?php endforeach; if($acceptedRows===[]):?><tr><td colspan="8" class="empty-state">No accepted customers found.</td></tr><?php endif;?></tbody></table></div>
         <?php endif; ?>
+      </section>
+    <?php endif; ?>
+
+    <?php if ($activeTab === 'completed_customers'): ?>
+      <section class="panel">
+        <div class="commercial-toolbar"><div><h2>Completed Customers</h2><p class="muted-helper">Only projects explicitly marked Site Completed appear here. Completion figures remain an immutable snapshot.</p></div></div>
+        <div class="summary-cards" aria-label="Completed customer summary"><?php foreach([['Completed Sites',$completedKpis['count']],['Final Amount',$inr($completedKpis['business'])],['Paid at Completion',$inr($completedKpis['received'])],['Require Review',$completedKpis['changed']]] as $m):?><div class="summary-card"><span><?= htmlspecialchars((string)$m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach;?></div>
+        <div class="responsive-table"><table><thead><tr><th>Customer</th><th>Quotation</th><th>Final Amount</th><th>Paid Amount</th><th>Completion Date</th><th>Completed By</th><th>Document Status</th><th>Review / Action</th></tr></thead><tbody>
+        <?php foreach($completedRows as $row):$q=$row['quote'];$c=$row['completion'];$s=(array)($c['snapshot']??[]);$qid=(string)($q['id']??'');$docs=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Dispatch Advice'=>documents_dispatch_advices_for_quote($qid)!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[]];?>
+          <tr><td><?= htmlspecialchars((string)($q['customer_name']??''),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($q['quote_no']??$qid),ENT_QUOTES) ?></td><td><?= htmlspecialchars($inr((float)($s['reference_amount']??0)),ENT_QUOTES) ?></td><td><?= htmlspecialchars($inr((float)($s['paid_amount']??0)),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($c['completed_at']??''),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($c['completed_by']['name']??'—'),ENT_QUOTES) ?></td><td><?php foreach($docs as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span> <?php endforeach;?></td><td><?php if(!empty($row['review']['financial_data_changed'])):?><div class="banner error">Financial data changed; snapshot preserved. Review and reopen required.</div><?php endif;?><?php if($isAdmin):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="reopen_project"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><label>Reason<input name="reopen_reason" required></label><button class="btn warn" type="submit">Reopen Project</button></form><?php endif;?></td></tr>
+        <?php endforeach;if($completedRows===[]):?><tr><td colspan="8" class="empty-state">No explicitly completed projects found.</td></tr><?php endif;?></tbody></table></div>
       </section>
     <?php endif; ?>
 
