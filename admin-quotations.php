@@ -87,9 +87,17 @@ $templates = array_values(array_filter($templatesRaw, static function ($row): bo
 }));
 $templateBlocks = documents_sync_template_block_entries($templates);
 $templateBlocks = is_array($templateBlocks) ? $templateBlocks : [];
-$resolveDefaultTemplateIdForNewQuote = static function (array $templateRows, string $segment = 'RES'): string {
-    $resolved = documents_resolve_default_template_for_segment($segment);
-    return safe_text((string) ($resolved['id'] ?? ''));
+$defaultTemplateNameForNewQuote = 'pm surya ghar - residential (subsidy) (res)';
+$resolveDefaultTemplateIdForNewQuote = static function (array $templateRows) use ($defaultTemplateNameForNewQuote): string {
+    foreach ($templateRows as $tplRow) {
+        $templateName = trim((string) ($tplRow['name'] ?? ''));
+        $segmentName = trim((string) ($tplRow['segment'] ?? ''));
+        $displayName = trim($templateName . ($segmentName !== '' ? (' (' . $segmentName . ')') : ''));
+        if (strcasecmp($displayName, $defaultTemplateNameForNewQuote) === 0) {
+            return safe_text((string) ($tplRow['id'] ?? ''));
+        }
+    }
+    return '';
 };
 $company = load_company_profile();
 $quoteDefaults = load_quote_defaults();
@@ -567,10 +575,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($selectedTemplate === null) {
             $redirectWith('error', 'Please select a template set.');
         }
-        $submittedSegment = documents_normalize_quotation_segment((string) ($_POST['segment'] ?? ($existing['segment'] ?? '')));
-        if ($submittedSegment === '' || documents_normalize_quotation_segment((string) ($selectedTemplate['segment'] ?? '')) !== $submittedSegment) {
-            $redirectWith('error', 'Please select an active template compatible with the quotation segment.');
-        }
 
         $partyType = safe_text($_POST['party_type'] ?? 'lead');
         $mobile = documents_normalize_mobile((string) ($_POST['customer_mobile'] ?? ''));
@@ -652,7 +656,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quote['created_by_type'] = $roleName === 'employee' ? 'employee' : 'admin';
             $quote['created_by_id'] = (string) ($user['id'] ?? '');
             $quote['created_by_name'] = (string) ($user['full_name'] ?? ($quote['created_by_type'] === 'employee' ? 'Employee' : 'Admin'));
-            $quote['segment'] = $submittedSegment;
+            $quote['segment'] = (string) ($selectedTemplate['segment'] ?? 'RES');
             $quote['status'] = 'Draft';
         } else {
             $quote = $existing;
@@ -669,7 +673,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $quote['template_set_id'] = $templateSetId;
-        $quote['segment'] = $submittedSegment;
 
         // Browser-disabled controls are omitted from POST. Preserve the saved quote value when a
         // key is absent, while still treating an explicitly submitted 0 (or blank) as user input.
@@ -2015,8 +2018,7 @@ if ($savedAnnualGenerationForEdit === '') {
 <input type="hidden" name="source_lead_id" value="<?= htmlspecialchars((string) ($editing['source']['lead_id'] ?? ($lookupResult['source']['lead_id'] ?? '')), ENT_QUOTES) ?>">
 <input type="hidden" name="source_lead_mobile" value="<?= htmlspecialchars((string) ($editing['source']['lead_mobile'] ?? ($lookupResult['source']['lead_mobile'] ?? '')), ENT_QUOTES) ?>">
 <div class="grid">
-<div><label>Segment</label><select name="segment" id="quotationSegment" required><?php foreach (documents_quotation_segments() as $code=>$meta): ?><option value="<?= $code ?>" <?= documents_normalize_quotation_segment((string)$editing['segment'])===$code?'selected':'' ?>><?= htmlspecialchars((string)$meta['label'], ENT_QUOTES) ?> (<?= $code ?>)</option><?php endforeach; ?></select></div>
-<div><label>Template Set</label><select name="template_set_id" id="quotationTemplateSet" required><?php foreach ($templates as $tpl): ?><option value="<?= htmlspecialchars((string)$tpl['id'], ENT_QUOTES) ?>" data-segment="<?= htmlspecialchars((string)($tpl['segment'] ?? ''), ENT_QUOTES) ?>" <?= ((string)$editing['template_set_id']===(string)$tpl['id'])?'selected':'' ?>><?= htmlspecialchars((string)$tpl['name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$tpl['segment'], ENT_QUOTES) ?>)</option><?php endforeach; ?></select><div class="muted">Only active templates for the selected segment are available.</div></div>
+<div><label>Template Set</label><select name="template_set_id" required><?php foreach ($templates as $tpl): ?><option value="<?= htmlspecialchars((string)$tpl['id'], ENT_QUOTES) ?>" data-segment="<?= htmlspecialchars((string)($tpl['segment'] ?? 'RES'), ENT_QUOTES) ?>" <?= ((string)$editing['template_set_id']===(string)$tpl['id'])?'selected':'' ?>><?= htmlspecialchars((string)$tpl['name'], ENT_QUOTES) ?> (<?= htmlspecialchars((string)$tpl['segment'], ENT_QUOTES) ?>)</option><?php endforeach; ?></select></div>
 <div><label>Party Type</label><select name="party_type"><option value="customer" <?= $editing['party_type']==='customer'?'selected':'' ?>>Customer</option><option value="lead" <?= $editing['party_type']!=='customer'?'selected':'' ?>>Lead</option></select></div>
 <div><label>Mobile</label><input name="customer_mobile" required value="<?= htmlspecialchars((string)(($lookup !== null) ? (string) ($lookup['mobile'] ?? $lookupMobile) : $editing['customer_mobile']), ENT_QUOTES) ?>"></div>
 <div><label>Name</label><input name="customer_name" required value="<?= htmlspecialchars((string)($quoteSnapshot['name'] ?? $editing['customer_name']), ENT_QUOTES) ?>"></div>
@@ -2543,17 +2545,6 @@ document.querySelectorAll('#structuredItemsTable tbody tr').forEach((tr) => sync
       row.innerHTML = `<td>${idx + 1}<input type="hidden" name="important_points[${idx}][id]" value=""></td><td class="center"><input type="checkbox" name="important_points[${idx}][active]" checked></td><td><textarea name="important_points[${idx}][text]" maxlength="1000"></textarea></td><td><input type="number" name="important_points[${idx}][sort_order]" value="${(idx + 1) * 10}"></td><td><button class="btn secondary important-remove" type="button">Remove</button></td>`;
       importantTable.appendChild(row);
     });
-    const quotationSegment=document.getElementById('quotationSegment');
-    const quotationTemplateSet=document.getElementById('quotationTemplateSet');
-    const filterQuotationTemplates=()=>{
-      if(!quotationSegment||!quotationTemplateSet)return;
-      let first='';
-      [...quotationTemplateSet.options].forEach((option)=>{const allowed=option.dataset.segment===quotationSegment.value;option.hidden=!allowed;option.disabled=!allowed;if(allowed&&first==='')first=option.value;});
-      const selected=quotationTemplateSet.selectedOptions[0];
-      if(!selected||selected.disabled)quotationTemplateSet.value=first;
-    };
-    quotationSegment?.addEventListener('change',filterQuotationTemplates);
-    filterQuotationTemplates();
 
     const settingsForm = document.querySelector('form.grid input[name="action"][value="save_settings"]')?.form;
     if (!settingsForm) return;
