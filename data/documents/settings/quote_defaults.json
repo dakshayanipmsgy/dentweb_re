@@ -145,13 +145,6 @@
   },
   "defaults": {
     "hsn_solar": "8541",
-    "cover_note_template": "Thank you for trusting Dakshayani Enterprises for your rooftop solar journey in Jharkhand.\nWe have prepared this proposal for your site and monthly savings goals.",
-    "cover_note_presentations": {
-      "RES": {"kicker": "A note for your home", "heading": "Dear Homeowner"},
-      "COM": {"kicker": "A note for your business", "heading": "Dear Business Customer"},
-      "IND": {"kicker": "A note for your facility", "heading": "Dear Industrial Customer"},
-      "INST": {"kicker": "A note for your organization", "heading": "Dear Organization"},
-      "PROD": {"kicker": "A note for you", "heading": "Dear Customer"}
-    }
+    "cover_note_template": "Thank you for trusting Dakshayani Enterprises for your rooftop solar journey in Jharkhand.\nWe have prepared this proposal for your site and monthly savings goals."
   }
 }
