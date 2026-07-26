@@ -439,7 +439,7 @@ function employee_dashboard_safe(string $value): string
         <div class="employee-meta">
           <span class="employee-meta__pill">Logged in as <?= employee_dashboard_safe($employee['name'] ?? $employee['login_id'] ?? 'Employee') ?></span>
           <a class="primary-button" href="employee-tasks.php">My Tasks</a>
-          <a class="primary-button" href="admin-users.php?tab=customers">+ Add Customer</a>
+          <a class="primary-button" href="admin-customers.php">+ Add Customer</a>
           <a class="primary-button" href="employee-documents.php">Quotations &amp; Challans</a>
           <a class="primary-button" href="admin-documents.php?tab=items&sub=inventory">Inventory</a>
           <a class="logout-link" href="logout.php">Log out</a>
@@ -610,7 +610,7 @@ function employee_dashboard_safe(string $value): string
                 <td><?= employee_dashboard_safe($customer['district'] ?? '') ?></td>
                 <td><?= employee_dashboard_safe($customer['status'] ?? '') ?></td>
                 <td><?= ($customer['complaints_raised'] ?? '') === 'Yes' ? 'Yes' : 'No' ?></td>
-                <td><a class="table-link" href="admin-users.php?tab=customers&amp;view=<?= urlencode((string) ($customer['mobile'] ?? '')) ?>">View / Edit</a></td>
+                <td><a class="table-link" href="admin-customers.php?view=<?= urlencode((string) ($customer['mobile'] ?? '')) ?>">View / Edit</a></td>
               </tr>
               <?php endforeach; ?>
             </tbody>
