@@ -2794,6 +2794,92 @@ function documents_find_customer_by_mobile(string $mobile): ?array
     return documents_map_customer_record($record);
 }
 
+/**
+ * Resolve a quotation's Customer Users linkage. The customer store is always
+ * consulted; quotation metadata is only a receipt recording a successful link.
+ *
+ * @return array{state:string,label:string,mobile:string,customer:?array,error:string,can_create:bool}
+ */
+function documents_project_customer_user_link(array $quote, ?CustomerFsStore $store = null): array
+{
+    $snapshot = documents_quote_resolve_snapshot($quote);
+    $mobile = documents_normalize_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
+    if ($mobile === '') {
+        return ['state' => 'invalid', 'label' => 'Not in Customer Users', 'mobile' => '', 'customer' => null, 'error' => 'A valid 10-digit customer mobile is required.', 'can_create' => false];
+    }
+
+    $store = $store ?? new CustomerFsStore();
+    $customer = $store->findByMobile($mobile);
+    if ($customer === null) {
+        return ['state' => 'missing', 'label' => 'Not in Customer Users', 'mobile' => $mobile, 'customer' => null, 'error' => '', 'can_create' => true];
+    }
+
+    $quoteName = preg_replace('/\s+/', ' ', strtolower(trim((string) ($snapshot['name'] ?? $quote['customer_name'] ?? '')))) ?? '';
+    $customerName = preg_replace('/\s+/', ' ', strtolower(trim((string) ($customer['name'] ?? '')))) ?? '';
+    if ($quoteName === '' || $customerName === '' || $quoteName !== $customerName) {
+        return ['state' => 'conflict', 'label' => 'Link conflict', 'mobile' => $mobile, 'customer' => $customer, 'error' => 'This mobile belongs to a different customer identity. Existing customer data was not changed.', 'can_create' => false];
+    }
+
+    $metadata = is_array($quote['customer_user_link'] ?? null) ? $quote['customer_user_link'] : [];
+    $created = (string) ($metadata['mobile'] ?? '') === $mobile && (string) ($metadata['link_type'] ?? '') === 'created';
+    return ['state' => $created ? 'created' : 'existing', 'label' => $created ? 'Customer account created' : 'Existing customer linked', 'mobile' => $mobile, 'customer' => $customer, 'error' => '', 'can_create' => false];
+}
+
+/** Build only allow-listed snapshot fields and let CustomerFsStore validate them. */
+function documents_project_customer_user_payload(array $quote): array
+{
+    $snapshot = documents_quote_resolve_snapshot($quote);
+    return [
+        'mobile' => documents_normalize_mobile((string) ($snapshot['mobile'] ?? $quote['customer_mobile'] ?? '')),
+        'name' => safe_text((string) ($snapshot['name'] ?? $quote['customer_name'] ?? '')),
+        'customer_type' => safe_text((string) ($quote['customer_type'] ?? '')),
+        'address' => safe_text((string) ($quote['site_address'] ?? $snapshot['address'] ?? '')),
+        'city' => safe_text((string) ($quote['city'] ?? $snapshot['city'] ?? '')),
+        'district' => safe_text((string) ($quote['district'] ?? $snapshot['district'] ?? '')),
+        'pin_code' => safe_text((string) ($quote['pin'] ?? $snapshot['pin_code'] ?? '')),
+        'state' => safe_text((string) ($quote['state'] ?? $snapshot['state'] ?? '')),
+        'meter_number' => safe_text((string) ($snapshot['meter_number'] ?? '')),
+        'meter_serial_number' => safe_text((string) ($snapshot['meter_serial_number'] ?? '')),
+        'jbvnl_account_number' => safe_text((string) ($quote['consumer_account_no'] ?? $snapshot['consumer_account_no'] ?? '')),
+        'application_id' => safe_text((string) ($snapshot['application_id'] ?? '')),
+        'application_submitted_date' => safe_text((string) ($snapshot['application_submitted_date'] ?? '')),
+        'sanction_load_kwp' => safe_text((string) ($snapshot['sanction_load_kwp'] ?? '')),
+        'installed_pv_module_capacity_kwp' => safe_text((string) ($snapshot['installed_pv_module_capacity_kwp'] ?? '')),
+        'circle_name' => safe_text((string) ($snapshot['circle_name'] ?? '')),
+        'division_name' => safe_text((string) ($snapshot['division_name'] ?? '')),
+        'sub_division_name' => safe_text((string) ($snapshot['sub_division_name'] ?? '')),
+        'created_from_quote_id' => safe_text((string) ($quote['id'] ?? '')),
+        'created_from_quote_no' => safe_text((string) ($quote['quote_no'] ?? '')),
+    ];
+}
+
+/**
+ * Create or safely link without ever updating an existing customer. A second
+ * concurrent request is resolved after addCustomer's locked duplicate check.
+ */
+function documents_project_create_or_link_customer(array $quote, ?CustomerFsStore $store = null): array
+{
+    $store = $store ?? new CustomerFsStore();
+    $resolved = documents_project_customer_user_link($quote, $store);
+    if ($resolved['state'] === 'existing' || $resolved['state'] === 'created') {
+        return ['ok' => true, 'created' => false, 'customer' => $resolved['customer'], 'error' => ''];
+    }
+    if ($resolved['state'] !== 'missing') {
+        return ['ok' => false, 'created' => false, 'customer' => $resolved['customer'], 'error' => $resolved['error']];
+    }
+
+    $result = $store->addCustomer(documents_project_customer_user_payload($quote));
+    if (!empty($result['success']) && is_array($result['customer'] ?? null)) {
+        return ['ok' => true, 'created' => true, 'customer' => $result['customer'], 'error' => ''];
+    }
+    $after = documents_project_customer_user_link($quote, $store);
+    if ($after['state'] === 'existing' || $after['state'] === 'created') {
+        return ['ok' => true, 'created' => false, 'customer' => $after['customer'], 'error' => ''];
+    }
+    $errors = is_array($result['errors'] ?? null) ? $result['errors'] : [];
+    return ['ok' => false, 'created' => false, 'customer' => null, 'error' => $after['state'] === 'conflict' ? $after['error'] : (implode(' ', $errors) ?: 'Customer account could not be created.')];
+}
+
 function documents_normalize_mobile(string $input): string
 {
     $digits = preg_replace('/\D+/', '', trim($input));

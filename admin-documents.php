@@ -5,6 +5,7 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 require_once __DIR__ . '/includes/commercial_lifecycle.php';
 require_once __DIR__ . '/includes/business_pulse_helpers.php';
+require_once __DIR__ . '/includes/audit_log.php';
 
 require_login_any_role(['admin', 'employee']);
 
@@ -318,6 +319,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sendJsonResponse(['ok' => false, 'error' => 'Access denied.'], 403);
         }
         $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
+    }
+
+    if ($action === 'create_or_link_customer_user') {
+        $returnTab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
+        if (!in_array($returnTab, ['accepted_customers', 'completed_customers'], true)) { $returnTab = 'accepted_customers'; }
+        $qid = safe_text($_POST['quotation_id'] ?? '');
+        $quote = $qid !== '' ? documents_get_quote($qid) : null;
+        if ($quote === null) { $redirectDocuments($returnTab, 'error', 'Accepted quotation not found.'); }
+        $result = documents_project_create_or_link_customer($quote);
+        if (empty($result['ok']) || !is_array($result['customer'] ?? null)) {
+            $redirectDocuments($returnTab, 'error', (string) ($result['error'] ?? 'Customer account could not be created.'), ['view' => $qid]);
+        }
+        $customer = $result['customer'];
+        $mobile = documents_normalize_mobile((string) ($customer['mobile'] ?? ''));
+        $quote['customer_user_link'] = [
+            'mobile' => $mobile,
+            'serial_number' => safe_text((string) ($customer['serial_number'] ?? '')),
+            'link_type' => !empty($result['created']) ? 'created' : 'existing',
+            'linked_at' => date('c'),
+            'linked_by' => ['id' => (string) ($user['id'] ?? ''), 'name' => (string) ($user['full_name'] ?? 'Admin')],
+        ];
+        $saved = documents_save_quote($quote);
+        if (empty($saved['ok'])) { $redirectDocuments($returnTab, 'error', 'Customer exists, but linkage metadata could not be saved. Open Customer Users to verify.', ['view' => $qid]); }
+        $actor = audit_current_actor();
+        log_audit_event($actor['actor_type'], $actor['actor_id'], 'quotation', $qid, !empty($result['created']) ? 'customer_user_created' : 'customer_user_linked', ['mobile' => $mobile, 'serial_number' => (string) ($customer['serial_number'] ?? '')]);
+        $redirectDocuments($returnTab, 'success', !empty($result['created']) ? 'Customer account created.' : 'Existing customer linked.', ['view' => $qid]);
     }
 
     if ($action === 'save_company_profile') {
@@ -3414,6 +3441,30 @@ $collectByQuote = static function (array $rows, string $quoteId, bool $includeAr
     return $list;
 };
 
+$renderCustomerUserLink = static function (array $quote, string $returnTab, bool $isAdmin): string {
+    $link = documents_project_customer_user_link($quote);
+    $mobile = (string) ($link['mobile'] ?? '');
+    $state = (string) ($link['state'] ?? 'invalid');
+    $pillClass = $state === 'conflict' || $state === 'invalid' ? 'warn' : (($state === 'missing') ? 'archived' : '');
+    ob_start();
+    ?><div class="customer-user-link" style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
+      <span class="pill <?= htmlspecialchars($pillClass, ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($link['label'] ?? 'Not in Customer Users'), ENT_QUOTES) ?></span>
+      <?php if (($state === 'existing' || $state === 'created') && $mobile !== ''): ?>
+        <a class="btn secondary" href="admin-users.php?<?= htmlspecialchars(http_build_query(['tab' => 'customers', 'view' => $mobile]), ENT_QUOTES) ?>">Open in Customer Users</a>
+      <?php elseif ($state === 'missing' && $isAdmin): ?>
+        <form method="post" class="inline-form" data-customer-user-create-form="1">
+          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>">
+          <input type="hidden" name="action" value="create_or_link_customer_user">
+          <input type="hidden" name="quotation_id" value="<?= htmlspecialchars((string) ($quote['id'] ?? ''), ENT_QUOTES) ?>">
+          <input type="hidden" name="return_tab" value="<?= htmlspecialchars($returnTab, ENT_QUOTES) ?>">
+          <button class="btn secondary" type="submit">Create in Customer Users</button>
+        </form>
+      <?php endif; ?>
+      <?php if ((string) ($link['error'] ?? '') !== ''): ?><span class="muted-helper" title="<?= htmlspecialchars((string) $link['error'], ENT_QUOTES) ?>"><?= htmlspecialchars((string) $link['error'], ENT_QUOTES) ?></span><?php endif; ?>
+    </div><?php
+    return (string) ob_get_clean();
+};
+
 $archivedRows = [];
 foreach ($quotes as $quote) {
     if (!is_array($quote) || !$isArchivedRecord($quote)) {
@@ -3742,6 +3793,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           <p><a class="btn secondary" href="?tab=accepted_customers">&larr; Back to Accepted Customers</a></p>
           <section class="accepted-context">
             <h2 style="margin-top:0;">Accepted Customer Commercial Summary: <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></h2>
+            <?= $renderCustomerUserLink($packQuote, 'accepted_customers', $isAdmin) ?>
             <div class="accepted-context__meta">
               <span><strong>Quotation:</strong> <?= htmlspecialchars((string) ($packQuote['quote_no'] ?? $packQuoteId), ENT_QUOTES) ?></span>
               <span><strong>Quotation amount:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['quotation_amount']), ENT_QUOTES) ?></span>
@@ -4100,7 +4152,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           <form method="get" class="filter-grid list-toolbar"><input type="hidden" name="tab" value="accepted_customers" /><div><label>Search customer / mobile</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div><div><label>Archive visibility</label><label class="checkbox-field"><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived</label></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form>
           <div class="responsive-table accepted-customers-table-wrap"><table class="accepted-customers-table"><thead><tr><th>Accepted Quotation</th><th>Customer</th><th>System</th><th>Finance</th><th>Dues Since</th><th>Documents</th><th>Complaints/Tasks</th><th>Actions</th></tr></thead><tbody>
           <?php foreach ($acceptedRows as $row): $quote=$row['quote']; $qid=(string)($quote['id']??''); $paymentSummary=is_array($row['payment_summary']??null)?$row['payment_summary']:[]; $finance=is_array($row['finance_presentation']??null)?$row['finance_presentation']:documents_project_financial_presentation($quote); $activePaymentRequests=(int)($paymentSummary['active_request_count']??0); $collectionPct=$finance['collection_pct']; $dueSince=((string)($finance['due_since']??'')!=='')?(string)$finance['due_since']:'—'; $workflow=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Dispatch Advice'=>array_values(array_filter(documents_dispatch_advices_for_quote($qid), static fn(array $row): bool => !documents_is_archived($row)))!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[]]; ?>
-          <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td><div class="accepted-finance"><div class="accepted-finance__row"><span class="accepted-finance__label">Total</span><span class="accepted-finance__value"><?= htmlspecialchars($inr((float)($row['quotation_amount']??0)),ENT_QUOTES) ?></span></div><div class="accepted-finance__row"><span class="accepted-finance__label">Received</span><span class="accepted-finance__value"><?= htmlspecialchars($inr((float)($row['payment_received']??0)),ENT_QUOTES) ?></span></div><div class="accepted-finance__row"><span class="accepted-finance__label">Due</span><span class="accepted-finance__value"><?= htmlspecialchars($inr(max(0,(float)($row['receivables']??0))),ENT_QUOTES) ?></span></div><?php if(!empty($row['advance'])):?><span class="pill warn">Overpaid / advance <?= htmlspecialchars($inr(abs((float)($row['receivables']??0))),ENT_QUOTES) ?></span><?php endif;?><?php if($activePaymentRequests>0):?><span class="pill"><?= $activePaymentRequests ?> active request<?= $activePaymentRequests===1?'':'s' ?></span><?php endif;?><div class="accepted-finance__row"><span class="accepted-finance__label">Collection</span><span class="accepted-finance__value"><?= htmlspecialchars(business_pulse_format_pct($collectionPct),ENT_QUOTES) ?></span></div></div></td><td><span class="due-age"><?= htmlspecialchars($dueSince,ENT_QUOTES) ?></span></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><span class="muted">Reliable matching unavailable</span></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Enter</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php foreach ([['create_agreement','Create/Open Agreement'],['create_dispatch_advice','Create/Open Dispatch Advice'],['create_delivery_challan','Create/Open Challan'],['create_invoice','Create/Open Invoice']] as $docAction): ?><form method="post" data-accepted-ajax-form="1" action="<?= htmlspecialchars($documentActionEndpoint, ENT_QUOTES) ?>" class="document-action-form" data-document-action="1" data-document-label="<?= htmlspecialchars($docAction[1], ENT_QUOTES) ?>" data-quote-no="<?= htmlspecialchars((string)($quote['quote_no']??$qid), ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($quote['customer_name']??''), ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars((string)($quote['customer_mobile']??''), ENT_QUOTES) ?>"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="<?= htmlspecialchars($docAction[0], ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><input type="hidden" name="response_format" value="json"><button class="btn secondary" type="submit"><?= htmlspecialchars($docAction[1], ENT_QUOTES) ?></button></form><?php endforeach; ?><?php if($isAdmin && empty($row['is_archived'])):?><form method="post" data-accepted-ajax-form="1"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
+          <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span><?= $renderCustomerUserLink($quote, 'accepted_customers', $isAdmin) ?></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td><div class="accepted-finance"><div class="accepted-finance__row"><span class="accepted-finance__label">Total</span><span class="accepted-finance__value"><?= htmlspecialchars($inr((float)($row['quotation_amount']??0)),ENT_QUOTES) ?></span></div><div class="accepted-finance__row"><span class="accepted-finance__label">Received</span><span class="accepted-finance__value"><?= htmlspecialchars($inr((float)($row['payment_received']??0)),ENT_QUOTES) ?></span></div><div class="accepted-finance__row"><span class="accepted-finance__label">Due</span><span class="accepted-finance__value"><?= htmlspecialchars($inr(max(0,(float)($row['receivables']??0))),ENT_QUOTES) ?></span></div><?php if(!empty($row['advance'])):?><span class="pill warn">Overpaid / advance <?= htmlspecialchars($inr(abs((float)($row['receivables']??0))),ENT_QUOTES) ?></span><?php endif;?><?php if($activePaymentRequests>0):?><span class="pill"><?= $activePaymentRequests ?> active request<?= $activePaymentRequests===1?'':'s' ?></span><?php endif;?><div class="accepted-finance__row"><span class="accepted-finance__label">Collection</span><span class="accepted-finance__value"><?= htmlspecialchars(business_pulse_format_pct($collectionPct),ENT_QUOTES) ?></span></div></div></td><td><span class="due-age"><?= htmlspecialchars($dueSince,ENT_QUOTES) ?></span></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><span class="muted">Reliable matching unavailable</span></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Enter</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php foreach ([['create_agreement','Create/Open Agreement'],['create_dispatch_advice','Create/Open Dispatch Advice'],['create_delivery_challan','Create/Open Challan'],['create_invoice','Create/Open Invoice']] as $docAction): ?><form method="post" data-accepted-ajax-form="1" action="<?= htmlspecialchars($documentActionEndpoint, ENT_QUOTES) ?>" class="document-action-form" data-document-action="1" data-document-label="<?= htmlspecialchars($docAction[1], ENT_QUOTES) ?>" data-quote-no="<?= htmlspecialchars((string)($quote['quote_no']??$qid), ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($quote['customer_name']??''), ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars((string)($quote['customer_mobile']??''), ENT_QUOTES) ?>"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="<?= htmlspecialchars($docAction[0], ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><input type="hidden" name="response_format" value="json"><button class="btn secondary" type="submit"><?= htmlspecialchars($docAction[1], ENT_QUOTES) ?></button></form><?php endforeach; ?><?php if($isAdmin && empty($row['is_archived'])):?><form method="post" data-accepted-ajax-form="1"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
           <?php endforeach; if($acceptedRows===[]):?><tr><td colspan="8" class="empty-state">No accepted customers found.</td></tr><?php endif;?></tbody></table></div>
         <?php endif; ?>
       </section>
@@ -4110,10 +4162,10 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
       <section class="panel">
         <div class="commercial-toolbar"><div><h2>Completed Customers</h2><p class="muted-helper">Only projects explicitly marked Site Completed appear here. Completion figures remain an immutable snapshot.</p></div></div>
         <div class="summary-cards" aria-label="Completed customer summary"><?php foreach([['Completed Sites',$completedKpis['count']],['Final Amount',$inr($completedKpis['business'])],['Paid at Completion',$inr($completedKpis['received'])],['Require Review',$completedKpis['changed']]] as $m):?><div class="summary-card"><span><?= htmlspecialchars((string)$m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach;?></div>
-        <div class="responsive-table"><table><thead><tr><th>Customer</th><th>Quotation</th><th>Final Amount</th><th>Paid Amount</th><th>Completion Date</th><th>Completed By</th><th>Document Status</th><th>Review / Action</th></tr></thead><tbody>
+        <div class="responsive-table"><table><thead><tr><th>Customer</th><th>Customer Users</th><th>Quotation</th><th>Final Amount</th><th>Paid Amount</th><th>Completion Date</th><th>Completed By</th><th>Document Status</th><th>Review / Action</th></tr></thead><tbody>
         <?php foreach($completedRows as $row):$q=$row['quote'];$c=$row['completion'];$s=(array)($c['snapshot']??[]);$qid=(string)($q['id']??'');$docs=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Dispatch Advice'=>documents_dispatch_advices_for_quote($qid)!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[]];?>
-          <tr><td><?= htmlspecialchars((string)($q['customer_name']??''),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($q['quote_no']??$qid),ENT_QUOTES) ?></td><td><?= htmlspecialchars($inr((float)($s['reference_amount']??0)),ENT_QUOTES) ?></td><td><?= htmlspecialchars($inr((float)($s['paid_amount']??0)),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($c['completed_at']??''),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($c['completed_by']['name']??'—'),ENT_QUOTES) ?></td><td><?php foreach($docs as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span> <?php endforeach;?></td><td><?php if(!empty($row['review']['financial_data_changed'])):?><div class="banner error">Financial data changed; snapshot preserved. Review and reopen required.</div><?php endif;?><?php if($isAdmin):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="reopen_project"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><label>Reason<input name="reopen_reason" required></label><button class="btn warn" type="submit">Reopen Project</button></form><?php endif;?></td></tr>
-        <?php endforeach;if($completedRows===[]):?><tr><td colspan="8" class="empty-state">No explicitly completed projects found.</td></tr><?php endif;?></tbody></table></div>
+          <tr><td><?= htmlspecialchars((string)($q['customer_name']??''),ENT_QUOTES) ?><br><span class="muted-helper"><?= htmlspecialchars((string)($q['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= $renderCustomerUserLink($q, 'completed_customers', $isAdmin) ?></td><td><?= htmlspecialchars((string)($q['quote_no']??$qid),ENT_QUOTES) ?></td><td><?= htmlspecialchars($inr((float)($s['reference_amount']??0)),ENT_QUOTES) ?></td><td><?= htmlspecialchars($inr((float)($s['paid_amount']??0)),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($c['completed_at']??''),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($c['completed_by']['name']??'—'),ENT_QUOTES) ?></td><td><?php foreach($docs as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span> <?php endforeach;?></td><td><?php if(!empty($row['review']['financial_data_changed'])):?><div class="banner error">Financial data changed; snapshot preserved. Review and reopen required.</div><?php endif;?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Open document pack</a><?php if($isAdmin):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="reopen_project"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><label>Reason<input name="reopen_reason" required></label><button class="btn warn" type="submit">Reopen Project</button></form><?php endif;?></td></tr>
+        <?php endforeach;if($completedRows===[]):?><tr><td colspan="9" class="empty-state">No explicitly completed projects found.</td></tr><?php endif;?></tbody></table></div>
       </section>
     <?php endif; ?>
 
@@ -5215,6 +5267,20 @@ document.querySelectorAll('form[data-inventory-form="1"]').forEach(function (for
     replaceFromUrl(url, 'Archive visibility updated.', true).catch(function(err){ message(currentWorkbench(), err.message || 'Unable to update archive visibility.', false); });
   });
 })();
+</script>
+
+<script>
+// Prevent rapid repeat submissions while the server/store lock resolves the link.
+document.addEventListener('submit', function (event) {
+  var form = event.target.closest && event.target.closest('form[data-customer-user-create-form]');
+  if (!form || form.dataset.submitting === '1') {
+    if (form) event.preventDefault();
+    return;
+  }
+  form.dataset.submitting = '1';
+  var button = form.querySelector('button[type="submit"]');
+  if (button) { button.disabled = true; button.textContent = 'Creating…'; }
+});
 </script>
 
 </body>
