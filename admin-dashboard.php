@@ -554,7 +554,8 @@ $cardConfigs[] = [
           <div class="dashboard-action-group">
             <h3>People &amp; approvals</h3>
             <div class="dashboard-action-links">
-              <a href="<?= htmlspecialchars($pathFor('admin-users.php'), ENT_QUOTES) ?>">Users</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-customers.php'), ENT_QUOTES) ?>">Customers</a>
+              <a href="<?= htmlspecialchars($pathFor('admin-users.php'), ENT_QUOTES) ?>">Employees</a>
               <a href="<?= htmlspecialchars($pathFor('admin-requests.php'), ENT_QUOTES) ?>">Requests</a>
               <a href="<?= htmlspecialchars($pathFor('admin-documents.php'), ENT_QUOTES) ?>">Documents</a>
             </div>

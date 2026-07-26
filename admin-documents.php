@@ -3460,7 +3460,7 @@ $renderCustomerUserLink = static function (array $quote, string $returnTab, bool
     ?><div class="customer-user-link" style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
       <span class="pill <?= htmlspecialchars($pillClass, ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($link['label'] ?? 'Not in Customer Users'), ENT_QUOTES) ?></span>
       <?php if (($state === 'existing' || $state === 'created') && $mobile !== ''): ?>
-        <a class="btn secondary" href="admin-users.php?<?= htmlspecialchars(http_build_query(['tab' => 'customers', 'view' => $mobile]), ENT_QUOTES) ?>">Open in Customer Users</a>
+        <a class="btn secondary" href="admin-customers.php?<?= htmlspecialchars(http_build_query(['view' => $mobile]), ENT_QUOTES) ?>">Open in Customer Users</a>
       <?php elseif ($state === 'missing' && $isAdmin): ?>
         <form method="post" class="inline-form" data-customer-user-create-form="1">
           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>">

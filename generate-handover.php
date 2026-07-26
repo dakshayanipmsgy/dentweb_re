@@ -62,7 +62,7 @@ if ($customer !== null && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['hand
 
                 if ($update['success']) {
                     set_flash('success', 'Handover document generated successfully.');
-                    header('Location: admin-users.php?view=' . urlencode((string) ($customer['mobile'] ?? '')));
+                    header('Location: admin-customers.php?view=' . urlencode((string) ($customer['mobile'] ?? '')));
                     exit;
                 }
 
@@ -124,7 +124,7 @@ function handover_editor_safe(string $value): string
 </head>
 <body>
 <div class="page-shell">
-    <a class="breadcrumb" href="admin-users.php?view=<?= handover_editor_safe($customerMobileValue) ?>">
+    <a class="breadcrumb" href="admin-customers.php?view=<?= handover_editor_safe($customerMobileValue) ?>">
         &#8592; Back to customer details
     </a>
     <div class="card">
@@ -149,7 +149,7 @@ function handover_editor_safe(string $value): string
             <label for="handover_html_content">Handover HTML (final, per-customer)</label>
             <textarea id="handover_html_content" name="handover_html_content" spellcheck="false"><?= handover_editor_safe($renderedHtml) ?></textarea>
             <div class="actions">
-                <a class="btn btn-secondary" href="admin-users.php?view=<?= handover_editor_safe($customerMobileValue) ?>">Cancel</a>
+                <a class="btn btn-secondary" href="admin-customers.php?view=<?= handover_editor_safe($customerMobileValue) ?>">Cancel</a>
                 <button type="submit" class="btn btn-primary">Save &amp; Generate Handover (HTML)</button>
             </div>
         </form>
