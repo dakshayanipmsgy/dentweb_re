@@ -3675,7 +3675,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
     .more-actions summary { list-style:none; cursor:pointer; }
     .more-actions summary::-webkit-details-marker { display:none; }
     .more-actions__menu { position:absolute; right:0; top:calc(100% + 0.4rem); display:grid; gap:0.35rem; min-width:230px; padding:0.55rem; background:#fff; border:1px solid #dbe7ef; border-radius:14px; box-shadow:0 18px 46px rgba(15,23,42,0.18); z-index:1001; }
-    .more-actions[open] .more-actions__menu { position:fixed; top:auto; right:auto; bottom:auto; }
+    .more-actions__menu--portal { position:fixed; top:0; right:auto; bottom:auto; left:0; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px); overflow-y:auto; overscroll-behavior:contain; z-index:10000; }
     .more-actions--dropup .more-actions__menu { top:auto; bottom:auto; }
     .more-actions__menu .btn { width:100%; text-align:left; justify-content:flex-start; }
     .more-actions__menu form { margin:0; }
@@ -3727,7 +3727,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
     .accepted-summary { grid-template-columns:1fr; }
       .accepted-summary__card--document { grid-column:1 / -1; }
       .accepted-summary__card--document table { min-width:560px; }
-      .more-actions__menu { left:0; right:auto; max-width:calc(100vw - 2rem); }
+      .more-actions__menu { max-width:calc(100vw - 24px); }
     }
     .document-action-form{margin:0}.document-action-dialog::backdrop{background:rgba(15,23,42,.45)}.document-action-dialog{border:0;border-radius:18px;box-shadow:0 24px 80px rgba(15,23,42,.3);max-width:560px;width:calc(100% - 32px);padding:0}.document-action-modal{padding:22px}.document-action-modal__header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:1px solid #dbe7e3;padding-bottom:12px}.document-action-modal__body{display:grid;gap:12px;padding:16px 0}.document-action-modal__context{background:#f8fbfa;border:1px solid #dbe7e3;border-radius:12px;padding:12px}.document-action-modal__status{border-radius:12px;padding:12px;background:#eef6ff;color:#1e3a8a}.document-action-modal__status.is-success{background:#ecfdf5;color:#065f46}.document-action-modal__status.is-error{background:#fef2f2;color:#991b1b}.document-action-modal__footer{display:flex;justify-content:flex-end;gap:10px;border-top:1px solid #dbe7e3;padding-top:14px}.document-action-modal__open[hidden]{display:none}
 
@@ -5135,36 +5135,73 @@ document.querySelectorAll('form[data-inventory-form="1"]').forEach(function (for
 (function () {
   const moreActions = Array.from(document.querySelectorAll('.more-actions'));
   if (moreActions.length === 0) return;
+  let activeMenu = null;
+  let activeFlyout = null;
+  let activePlaceholder = null;
+  let positionFrame = 0;
+
+  moreActions.forEach(function (menu, index) {
+    const summary = menu.querySelector('summary');
+    const flyout = menu.querySelector('.more-actions__menu');
+    if (!summary || !flyout) return;
+    if (!flyout.id) flyout.id = 'row-more-actions-' + (index + 1);
+    summary.setAttribute('aria-controls', flyout.id);
+    summary.setAttribute('aria-haspopup', 'true');
+    summary.setAttribute('aria-expanded', 'false');
+  });
+
+  function restoreFlyout(menu) {
+    if (menu !== activeMenu || !activeFlyout) return;
+    activeFlyout.classList.remove('more-actions__menu--portal');
+    activeFlyout.style.left = '';
+    activeFlyout.style.top = '';
+    activeFlyout.style.maxHeight = '';
+    if (activePlaceholder && activePlaceholder.parentNode) {
+      activePlaceholder.parentNode.replaceChild(activeFlyout, activePlaceholder);
+    }
+    activeMenu = null;
+    activeFlyout = null;
+    activePlaceholder = null;
+  }
+
+  function closeMenu(menu, returnFocus) {
+    const summary = menu.querySelector('summary');
+    menu.removeAttribute('open');
+    menu.classList.remove('more-actions--dropup');
+    if (summary) summary.setAttribute('aria-expanded', 'false');
+    restoreFlyout(menu);
+    if (returnFocus && summary) summary.focus();
+  }
 
   function closeOtherMenus(active) {
     moreActions.forEach(function (menu) {
       if (menu !== active) {
-        menu.removeAttribute('open');
-        menu.classList.remove('more-actions--dropup');
+        closeMenu(menu, false);
       }
     });
   }
 
   function positionMenu(menu) {
-    const flyout = menu.querySelector('.more-actions__menu');
+    const flyout = menu === activeMenu ? activeFlyout : menu.querySelector('.more-actions__menu');
     if (!flyout) return;
     menu.classList.remove('more-actions--dropup');
-    flyout.style.left = '';
-    flyout.style.top = '';
     const summary = menu.querySelector('summary');
     const summaryRect = summary ? summary.getBoundingClientRect() : menu.getBoundingClientRect();
-    const flyoutRect = flyout.getBoundingClientRect();
-    const flyoutWidth = flyoutRect.width || 230;
-    const flyoutHeight = flyoutRect.height || 260;
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = document.documentElement.clientHeight;
     const viewportPad = 12;
     const gap = 6;
-    const spaceBelow = window.innerHeight - summaryRect.bottom;
+    flyout.style.maxHeight = Math.max(0, viewportHeight - (viewportPad * 2)) + 'px';
+    const flyoutRect = flyout.getBoundingClientRect();
+    const flyoutWidth = Math.min(flyoutRect.width || 230, viewportWidth - (viewportPad * 2));
+    const flyoutHeight = Math.min(flyoutRect.height || 260, viewportHeight - (viewportPad * 2));
+    const spaceBelow = viewportHeight - summaryRect.bottom;
     const spaceAbove = summaryRect.top;
     const openUpward = spaceBelow < flyoutHeight + gap + viewportPad && spaceAbove > spaceBelow;
-    const left = Math.min(Math.max(viewportPad, summaryRect.right - flyoutWidth), window.innerWidth - flyoutWidth - viewportPad);
+    const left = Math.min(Math.max(viewportPad, summaryRect.right - flyoutWidth), viewportWidth - flyoutWidth - viewportPad);
     const top = openUpward
       ? Math.max(viewportPad, summaryRect.top - flyoutHeight - gap)
-      : Math.min(summaryRect.bottom + gap, window.innerHeight - flyoutHeight - viewportPad);
+      : Math.min(summaryRect.bottom + gap, viewportHeight - flyoutHeight - viewportPad);
     if (openUpward) {
       menu.classList.add('more-actions--dropup');
     }
@@ -5175,29 +5212,53 @@ document.querySelectorAll('form[data-inventory-form="1"]').forEach(function (for
   moreActions.forEach(function (menu) {
     menu.addEventListener('toggle', function () {
       if (!menu.open) {
-        menu.classList.remove('more-actions--dropup');
+        closeMenu(menu, false);
         return;
       }
       closeOtherMenus(menu);
+      const summary = menu.querySelector('summary');
+      const flyout = menu.querySelector('.more-actions__menu');
+      if (!summary || !flyout) return;
+      summary.setAttribute('aria-expanded', 'true');
+      activeMenu = menu;
+      activeFlyout = flyout;
+      activePlaceholder = document.createComment('row actions menu portal');
+      flyout.parentNode.replaceChild(activePlaceholder, flyout);
+      document.body.appendChild(flyout);
+      flyout.classList.add('more-actions__menu--portal');
       window.requestAnimationFrame(function () { positionMenu(menu); });
     });
   });
 
   document.addEventListener('click', function (event) {
-    const active = event.target.closest ? event.target.closest('.more-actions') : null;
-    moreActions.forEach(function (menu) {
-      if (menu !== active) {
-        menu.removeAttribute('open');
-        menu.classList.remove('more-actions--dropup');
-      }
-    });
+    if (!activeMenu) return;
+    const clickedAnchor = activeMenu.contains(event.target);
+    const clickedFlyout = activeFlyout && activeFlyout.contains(event.target);
+    if (clickedFlyout && event.target.closest && event.target.closest('a, button')) {
+      // Restore the form beneath its workbench before the browser dispatches its
+      // submit event, preserving the existing delegated AJAX/business behavior.
+      closeMenu(activeMenu, false);
+      return;
+    }
+    if (!clickedAnchor && !clickedFlyout) closeMenu(activeMenu, false);
   });
 
-  window.addEventListener('resize', function () {
-    moreActions.forEach(function (menu) {
-      if (menu.open) positionMenu(menu);
-    });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && activeMenu) {
+      event.preventDefault();
+      closeMenu(activeMenu, true);
+    }
   });
+
+  function schedulePosition() {
+    if (!activeMenu || positionFrame) return;
+    positionFrame = window.requestAnimationFrame(function () {
+      positionFrame = 0;
+      if (activeMenu) positionMenu(activeMenu);
+    });
+  }
+  window.addEventListener('resize', schedulePosition);
+  window.addEventListener('scroll', schedulePosition, true);
 })();
 
 </script>
