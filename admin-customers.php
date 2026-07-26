@@ -10,6 +10,7 @@ require_once __DIR__ . '/includes/employee_admin.php';
 require_once __DIR__ . '/includes/employee_portal.php';
 require_once __DIR__ . '/includes/audit_log.php';
 require_once __DIR__ . '/includes/handover.php';
+require_once __DIR__ . '/includes/customer_operations.php';
 
 employee_portal_session();
 $isEmployeePortal = !empty($_SESSION['employee_logged_in']);
