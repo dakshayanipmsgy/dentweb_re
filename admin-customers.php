@@ -374,11 +374,20 @@ if ($activeTab === 'customers') {
                 }
             } elseif ($action === 'import_customers') {
                 $upload = $_FILES['csv_file'] ?? null;
-                $importResult = customer_bulk_import($customerStore, $upload);
-                if ($importResult['success']) {
-                    $customerImportSummary = $importResult['summary'];
+                if (!is_array($upload) || ($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || strtolower(pathinfo((string)($upload['name'] ?? ''), PATHINFO_EXTENSION)) !== 'csv') {
+                    $customerImportError = 'Upload a valid CSV file to preview.';
                 } else {
-                    $customerImportError = $importResult['message'];
+                    $contents = file_get_contents((string)$upload['tmp_name']);
+                    $preview = is_string($contents) ? customer_bulk_mobile_sync_preview($customerStore, $contents) : ['rows'=>[], 'error'=>'Could not read uploaded CSV.'];
+                    if (($preview['error'] ?? '') !== '') $customerImportError = (string)$preview['error'];
+                    else { $_SESSION['customer_csv_mobile_sync_preview'] = $preview; $customerImportSummary = $preview; }
+                }
+            } elseif ($action === 'apply_customer_sync') {
+                $preview = $_SESSION['customer_csv_mobile_sync_preview'] ?? null;
+                if (!is_array($preview)) $customerImportError = 'Preview expired. Upload the CSV again.';
+                else {
+                    $customerImportSummary = customer_bulk_mobile_sync_apply($customerStore, $preview);
+                    unset($_SESSION['customer_csv_mobile_sync_preview']);
                 }
             }
         }
@@ -1330,7 +1339,7 @@ function admin_users_build_welcome_subject(array $customer): string
           <div class="users-card__header">
             <div>
               <h3 id="bulk-upload-heading">Bulk Upload (CSV)</h3>
-              <p class="admin-muted">Upload CSV matching required headers. Existing mobiles are updated.</p>
+              <p class="admin-muted">Normalized mobile is the only identity key. Upload first to review every changed field and every matching active project; nothing is written until Apply.</p>
             </div>
             <a class="btn btn-link" href="admin-customers.php?download=customer_csv_template">Download sample CSV</a>
           </div>
@@ -1339,11 +1348,17 @@ function admin_users_build_welcome_subject(array $customer): string
           <?php endif; ?>
           <?php if ($customerImportSummary !== null): ?>
           <div class="admin-alert admin-alert--success" role="status">
-            <strong>Import completed.</strong>
-            <div>New customers created: <?php echo (int) $customerImportSummary['created']; ?></div>
-            <div>Existing customers updated: <?php echo (int) $customerImportSummary['updated']; ?></div>
-            <div>Rows skipped due to errors: <?php echo (int) $customerImportSummary['skipped']; ?></div>
+            <?php if (isset($customerImportSummary['applied'])): ?>
+            <strong>Synchronization completed.</strong>
+            <div>Applied: <?= (int)$customerImportSummary['applied'] ?> · Unchanged: <?= (int)$customerImportSummary['unchanged'] ?> · Skipped: <?= (int)$customerImportSummary['skipped'] ?> · Conflict: <?= (int)$customerImportSummary['conflict'] ?> · Failed: <?= (int)$customerImportSummary['failed'] ?></div>
+            <?php else: ?><strong>Staged preview — no records have been written.</strong><?php endif; ?>
           </div>
+          <?php $importRows=(array)($customerImportSummary['rows']??[]); if ($importRows!==[]): ?>
+          <div class="responsive-table"><table><thead><tr><th>CSV line / mobile</th><th>Result</th><th>Customer changes</th><th>Matching active quotations/projects</th></tr></thead><tbody>
+          <?php foreach($importRows as $importRow): ?><tr><td><?= (int)($importRow['line']??0) ?><br><?= admin_users_safe((string)($importRow['mobile']??'')) ?></td><td><strong><?= admin_users_safe((string)($importRow['result']??'Ready')) ?></strong><br><?= admin_users_safe((string)($importRow['message']??'')) ?></td><td><?php foreach((array)($importRow['customer_changes']??[]) as $field=>$change): ?><div><strong><?= admin_users_safe((string)$field) ?></strong>: <?= admin_users_safe((string)($change['from']??'')) ?> → <?= admin_users_safe((string)($change['to']??'')) ?></div><?php endforeach; ?></td><td><?php foreach((array)($importRow['quotes']??[]) as $quote): ?><div><strong><?= admin_users_safe((string)($quote['id']??'')) ?></strong> (<?= admin_users_safe((string)($quote['status']??'')) ?>) — <?= count((array)($quote['changes']??[])) ?> field(s)</div><?php foreach((array)($quote['changes']??[]) as $field=>$change): ?><div><?= admin_users_safe((string)$field) ?>: <?= admin_users_safe((string)($change['from']??'')) ?> → <?= admin_users_safe((string)($change['to']??'')) ?></div><?php endforeach; endforeach; ?></td></tr><?php endforeach; ?>
+          </tbody></table></div>
+          <?php if (!isset($customerImportSummary['applied'])): ?><form method="post"><?= csrf_field() ?><input type="hidden" name="customer_action" value="apply_customer_sync"><button class="btn btn-primary" type="submit">Apply staged synchronization</button></form><?php endif; ?>
+          <?php endif; ?>
           <?php endif; ?>
           <form method="post" enctype="multipart/form-data" class="users-form-grid">
         <?= csrf_field() ?>
@@ -1353,7 +1368,7 @@ function admin_users_build_welcome_subject(array $customer): string
               <input id="customer_csv" class="users-input" type="file" name="csv_file" accept=".csv,text/csv" required />
             </div>
             <div class="users-form-actions">
-              <button class="btn btn-primary" type="submit">Upload and import</button>
+              <button class="btn btn-primary" type="submit">Upload and preview</button>
             </div>
           </form>
         </details>
