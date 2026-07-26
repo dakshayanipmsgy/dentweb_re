@@ -382,12 +382,22 @@ if ($activeTab === 'customers') {
                     if (($preview['error'] ?? '') !== '') $customerImportError = (string)$preview['error'];
                     else { $_SESSION['customer_csv_mobile_sync_preview'] = $preview; $customerImportSummary = $preview; }
                 }
-            } elseif ($action === 'apply_customer_sync') {
+            } elseif ($action === 'confirm_customer_sync') {
                 $preview = $_SESSION['customer_csv_mobile_sync_preview'] ?? null;
-                if (!is_array($preview)) $customerImportError = 'Preview expired. Upload the CSV again.';
-                else {
-                    $customerImportSummary = customer_bulk_mobile_sync_apply($customerStore, $preview);
+                if (!is_array($preview) || !hash_equals((string)($preview['id'] ?? ''), (string)($_POST['preview_id'] ?? ''))) {
+                    $customerImportError = 'Preview expired or does not match. Upload the CSV again.';
+                } else {
+                    $customerImportSummary = customer_bulk_mobile_sync_confirm($preview, is_array($_POST['choices'] ?? null) ? $_POST['choices'] : []);
+                    $_SESSION['customer_csv_mobile_sync_confirmation'] = $customerImportSummary;
                     unset($_SESSION['customer_csv_mobile_sync_preview']);
+                }
+            } elseif ($action === 'apply_customer_sync') {
+                $preview = $_SESSION['customer_csv_mobile_sync_confirmation'] ?? null;
+                if (!is_array($preview) || !hash_equals((string)($preview['confirmation_id'] ?? ''), (string)($_POST['confirmation_id'] ?? ''))) {
+                    $customerImportError = 'Confirmation expired or was already applied. Upload the CSV again.';
+                } else {
+                    unset($_SESSION['customer_csv_mobile_sync_confirmation']); // consume before writing: retry cannot duplicate the operation
+                    $customerImportSummary = customer_bulk_mobile_sync_apply($customerStore, $preview);
                 }
             }
         }
@@ -1354,10 +1364,29 @@ function admin_users_build_welcome_subject(array $customer): string
             <?php else: ?><strong>Staged preview — no records have been written.</strong><?php endif; ?>
           </div>
           <?php $importRows=(array)($customerImportSummary['rows']??[]); if ($importRows!==[]): ?>
-          <div class="responsive-table"><table><thead><tr><th>CSV line / mobile</th><th>Result</th><th>Customer changes</th><th>Matching active quotations/projects</th></tr></thead><tbody>
-          <?php foreach($importRows as $importRow): ?><tr><td><?= (int)($importRow['line']??0) ?><br><?= admin_users_safe((string)($importRow['mobile']??'')) ?></td><td><strong><?= admin_users_safe((string)($importRow['result']??'Ready')) ?></strong><br><?= admin_users_safe((string)($importRow['message']??'')) ?></td><td><?php foreach((array)($importRow['customer_changes']??[]) as $field=>$change): ?><div><strong><?= admin_users_safe((string)$field) ?></strong>: <?= admin_users_safe((string)($change['from']??'')) ?> → <?= admin_users_safe((string)($change['to']??'')) ?></div><?php endforeach; ?></td><td><?php foreach((array)($importRow['quotes']??[]) as $quote): ?><div><strong><?= admin_users_safe((string)($quote['id']??'')) ?></strong> (<?= admin_users_safe((string)($quote['status']??'')) ?>) — <?= count((array)($quote['changes']??[])) ?> field(s)</div><?php foreach((array)($quote['changes']??[]) as $field=>$change): ?><div><?= admin_users_safe((string)$field) ?>: <?= admin_users_safe((string)($change['from']??'')) ?> → <?= admin_users_safe((string)($change['to']??'')) ?></div><?php endforeach; endforeach; ?></td></tr><?php endforeach; ?>
-          </tbody></table></div>
-          <?php if (!isset($customerImportSummary['applied'])): ?><form method="post"><?= csrf_field() ?><input type="hidden" name="customer_action" value="apply_customer_sync"><button class="btn btn-primary" type="submit">Apply staged synchronization</button></form><?php endif; ?>
+          <?php $isFinal=isset($customerImportSummary['confirmation_id']); $isApplied=isset($customerImportSummary['applied']); ?>
+          <form method="post">
+          <?= csrf_field() ?>
+          <?php if (!$isApplied): ?><input type="hidden" name="customer_action" value="<?= $isFinal?'apply_customer_sync':'confirm_customer_sync' ?>">
+          <input type="hidden" name="<?= $isFinal?'confirmation_id':'preview_id' ?>" value="<?= admin_users_safe((string)($customerImportSummary[$isFinal?'confirmation_id':'id']??'')) ?>"><?php endif; ?>
+          <div class="responsive-table"><table><thead><tr><th>CSV line / normalized mobile</th><th>Result / row action</th><th>Saved and CSV field values</th><th>Matching eligible quotations</th></tr></thead><tbody>
+          <?php foreach($importRows as $rowIndex=>$importRow): ?><tr>
+            <td><?= (int)($importRow['line']??0) ?><br><strong><?= admin_users_safe((string)($importRow['mobile']??'')) ?></strong></td>
+            <td><strong><?= admin_users_safe((string)($importRow['result']??'Ready')) ?></strong><br><?= admin_users_safe((string)($importRow['message']??'')) ?>
+            <?php if (!$isFinal && !$isApplied && ($importRow['result']??'')==='Ready'): ?><label><input type="radio" name="choices[<?= $rowIndex ?>][row]" value="sync" checked> Synchronize</label><br><label><input type="radio" name="choices[<?= $rowIndex ?>][row]" value="ignore"> Ignore entire customer</label><?php endif; ?></td>
+            <td><?php foreach((array)($importRow['fields']??[]) as $field=>$comparison): ?><fieldset style="margin-bottom:.75rem"><legend><strong><?= admin_users_safe((string)$field) ?></strong> — <?= admin_users_safe((string)($comparison['state']??'')) ?></legend>
+              <div><small>Saved</small>: <?= admin_users_safe((string)($comparison['saved']??'')) ?></div><div><small>CSV</small>: <?= admin_users_safe((string)($comparison['csv']??'')) ?></div>
+              <?php if (($comparison['state']??'')==='Different' && !$isFinal && !$isApplied): ?>
+              <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="keep" checked> Keep saved value</label>
+              <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="csv"> Use CSV value</label>
+              <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="manual"> Manual corrected value</label>
+              <input class="users-input" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][manual]" value="<?= admin_users_safe((string)($comparison['saved']??'')) ?>">
+              <?php elseif ($isFinal && isset($comparison['after'])): ?><div><strong>After confirmation:</strong> <?= admin_users_safe((string)$comparison['after']) ?> (<?= admin_users_safe((string)$comparison['choice']) ?>)</div><?php endif; ?>
+            </fieldset><?php endforeach; ?></td>
+            <td><?php foreach((array)($importRow['quotes']??[]) as $quote): ?><div><strong><?= admin_users_safe((string)($quote['id']??'')) ?></strong> (<?= admin_users_safe((string)($quote['status']??'')) ?>)</div><?php endforeach; ?></td>
+          </tr><?php endforeach; ?></tbody></table></div>
+          <?php if (!$isApplied): ?><button class="btn btn-primary" type="submit"><?= $isFinal?'Apply confirmed before/after changes':'Review final before/after' ?></button><?php endif; ?>
+          </form>
           <?php endif; ?>
           <?php endif; ?>
           <form method="post" enctype="multipart/form-data" class="users-form-grid">
