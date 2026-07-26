@@ -9,6 +9,7 @@ require_once __DIR__ . '/includes/employee_admin.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 require_once __DIR__ . '/includes/audit_log.php';
 require_once __DIR__ . '/includes/quotation_view_renderer.php';
+require_once __DIR__ . '/includes/customer_operations.php';
 
 ini_set('display_errors', '0');
 
@@ -171,4 +172,10 @@ if($viewerType==='admin' && in_array(documents_quote_normalize_status((string)($
  $requestId=bin2hex(random_bytes(16));
  ?><section style="max-width:1100px;margin:16px auto;padding:16px;border:1px solid #dbe7e3;border-radius:12px;background:#fff"><details><summary style="cursor:pointer;font-weight:700">Change mobile number</summary><p>Corrects only the current contact and safe Customer Users linkage. It does not create a revision or rewrite finalized document snapshots.</p><form method="post" style="display:grid;gap:10px;max-width:620px"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="change_mobile_number"><input type="hidden" name="expected_version" value="<?= htmlspecialchars((string)($quote['updated_at']??$quote['created_at']??''),ENT_QUOTES) ?>"><input type="hidden" name="request_id" value="<?= htmlspecialchars($requestId,ENT_QUOTES) ?>"><label>New mobile number<input name="new_mobile" inputmode="numeric" pattern="[6-9][0-9]{9}" required></label><label>Correction reason<textarea name="correction_reason" required></textarea></label><label><input type="checkbox" name="confirm_customer_link" value="1"> I explicitly confirm migrating or relinking any currently linked Customer User. Existing accounts will not be overwritten.</label><button type="submit">Change mobile number</button></form></details></section><?php
 }
-quotation_render($quote, $quoteDefaults, $company, false, $shareUrl, $viewerType, $viewerId);
+$quotationHtml = quotation_render_to_html($quote, $quoteDefaults, $company, false, $shareUrl, $viewerType, $viewerId);
+$returnTo = customer_operations_valid_return_to((string)($_GET['return_to'] ?? ''));
+if ($returnTo !== '') {
+    $returnLink = '<div class="wrap screen-only"><a href="' . htmlspecialchars($returnTo, ENT_QUOTES) . '">&larr; Return to project</a></div>';
+    $quotationHtml = preg_replace('/<body>/', '<body>' . $returnLink, $quotationHtml, 1) ?? $quotationHtml;
+}
+echo $quotationHtml;
