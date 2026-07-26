@@ -13,7 +13,7 @@ $preview=customer_bulk_mobile_sync_preview($store,"mobile,name,address,city,pass
 $row=$preview['rows'][0];
 field_choice_assert($row['result']==='Ready','mobile-only match is ready');
 field_choice_assert($row['fields']['city']['state']==='Unchanged','identical field marked unchanged');
-field_choice_assert($row['fields']['name']['choice']==='' && !empty($row['fields']['name']['requires_choice']),'populated difference requires an explicit choice');
+field_choice_assert($row['fields']['name']['choice']==='csv' && empty($row['fields']['name']['requires_choice']),'populated difference defaults to CSV');
 field_choice_assert(!isset($row['fields']['password'],$row['fields']['serial_number']),'protected fields are not choices');
 field_choice_assert(count($row['quotes'])===1 && $row['quotes'][0]['id']==='Q843','archived quotation excluded');
 $confirmed=customer_bulk_mobile_sync_confirm($preview,[0=>['row'=>'sync','name'=>['choice'=>'csv'],'address'=>['choice'=>'manual','manual'=>'Corrected address']]]);
@@ -23,8 +23,8 @@ field_choice_assert($changes['address']['to']==='Corrected address','manual sele
 field_choice_assert(!isset($changes['city']),'unchanged field not rewritten');
 $ignored=customer_bulk_mobile_sync_confirm($preview,[0=>['row'=>'ignore']]);
 field_choice_assert($ignored['rows'][0]['result']==='Ignored' && $ignored['rows'][0]['customer_changes']===[],'entire row can be ignored');
-$blocked=customer_bulk_mobile_sync_confirm($preview,[]);
-field_choice_assert(!empty($blocked['error']) && empty($blocked['confirmation_id']),'unresolved populated conflicts block confirmation');
+$defaulted=customer_bulk_mobile_sync_confirm($preview,[]);
+field_choice_assert(empty($defaulted['error']) && ($defaulted['rows'][0]['customer_changes']['name']['to']??'')==='CSV Name','default CSV choice confirms without extra interaction');
 $blankStore=new CustomerFsStore($dir.'-blank');
 $blankStore->addCustomer(['mobile'=>'9123456789','name'=>'Blank Test','address'=>'','city'=>'Saved City','password_hash'=>$hash]);
 $blankPreview=customer_bulk_mobile_sync_preview($blankStore,"mobile,name,address,city\n9123456789,Blank Test,Filled address,\n",[]);

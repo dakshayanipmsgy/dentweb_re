@@ -13,7 +13,7 @@ $preview=customer_bulk_mobile_sync_preview($store,$csv,[$quote]);
 csv_sync_assert(($preview['error']??'')==='', 'CSV accepted');
 $row=$preview['rows'][0];
 csv_sync_assert($row['result']==='Ready', 'valid row is ready');
-csv_sync_assert($row['fields']['name']['state']==='Conflict' && $row['fields']['address']['state']==='Conflict', 'populated differences previewed as explicit conflicts');
+csv_sync_assert($row['fields']['name']['state']==='Different' && $row['fields']['address']['state']==='Different', 'populated differences previewed and defaulted safely');
 csv_sync_assert(!isset($row['customer_changes']['status'],$row['customer_changes']['password'],$row['customer_changes']['serial_number']), 'protected fields excluded');
 csv_sync_assert(count($row['quotes'])===1, 'all mobile-matched quotes previewed');
 $confirmed=customer_bulk_mobile_sync_confirm($preview,[0=>['name'=>['choice'=>'csv'],'address'=>['choice'=>'csv']]]);

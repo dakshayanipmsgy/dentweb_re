@@ -100,10 +100,23 @@ function customer_bulk_parse_csv(string $contents): array
 
 function customer_bulk_compare_value(string $field, string $value): string
 {
-    $value = trim(str_replace(["\r\n", "\r"], "\n", $value));
-    if (in_array($field, ['loan_taken'], true)) return strtolower($value);
-    if ($field === 'customer_type') return strtolower(preg_replace('/\s+/u', ' ', $value) ?? $value);
-    return $value;
+    // Comparison is deliberately more forgiving than storage.  In particular,
+    // never feed this value back to the store: cosmetic CSV differences must not
+    // rewrite a customer's carefully formatted value.
+    $value = str_replace(["\r\n", "\r"], "\n", $value);
+    $value = str_replace("\xC2\xA0", ' ', $value);
+    if (class_exists('Normalizer')) {
+        $normal = Normalizer::normalize($value, Normalizer::FORM_C);
+        if (is_string($normal)) $value = $normal;
+    }
+    $value = preg_replace('/[\p{Z}\s]+/u', ' ', $value) ?? $value;
+    $value = trim($value);
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+}
+
+function customer_bulk_row_token(array $row): string
+{
+    return hash('sha256', implode('|', [(string)($row['line'] ?? ''), (string)($row['mobile'] ?? ''), (string)($row['customer']['fingerprint'] ?? '')]));
 }
 
 /** Build a read-only server-side plan. The CSV mobile is identity only and is never a writable field. */
@@ -141,8 +154,10 @@ function customer_bulk_mobile_sync_preview(CustomerFsStore $store, string $conte
             if (($savedBlank && $csvBlank) || $same) { $state='Unchanged'; $choice='keep'; }
             elseif ($savedBlank) { $state='Fill blank field'; $choice='csv'; $row['customer_changes'][$field]=['from'=>$saved,'to'=>$csvValue]; }
             elseif ($csvBlank) { $state='CSV blank — keep saved value'; $choice='keep'; }
-            else { $state='Conflict'; $choice=''; }
-            $row['fields'][$field]=['saved'=>$saved,'csv'=>$csvValue,'state'=>$state,'choice'=>$choice,'manual_supported'=>true,'requires_choice'=>$state==='Conflict'];
+            else { $state='Different'; $choice='csv'; $row['customer_changes'][$field]=['from'=>$saved,'to'=>$csvValue]; }
+            // Unchanged comparisons are retained server-side for tamper-resistant
+            // reconstruction, but the review renders differences only.
+            $row['fields'][$field]=['saved'=>$saved,'csv'=>$csvValue,'state'=>$state,'choice'=>$choice,'after'=>$choice==='csv'?$csvValue:$saved,'manual_supported'=>true,'requires_choice'=>false];
         }
         foreach ($quotes as $quote) {
             if (!is_array($quote) || !customer_bulk_quote_is_eligible($quote) || customer_bulk_normalise_mobile((string)($quote['customer_mobile']??''))!==$mobile) continue;
@@ -151,11 +166,26 @@ function customer_bulk_mobile_sync_preview(CustomerFsStore $store, string $conte
             foreach ($row['customer_changes'] as $field=>$change) { $qfield=customer_bulk_quote_field_map()[$field]??null; if ($qfield!==null && trim((string)($quote[$qfield]??''))!==trim((string)$change['to'])) $changes[$qfield]=['from'=>(string)($quote[$qfield]??''),'to'=>$change['to']]; }
             $row['quotes'][]=['id'=>(string)($quote['id']??''),'status'=>(string)($quote['status']??'Draft'),'fingerprint'=>customer_bulk_record_fingerprint($quote),'values'=>$values,'changes'=>$changes];
         }
-        $hasConflict=(bool)array_filter($row['fields'],static fn(array $field):bool=>!empty($field['requires_choice']));
-        if ($row['customer_changes']===[] && !$hasConflict) { $row['result']='Unchanged'; $row['message']='All supported CSV fields are unchanged or blank in the CSV'; }
+        if ($row['customer_changes']===[]) { $row['result']='Unchanged'; $row['message']='All supported CSV fields are unchanged or blank in the CSV'; }
+        $row['row_token']=customer_bulk_row_token($row);
         $rows[]=$row;
     }
     return array_merge(['id'=>bin2hex(random_bytes(16)),'rows'=>$rows,'error'=>'','fields'=>$presentFields,'created_at'=>time(),'expires_at'=>time()+1800],$metadata);
+}
+
+/** Rebuild and confirm one row exclusively from the session-staged preview. */
+function customer_bulk_confirm_staged_row(array $preview, string $rowToken, array $choices): array
+{
+    foreach (($preview['rows'] ?? []) as $index => $row) {
+        if (!is_array($row) || !hash_equals((string)($row['row_token'] ?? ''), $rowToken)) continue;
+        if (!hash_equals(customer_bulk_row_token($row), $rowToken)) return ['error'=>'The staged row token is invalid.'];
+        $one=$preview; $one['rows']=[$row];
+        $confirmed=customer_bulk_mobile_sync_confirm($one, [0=>$choices]);
+        if (($confirmed['error'] ?? '') !== '') return ['error'=>$confirmed['error']];
+        $confirmed['source_index']=$index;
+        return $confirmed;
+    }
+    return ['error'=>'This staged row is missing or was already consumed.'];
 }
 
 /** Convert posted choices into an immutable before/after confirmation plan. */
@@ -235,6 +265,30 @@ function customer_bulk_mobile_sync_apply(CustomerFsStore $store, array $preview)
         $actor=audit_current_actor(); log_audit_event($actor['actor_type'],$actor['actor_id'],'customer',(string)$row['mobile'],'customer_csv_field_choice_sync',['confirmation_id'=>$preview['confirmation_id'],'result'=>$row['result'],'changes'=>$row['customer_changes'],'quotation_ids'=>array_column($row['quotes'],'id'),'verified'=>!$failed]);
     }
     flock($lock,LOCK_UN); fclose($lock); return $summary;
+}
+
+/** Shared single-row apply service used by AJAX and batch paths. */
+function customer_bulk_mobile_sync_apply_staged_row(CustomerFsStore $store, array $preview, string $rowToken, array $choices): array
+{
+    $staged=null;
+    foreach (($preview['rows']??[]) as $candidate) if (is_array($candidate) && hash_equals((string)($candidate['row_token']??''),$rowToken)) { $staged=$candidate; break; }
+    if ($staged===null || (int)($preview['expires_at']??0)<time()) return ['ok'=>false,'result'=>'Conflict','message'=>'This staged row is missing or expired.'];
+    $current=$store->findByMobile((string)($staged['mobile']??''));
+    if ($current===null || !empty($current['archived']) || !hash_equals((string)($staged['customer']['fingerprint']??''),customer_bulk_record_fingerprint($current))) {
+        return ['ok'=>false,'result'=>'Conflict','message'=>'Customer changed or was archived after preview.'];
+    }
+    foreach (($staged['quotes']??[]) as $planned) {
+        $quote=documents_get_quote((string)($planned['id']??''));
+        if ($quote===null || !customer_bulk_quote_is_eligible($quote) || !hash_equals((string)($planned['fingerprint']??''),customer_bulk_record_fingerprint($quote))) {
+            return ['ok'=>false,'result'=>'Conflict','message'=>'A quotation changed or was archived after preview.'];
+        }
+    }
+    $confirmed=customer_bulk_confirm_staged_row($preview,$rowToken,$choices);
+    if (($confirmed['error']??'')!=='') return ['ok'=>false,'result'=>'Conflict','message'=>$confirmed['error']];
+    $summary=customer_bulk_mobile_sync_apply($store,$confirmed);
+    $row=$summary['rows'][0]??null;
+    $result=(string)($row['result']??($summary['conflict']?'Conflict':'Failed'));
+    return ['ok'=>in_array($result,['Applied','Unchanged','Ignored'],true),'result'=>$result,'message'=>(string)($row['message']??($summary['error']??'')),'summary'=>$summary,'source_index'=>$confirmed['source_index']];
 }
 
 function customer_bulk_headers(): array

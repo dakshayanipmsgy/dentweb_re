@@ -75,7 +75,23 @@ if ($activeTab === 'customers') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_valid_csrf();
         $action = (string) ($_POST['customer_action'] ?? '');
-        if ($action === 'archive_customer') {
+        if ($action === 'save_customer_sync_ajax') {
+            header('Content-Type: application/json; charset=utf-8');
+            $preview=$_SESSION['customer_csv_mobile_sync_preview']??null;
+            $previewId=(string)($_POST['preview_id']??''); $token=(string)($_POST['row_token']??'');
+            if (!is_array($preview) || !hash_equals((string)($preview['id']??''),$previewId)) {
+                echo json_encode(['ok'=>false,'result'=>'Conflict','message'=>'Preview expired or does not match. Upload the CSV again.']); exit;
+            }
+            $consumed=is_array($_SESSION['customer_csv_mobile_sync_consumed']??null)?$_SESSION['customer_csv_mobile_sync_consumed']:[];
+            if (isset($consumed[$token])) { echo json_encode(['ok'=>true,'result'=>'Unchanged','message'=>'This row was already handled.','counts'=>$consumed]); exit; }
+            $posted=is_array($_POST['choice']??null)?$_POST['choice']:[];
+            $result=customer_bulk_mobile_sync_apply_staged_row($customerStore,$preview,$token,$posted);
+            if (!empty($result['ok'])) {
+                $consumed[$token]=(string)$result['result']; $_SESSION['customer_csv_mobile_sync_consumed']=$consumed;
+            }
+            $result['counts']=['consumed'=>count($consumed),'remaining'=>max(0,count(array_filter($preview['rows'],static fn($r)=>($r['result']??'')==='Ready'))-count($consumed))];
+            echo json_encode($result,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE); exit;
+        } elseif ($action === 'archive_customer') {
             $mobile = trim((string) ($_POST['mobile'] ?? ''));
             $reason = trim((string) ($_POST['archive_reason'] ?? ''));
             if ($mobile === '' || !$customerStore->archiveCustomer($mobile, $reason)) {
@@ -380,20 +396,26 @@ if ($activeTab === 'customers') {
                     $contents = file_get_contents((string)$upload['tmp_name']);
                     $preview = is_string($contents) ? customer_bulk_mobile_sync_preview($customerStore, $contents) : ['rows'=>[], 'error'=>'Could not read uploaded CSV.'];
                     if (($preview['error'] ?? '') !== '') $customerImportError = (string)$preview['error'];
-                    else { $_SESSION['customer_csv_mobile_sync_preview'] = $preview; $customerImportSummary = $preview; }
+                    else { $_SESSION['customer_csv_mobile_sync_preview'] = $preview; unset($_SESSION['customer_csv_mobile_sync_consumed']); $customerImportSummary = $preview; }
                 }
             } elseif ($action === 'confirm_customer_sync') {
                 $preview = $_SESSION['customer_csv_mobile_sync_preview'] ?? null;
                 if (!is_array($preview) || !hash_equals((string)($preview['id'] ?? ''), (string)($_POST['preview_id'] ?? ''))) {
                     $customerImportError = 'Preview expired or does not match. Upload the CSV again.';
                 } else {
-                    $customerImportSummary = customer_bulk_mobile_sync_confirm($preview, is_array($_POST['choices'] ?? null) ? $_POST['choices'] : []);
+                    $consumed=is_array($_SESSION['customer_csv_mobile_sync_consumed']??null)?$_SESSION['customer_csv_mobile_sync_consumed']:[];
+                    $remaining=$preview; $remaining['rows']=array_values(array_filter($preview['rows'],static fn($row)=>!isset($consumed[(string)($row['row_token']??'')])));
+                    $posted=is_array($_POST['choices'] ?? null) ? $_POST['choices'] : [];
+                    // Re-index posted choices by stable row token after individually
+                    // consumed rows have been removed.
+                    $remainingChoices=[]; foreach($remaining['rows'] as $ri=>$row) { $original=array_search($row,$preview['rows'],true); $remainingChoices[$ri]=$posted[$original]??[]; }
+                    $confirmed = customer_bulk_mobile_sync_confirm($remaining, $remainingChoices);
+                    $customerImportSummary = ($confirmed['error']??'')==='' ? customer_bulk_mobile_sync_apply($customerStore,$confirmed) : $confirmed;
                     if (($customerImportSummary['error'] ?? '') !== '') {
                         $customerImportError = (string)$customerImportSummary['error'];
                         $_SESSION['customer_csv_mobile_sync_preview'] = $preview;
                     } else {
-                        $_SESSION['customer_csv_mobile_sync_confirmation'] = $customerImportSummary;
-                        unset($_SESSION['customer_csv_mobile_sync_preview']);
+                        unset($_SESSION['customer_csv_mobile_sync_preview'],$_SESSION['customer_csv_mobile_sync_consumed']);
                     }
                 }
             } elseif ($action === 'apply_customer_sync') {
@@ -1365,35 +1387,82 @@ function admin_users_build_welcome_subject(array $customer): string
           <div class="admin-alert admin-alert--success" role="status">
             <?php if (isset($customerImportSummary['applied'])): ?>
             <strong>Synchronization completed.</strong>
-            <div>Applied: <?= (int)$customerImportSummary['applied'] ?> · Unchanged: <?= (int)$customerImportSummary['unchanged'] ?> · Skipped: <?= (int)$customerImportSummary['skipped'] ?> · Conflict: <?= (int)$customerImportSummary['conflict'] ?> · Failed: <?= (int)$customerImportSummary['failed'] ?></div>
+            <div>Applied: <?= (int)$customerImportSummary['applied'] ?> · Unchanged: <?= (int)$customerImportSummary['unchanged'] ?> · Ignored: <?= (int)($customerImportSummary['ignored']??0) ?> · Conflict: <?= (int)$customerImportSummary['conflict'] ?> · Failed: <?= (int)$customerImportSummary['failed'] ?></div>
             <?php else: ?><strong>Staged preview — no records have been written.</strong><?php endif; ?>
           </div>
           <?php $importRows=(array)($customerImportSummary['rows']??[]); if ($importRows!==[]): ?>
-          <?php $isFinal=isset($customerImportSummary['confirmation_id']); $isApplied=isset($customerImportSummary['applied']); ?>
-          <form method="post">
+          <?php $isApplied=isset($customerImportSummary['applied']); $reviewRows=array_filter($importRows,static fn($r)=>($r['result']??'')!=='Unchanged'); ?>
+          <?php if ($reviewRows!==[]): ?><form method="post" id="customer-csv-review">
           <?= csrf_field() ?>
-          <?php if (!$isApplied): ?><input type="hidden" name="customer_action" value="<?= $isFinal?'apply_customer_sync':'confirm_customer_sync' ?>">
-          <input type="hidden" name="<?= $isFinal?'confirmation_id':'preview_id' ?>" value="<?= admin_users_safe((string)($customerImportSummary[$isFinal?'confirmation_id':'id']??'')) ?>"><?php endif; ?>
-          <div class="responsive-table"><table><thead><tr><th>CSV line / normalized mobile</th><th>Result / row action</th><th>Saved and CSV field values</th><th>Matching eligible quotations</th></tr></thead><tbody>
-          <?php foreach($importRows as $rowIndex=>$importRow): ?><tr>
+          <?php if (!$isApplied): ?><input type="hidden" name="customer_action" value="confirm_customer_sync"><input type="hidden" name="preview_id" value="<?= admin_users_safe((string)($customerImportSummary['id']??'')) ?>"><?php endif; ?>
+          <div class="responsive-table"><table><thead><tr><th>CSV line / normalized mobile</th><th>Result</th><th>Meaningful differences</th><th>Matching eligible quotations</th><?php if(!$isApplied): ?><th>Actions</th><?php endif; ?></tr></thead><tbody>
+          <?php foreach($reviewRows as $rowIndex=>$importRow): ?><tr class="customer-csv-row" data-row-token="<?= admin_users_safe((string)($importRow['row_token']??'')) ?>">
             <td><?= (int)($importRow['line']??0) ?><br><strong><?= admin_users_safe((string)($importRow['mobile']??'')) ?></strong></td>
-            <td><strong><?= admin_users_safe((string)($importRow['result']??'Ready')) ?></strong><br><?= admin_users_safe((string)($importRow['message']??'')) ?>
-            <?php if (!$isFinal && !$isApplied && ($importRow['result']??'')==='Ready'): ?><label><input type="radio" name="choices[<?= $rowIndex ?>][row]" value="sync" checked> Synchronize</label><br><label><input type="radio" name="choices[<?= $rowIndex ?>][row]" value="ignore"> Ignore entire customer</label><?php endif; ?></td>
-            <td><?php foreach((array)($importRow['fields']??[]) as $field=>$comparison): ?><fieldset style="margin-bottom:.75rem"><legend><strong><?= admin_users_safe((string)$field) ?></strong> — <?= admin_users_safe((string)($comparison['state']??'')) ?></legend>
-              <div><small>Saved</small>: <?= admin_users_safe((string)($comparison['saved']??'')) ?></div><div><small>CSV</small>: <?= admin_users_safe((string)($comparison['csv']??'')) ?></div>
-              <?php if (($comparison['state']??'')!=='Unchanged' && !$isFinal && !$isApplied): $automatic=(string)($comparison['choice']??''); $required=!empty($comparison['requires_choice']); ?>
-              <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="keep" <?= $automatic==='keep'?'checked':'' ?> <?= $required?'required':'' ?>> Keep saved value<?= ($comparison['state']??'')==='CSV blank — keep saved value'?' (CSV cell is blank)':'' ?></label>
-              <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="csv" <?= $automatic==='csv'?'checked':'' ?> <?= $required?'required':'' ?>> Use CSV value<?= ($comparison['state']??'')==='Fill blank field'?' (fill blank field)':'' ?></label>
-              <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="manual"> Manual corrected value</label>
-              <input class="users-input" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][manual]" value="<?= admin_users_safe((string)($comparison['saved']??'')) ?>">
-              <?php elseif ($isFinal && isset($comparison['after'])): ?><div><strong>After confirmation:</strong> <?= admin_users_safe((string)$comparison['after']) ?> (<?= admin_users_safe((string)$comparison['choice']) ?>)</div><?php endif; ?>
+            <td><strong class="customer-csv-result"><?= admin_users_safe((string)($importRow['result']??'Ready')) ?></strong><div class="customer-csv-error" role="alert"><?= admin_users_safe((string)($importRow['message']??'')) ?></div></td>
+            <td><?php foreach((array)($importRow['fields']??[]) as $field=>$comparison): if(($comparison['state']??'')==='Unchanged') continue; $automatic=(string)($comparison['choice']??'keep'); ?><fieldset class="customer-csv-field" data-field="<?= admin_users_safe((string)$field) ?>" style="margin-bottom:.75rem"><legend><strong><?= admin_users_safe((string)$field) ?></strong></legend>
+              <div><small>Saved</small>: <span data-value="saved"><?= admin_users_safe((string)($comparison['saved']??'')) ?></span></div><div><small>CSV</small>: <span data-value="csv"><?= admin_users_safe((string)($comparison['csv']??'')) ?></span></div>
+              <div><strong>Selected final value:</strong> <span class="customer-csv-final"><?= admin_users_safe((string)($comparison['after']??($automatic==='csv'?($comparison['csv']??''):($comparison['saved']??'')))) ?></span></div>
+              <?php if (!$isApplied): ?><details class="customer-csv-choice"><summary>Change choice</summary>
+              <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="keep" <?= $automatic==='keep'?'checked':'' ?>> Keep saved</label>
+              <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="csv" <?= $automatic==='csv'?'checked':'' ?>> Use CSV</label>
+              <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="manual"> Manual value</label>
+              <input class="users-input customer-csv-manual" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][manual]" value="<?= admin_users_safe((string)($comparison['saved']??'')) ?>">
+              </details><?php endif; ?>
             </fieldset><?php endforeach; ?></td>
             <td><?php foreach((array)($importRow['quotes']??[]) as $quote): ?><div><strong><?= admin_users_safe((string)($quote['id']??'')) ?></strong> (<?= admin_users_safe((string)($quote['status']??'')) ?>)</div><?php endforeach; ?></td>
+            <?php if (!$isApplied && ($importRow['result']??'')==='Ready'): ?><td><button class="btn btn-secondary customer-csv-save" type="button">Save customer</button> <button class="btn btn-link customer-csv-ignore" type="button">Ignore</button></td><?php endif; ?>
           </tr><?php endforeach; ?></tbody></table></div>
-          <?php if (!$isApplied): ?><button class="btn btn-primary" type="submit"><?= $isFinal?'Apply confirmed before/after changes':'Review final before/after' ?></button><?php endif; ?>
-          </form>
+          <?php if (!$isApplied): ?><button class="btn btn-primary" type="submit">Save All</button> <span id="customer-csv-count" aria-live="polite"><?= count($reviewRows) ?> remaining</span><?php endif; ?>
+          </form><?php endif; ?>
           <?php endif; ?>
           <?php endif; ?>
+          <script>
+          (() => {
+            const review = document.getElementById('customer-csv-review');
+            if (!review) return;
+            const refreshFinal = field => {
+              const choice = field.querySelector('input[type="radio"]:checked')?.value || 'keep';
+              const source = choice === 'manual' ? field.querySelector('.customer-csv-manual') : field.querySelector(`[data-value="${choice === 'csv' ? 'csv' : 'saved'}"]`);
+              field.querySelector('.customer-csv-final').textContent = source?.value ?? source?.textContent ?? '';
+            };
+            review.querySelectorAll('.customer-csv-field').forEach(field => {
+              field.addEventListener('input', () => refreshFinal(field));
+              field.addEventListener('change', () => refreshFinal(field));
+            });
+            const saveRow = async (row, ignore) => {
+              row.querySelectorAll('button').forEach(item => item.disabled = true);
+              const data = new FormData();
+              data.set('csrf_token', review.querySelector('[name="csrf_token"]').value);
+              data.set('customer_action', 'save_customer_sync_ajax');
+              data.set('preview_id', review.querySelector('[name="preview_id"]').value);
+              data.set('row_token', row.dataset.rowToken);
+              if (ignore) data.set('choice[row]', 'ignore');
+              row.querySelectorAll('.customer-csv-field').forEach(field => {
+                const key = field.dataset.field;
+                data.set(`choice[${key}][choice]`, field.querySelector('input[type="radio"]:checked')?.value || 'keep');
+                data.set(`choice[${key}][manual]`, field.querySelector('.customer-csv-manual')?.value || '');
+              });
+              try {
+                const response = await fetch('admin-customers.php', {method:'POST', body:data, headers:{'Accept':'application/json'}});
+                const result = await response.json();
+                if (!response.ok || !result.ok) throw new Error(result.message || 'Customer could not be saved.');
+                row.remove();
+                const count = document.getElementById('customer-csv-count');
+                if (count) count.textContent = `${result.counts?.remaining ?? review.querySelectorAll('.customer-csv-row').length} remaining`;
+              } catch (error) {
+                row.querySelector('.customer-csv-result').textContent = 'Failed';
+                row.querySelector('.customer-csv-error').textContent = error.message;
+                row.querySelectorAll('button').forEach(item => item.disabled = false);
+              }
+            };
+            review.addEventListener('click', event => {
+              const save = event.target.closest('.customer-csv-save');
+              const ignore = event.target.closest('.customer-csv-ignore');
+              if (save || ignore) saveRow((save || ignore).closest('.customer-csv-row'), Boolean(ignore));
+            });
+            review.addEventListener('submit', () => review.querySelectorAll('button').forEach(button => button.disabled = true));
+          })();
+          </script>
           <form method="post" enctype="multipart/form-data" class="users-form-grid">
         <?= csrf_field() ?>
             <input type="hidden" name="customer_action" value="import_customers" />
