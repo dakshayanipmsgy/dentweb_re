@@ -243,6 +243,9 @@ final class CustomerFsStore
         $handoverHtmlPath = trim((string) ($input['handover_html_path'] ?? ($existing['handover_html_path'] ?? $handoverDocumentPath)));
         $handoverPdfPath = trim((string) ($input['handover_pdf_path'] ?? ($existing['handover_pdf_path'] ?? '')));
         $handoverGeneratedAt = trim((string) ($input['handover_generated_at'] ?? ($existing['handover_generated_at'] ?? '')));
+        $handoverSourceHash = trim((string) ($input['handover_source_hash'] ?? ($existing['handover_source_hash'] ?? '')));
+        $handoverVersion = max(0, (int) ($input['handover_version'] ?? ($existing['handover_version'] ?? 0)));
+        $handoverSent = is_array($input['handover_sent'] ?? null) ? $input['handover_sent'] : (is_array($existing['handover_sent'] ?? null) ? $existing['handover_sent'] : []);
 
         return [
             'mobile' => $mobile,
@@ -278,6 +281,9 @@ final class CustomerFsStore
             'handover_html_path' => $handoverHtmlPath,
             'handover_pdf_path' => $handoverPdfPath,
             'handover_generated_at' => $handoverGeneratedAt,
+            'handover_source_hash' => $handoverSourceHash,
+            'handover_version' => $handoverVersion,
+            'handover_sent' => $handoverSent,
             'password_hash' => isset($input['password_hash']) && is_string($input['password_hash'])
                 ? trim($input['password_hash'])
                 : ($existing['password_hash'] ?? null),
@@ -527,6 +533,9 @@ final class CustomerFsStore
             'handover_html_path' => trim((string) ($customer['handover_html_path'] ?? '')),
             'handover_pdf_path' => trim((string) ($customer['handover_pdf_path'] ?? '')),
             'handover_generated_at' => trim((string) ($customer['handover_generated_at'] ?? '')),
+            'handover_source_hash' => trim((string) ($customer['handover_source_hash'] ?? '')),
+            'handover_version' => max(0, (int) ($customer['handover_version'] ?? 0)),
+            'handover_sent' => is_array($customer['handover_sent'] ?? null) ? $customer['handover_sent'] : [],
             'password_hash' => $customer['password_hash'] ?? null,
             'created_from_quote_id' => trim((string) ($customer['created_from_quote_id'] ?? '')),
             'created_from_quote_no' => trim((string) ($customer['created_from_quote_no'] ?? '')),

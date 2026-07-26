@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/customer_admin.php';
 require_once __DIR__ . '/includes/handover.php';
+require_once __DIR__ . '/includes/customer_operations.php';
 
 require_admin();
 start_session();
@@ -58,6 +59,8 @@ if ($customer !== null && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['hand
                     'handover_document_path' => $relativeHtmlPath,
                     'handover_html_path' => $relativeHtmlPath,
                     'handover_generated_at' => $timestamp,
+                    'handover_source_hash' => customer_operations_source_hash($customer),
+                    'handover_version' => max(0, (int) ($customer['handover_version'] ?? 0)) + 1,
                 ]);
 
                 if ($update['success']) {
