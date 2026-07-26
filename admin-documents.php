@@ -19,6 +19,11 @@ if (!$isAdmin && !$isEmployee) {
     echo 'Access denied.';
     exit;
 }
+if ($isAdmin && ($_GET['download'] ?? '') === 'quotation_contact_sample') {
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="quotation-contact-sample.csv"');
+    echo "name,mobile\nAnita Sharma,9876543210\n"; exit;
+}
 
 $docTypes = ['quotation', 'agreement', 'challan', 'invoice_public', 'invoice_internal', 'receipt', 'sales_return'];
 $segments = ['RES', 'COM', 'IND', 'INST', 'PROD'];
@@ -320,6 +325,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sendJsonResponse(['ok' => false, 'error' => 'Access denied.'], 403);
         }
         $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
+    }
+
+    if ($action === 'analyse_quotation_contacts') {
+        if (!isset($_FILES['contact_csv']) || (int)($_FILES['contact_csv']['error'] ?? 1) !== UPLOAD_ERR_OK) $redirectDocuments('quotation_contact_import','error','Choose a CSV file to analyse.');
+        if ((int)($_FILES['contact_csv']['size'] ?? 0) > 1048576) $redirectDocuments('quotation_contact_import','error','CSV exceeds the 1 MB file limit.');
+        $parsed=documents_contact_parse_csv((string)file_get_contents((string)$_FILES['contact_csv']['tmp_name']));
+        if(empty($parsed['ok'])) $redirectDocuments('quotation_contact_import','error',implode(' ',array_slice($parsed['errors'],0,8)));
+        $stage=documents_contact_stage_save(documents_contact_build_preview($parsed['rows'],documents_list_quotes()),$parsed['rows'],(string)($user['id']??''));
+        if(empty($stage['ok'])) $redirectDocuments('quotation_contact_import','error','Could not create secure preview.');
+        header('Location: admin-documents.php?'.http_build_query(['tab'=>'quotation_contact_import','stage_id'=>$stage['stage']['id']])); exit;
+    }
+    if ($action === 'apply_quotation_contacts') {
+        $stage=documents_contact_stage_load((string)($_POST['stage_id']??''),(string)($user['id']??''));
+        if($stage===null) $redirectDocuments('quotation_contact_import','error','Preview expired or is not yours. Upload again.');
+        $result=documents_contact_apply_batch($stage,(array)($_POST['decision']??[]),(string)($_POST['correction_reason']??''),['type'=>'admin','id'=>(string)($user['id']??''),'name'=>(string)($user['full_name']??'Admin')],(string)($_POST['batch_id']??''));
+        $_SESSION['quotation_contact_report']=$result['results']??[];
+        $redirectDocuments('quotation_contact_import',empty($result['ok'])?'error':'success',empty($result['ok'])?((string)($result['error']??'Batch completed with errors.')):'Batch correction completed.');
     }
 
     if (in_array($action, ['prepare_handover_whatsapp', 'mark_handover_sent'], true)) {
@@ -3018,7 +3040,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $activeTab = safe_text($_GET['tab'] ?? 'company');
-if (!in_array($activeTab, ['company', 'numbering', 'templates', 'accepted_customers', 'completed_customers', 'items', 'archived'], true)) {
+if (!in_array($activeTab, ['company', 'numbering', 'templates', 'accepted_customers', 'completed_customers', 'items', 'archived', 'quotation_contact_import'], true)) {
     $activeTab = 'company';
 }
 
@@ -3029,6 +3051,9 @@ if (isset($_SESSION['items_csv_import_report']) && is_array($_SESSION['items_csv
     $csvImportReport = $_SESSION['items_csv_import_report'];
 }
 unset($_SESSION['items_csv_import_report']);
+$contactStage=$isAdmin?documents_contact_stage_load((string)($_GET['stage_id']??''),(string)($user['id']??'')):null;
+$contactReport=is_array($_SESSION['quotation_contact_report']??null)?$_SESSION['quotation_contact_report']:[];
+unset($_SESSION['quotation_contact_report']);
 
 $company = load_company_profile();
 
@@ -3799,12 +3824,39 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
       <a data-workspace-tab class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates"<?= $activeTab === 'templates' ? ' aria-current="page"' : '' ?>>Template Sets</a>
       <a data-workspace-tab class="tab <?= $activeTab === 'accepted_customers' ? 'active' : '' ?>" href="?tab=accepted_customers"<?= $activeTab === 'accepted_customers' ? ' aria-current="page"' : '' ?>>Accepted Customers</a>
       <a data-workspace-tab class="tab <?= $activeTab === 'completed_customers' ? 'active' : '' ?>" href="?tab=completed_customers"<?= $activeTab === 'completed_customers' ? ' aria-current="page"' : '' ?>>Completed Customers</a>
+      <?php if ($isAdmin): ?><a data-workspace-tab data-workspace-mode="reload" class="tab <?= $activeTab === 'quotation_contact_import' ? 'active' : '' ?>" href="?tab=quotation_contact_import"<?= $activeTab === 'quotation_contact_import' ? ' aria-current="page"' : '' ?>>Contact CSV Review</a><?php endif; ?>
       <a data-workspace-tab data-workspace-mode="reload" class="tab <?= $activeTab === 'items' ? 'active' : '' ?>" href="?tab=items"<?= $activeTab === 'items' ? ' aria-current="page"' : '' ?>>Items</a>
       <a data-workspace-tab class="tab <?= $activeTab === 'archived' ? 'active' : '' ?>" href="?tab=archived"<?= $activeTab === 'archived' ? ' aria-current="page"' : '' ?>>Archived</a>
       <a class="tab" href="admin-templates.php">Template Blocks &amp; Media</a>
     </nav>
 
-    <?php if ($activeTab === 'accepted_customers'): ?>
+    <?php if ($activeTab === 'quotation_contact_import' && $isAdmin): ?>
+      <section class="panel">
+        <h2>Quotation contact CSV reconciliation</h2>
+        <p class="muted">Review-first correction: analysing never writes quotation changes. A score of 60% only displays a candidate and never approves it automatically. Finalized document snapshots are not changed.</p>
+        <p><a class="btn secondary" href="?download=quotation_contact_sample">Download sample CSV</a></p>
+        <form method="post" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="analyse_quotation_contacts">
+          <label>CSV (exact headers <code>name,mobile</code>; maximum 1 MB / 1,000 rows)<input type="file" name="contact_csv" accept=".csv,text/csv" required></label><button class="btn" type="submit">Upload and analyse</button>
+        </form>
+        <?php if($contactReport!==[]): ?><h3>Results report</h3><table><thead><tr><th>Quotation</th><th>Result</th></tr></thead><tbody><?php foreach($contactReport as $rr): ?><tr><td><?= htmlspecialchars((string)($rr['quotation_id']??''),ENT_QUOTES) ?></td><td><?= !empty($rr['ok'])?'✓ ':'✗ ' ?><?= htmlspecialchars((string)($rr['message']??''),ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table><?php endif; ?>
+        <?php if(is_array($contactStage)): ?>
+        <hr><h3>Review candidates</h3><p><span class="pill">90–100 strong</span> <span class="pill">75–89 likely</span> <span class="pill warn">60–74 weak</span></p>
+        <?php if(($contactStage['candidates']??[])===[]): ?><div class="banner error">No quotation name candidates scored 60% or more. Rows may be ignored or treated as having no correct match.</div><?php else: ?>
+        <form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="apply_quotation_contacts"><input type="hidden" name="stage_id" value="<?= htmlspecialchars((string)$contactStage['id'],ENT_QUOTES) ?>"><input type="hidden" name="batch_id" value="contact_<?= htmlspecialchars(bin2hex(random_bytes(8)),ENT_QUOTES) ?>">
+        <div class="responsive-table"><table><thead><tr><th>Accept</th><th>Quotation</th><th>Names</th><th>Mobiles</th><th>Score / conflicts</th><th>Customer Users</th><th>Final choices</th></tr></thead><tbody>
+        <?php foreach($contactStage['candidates'] as $c): $cid=(string)$c['candidate_id']; ?><tr>
+          <td><label><input type="radio" name="decision[<?= $cid ?>][action]" value="apply" <?= !empty($c['preselected'])?'checked':'' ?>> Select</label><label><input type="radio" name="decision[<?= $cid ?>][action]" value="ignore" <?= empty($c['preselected'])?'checked':'' ?>> Ignore</label><label><input type="radio" name="decision[<?= $cid ?>][action]" value="no_match"> No correct match</label></td>
+          <td><strong><?= htmlspecialchars((string)$c['quotation_reference'],ENT_QUOTES) ?></strong><br><?= htmlspecialchars((string)$c['status'],ENT_QUOTES) ?></td>
+          <td>Quotation: <?= htmlspecialchars((string)$c['quotation_name'],ENT_QUOTES) ?><br>CSV: <?= htmlspecialchars((string)$c['csv']['name'],ENT_QUOTES) ?></td>
+          <td>Current: <?= htmlspecialchars((string)$c['current_mobile'],ENT_QUOTES) ?><br>CSV: <?= htmlspecialchars((string)$c['csv']['mobile'],ENT_QUOTES) ?><?php if($c['mobile_matches']): ?><br><strong>Mobile already matches</strong><?php endif; ?></td>
+          <td><strong><?= (int)$c['score'] ?>% <?= htmlspecialchars((string)$c['band'],ENT_QUOTES) ?></strong><?php foreach($c['conflicts'] as $conf): ?><br><span class="pill warn"><?= htmlspecialchars((string)$conf,ENT_QUOTES) ?></span><?php endforeach; ?></td>
+          <td>Old: <?= htmlspecialchars((string)$c['old_link'],ENT_QUOTES) ?><br>New: <?= htmlspecialchars((string)$c['new_link'],ENT_QUOTES) ?><br><small>Quotation-only by default; accounts are never merged or migrated here.</small></td>
+          <td>Name: <select name="decision[<?= $cid ?>][name_choice]"><option value="keep">Keep quotation</option><option value="csv">Use CSV</option><option value="manual">Manual</option></select><input name="decision[<?= $cid ?>][manual_name]" placeholder="Manual final name"><br>Mobile: <select name="decision[<?= $cid ?>][mobile_choice]"><option value="keep">Keep quotation</option><option value="csv" <?= $c['mobile_matches']?'':'selected' ?>>Use CSV</option><option value="manual">Manual</option></select><input name="decision[<?= $cid ?>][manual_mobile]" placeholder="Manual final mobile" inputmode="numeric"><br><label><input type="checkbox" name="decision[<?= $cid ?>][confirm_account_change]" value="1"> Separately request account migration/relinking (batch will stop for separate workflow)</label></td>
+        </tr><?php endforeach; ?></tbody></table></div>
+        <label>Mandatory batch correction reason<textarea name="correction_reason" required></textarea></label><label><input type="checkbox" required> I reviewed every selected match and confirm the final values.</label><button class="btn warn" type="submit">Apply reviewed batch</button></form><?php endif; endif; ?>
+      </section>
+    <?php elseif ($activeTab === 'accepted_customers'): ?>
       <section class="panel">
         <?php if ($packQuote !== null): ?>
           <?php

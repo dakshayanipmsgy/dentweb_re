@@ -3372,6 +3372,8 @@ function documents_correct_quotation_mobile(string $quoteId, string $newMobile, 
     }
 }
 
+require_once __DIR__ . '/quotation_contact_csv.php';
+
 
 /**
  * Apply and persist the status rules shared by quotation row actions and Bulk Tools.
