@@ -58,6 +58,9 @@ function documents_contact_build_preview(array $csvRows, array $quotes): array
 {
     $candidates=[]; $quoteUse=[]; $csvUse=[];
     foreach($csvRows as $ci=>$csv) foreach($quotes as $quote) {
+        // Archived quotations are not candidates.  Keep this guard before the
+        // similarity call so they cannot influence scoring or ambiguity.
+        if (documents_is_archived($quote)) continue;
         $score=documents_contact_similarity((string)$csv['name'],(string)($quote['customer_name']??''));
         if($score<60) continue;
         $qid=(string)($quote['id']??''); $quoteUse[$qid][]= $ci; $csvUse[$ci][]=$qid;
@@ -105,6 +108,9 @@ function documents_contact_apply_batch(array $stage, array $decisions, string $r
         if(!is_resource($lock)||!flock($lock,LOCK_EX)){ $results[]=['quotation_id'=>$qid,'ok'=>false,'message'=>'Could not acquire quotation lock.']; continue; }
         try {
             $q=documents_get_quote($qid); if($q===null){$results[]=['quotation_id'=>$qid,'ok'=>false,'message'=>'Quotation not found.'];continue;}
+            // The quotation may have been archived after the preview was made.
+            // Reject it before idempotency, version, linkage, or correction work.
+            if(documents_is_archived($q)){$results[]=['quotation_id'=>$qid,'ok'=>false,'message'=>'Skipped — quotation is archived'];continue;}
             foreach((array)($q['contact_correction_audit']??[]) as $event) if(($event['batch_id']??'')===$batchId){$results[]=['quotation_id'=>$qid,'ok'=>true,'duplicate'=>true,'message'=>'Already applied.'];continue 2;}
             $version=(string)($q['updated_at']??$q['created_at']??''); if(!hash_equals((string)$candidate['version'],$version)){$results[]=['quotation_id'=>$qid,'ok'=>false,'message'=>'Stale quotation; reload and review.'];continue;}
             $oldName=(string)($q['customer_name']??''); $oldMobile=documents_normalize_mobile((string)($q['customer_mobile']??''));
