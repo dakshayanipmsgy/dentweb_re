@@ -388,8 +388,13 @@ if ($activeTab === 'customers') {
                     $customerImportError = 'Preview expired or does not match. Upload the CSV again.';
                 } else {
                     $customerImportSummary = customer_bulk_mobile_sync_confirm($preview, is_array($_POST['choices'] ?? null) ? $_POST['choices'] : []);
-                    $_SESSION['customer_csv_mobile_sync_confirmation'] = $customerImportSummary;
-                    unset($_SESSION['customer_csv_mobile_sync_preview']);
+                    if (($customerImportSummary['error'] ?? '') !== '') {
+                        $customerImportError = (string)$customerImportSummary['error'];
+                        $_SESSION['customer_csv_mobile_sync_preview'] = $preview;
+                    } else {
+                        $_SESSION['customer_csv_mobile_sync_confirmation'] = $customerImportSummary;
+                        unset($_SESSION['customer_csv_mobile_sync_preview']);
+                    }
                 }
             } elseif ($action === 'apply_customer_sync') {
                 $preview = $_SESSION['customer_csv_mobile_sync_confirmation'] ?? null;
@@ -1376,9 +1381,9 @@ function admin_users_build_welcome_subject(array $customer): string
             <?php if (!$isFinal && !$isApplied && ($importRow['result']??'')==='Ready'): ?><label><input type="radio" name="choices[<?= $rowIndex ?>][row]" value="sync" checked> Synchronize</label><br><label><input type="radio" name="choices[<?= $rowIndex ?>][row]" value="ignore"> Ignore entire customer</label><?php endif; ?></td>
             <td><?php foreach((array)($importRow['fields']??[]) as $field=>$comparison): ?><fieldset style="margin-bottom:.75rem"><legend><strong><?= admin_users_safe((string)$field) ?></strong> — <?= admin_users_safe((string)($comparison['state']??'')) ?></legend>
               <div><small>Saved</small>: <?= admin_users_safe((string)($comparison['saved']??'')) ?></div><div><small>CSV</small>: <?= admin_users_safe((string)($comparison['csv']??'')) ?></div>
-              <?php if (($comparison['state']??'')==='Different' && !$isFinal && !$isApplied): ?>
-              <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="keep" checked> Keep saved value</label>
-              <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="csv"> Use CSV value</label>
+              <?php if (($comparison['state']??'')!=='Unchanged' && !$isFinal && !$isApplied): $automatic=(string)($comparison['choice']??''); $required=!empty($comparison['requires_choice']); ?>
+              <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="keep" <?= $automatic==='keep'?'checked':'' ?> <?= $required?'required':'' ?>> Keep saved value<?= ($comparison['state']??'')==='CSV blank — keep saved value'?' (CSV cell is blank)':'' ?></label>
+              <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="csv" <?= $automatic==='csv'?'checked':'' ?> <?= $required?'required':'' ?>> Use CSV value<?= ($comparison['state']??'')==='Fill blank field'?' (fill blank field)':'' ?></label>
               <label><input type="radio" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][choice]" value="manual"> Manual corrected value</label>
               <input class="users-input" name="choices[<?= $rowIndex ?>][<?= admin_users_safe((string)$field) ?>][manual]" value="<?= admin_users_safe((string)($comparison['saved']??'')) ?>">
               <?php elseif ($isFinal && isset($comparison['after'])): ?><div><strong>After confirmation:</strong> <?= admin_users_safe((string)$comparison['after']) ?> (<?= admin_users_safe((string)$comparison['choice']) ?>)</div><?php endif; ?>
