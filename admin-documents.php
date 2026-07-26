@@ -3763,7 +3763,16 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
       </div>
     </section>
 
-    <?= render_documents_workspace_tabs($activeTab) ?>
+    <nav class="tabs admin-documents__tabs workspace-tabs" data-workspace-tabs="fetch" aria-label="Document Center tabs">
+      <a data-workspace-tab class="tab <?= $activeTab === 'company' ? 'active' : '' ?>" href="?tab=company"<?= $activeTab === 'company' ? ' aria-current="page"' : '' ?>>Company Profile &amp; Branding</a>
+      <a data-workspace-tab class="tab <?= $activeTab === 'numbering' ? 'active' : '' ?>" href="?tab=numbering"<?= $activeTab === 'numbering' ? ' aria-current="page"' : '' ?>>Numbering Rules</a>
+      <a data-workspace-tab class="tab <?= $activeTab === 'templates' ? 'active' : '' ?>" href="?tab=templates"<?= $activeTab === 'templates' ? ' aria-current="page"' : '' ?>>Template Sets</a>
+      <a data-workspace-tab class="tab <?= $activeTab === 'accepted_customers' ? 'active' : '' ?>" href="?tab=accepted_customers"<?= $activeTab === 'accepted_customers' ? ' aria-current="page"' : '' ?>>Accepted Customers</a>
+      <a data-workspace-tab class="tab <?= $activeTab === 'completed_customers' ? 'active' : '' ?>" href="?tab=completed_customers"<?= $activeTab === 'completed_customers' ? ' aria-current="page"' : '' ?>>Completed Customers</a>
+      <a data-workspace-tab data-workspace-mode="reload" class="tab <?= $activeTab === 'items' ? 'active' : '' ?>" href="?tab=items"<?= $activeTab === 'items' ? ' aria-current="page"' : '' ?>>Items</a>
+      <a data-workspace-tab class="tab <?= $activeTab === 'archived' ? 'active' : '' ?>" href="?tab=archived"<?= $activeTab === 'archived' ? ' aria-current="page"' : '' ?>>Archived</a>
+      <a class="tab" href="admin-templates.php">Template Blocks &amp; Media</a>
+    </nav>
 
     <?php if ($activeTab === 'accepted_customers'): ?>
       <section class="panel">
