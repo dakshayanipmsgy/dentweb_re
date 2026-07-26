@@ -1,6 +1,56 @@
 <?php
 declare(strict_types=1);
 
+/**
+ * Canonical statuses exposed by the quotation bulk table filter.
+ *
+ * Labels deliberately go through the same helper as quotation rows so the
+ * filter cannot drift from the rest of the quotation UI.
+ */
+function quotation_bulk_status_options(): array
+{
+    $statuses = ['draft', 'pending_admin_approval', 'approved', 'accepted', 'update_requested', 'archived'];
+    $options = [];
+    foreach ($statuses as $status) {
+        $options[$status] = documents_status_label(['status' => $status], 'admin');
+    }
+    return $options;
+}
+
+function quotation_bulk_normalize_status_filter($value): string
+{
+    $candidate = strtolower(trim((string) $value));
+    return array_key_exists($candidate, quotation_bulk_status_options()) ? $candidate : '';
+}
+
+function quotation_bulk_filter_quotes(array $quotes, $statusFilter = '', $search = ''): array
+{
+    $statusFilter = quotation_bulk_normalize_status_filter($statusFilter);
+    $search = strtolower(trim((string) $search));
+
+    return array_values(array_filter($quotes, static function ($quote) use ($statusFilter, $search): bool {
+        if (!is_array($quote)) {
+            return false;
+        }
+        $status = documents_is_archived($quote)
+            ? 'archived'
+            : documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
+        if ($statusFilter !== '' && $status !== $statusFilter) {
+            return false;
+        }
+        if ($search === '') {
+            return true;
+        }
+        $haystack = strtolower(implode(' ', [
+            (string) ($quote['quote_no'] ?? ''),
+            (string) ($quote['customer_name'] ?? ''),
+            (string) ($quote['customer_mobile'] ?? ''),
+            documents_status_label($quote, 'admin'),
+        ]));
+        return str_contains($haystack, $search);
+    }));
+}
+
 require_once __DIR__ . '/../admin/includes/documents_helpers.php';
 require_once __DIR__ . '/quotation_view_renderer.php';
 require_once __DIR__ . '/quotation_browser_pdf.php';

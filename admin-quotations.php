@@ -123,7 +123,15 @@ foreach ($inventoryVariants as $variant) {
 }
 
 $redirectWith = static function (string $type, string $msg): void {
-    header('Location: admin-quotations.php?' . http_build_query(['status' => $type, 'message' => $msg]));
+    $query = ['status' => $type, 'message' => $msg];
+    if (safe_text((string) ($_GET['tab'] ?? '')) === 'bulk') {
+        $query = [
+            'tab' => 'bulk',
+            'status_filter' => quotation_bulk_normalize_status_filter($_GET['status_filter'] ?? ''),
+            'search' => safe_text((string) ($_GET['search'] ?? '')),
+        ] + $query;
+    }
+    header('Location: admin-quotations.php?' . http_build_query($query));
     exit;
 };
 $isQuotationSaveAjax = strtolower((string) ($_SERVER['HTTP_X_QUOTATION_SAVE'] ?? '')) === '1';
@@ -1783,6 +1791,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 documents_normalize_quotes_store();
 $allQuotes = documents_list_quotes();
 $statusFilter = safe_text($_GET['status_filter'] ?? '');
+$bulkSearch = safe_text($_GET['search'] ?? '');
 $tab = safe_text($_GET['tab'] ?? 'editor');
 if (!in_array($tab, ['quotations','editor','bulk_create','archived','bulk','settings'], true)) { $tab = 'editor'; }
 $isQuotationListPartialRequest = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'quotation-list'
@@ -1799,7 +1808,12 @@ if ($tab === 'archived') {
         return !documents_is_archived($q);
     }));
 }
-if ($statusFilter !== '') {
+if ($tab === 'bulk') {
+    // Only accepted canonical values survive into the URL controls. Unknown
+    // input safely means "All statuses" rather than an empty result set.
+    $statusFilter = quotation_bulk_normalize_status_filter($statusFilter);
+    $allQuotes = quotation_bulk_filter_quotes($allQuotes, $statusFilter, $bulkSearch);
+} elseif ($statusFilter !== '') {
     $allQuotes = array_values(array_filter($allQuotes, static function (array $q) use ($statusFilter): bool {
         $status = documents_quote_normalize_status((string) ($q['status'] ?? 'draft'));
         if ($statusFilter === 'needs_approval') {
@@ -2146,15 +2160,23 @@ while (count($orientationObstructions) < 3) { $orientationObstructions[] = ['lab
 </tbody></table></div></section><?php endif; ?>
 <h3>Import batch history</h3><table><thead><tr><th>Batch</th><th>File</th><th>Time</th><th>Rows</th><th>Valid</th><th>Invalid</th><th>Created</th><th>Status</th><th>Actions</th></tr></thead><tbody><?php foreach ($importBatches as $b): ?><tr><td><?= htmlspecialchars((string)($b['batch_id']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($b['filename']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($b['created_at']??''), ENT_QUOTES) ?></td><td><?= (int)($b['total_rows']??0) ?></td><td><?= (int)($b['valid_rows']??0) ?></td><td><?= (int)($b['invalid_rows']??0) ?></td><td><?= (int)($b['created_rows']??0) ?></td><td><?= htmlspecialchars((string)($b['status']??'Validated'), ENT_QUOTES) ?></td><td><a class="btn secondary" href="admin-quotations.php?tab=bulk_create&amp;batch=<?= urlencode((string)($b['batch_id']??'')) ?>">Open</a></td></tr><?php endforeach; if(!$importBatches): ?><tr><td colspan="9">No import batches yet.</td></tr><?php endif; ?></tbody></table></div><?php endif; ?>
 <?php if ($tab === 'bulk'): ?>
-<?php $quotationPdfCapabilities = quotation_browser_pdf_capabilities(); $quotationPdfStatusText = quotation_bulk_pdf_engine_status_text($quotationPdfCapabilities); $quotationManagedInstallAvailable = quotation_browser_managed_install_available(); $quotationBrowserAssetStatus = quotation_browser_export_asset_status(); ?>
+<?php $quotationPdfCapabilities = quotation_browser_pdf_capabilities(); $quotationPdfStatusText = quotation_bulk_pdf_engine_status_text($quotationPdfCapabilities); $quotationManagedInstallAvailable = quotation_browser_managed_install_available(); $quotationBrowserAssetStatus = quotation_browser_export_asset_status(); $bulkStatusOptions = quotation_bulk_status_options(); ?>
 <div class="card workspace-panel active"><div class="editor-intro"><div><h2>Bulk Tools</h2><p class="muted">Apply status actions, print selected quotations, or download one PDF for a single selection and a ZIP for multiple selections. Export limit: <?= (int) QUOTATION_BULK_EXPORT_LIMIT ?> quotations.</p></div><a class="btn secondary" href="admin-quotations.php?tab=quotations">Back to Manage Quotations</a></div>
-<form method="post" id="quoteBulkForm">
+<form method="get" class="list-toolbar" style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:12px">
+<input type="hidden" name="tab" value="bulk">
+<div><label for="bulkQuotationSearch">Search</label><input id="bulkQuotationSearch" type="search" name="search" value="<?= htmlspecialchars($bulkSearch, ENT_QUOTES) ?>" placeholder="Quote no, customer, mobile"></div>
+<div><label for="bulkQuotationStatusFilter">Status</label><select id="bulkQuotationStatusFilter" name="status_filter"><option value="">All statuses</option><?php foreach ($bulkStatusOptions as $bulkStatus => $bulkStatusLabel): ?><option value="<?= htmlspecialchars($bulkStatus, ENT_QUOTES) ?>" <?= $statusFilter === $bulkStatus ? 'selected' : '' ?>><?= htmlspecialchars($bulkStatusLabel, ENT_QUOTES) ?></option><?php endforeach; ?></select></div>
+<button class="btn secondary" type="submit">Apply filters</button>
+</form>
+<p class="muted" id="bulkVisibleCount" aria-live="polite"><?= count($allQuotes) ?> quotation<?= count($allQuotes) === 1 ? '' : 's' ?> shown</p>
+<form method="post" id="quoteBulkForm" action="admin-quotations.php?<?= htmlspecialchars(http_build_query(['tab' => 'bulk', 'status_filter' => $statusFilter, 'search' => $bulkSearch]), ENT_QUOTES) ?>">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
 <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:8px"><div><label>Status/archive action</label><select name="bulk_action"><option value="archive">Archive selected</option><option value="unarchive">Unarchive selected</option><option value="set_approved">Set status approved</option><option value="set_accepted">Set status accepted</option></select></div><button class="btn" type="submit" name="action" value="bulk_quote_action">Apply</button><button class="btn secondary bulk-requires-selection" type="submit" name="action" value="bulk_download_quotation_pdfs" data-server-pdf-available="<?= !empty($quotationPdfCapabilities["server_pdf_available"]) ? "1" : "0" ?>">Download PDF(s)</button><button class="btn secondary bulk-requires-selection" type="button" data-browser-quotation-export>Download using browser</button><label style="display:flex;flex-direction:column;gap:4px"><span>Export content size</span><select id="quotationBrowserExportScale" name="browser_export_scale_percent"><option value="100">100%</option><option value="90">90%</option><option value="80">80%</option><option value="70">70%</option><option value="60">60%</option><option value="50">50%</option></select></label><label style="display:flex;flex-direction:column;gap:4px"><span>Print content size</span><select id="quotationPrintScale" name="print_scale_percent"><option value="100">100%</option><option value="90">90%</option><option value="80">80%</option><option value="75">75%</option><option value="70">70%</option><option value="60">60%</option><option value="50">50%</option></select></label><button class="btn secondary bulk-requires-selection" type="submit" name="action" value="bulk_print_quotations" formtarget="_blank">Print Selected</button><button class="btn secondary" type="submit" name="action" value="quotation_pdf_diagnostics" formtarget="_blank">Test PDF engine</button><span class="quote-meta" id="bulkSelectionHelp"><?= empty($quotationPdfCapabilities["server_pdf_available"]) ? "Select quotations to use browser PDF/ZIP export." : "Select quotations to enable print/download." ?></span></div><div class="quote-meta" style="margin-bottom:12px"><strong><?= htmlspecialchars($quotationPdfStatusText, ENT_QUOTES) ?></strong><?= !empty($quotationPdfCapabilities["browser"]["warning"]) ? " — " . htmlspecialchars((string)$quotationPdfCapabilities["browser"]["warning"], ENT_QUOTES) : "" ?><?= $quotationManagedInstallAvailable ? "" : " Managed Install/Repair PDF engine is disabled until a real pinned checksum is committed." ?></div><div id="quotationBrowserExportStatus" class="quote-meta" style="margin-bottom:12px"><?= htmlspecialchars((string)$quotationBrowserAssetStatus["message"], ENT_QUOTES) ?>. Browser limits: mobile <?= 3 ?> quotations, desktop <?= (int) QUOTATION_BROWSER_EXPORT_LIMIT ?> quotations. Browser PDFs may be larger because complex quotation pages are rasterized page by page. Export content size reduces text, cards, tables, images, and spacing inside the A4 PDF; it does not change the saved quotation. Print content size reduces text, cards, tables, images, and spacing inside the A4 printout. This does not change the saved quotation.</div><button class="btn secondary" type="button" id="quotationBrowserExportCancel" hidden>Cancel browser export after current quotation</button>
-<table><thead><tr><th><input type="checkbox" id="bulkSelectAll" aria-label="Select all quotations"></th><th>Quote No</th><th>Customer</th><th>Status</th><th>Updated</th></tr></thead><tbody>
-<?php foreach ($allQuotes as $q): ?><tr><td><input class="bulk-row-check" type="checkbox" name="selected_ids[]" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"></td><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td></tr><?php endforeach; ?>
+<div class="list-table-wrap"><table><thead><tr><th><input type="checkbox" id="bulkSelectAll" aria-label="Select all visible quotations"></th><th>Quote No</th><th>Customer</th><th>Status</th><th>Updated</th></tr></thead><tbody>
+<?php foreach ($allQuotes as $q): ?><tr data-bulk-quotation-row><td><input class="bulk-row-check" type="checkbox" name="selected_ids[]" value="<?= htmlspecialchars((string)$q['id'], ENT_QUOTES) ?>"></td><td><?= htmlspecialchars((string)$q['quote_no'], ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['customer_name'], ENT_QUOTES) ?></td><td><?= htmlspecialchars(documents_status_label($q, 'admin'), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)$q['updated_at'], ENT_QUOTES) ?></td></tr><?php endforeach; ?>
+<?php if ($allQuotes === []): ?><tr><td colspan="5" class="empty-state">No quotations match the current filters.</td></tr><?php endif; ?>
 </tbody></table>
-</form></div>
+</div></form></div>
 <?php endif; ?>
 </div>
 <div class="ux-backdrop" id="uxBackdrop"></div><div class="ux-modal" id="uxModal" aria-hidden="true"><div class="ux-modal-head"><strong id="uxModalTitle">Preview</strong><button class="btn secondary" type="button" id="uxModalClose">Close</button></div><iframe id="uxModalFrame" src="about:blank"></iframe></div>
@@ -2896,15 +2918,18 @@ window.quoteFormAutofillConfig = {
   const checks=Array.from(form.querySelectorAll('.bulk-row-check'));
   const gated=Array.from(form.querySelectorAll('.bulk-requires-selection'));
   const help=document.getElementById('bulkSelectionHelp');
+  const visibleChecks=()=>checks.filter((check)=>!check.disabled&&!check.closest('tr')?.hidden&&check.closest('tr')?.style.display!=='none');
   const update=()=>{
-    const selected=checks.filter(c=>c.checked).length;
-    if(all){all.checked=selected>0&&selected===checks.length;all.indeterminate=selected>0&&selected<checks.length;}
+    const visible=visibleChecks();
+    const selected=visible.filter(c=>c.checked).length;
+    if(all){all.checked=visible.length>0&&selected===visible.length;all.indeterminate=selected>0&&selected<visible.length;all.disabled=visible.length===0;}
     gated.forEach(btn=>btn.disabled=selected===0);
     if(help)help.textContent=selected===0?'Select quotations to enable print/download.':(selected===1?'1 quotation selected: download creates one PDF.':`${selected} quotations selected: download creates a ZIP of PDFs.`);
   };
-  all?.addEventListener('change',()=>{checks.forEach(c=>{c.checked=all.checked;});update();});
+  all?.addEventListener('change',()=>{visibleChecks().forEach(c=>{c.checked=all.checked;});update();});
   checks.forEach(c=>c.addEventListener('change',update));
   form.addEventListener('submit',(event)=>{
+    checks.filter((check)=>!visibleChecks().includes(check)).forEach((check)=>{check.checked=false;check.disabled=true;});
     const submitter=event.submitter;
     if(submitter?.classList?.contains('bulk-requires-selection') && checks.every(c=>!c.checked)){
       event.preventDefault();
