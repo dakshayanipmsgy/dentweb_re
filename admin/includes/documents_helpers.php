@@ -3274,6 +3274,104 @@ function documents_save_quote(array $quote): array
     return json_save($path, $quote);
 }
 
+/**
+ * Correct the canonical contact mobile on an approved/accepted quotation.
+ * This deliberately leaves source/import history and every issued-document
+ * snapshot alone.  The quotation id remains the linkage key for those records.
+ */
+function documents_correct_quotation_mobile(string $quoteId, string $newMobile, string $reason, string $expectedVersion, array $actor, bool $confirmCustomerLink = false, string $requestId = ''): array
+{
+    $quoteId = safe_filename($quoteId);
+    $newMobile = documents_normalize_mobile($newMobile);
+    $reason = safe_text($reason);
+    if ($quoteId === '' || $newMobile === '' || !preg_match('/^[6-9][0-9]{9}$/', $newMobile)) {
+        return ['ok' => false, 'error' => 'A valid 10-digit Indian mobile number is required.'];
+    }
+    if ($reason === '') {
+        return ['ok' => false, 'error' => 'Correction reason is required.'];
+    }
+
+    $lockPath = documents_quotations_dir() . '/' . $quoteId . '.mobile-correction.lock';
+    $lock = @fopen($lockPath, 'c+');
+    if (!is_resource($lock) || !flock($lock, LOCK_EX)) {
+        if (is_resource($lock)) { fclose($lock); }
+        return ['ok' => false, 'error' => 'Unable to lock the quotation for correction.'];
+    }
+    try {
+        $quote = documents_get_quote($quoteId);
+        if ($quote === null) { return ['ok' => false, 'error' => 'Quotation not found.']; }
+        $status = documents_quote_normalize_status((string)($quote['status'] ?? 'draft'));
+        if (!in_array($status, ['approved', 'accepted'], true)) {
+            return ['ok' => false, 'error' => 'Mobile correction is available only for approved or accepted quotations.'];
+        }
+        $requestId = safe_text($requestId);
+        foreach ((array)($quote['mobile_correction_audit'] ?? []) as $event) {
+            if ($requestId !== '' && hash_equals((string)($event['request_id'] ?? ''), $requestId)) {
+                return ['ok' => true, 'duplicate' => true, 'quote' => $quote, 'error' => ''];
+            }
+        }
+        $currentVersion = (string)($quote['updated_at'] ?? $quote['created_at'] ?? '');
+        if ($expectedVersion === '' || !hash_equals($currentVersion, $expectedVersion)) {
+            return ['ok' => false, 'error' => 'This quotation changed after the form was opened. Reload and review before retrying.'];
+        }
+        $oldMobile = documents_normalize_mobile((string)($quote['customer_mobile'] ?? ''));
+        if ($oldMobile === $newMobile) { return ['ok' => false, 'error' => 'The new mobile number is the same as the current number.']; }
+
+        $store = new CustomerFsStore();
+        $oldCustomer = $oldMobile !== '' ? $store->findByMobile($oldMobile) : null;
+        $newCustomer = $store->findByMobile($newMobile);
+        $link = is_array($quote['customer_user_link'] ?? null) ? $quote['customer_user_link'] : [];
+        $hasOldLink = documents_normalize_mobile((string)($link['mobile'] ?? '')) === $oldMobile && $oldMobile !== '';
+        if ($hasOldLink && !$confirmCustomerLink) {
+            $detail = $newCustomer !== null
+                ? 'The new number already belongs to a Customer User. Confirm explicit relinking; that account will not be overwritten.'
+                : 'This quotation is linked to a Customer User. Confirm explicit account migration to the new number.';
+            return ['ok' => false, 'conflict' => true, 'error' => $detail];
+        }
+
+        $customerLinkAction = 'none';
+        if ($hasOldLink && $newCustomer !== null) {
+            $customerLinkAction = 'relinked_existing';
+            $link['mobile'] = $newMobile;
+            $link['serial_number'] = safe_text((string)($newCustomer['serial_number'] ?? ''));
+        } elseif ($hasOldLink && $oldCustomer !== null) {
+            $migration = $store->updateCustomer($oldMobile, ['mobile' => $newMobile]);
+            if (empty($migration['success'])) {
+                return ['ok' => false, 'error' => implode(' ', (array)($migration['errors'] ?? ['Customer account migration failed.']))];
+            }
+            $customerLinkAction = 'migrated';
+            $link['mobile'] = $newMobile;
+        } elseif ($newCustomer !== null && $link !== []) {
+            if (!$confirmCustomerLink) { return ['ok' => false, 'conflict' => true, 'error' => 'Confirm explicit relinking to the existing Customer User.']; }
+            $customerLinkAction = 'relinked_existing';
+            $link['mobile'] = $newMobile;
+            $link['serial_number'] = safe_text((string)($newCustomer['serial_number'] ?? ''));
+        }
+
+        $now = date('c');
+        $quote['customer_mobile'] = $newMobile;
+        $quote['customer_snapshot'] = array_merge((array)($quote['customer_snapshot'] ?? []), ['mobile' => $newMobile]);
+        if (is_array($quote['links'] ?? null)) { $quote['links']['customer_mobile'] = $newMobile; }
+        if ($link !== []) {
+            $link['linked_at'] = $now;
+            $link['linked_by'] = ['id' => (string)($actor['id'] ?? ''), 'name' => (string)($actor['name'] ?? 'Admin')];
+            $link['link_type'] = $customerLinkAction;
+            $quote['customer_user_link'] = $link;
+        }
+        $quote['updated_at'] = $now;
+        $quote['mobile_correction_audit'][] = [
+            'old_mobile' => $oldMobile, 'new_mobile' => $newMobile, 'reason' => $reason,
+            'customer_link_action' => $customerLinkAction, 'request_id' => $requestId,
+            'at' => $now, 'actor' => ['type' => 'admin', 'id' => (string)($actor['id'] ?? ''), 'name' => (string)($actor['name'] ?? 'Admin')],
+        ];
+        $saved = documents_save_quote($quote);
+        return !empty($saved['ok']) ? ['ok' => true, 'duplicate' => false, 'quote' => $quote, 'error' => ''] : $saved;
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
 
 /**
  * Apply and persist the status rules shared by quotation row actions and Bulk Tools.

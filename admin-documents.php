@@ -321,6 +321,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $redirectDocuments('items', 'error', 'Access denied.', ['items_subtab' => 'inventory']);
     }
 
+    if ($action === 'change_quotation_mobile') {
+        $returnTab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
+        if (!in_array($returnTab, ['accepted_customers', 'completed_customers'], true)) { $returnTab = 'accepted_customers'; }
+        $qid = safe_text($_POST['quotation_id'] ?? '');
+        $result = documents_correct_quotation_mobile($qid, (string)($_POST['new_mobile'] ?? ''), (string)($_POST['correction_reason'] ?? ''), (string)($_POST['expected_version'] ?? ''), ['id'=>(string)($user['id']??''),'name'=>(string)($user['full_name']??'Admin')], isset($_POST['confirm_customer_link']), (string)($_POST['request_id']??''));
+        if (empty($result['ok'])) { $redirectDocuments($returnTab, 'error', (string)($result['error'] ?? 'Unable to correct mobile number.'), ['view'=>$qid]); }
+        if (empty($result['duplicate'])) { $actor=audit_current_actor(); log_audit_event($actor['actor_type'],$actor['actor_id'],'quotation',$qid,'quotation_mobile_corrected',['reason'=>safe_text((string)($_POST['correction_reason']??'')),'new_mobile'=>documents_normalize_mobile((string)($_POST['new_mobile']??''))]); }
+        $redirectDocuments($returnTab, 'success', !empty($result['duplicate']) ? 'This correction was already applied.' : 'Mobile number corrected without creating a quotation revision.', ['view'=>$qid]);
+    }
+
     if ($action === 'create_or_link_customer_user') {
         $returnTab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
         if (!in_array($returnTab, ['accepted_customers', 'completed_customers'], true)) { $returnTab = 'accepted_customers'; }
@@ -3465,6 +3475,19 @@ $renderCustomerUserLink = static function (array $quote, string $returnTab, bool
     return (string) ob_get_clean();
 };
 
+$renderMobileCorrection = static function (array $quote, string $returnTab, bool $isAdmin): string {
+    if (!$isAdmin || !in_array(documents_quote_normalize_status((string)($quote['status'] ?? 'draft')), ['approved','accepted'], true)) { return ''; }
+    $version = (string)($quote['updated_at'] ?? $quote['created_at'] ?? '');
+    $requestId = bin2hex(random_bytes(16));
+    ob_start(); ?>
+    <details class="mobile-correction" style="margin-top:.6rem"><summary class="btn secondary">Change mobile number</summary>
+      <form method="post" style="display:grid;gap:.55rem;margin-top:.6rem;max-width:620px">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="change_quotation_mobile"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars((string)($quote['id']??''),ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="<?= htmlspecialchars($returnTab,ENT_QUOTES) ?>"><input type="hidden" name="expected_version" value="<?= htmlspecialchars($version,ENT_QUOTES) ?>"><input type="hidden" name="request_id" value="<?= htmlspecialchars($requestId,ENT_QUOTES) ?>">
+        <label>New mobile number<input name="new_mobile" inputmode="numeric" pattern="[6-9][0-9]{9}" required></label><label>Mandatory correction reason<textarea name="correction_reason" required></textarea></label>
+        <label><input type="checkbox" name="confirm_customer_link" value="1"> Explicitly confirm migration/relinking if a Customer User is linked. No existing customer account will be overwritten.</label><small>Quotation/project ID and finalized document snapshots remain unchanged.</small><button class="btn" type="submit">Change mobile number</button>
+      </form></details><?php return (string)ob_get_clean();
+};
+
 $archivedRows = [];
 foreach ($quotes as $quote) {
     if (!is_array($quote) || !$isArchivedRecord($quote)) {
@@ -3794,6 +3817,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           <section class="accepted-context">
             <h2 style="margin-top:0;">Accepted Customer Commercial Summary: <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></h2>
             <?= $renderCustomerUserLink($packQuote, 'accepted_customers', $isAdmin) ?>
+            <?= $renderMobileCorrection($packQuote, documents_project_completion_state($packQuote)==='completed'?'completed_customers':'accepted_customers', $isAdmin) ?>
             <div class="accepted-context__meta">
               <span><strong>Quotation:</strong> <?= htmlspecialchars((string) ($packQuote['quote_no'] ?? $packQuoteId), ENT_QUOTES) ?></span>
               <span><strong>Quotation amount:</strong> <?= htmlspecialchars($inr((float)$packProjectSummary['quotation_amount']), ENT_QUOTES) ?></span>
@@ -4164,7 +4188,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
         <div class="summary-cards" aria-label="Completed customer summary"><?php foreach([['Completed Sites',$completedKpis['count']],['Final Amount',$inr($completedKpis['business'])],['Paid at Completion',$inr($completedKpis['received'])],['Require Review',$completedKpis['changed']]] as $m):?><div class="summary-card"><span><?= htmlspecialchars((string)$m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach;?></div>
         <div class="responsive-table"><table><thead><tr><th>Customer</th><th>Customer Users</th><th>Quotation</th><th>Final Amount</th><th>Paid Amount</th><th>Completion Date</th><th>Completed By</th><th>Document Status</th><th>Review / Action</th></tr></thead><tbody>
         <?php foreach($completedRows as $row):$q=$row['quote'];$c=$row['completion'];$s=(array)($c['snapshot']??[]);$qid=(string)($q['id']??'');$docs=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Dispatch Advice'=>documents_dispatch_advices_for_quote($qid)!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[]];?>
-          <tr><td><?= htmlspecialchars((string)($q['customer_name']??''),ENT_QUOTES) ?><br><span class="muted-helper"><?= htmlspecialchars((string)($q['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= $renderCustomerUserLink($q, 'completed_customers', $isAdmin) ?></td><td><?= htmlspecialchars((string)($q['quote_no']??$qid),ENT_QUOTES) ?></td><td><?= htmlspecialchars($inr((float)($s['reference_amount']??0)),ENT_QUOTES) ?></td><td><?= htmlspecialchars($inr((float)($s['paid_amount']??0)),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($c['completed_at']??''),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($c['completed_by']['name']??'—'),ENT_QUOTES) ?></td><td><?php foreach($docs as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span> <?php endforeach;?></td><td><?php if(!empty($row['review']['financial_data_changed'])):?><div class="banner error">Financial data changed; snapshot preserved. Review and reopen required.</div><?php endif;?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Open document pack</a><?php if($isAdmin):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="reopen_project"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><label>Reason<input name="reopen_reason" required></label><button class="btn warn" type="submit">Reopen Project</button></form><?php endif;?></td></tr>
+          <tr><td><?= htmlspecialchars((string)($q['customer_name']??''),ENT_QUOTES) ?><br><span class="muted-helper"><?= htmlspecialchars((string)($q['customer_mobile']??''),ENT_QUOTES) ?></span></td><td><?= $renderCustomerUserLink($q, 'completed_customers', $isAdmin) ?><?= $renderMobileCorrection($q, 'completed_customers', $isAdmin) ?></td><td><?= htmlspecialchars((string)($q['quote_no']??$qid),ENT_QUOTES) ?></td><td><?= htmlspecialchars($inr((float)($s['reference_amount']??0)),ENT_QUOTES) ?></td><td><?= htmlspecialchars($inr((float)($s['paid_amount']??0)),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($c['completed_at']??''),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($c['completed_by']['name']??'—'),ENT_QUOTES) ?></td><td><?php foreach($docs as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span> <?php endforeach;?></td><td><?php if(!empty($row['review']['financial_data_changed'])):?><div class="banner error">Financial data changed; snapshot preserved. Review and reopen required.</div><?php endif;?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Open document pack</a><?php if($isAdmin):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="reopen_project"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><label>Reason<input name="reopen_reason" required></label><button class="btn warn" type="submit">Reopen Project</button></form><?php endif;?></td></tr>
         <?php endforeach;if($completedRows===[]):?><tr><td colspan="9" class="empty-state">No explicitly completed projects found.</td></tr><?php endif;?></tbody></table></div>
       </section>
     <?php endif; ?>
