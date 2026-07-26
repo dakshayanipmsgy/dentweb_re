@@ -356,6 +356,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['quotation_contact_report']=$result['results']??[];
         $redirectDocuments('quotation_contact_import',empty($result['ok'])?'error':'success',empty($result['ok'])?((string)($result['error']??'Batch completed with errors.')):'Batch correction completed.');
     }
+    if ($action === 'resolve_customer_conflict') {
+        $returnTab=safe_text($_POST['return_tab']??'accepted_customers');
+        if(!in_array($returnTab,['accepted_customers','completed_customers'],true)) $returnTab='accepted_customers';
+        $qid=safe_text($_POST['quotation_id']??'');
+        $result=customer_conflict_apply($qid,$_POST,audit_current_actor());
+        $_SESSION['customer_conflict_result'][$qid]=['state'=>(string)($result['state']??'failed'),'message'=>(string)($result['message']??''),'at'=>date('c'),'errors'=>(array)($result['errors']??[])];
+        $state=(string)($result['state']??'failed');
+        $message=ucwords(str_replace('_',' ',$state)).': '.(string)($result['message']??'Resolution could not be completed.');
+        $redirectDocuments($returnTab,in_array($state,['resolved','partially_resolved'],true)?'success':'error',$message,['view'=>$qid,'conflict_state'=>$state]);
+    }
 
     if (in_array($action, ['prepare_handover_whatsapp', 'mark_handover_sent'], true)) {
         $returnTab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
@@ -3712,6 +3722,14 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
     .pill.warn { background:#fef3c7; color:#92400e; }
     .row-actions { display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center; }
     .inline-form { display:inline-block; margin:0; }
+    .customer-conflict-resolver { width:min(920px,calc(100vw - 2rem)); max-height:90vh; border:0; border-radius:16px; padding:1.25rem; box-shadow:0 24px 70px rgba(15,23,42,.3); color:#0f172a; }
+    .customer-conflict-resolver::backdrop { background:rgba(15,23,42,.62); }
+    .customer-conflict-resolver .resolver-close { float:right; }
+    .customer-conflict-resolver .resolver-form { display:grid; gap:.85rem; }
+    .customer-conflict-resolver fieldset { display:grid; gap:.6rem; border:1px solid #cbd5e1; border-radius:12px; padding:1rem; }
+    .customer-conflict-resolver fieldset label { display:flex; gap:.5rem; align-items:flex-start; }
+    .customer-conflict-resolver input[type=radio], .customer-conflict-resolver input[type=checkbox] { width:auto; margin-top:.15rem; }
+    .customer-conflict-resolver .resolver-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:.6rem; padding:.75rem; background:#f8fafc; border-radius:10px; }
     .summary-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.75rem;margin:1rem 0}.summary-card{background:#fff;border:1px solid #dbe7ef;border-radius:14px;padding:.8rem}.summary-card span{display:block;color:#64748b;font-size:.78rem;font-weight:700}.summary-card strong{display:block;margin-top:.2rem;color:#0f172a;font-size:1.15rem}.workbench-command{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;margin:1rem 0}.doc-status-list{display:grid;gap:.25rem}.due-age{font-weight:700;color:#92400e}
     .accepted-summary {
       display:grid;
