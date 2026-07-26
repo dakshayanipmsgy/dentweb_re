@@ -71,6 +71,7 @@ require_once __DIR__ . '/includes/solar_finance_reports.php';
 require_once __DIR__ . '/includes/quotation_import_service.php';
 require_once __DIR__ . '/includes/quotation_reference_export.php';
 require_once __DIR__ . '/includes/quotation_bulk_actions.php';
+require_once __DIR__ . '/admin/includes/quotation_similar_names.php';
 
 require_login_any_role(['admin', 'employee']);
 documents_ensure_structure();
@@ -362,6 +363,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $action = safe_text($_POST['action'] ?? '');
+
+    if (in_array($action, ['similar_names_scan','similar_names_review','similar_names_apply'], true)) {
+        $user=current_user();
+        if (!is_array($user) || (string)($user['role_name']??'') !== 'admin') { $redirectWith('error','Only administrators can review similar names.'); }
+        if ($action === 'similar_names_scan') {
+            // This is deliberately the only load used by the scan, and filtering
+            // happens before the matcher is called.
+            $active=array_values(array_filter(documents_list_quotes(),static fn(array $q):bool=>!documents_is_archived($q)));
+            $stage=documents_similar_names_stage_save(documents_similar_names_scan($active),(string)($user['id']??''));
+            header('Location: admin-quotations.php?'.http_build_query(['tab'=>'similar_names','stage_id'=>$stage['id']??''])); exit;
+        }
+        $stage=documents_similar_names_stage_load((string)($_POST['stage_id']??''),(string)($user['id']??''));
+        if(!$stage){$redirectWith('error','Review expired. Run a fresh scan.');}
+        if($action==='similar_names_review'){
+            $stage=documents_similar_names_stage_confirm($stage,(array)($_POST['decision']??[]));
+            header('Location: admin-quotations.php?'.http_build_query(['tab'=>'similar_names','stage_id'=>$stage['id']]));exit;
+        }
+        if(($stage['state']??'')!=='confirm'){$redirectWith('error','Review the choices before applying them.');}
+        $result=documents_similar_names_apply($stage,(string)($_POST['archive_reason']??''),['type'=>'admin','id'=>(string)($user['id']??''),'name'=>(string)($user['full_name']??'Admin')],(string)($_POST['batch_id']??''));
+        $parts=[];foreach(['archived','kept','skipped','conflicted','failed'] as $key)$parts[]=ucfirst($key).' '.count($result[$key]);
+        header('Location: admin-quotations.php?'.http_build_query(['tab'=>'similar_names','status'=>empty($result['failed'])?'success':'error','message'=>implode(', ',$parts)]));exit;
+    }
 
     if ($action === 'quotation_csv_upload') {
         $user = current_user();
@@ -1793,7 +1816,8 @@ $allQuotes = documents_list_quotes();
 $statusFilter = safe_text($_GET['status_filter'] ?? '');
 $bulkSearch = safe_text($_GET['search'] ?? '');
 $tab = safe_text($_GET['tab'] ?? 'editor');
-if (!in_array($tab, ['quotations','editor','bulk_create','archived','bulk','settings'], true)) { $tab = 'editor'; }
+if (!in_array($tab, ['quotations','editor','bulk_create','archived','bulk','similar_names','settings'], true)) { $tab = 'editor'; }
+if ($tab === 'similar_names' && (string)(current_user()['role_name']??'') !== 'admin') { http_response_code(403); exit('Administrator access is required.'); }
 $isQuotationListPartialRequest = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'quotation-list'
     || safe_text((string) ($_GET['partial'] ?? '')) === 'quotation_list';
 if ($isQuotationListPartialRequest && $tab !== 'archived') {
@@ -2005,6 +2029,7 @@ if ($savedAnnualGenerationForEdit === '') {
 <a class="<?= $tab === 'quotations' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=quotations">Manage Quotations</a>
 <a class="<?= $tab === 'bulk_create' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=bulk_create">Bulk Create Quotations</a>
 <a class="<?= $tab === 'bulk' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=bulk">Bulk Tools</a>
+<?php if ((string)(current_user()['role_name']??'') === 'admin'): ?><a class="<?= $tab === 'similar_names' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=similar_names">Review Similar Names</a><?php endif; ?>
 <a class="<?= $tab === 'archived' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=archived">Archived Quotations</a>
 <a class="<?= $tab === 'settings' ? 'active' : '' ?>" data-workspace-tab href="admin-quotations.php?tab=settings">Settings</a>
 </nav>
@@ -2159,9 +2184,17 @@ while (count($orientationObstructions) < 3) { $orientationObstructions[] = ['lab
 <?php endforeach; ?>
 </tbody></table></div></section><?php endif; ?>
 <h3>Import batch history</h3><table><thead><tr><th>Batch</th><th>File</th><th>Time</th><th>Rows</th><th>Valid</th><th>Invalid</th><th>Created</th><th>Status</th><th>Actions</th></tr></thead><tbody><?php foreach ($importBatches as $b): ?><tr><td><?= htmlspecialchars((string)($b['batch_id']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($b['filename']??''), ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($b['created_at']??''), ENT_QUOTES) ?></td><td><?= (int)($b['total_rows']??0) ?></td><td><?= (int)($b['valid_rows']??0) ?></td><td><?= (int)($b['invalid_rows']??0) ?></td><td><?= (int)($b['created_rows']??0) ?></td><td><?= htmlspecialchars((string)($b['status']??'Validated'), ENT_QUOTES) ?></td><td><a class="btn secondary" href="admin-quotations.php?tab=bulk_create&amp;batch=<?= urlencode((string)($b['batch_id']??'')) ?>">Open</a></td></tr><?php endforeach; if(!$importBatches): ?><tr><td colspan="9">No import batches yet.</td></tr><?php endif; ?></tbody></table></div><?php endif; ?>
+<?php if ($tab === 'similar_names'): $similarStage=documents_similar_names_stage_load((string)($_GET['stage_id']??''),(string)(current_user()['id']??'')); ?>
+<div class="card workspace-panel active"><div class="editor-intro"><div><h2>Review Similar Names</h2><p class="muted">Active quotations scoring 60% or higher are review candidates. A match never archives anything automatically.</p></div><a class="btn secondary" href="admin-quotations.php?tab=bulk">Back to Bulk Tools</a></div>
+<?php if(!$similarStage): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><button class="btn" name="action" value="similar_names_scan">Scan active quotations</button></form>
+<?php else: $isConfirm=($similarStage['state']??'')==='confirm'; ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="stage_id" value="<?= htmlspecialchars((string)$similarStage['id'],ENT_QUOTES) ?>">
+<?php foreach($similarStage['groups'] as $gi=>$group): ?><section class="section-card"><h3>Similar-name group <?= $gi+1 ?></h3><div class="list-table-wrap"><table><thead><tr><th>Reference / ID</th><th>Status</th><th>Customer</th><th>Contact / address</th><th>Created</th><th>Amount / share</th><th>Links</th><th>Warnings</th><th>Similarity</th><th>Choice</th></tr></thead><tbody><?php foreach($group['quotations'] as $q): $choice=$similarStage['decisions'][$q['id']]??'ignore'; ?><tr><td><?= htmlspecialchars($q['reference'],ENT_QUOTES) ?><div class="quote-meta"><?= htmlspecialchars($q['id'],ENT_QUOTES) ?></div></td><td><?= htmlspecialchars($q['status'],ENT_QUOTES) ?></td><td><?= htmlspecialchars($q['customer_name'],ENT_QUOTES) ?></td><td><?= htmlspecialchars($q['mobile'],ENT_QUOTES) ?><div class="quote-meta"><?= htmlspecialchars($q['city_address'],ENT_QUOTES) ?></div></td><td><?= htmlspecialchars($q['created_at'],ENT_QUOTES) ?><div class="quote-meta"><?= htmlspecialchars($q['creator'],ENT_QUOTES) ?></div></td><td>₹<?= number_format($q['amount'],2) ?><div class="quote-meta">Public share: <?= $q['public_share']?'Enabled':'Disabled' ?></div></td><td>Customer User: <?= htmlspecialchars($q['customer_user'],ENT_QUOTES) ?><div class="quote-meta">Invoices: <?= htmlspecialchars(implode(', ',$q['invoices'])?:'None',ENT_QUOTES) ?>; Receipts: <?= htmlspecialchars(implode(', ',$q['receipts'])?:'None',ENT_QUOTES) ?>; Documents: <?= htmlspecialchars(implode(', ',$q['documents'])?:'None',ENT_QUOTES) ?></div></td><td><?= htmlspecialchars(implode(', ',$q['warnings'])?:'None',ENT_QUOTES) ?></td><td><strong><?= (int)$q['score'] ?>%</strong> <?= htmlspecialchars(ucfirst($q['band']),ENT_QUOTES) ?></td><td><?php if($isConfirm): ?><strong><?= htmlspecialchars(ucfirst($choice),ENT_QUOTES) ?></strong><?php else: ?><select name="decision[<?= htmlspecialchars($q['id'],ENT_QUOTES) ?>]"><option value="keep">Keep as is</option><option value="archive">Archive</option><option value="ignore" selected>Ignore for now</option></select><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div></section><?php endforeach; ?>
+<?php if(!$isConfirm): ?><button class="btn" name="action" value="similar_names_review">Review confirmation summary</button><?php else: $archiveCount=count(array_filter($similarStage['decisions'],static fn($v)=>$v==='archive')); ?><div class="alert err"><strong>Confirmation:</strong> <?= $archiveCount ?> quotation(s) selected for archive. Payment and Site Completed warnings above require particular care. Current server versions will be revalidated and already archived records skipped.</div><label>Archive reason (required)</label><textarea name="archive_reason" required></textarea><input type="hidden" name="batch_id" value="<?= htmlspecialchars('sn_'.bin2hex(random_bytes(12)),ENT_QUOTES) ?>"><button class="btn" name="action" value="similar_names_apply" <?= $archiveCount===0?'disabled':'' ?>>Confirm eligible archives</button><?php endif; ?></form><?php endif; ?></div>
+<?php endif; ?>
 <?php if ($tab === 'bulk'): ?>
 <?php $quotationPdfCapabilities = quotation_browser_pdf_capabilities(); $quotationPdfStatusText = quotation_bulk_pdf_engine_status_text($quotationPdfCapabilities); $quotationManagedInstallAvailable = quotation_browser_managed_install_available(); $quotationBrowserAssetStatus = quotation_browser_export_asset_status(); $bulkStatusOptions = quotation_bulk_status_options(); ?>
 <div class="card workspace-panel active"><div class="editor-intro"><div><h2>Bulk Tools</h2><p class="muted">Apply status actions, print selected quotations, or download one PDF for a single selection and a ZIP for multiple selections. Export limit: <?= (int) QUOTATION_BULK_EXPORT_LIMIT ?> quotations.</p></div><a class="btn secondary" href="admin-quotations.php?tab=quotations">Back to Manage Quotations</a></div>
+<p><a class="btn secondary" href="admin-quotations.php?tab=similar_names">Review Similar Names</a></p>
 <form method="get" class="list-toolbar" style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:12px">
 <input type="hidden" name="tab" value="bulk">
 <div><label for="bulkQuotationSearch">Search</label><input id="bulkQuotationSearch" type="search" name="search" value="<?= htmlspecialchars($bulkSearch, ENT_QUOTES) ?>" placeholder="Quote no, customer, mobile"></div>
