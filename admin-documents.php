@@ -3518,11 +3518,14 @@ $collectByQuote = static function (array $rows, string $quoteId, bool $includeAr
     return $list;
 };
 
-$renderCustomerUserLink = static function (array $quote, string $returnTab, bool $isAdmin): string {
+$renderCustomerUserLink = static function (array $quote, string $returnTab, bool $isAdmin, bool $detail = false): string {
     $link = documents_project_customer_user_link($quote);
     $mobile = (string) ($link['mobile'] ?? '');
     $state = (string) ($link['state'] ?? 'invalid');
     $pillClass = $state === 'conflict' || $state === 'invalid' ? 'warn' : (($state === 'missing') ? 'archived' : '');
+    $qid = (string)($quote['id'] ?? '');
+    $returnTo = customer_operations_return_url($quote, $returnTab, $detail);
+    $customer = is_array($link['customer'] ?? null) ? $link['customer'] : null;
     ob_start();
     ?><div class="customer-user-link" style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
       <span class="pill <?= htmlspecialchars($pillClass, ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($link['label'] ?? 'Not in Customer Users'), ENT_QUOTES) ?></span>
@@ -3537,6 +3540,12 @@ $renderCustomerUserLink = static function (array $quote, string $returnTab, bool
           <button class="btn secondary" type="submit">Create in Customer Users</button>
         </form>
       <?php endif; ?>
+      <?php if ($state === 'conflict' && $customer !== null): ?>
+        <span>Quotation: <strong><?= htmlspecialchars((string)($quote['customer_name']??'—'),ENT_QUOTES) ?></strong> / <?= htmlspecialchars((string)($quote['customer_mobile']??'—'),ENT_QUOTES) ?> · Customer User: <strong><?= htmlspecialchars((string)($customer['name']??'—'),ENT_QUOTES) ?></strong> / <?= htmlspecialchars((string)($customer['mobile']??'—'),ENT_QUOTES) ?><?= !empty($customer['archived']) ? ' (Archived)' : '' ?></span>
+        <a class="btn" href="admin-documents.php?<?= htmlspecialchars(http_build_query(['tab'=>$returnTab,'view'=>$qid]),ENT_QUOTES) ?>#mobile-correction-<?= rawurlencode($qid) ?>">Resolve conflict</a>
+        <a class="btn secondary" href="admin-customers.php?<?= htmlspecialchars(http_build_query(['view'=>(string)$customer['mobile'],'return_to'=>$returnTo]),ENT_QUOTES) ?>">Open Customer User</a>
+        <a class="btn secondary" href="quotation-view.php?<?= htmlspecialchars(http_build_query(['id'=>$qid,'return_to'=>$returnTo]),ENT_QUOTES) ?>">Review quotation</a>
+      <?php endif; ?>
       <?php if ((string) ($link['error'] ?? '') !== ''): ?><span class="muted-helper" title="<?= htmlspecialchars((string) $link['error'], ENT_QUOTES) ?>"><?= htmlspecialchars((string) $link['error'], ENT_QUOTES) ?></span><?php endif; ?>
     </div><?php
     return (string) ob_get_clean();
@@ -3547,7 +3556,7 @@ $renderMobileCorrection = static function (array $quote, string $returnTab, bool
     $version = (string)($quote['updated_at'] ?? $quote['created_at'] ?? '');
     $requestId = bin2hex(random_bytes(16));
     ob_start(); ?>
-    <details class="mobile-correction" style="margin-top:.6rem"><summary class="btn secondary">Change mobile number</summary>
+    <details id="mobile-correction-<?= rawurlencode((string)($quote['id']??'')) ?>" class="mobile-correction" style="margin-top:.6rem"><summary class="btn secondary">Change quotation mobile</summary>
       <form method="post" style="display:grid;gap:.55rem;margin-top:.6rem;max-width:620px">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="change_quotation_mobile"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars((string)($quote['id']??''),ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="<?= htmlspecialchars($returnTab,ENT_QUOTES) ?>"><input type="hidden" name="expected_version" value="<?= htmlspecialchars($version,ENT_QUOTES) ?>"><input type="hidden" name="request_id" value="<?= htmlspecialchars($requestId,ENT_QUOTES) ?>">
         <label>New mobile number<input name="new_mobile" inputmode="numeric" pattern="[6-9][0-9]{9}" required></label><label>Mandatory correction reason<textarea name="correction_reason" required></textarea></label>
@@ -3911,7 +3920,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           <p><a class="btn secondary" href="?tab=accepted_customers">&larr; Back to Accepted Customers</a></p>
           <section class="accepted-context">
             <h2 style="margin-top:0;">Accepted Customer Commercial Summary: <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></h2>
-            <?= $renderCustomerUserLink($packQuote, 'accepted_customers', $isAdmin) ?>
+            <?= $renderCustomerUserLink($packQuote, documents_project_completion_state($packQuote)==='completed'?'completed_customers':'accepted_customers', $isAdmin, true) ?>
             <?= $renderMobileCorrection($packQuote, documents_project_completion_state($packQuote)==='completed'?'completed_customers':'accepted_customers', $isAdmin) ?>
             <?= customer_operations_render($packQuote, documents_project_completion_state($packQuote)==='completed'?'completed_customers':'accepted_customers', true) ?>
             <div class="accepted-context__meta">

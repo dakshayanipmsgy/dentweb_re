@@ -27,6 +27,7 @@ if ($isEmployeePortal) {
 }
 
 $activeTab = 'customers';
+$projectReturnTo = customer_operations_valid_return_to((string)($_GET['return_to'] ?? ''));
 
 $customerStore = new CustomerFsStore();
 $customerStatuses = $customerStore->customerStatuses();
@@ -1074,6 +1075,7 @@ function admin_users_build_welcome_subject(array $customer): string
         </p>
       </div>
       <div class="admin-records__meta">
+        <?php if ($projectReturnTo !== ''): ?><a class="admin-link" href="<?= admin_users_safe($projectReturnTo) ?>">&larr; Return to project</a><?php endif; ?>
         <a class="admin-link" href="<?= $isEmployeePortal ? 'employee-dashboard.php' : 'admin-dashboard.php' ?>">
           <i class="fa-solid fa-gauge-high"></i> Back to overview
         </a>
@@ -1377,7 +1379,7 @@ function admin_users_build_welcome_subject(array $customer): string
             <input type="hidden" name="original_mobile" value="<?= admin_users_safe($editingCustomer['mobile'] ?? '') ?>" />
             <input type="hidden" name="view_mobile" value="<?= admin_users_safe($editingCustomer['mobile'] ?? '') ?>" />
 
-            <div class="users-form-section" data-edit-group="profile">
+            <div id="customer-details" class="users-form-section" data-edit-group="profile">
               <div class="users-form-section__header">
                 <h4 class="users-form-section__title">A. Basic Information</h4>
                 <p class="admin-muted" style="margin: 0;">Leave password blank to keep the current one.</p>
