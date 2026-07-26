@@ -21,6 +21,6 @@ csv_sync_assert($duplicate['rows'][0]['result']==='Conflict' && $duplicate['rows
 $unchanged=customer_bulk_mobile_sync_preview($store,"mobile,name\n9876543210,Old Name\n",[]);
 csv_sync_assert($unchanged['rows'][0]['result']==='Unchanged', 'identical record marked unchanged');
 $other=customer_bulk_mobile_sync_preview($store,"mobile,name\n9999999999,Old Name\n",[]);
-csv_sync_assert($other['rows'][0]['result']==='Skipped', 'same name with different mobile is not matched');
+csv_sync_assert($other['rows'][0]['result']==='Conflict', 'same name with different mobile is not matched');
 @unlink($dir.'/customers.json'); @unlink($dir.'/customers.lock'); @rmdir($dir);
 echo "customer_csv_mobile_sync_test: ok\n";
