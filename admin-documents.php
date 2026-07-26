@@ -24,6 +24,18 @@ if ($isAdmin && ($_GET['download'] ?? '') === 'quotation_contact_sample') {
     header('Content-Disposition: attachment; filename="quotation-contact-sample.csv"');
     echo "name,mobile\nAnita Sharma,9876543210\n"; exit;
 }
+if ($isAdmin && ($_GET['download'] ?? '') === 'quotation_contact_results') {
+    $report = is_array($_SESSION['quotation_contact_report'] ?? null) ? $_SESSION['quotation_contact_report'] : [];
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="quotation-contact-results.csv"');
+    $output = fopen('php://output', 'wb');
+    fputcsv($output, ['quotation_id', 'result', 'message']);
+    foreach ($report as $row) {
+        fputcsv($output, [(string)($row['quotation_id'] ?? ''), !empty($row['ok']) ? 'success' : 'skipped_or_failed', (string)($row['message'] ?? '')]);
+    }
+    fclose($output);
+    exit;
+}
 
 $docTypes = ['quotation', 'agreement', 'challan', 'invoice_public', 'invoice_internal', 'receipt', 'sales_return'];
 $segments = ['RES', 'COM', 'IND', 'INST', 'PROD'];
@@ -332,7 +344,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ((int)($_FILES['contact_csv']['size'] ?? 0) > 1048576) $redirectDocuments('quotation_contact_import','error','CSV exceeds the 1 MB file limit.');
         $parsed=documents_contact_parse_csv((string)file_get_contents((string)$_FILES['contact_csv']['tmp_name']));
         if(empty($parsed['ok'])) $redirectDocuments('quotation_contact_import','error',implode(' ',array_slice($parsed['errors'],0,8)));
-        $stage=documents_contact_stage_save(documents_contact_build_preview($parsed['rows'],documents_list_quotes()),$parsed['rows'],(string)($user['id']??''));
+        $activeQuotes=array_values(array_filter(documents_list_quotes(),static fn(array $quote):bool=>!documents_is_archived($quote)));
+        $stage=documents_contact_stage_save(documents_contact_build_preview($parsed['rows'],$activeQuotes),$parsed['rows'],(string)($user['id']??''));
         if(empty($stage['ok'])) $redirectDocuments('quotation_contact_import','error','Could not create secure preview.');
         header('Location: admin-documents.php?'.http_build_query(['tab'=>'quotation_contact_import','stage_id'=>$stage['stage']['id']])); exit;
     }
@@ -3053,7 +3066,6 @@ if (isset($_SESSION['items_csv_import_report']) && is_array($_SESSION['items_csv
 unset($_SESSION['items_csv_import_report']);
 $contactStage=$isAdmin?documents_contact_stage_load((string)($_GET['stage_id']??''),(string)($user['id']??'')):null;
 $contactReport=is_array($_SESSION['quotation_contact_report']??null)?$_SESSION['quotation_contact_report']:[];
-unset($_SESSION['quotation_contact_report']);
 
 $company = load_company_profile();
 
@@ -3834,12 +3846,13 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
       <section class="panel">
         <h2>Quotation contact CSV reconciliation</h2>
         <p class="muted">Review-first correction: analysing never writes quotation changes. A score of 60% only displays a candidate and never approves it automatically. Finalized document snapshots are not changed.</p>
+        <p class="banner">Archived quotations are excluded from matching, preview, selection, and batch correction.</p>
         <p><a class="btn secondary" href="?download=quotation_contact_sample">Download sample CSV</a></p>
         <form method="post" enctype="multipart/form-data">
           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="analyse_quotation_contacts">
           <label>CSV (exact headers <code>name,mobile</code>; maximum 1 MB / 1,000 rows)<input type="file" name="contact_csv" accept=".csv,text/csv" required></label><button class="btn" type="submit">Upload and analyse</button>
         </form>
-        <?php if($contactReport!==[]): ?><h3>Results report</h3><table><thead><tr><th>Quotation</th><th>Result</th></tr></thead><tbody><?php foreach($contactReport as $rr): ?><tr><td><?= htmlspecialchars((string)($rr['quotation_id']??''),ENT_QUOTES) ?></td><td><?= !empty($rr['ok'])?'✓ ':'✗ ' ?><?= htmlspecialchars((string)($rr['message']??''),ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table><?php endif; ?>
+        <?php if($contactReport!==[]): ?><h3>Results report</h3><p><a class="btn secondary" href="?download=quotation_contact_results">Download result CSV</a></p><table><thead><tr><th>Quotation</th><th>Result</th></tr></thead><tbody><?php foreach($contactReport as $rr): ?><tr><td><?= htmlspecialchars((string)($rr['quotation_id']??''),ENT_QUOTES) ?></td><td><?= !empty($rr['ok'])?'✓ ':'✗ ' ?><?= htmlspecialchars((string)($rr['message']??''),ENT_QUOTES) ?></td></tr><?php endforeach; ?></tbody></table><?php endif; ?>
         <?php if(is_array($contactStage)): ?>
         <hr><h3>Review candidates</h3><p><span class="pill">90–100 strong</span> <span class="pill">75–89 likely</span> <span class="pill warn">60–74 weak</span></p>
         <?php if(($contactStage['candidates']??[])===[]): ?><div class="banner error">No quotation name candidates scored 60% or more. Rows may be ignored or treated as having no correct match.</div><?php else: ?>
