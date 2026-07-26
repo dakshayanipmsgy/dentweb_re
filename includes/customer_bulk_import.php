@@ -44,22 +44,83 @@ function customer_bulk_quote_is_eligible(array $quote): bool
     return in_array(documents_quote_normalize_status((string)($quote['status'] ?? 'draft')), ['draft', 'approved', 'accepted'], true);
 }
 
+function customer_bulk_normalise_header(string $header): string
+{
+    $header = preg_replace('/^\xEF\xBB\xBF/', '', $header) ?? $header;
+    $header = strtolower(trim($header));
+    $header = preg_replace('/[.\s-]+/u', '_', $header) ?? $header;
+    $header = trim(preg_replace('/_+/', '_', $header) ?? $header, '_');
+    if (in_array($header, ['mobile', 'mobile_number', 'mobile_no', 'phone', 'phone_number', 'customer_mobile', 'contact_number'], true)) {
+        return 'mobile';
+    }
+    return $header;
+}
+
+function customer_bulk_delimiter_label(string $delimiter): string
+{
+    return $delimiter === "\t" ? 'tab' : ($delimiter === ';' ? 'semicolon (;)' : 'comma (,)');
+}
+
+/** Parse spreadsheet CSV without relying on the locale-dependent default delimiter. */
+function customer_bulk_parse_csv(string $contents): array
+{
+    $contents = preg_replace('/^\xEF\xBB\xBF/', '', $contents) ?? $contents;
+    $contents = str_replace(["\r\n", "\r"], "\n", $contents);
+    $lines = explode("\n", $contents);
+    while ($lines !== [] && trim((string) $lines[0]) === '') array_shift($lines);
+    $forced = null;
+    if (isset($lines[0]) && preg_match('/^sep=(,|;|\t)\s*$/i', trim($lines[0]), $match)) {
+        $forced = $match[1];
+        array_shift($lines);
+        while ($lines !== [] && trim((string) $lines[0]) === '') array_shift($lines);
+    }
+    $contents = implode("\n", $lines);
+    if (trim($contents) === '') return ['error' => 'CSV file is empty.', 'rows' => [], 'headers' => [], 'delimiter' => ','];
+
+    $candidates = $forced !== null ? [$forced] : [',', ';', "\t"];
+    $best = null;
+    foreach ($candidates as $delimiter) {
+        $handle = fopen('php://temp', 'w+b');
+        fwrite($handle, $contents); rewind($handle); $rows = [];
+        while (($row = fgetcsv($handle, 0, $delimiter, '"', '')) !== false) $rows[] = $row;
+        fclose($handle);
+        while ($rows !== [] && customer_bulk_is_row_empty($rows[0])) array_shift($rows);
+        $columns = count($rows[0] ?? []); $consistent = 0;
+        foreach (array_slice($rows, 0, 20) as $row) if (customer_bulk_is_row_empty($row) || count($row) === $columns) $consistent++;
+        $score = $columns * 100 + $consistent;
+        if ($best === null || $score > $best['score']) $best = compact('delimiter', 'rows', 'score');
+    }
+    $rows = $best['rows'] ?? []; $delimiter = $best['delimiter'] ?? ',';
+    if ($rows === []) return ['error' => 'CSV file is empty.', 'rows' => [], 'headers' => [], 'delimiter' => $delimiter];
+    $rawHeaders = array_map(static fn($v): string => trim((string) $v), array_shift($rows));
+    if (isset($rawHeaders[0])) $rawHeaders[0] = preg_replace('/^\xEF\xBB\xBF/', '', $rawHeaders[0]) ?? $rawHeaders[0];
+    $headers = array_map('customer_bulk_normalise_header', $rawHeaders);
+    return ['error' => '', 'rows' => $rows, 'headers' => $headers, 'detected_headers' => $rawHeaders, 'delimiter' => $delimiter];
+}
+
+function customer_bulk_compare_value(string $field, string $value): string
+{
+    $value = trim(str_replace(["\r\n", "\r"], "\n", $value));
+    if (in_array($field, ['loan_taken'], true)) return strtolower($value);
+    if ($field === 'customer_type') return strtolower(preg_replace('/\s+/u', ' ', $value) ?? $value);
+    return $value;
+}
+
 /** Build a read-only server-side plan. The CSV mobile is identity only and is never a writable field. */
 function customer_bulk_mobile_sync_preview(CustomerFsStore $store, string $contents, ?array $quotes = null): array
 {
-    $handle=fopen('php://temp','w+b'); fwrite($handle,$contents); rewind($handle);
-    $header=fgetcsv($handle);
-    if (!is_array($header)) return ['rows'=>[],'error'=>'CSV file is empty.'];
-    $header=array_map(static fn($v)=>strtolower(trim((string)$v)),$header);
-    if (count($header)!==count(array_unique($header))) return ['rows'=>[],'error'=>'CSV contains duplicate column names.'];
-    if (!in_array('mobile',$header,true)) return ['rows'=>[],'error'=>'CSV must contain a mobile column.'];
+    $parsed=customer_bulk_parse_csv($contents);
+    if (($parsed['error']??'')!=='') return ['rows'=>[],'error'=>$parsed['error']];
+    $header=$parsed['headers'];
+    $metadata=['headers'=>$header,'detected_headers'=>$parsed['detected_headers'],'delimiter'=>$parsed['delimiter'],'delimiter_label'=>customer_bulk_delimiter_label($parsed['delimiter'])];
+    if (count($header)!==count(array_unique($header))) return array_merge(['rows'=>[],'error'=>'CSV contains duplicate canonical column names after header normalization.'],$metadata);
+    if (!in_array('mobile',$header,true)) return array_merge(['rows'=>[],'error'=>'Mobile column not found. Detected headers: '.implode(', ', $parsed['detected_headers']).'. Detected delimiter: '.$metadata['delimiter_label'].'.'],$metadata);
     $allowed=array_merge(customer_bulk_headers(),customer_bulk_optional_headers());
     $unknown=array_values(array_diff($header,$allowed));
-    if ($unknown!==[]) return ['rows'=>[],'error'=>'Unsupported CSV field(s): '.implode(', ',$unknown)];
+    if ($unknown!==[]) return array_merge(['rows'=>[],'error'=>'Unsupported CSV field(s): '.implode(', ',$unknown)],$metadata);
     $presentFields=array_values(array_intersect(customer_bulk_sync_fields(),$header));
     $quotes=$quotes ?? documents_list_quotes(); $raw=[]; $line=1;
-    while (($cells=fgetcsv($handle))!==false) { $line++; if (!customer_bulk_is_row_empty($cells)) $raw[]=['line'=>$line,'csv'=>customer_bulk_build_payload($cells,$header)]; }
-    fclose($handle);
+    foreach ($parsed['rows'] as $cells) { $line++; if (!customer_bulk_is_row_empty($cells)) $raw[]=['line'=>$line,'csv'=>customer_bulk_build_payload($cells,$header)]; }
     $counts=[];
     foreach ($raw as $r) { $m=customer_bulk_normalise_mobile((string)($r['csv']['mobile']??'')); if ($m!=='') $counts[$m]=($counts[$m]??0)+1; }
     $customers=$store->listCustomers(); $rows=[];
@@ -74,25 +135,33 @@ function customer_bulk_mobile_sync_preview(CustomerFsStore $store, string $conte
         $customer=$active[0];
         $row['customer']=['mobile'=>(string)$customer['mobile'],'fingerprint'=>customer_bulk_record_fingerprint($customer)];
         foreach ($presentFields as $field) {
-            $saved=(string)($customer[$field]??''); $csvValue=(string)($csv[$field]??''); $same=trim($saved)===trim($csvValue);
-            $row['fields'][$field]=['saved'=>$saved,'csv'=>$csvValue,'state'=>$same?'Unchanged':'Different','choice'=>'keep','manual_supported'=>true];
-            if (!$same) $row['customer_changes'][$field]=['from'=>$saved,'to'=>$csvValue];
+            $saved=(string)($customer[$field]??''); $csvValue=(string)($csv[$field]??'');
+            $savedBlank=trim($saved)===''; $csvBlank=trim($csvValue)==='';
+            $same=customer_bulk_compare_value($field,$saved)===customer_bulk_compare_value($field,$csvValue);
+            if (($savedBlank && $csvBlank) || $same) { $state='Unchanged'; $choice='keep'; }
+            elseif ($savedBlank) { $state='Fill blank field'; $choice='csv'; $row['customer_changes'][$field]=['from'=>$saved,'to'=>$csvValue]; }
+            elseif ($csvBlank) { $state='CSV blank — keep saved value'; $choice='keep'; }
+            else { $state='Conflict'; $choice=''; }
+            $row['fields'][$field]=['saved'=>$saved,'csv'=>$csvValue,'state'=>$state,'choice'=>$choice,'manual_supported'=>true,'requires_choice'=>$state==='Conflict'];
         }
         foreach ($quotes as $quote) {
             if (!is_array($quote) || !customer_bulk_quote_is_eligible($quote) || customer_bulk_normalise_mobile((string)($quote['customer_mobile']??''))!==$mobile) continue;
-            $changes=[];
+            $changes=[]; $values=[];
+            foreach ($presentFields as $field) { $qfield=customer_bulk_quote_field_map()[$field]??null; if ($qfield!==null) $values[$qfield]=(string)($quote[$qfield]??''); }
             foreach ($row['customer_changes'] as $field=>$change) { $qfield=customer_bulk_quote_field_map()[$field]??null; if ($qfield!==null && trim((string)($quote[$qfield]??''))!==trim((string)$change['to'])) $changes[$qfield]=['from'=>(string)($quote[$qfield]??''),'to'=>$change['to']]; }
-            $row['quotes'][]=['id'=>(string)($quote['id']??''),'status'=>(string)($quote['status']??'Draft'),'fingerprint'=>customer_bulk_record_fingerprint($quote),'changes'=>$changes];
+            $row['quotes'][]=['id'=>(string)($quote['id']??''),'status'=>(string)($quote['status']??'Draft'),'fingerprint'=>customer_bulk_record_fingerprint($quote),'values'=>$values,'changes'=>$changes];
         }
-        if ($row['customer_changes']===[]) { $row['result']='Unchanged'; $row['message']='All supported CSV fields are identical'; }
+        $hasConflict=(bool)array_filter($row['fields'],static fn(array $field):bool=>!empty($field['requires_choice']));
+        if ($row['customer_changes']===[] && !$hasConflict) { $row['result']='Unchanged'; $row['message']='All supported CSV fields are unchanged or blank in the CSV'; }
         $rows[]=$row;
     }
-    return ['id'=>bin2hex(random_bytes(16)),'rows'=>$rows,'error'=>'','fields'=>$presentFields,'created_at'=>time(),'expires_at'=>time()+1800];
+    return array_merge(['id'=>bin2hex(random_bytes(16)),'rows'=>$rows,'error'=>'','fields'=>$presentFields,'created_at'=>time(),'expires_at'=>time()+1800],$metadata);
 }
 
 /** Convert posted choices into an immutable before/after confirmation plan. */
 function customer_bulk_mobile_sync_confirm(array $preview, array $choices): array
 {
+    $unresolved=[];
     foreach ($preview['rows'] as $i=>&$row) {
         if (($row['result']??'')!=='Ready') continue;
         $posted=is_array($choices[$i]??null)?$choices[$i]:[];
@@ -100,7 +169,8 @@ function customer_bulk_mobile_sync_confirm(array $preview, array $choices): arra
         $selected=[];
         foreach ($row['fields'] as $field=>&$comparison) {
             if (($comparison['state']??'')==='Unchanged') continue;
-            $choice=(string)($posted[$field]['choice']??'keep');
+            $choice=(string)($posted[$field]['choice']??($comparison['choice']??''));
+            if (($comparison['requires_choice']??false) && !in_array($choice,['keep','csv','manual'],true)) { $unresolved[]='CSV line '.($row['line']??'?').': '.$field; continue; }
             if (!in_array($choice,['keep','csv','manual'],true)) $choice='keep';
             $after=(string)$comparison['saved'];
             if ($choice==='csv') $after=(string)$comparison['csv'];
@@ -111,13 +181,16 @@ function customer_bulk_mobile_sync_confirm(array $preview, array $choices): arra
         unset($comparison);
         $row['customer_changes']=$selected;
         foreach ($row['quotes'] as &$planned) {
+            $previousChanges=$planned['changes'];
             $planned['changes']=[];
-            foreach ($selected as $field=>$change) { $qfield=customer_bulk_quote_field_map()[$field]??null; if ($qfield!==null) $planned['changes'][$qfield]=['to'=>$change['to']]; }
+            foreach ($selected as $field=>$change) { $qfield=customer_bulk_quote_field_map()[$field]??null; if ($qfield!==null && (string)($planned['values'][$qfield]??'')!==(string)$change['to']) $planned['changes'][$qfield]=['from'=>$previousChanges[$qfield]['from']??($planned['values'][$qfield]??''), 'to'=>$change['to']]; }
         }
         unset($planned);
         if ($selected===[]) { $row['result']='Unchanged'; $row['message']='Keep saved value selected for every difference'; }
     }
     unset($row);
+    if ($unresolved!==[]) { $preview['error']='Resolve every populated conflict or ignore its customer row: '.implode('; ',$unresolved).'.'; return $preview; }
+    unset($preview['error']);
     $preview['confirmed_at']=time(); $preview['confirmation_id']=bin2hex(random_bytes(16));
     return $preview;
 }
