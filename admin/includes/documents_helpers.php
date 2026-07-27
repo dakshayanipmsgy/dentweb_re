@@ -2825,54 +2825,6 @@ function documents_project_customer_user_link(array $quote, ?CustomerFsStore $st
     return ['state' => $created ? 'created' : 'existing', 'label' => $created ? 'Customer account created' : 'Existing customer linked', 'mobile' => $mobile, 'customer' => $customer, 'error' => '', 'can_create' => false];
 }
 
-/**
- * The single authorization boundary for the customer portal.
- *
- * A phone number is deliberately not a relationship.  A project is returned
- * only when its persisted Customer User link identifies the active account and
- * the quotation is the current, visible, conflict-free accepted version.
- */
-function documents_customer_projects(array $customer, ?array $quotes = null): array
-{
-    if (!empty($customer['archived'])) { return []; }
-    $mobile = documents_normalize_mobile((string)($customer['mobile'] ?? ''));
-    if ($mobile === '') { return []; }
-    $serial = trim((string)($customer['serial_number'] ?? $customer['id'] ?? ''));
-    $customerName = preg_replace('/\s+/u', ' ', mb_strtolower(trim((string)($customer['name'] ?? '')))) ?? '';
-    $visible = [];
-    foreach ($quotes ?? documents_list_quotes() as $quote) {
-        if (!is_array($quote) || documents_is_archived($quote)
-            || documents_quote_normalize_status((string)($quote['status'] ?? 'draft')) !== 'accepted'
-            || empty($quote['is_current_version'])
-            || (array_key_exists('customer_visible', $quote) && empty($quote['customer_visible']))) { continue; }
-        $link = is_array($quote['customer_user_link'] ?? null) ? $quote['customer_user_link'] : [];
-        if ($link === [] || documents_normalize_mobile((string)($link['mobile'] ?? '')) !== $mobile) { continue; }
-        $linkedSerial = trim((string)($link['serial_number'] ?? $link['customer_id'] ?? ''));
-        if ($linkedSerial !== '' && ($serial === '' || !hash_equals($serial, $linkedSerial))) { continue; }
-        $snapshot = documents_quote_resolve_snapshot($quote);
-        $quoteMobile = documents_normalize_mobile((string)($snapshot['mobile'] ?? $quote['customer_mobile'] ?? ''));
-        $quoteName = preg_replace('/\s+/u', ' ', mb_strtolower(trim((string)($snapshot['name'] ?? $quote['customer_name'] ?? '')))) ?? '';
-        if ($quoteMobile !== $mobile || $customerName === '' || $quoteName === '' || $quoteName !== $customerName) { continue; }
-        $visible[] = $quote;
-    }
-    return $visible;
-}
-
-function documents_customer_project(array $customer, string $quoteId, ?array $quotes = null): ?array
-{
-    foreach (documents_customer_projects($customer, $quotes) as $quote) {
-        if (hash_equals((string)($quote['id'] ?? ''), $quoteId)) { return $quote; }
-    }
-    return null;
-}
-
-function documents_customer_document_authorized(array $customer, array $document, ?array $quotes = null): bool
-{
-    $quoteId = (string)($document['quotation_id'] ?? $document['linked_quote_id'] ?? $document['quote_id'] ?? '');
-    if ($quoteId === '' && isset($document['status'], $document['is_current_version'])) { $quoteId = (string)($document['id'] ?? ''); }
-    return $quoteId !== '' && documents_customer_project($customer, $quoteId, $quotes) !== null;
-}
-
 /** Build only allow-listed snapshot fields and let CustomerFsStore validate them. */
 function documents_project_customer_user_payload(array $quote): array
 {
@@ -4044,28 +3996,10 @@ function documents_project_financial_presentation(array $quote, array $receipts 
     $adjustment = round($quotation - $invoiceTotal, 2);
     $hasReceivable = $outstanding > 0.009;
     $collectionPct = $reference > 0 ? round(min($received, $reference) / $reference * 100, 1) : null;
-    $taxablePaise = 0; $gstPaise = 0;
-    if ($basis === 'finalized_invoices') {
-        foreach (documents_active_invoices_for_quote((string)($quote['id'] ?? '')) as $invoice) {
-            if (!documents_invoice_is_finalized($invoice)) { continue; }
-            $tax = is_array($invoice['tax_breakdown'] ?? null) ? $invoice['tax_breakdown'] : (array)($invoice['calc']['tax_breakdown'] ?? []);
-            $taxablePaise += documents_invoice_money_to_paise((float)($tax['basic_total'] ?? $tax['taxable_total'] ?? 0));
-            $gstPaise += documents_invoice_money_to_paise((float)($tax['gst_total'] ?? $tax['total_gst'] ?? 0));
-        }
-    } else {
-        $calc = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
-        $tax = is_array($calc['tax_breakdown'] ?? null) ? $calc['tax_breakdown'] : (array)($quote['tax_breakdown'] ?? []);
-        $taxablePaise = documents_invoice_money_to_paise((float)($tax['basic_total'] ?? $calc['basic_total'] ?? $calc['taxable_total'] ?? 0));
-        $gstPaise = documents_invoice_money_to_paise((float)($tax['gst_total'] ?? $calc['gst_total'] ?? $calc['total_gst'] ?? 0));
-    }
     return array_merge($summary, [
         'project_amount' => $reference,
         'received_amount' => $received,
         'outstanding_amount' => $outstanding,
-        'invoice_amount' => $basis === 'finalized_invoices' ? $reference : $reference,
-        'taxable_amount' => documents_invoice_paise_to_money($taxablePaise),
-        'gst_amount' => documents_invoice_paise_to_money($gstPaise),
-        'total_amount' => $reference,
         'customer_credit' => $overpayment,
         'collection_pct' => $collectionPct,
         'basis_label' => ucwords(str_replace('_', ' ', $basis)),
