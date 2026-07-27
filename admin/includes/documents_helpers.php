@@ -3782,7 +3782,10 @@ function documents_all_invoices(): array
 function documents_invoice_is_active_for_quote(array $invoice): bool
 {
     $status = documents_invoice_normalize_status((string)($invoice['status'] ?? 'draft'));
-    return in_array($status, ['draft', 'finalized'], true) && !documents_is_archived($invoice) && empty($invoice['superseded_by_invoice_id']);
+    return in_array($status, ['draft', 'finalized'], true)
+        && !documents_is_archived($invoice)
+        && empty($invoice['superseded_by_invoice_id'])
+        && empty($invoice['replaced_by_invoice_id']);
 }
 
 function documents_invoices_for_quote(string $quoteId, bool $includeCancelled = true): array
@@ -3801,6 +3804,51 @@ function documents_invoices_for_quote(string $quoteId, bool $includeCancelled = 
 function documents_active_invoices_for_quote(string $quoteId): array
 {
     return array_values(array_filter(documents_invoices_for_quote($quoteId, true), 'documents_invoice_is_active_for_quote'));
+}
+
+/**
+ * Return only invoices that a customer may currently open for a quotation.
+ *
+ * The workflow's current pointer is placed first when it still points at an
+ * active invoice. Remaining active invoices are retained (for milestone or
+ * other legitimate multi-invoice projects) and sorted newest-first.
+ */
+function documents_customer_visible_invoices_for_quote(string $quoteId, ?array $quote = null): array
+{
+    $quoteId = safe_text($quoteId);
+    if ($quoteId === '') { return []; }
+
+    $active = documents_active_invoices_for_quote($quoteId);
+    usort($active, static function (array $a, array $b): int {
+        $sortKey = static function (array $invoice): string {
+            foreach (['created_at', 'updated_at', 'invoice_date'] as $field) {
+                $value = trim((string)($invoice[$field] ?? ''));
+                if ($value !== '') { return $value; }
+            }
+            return '';
+        };
+        $aKey = $sortKey($a);
+        $bKey = $sortKey($b);
+        $dateOrder = strcmp($bKey, $aKey);
+        return $dateOrder !== 0 ? $dateOrder : strcmp((string)($b['id'] ?? ''), (string)($a['id'] ?? ''));
+    });
+
+    $quote = $quote ?? documents_get_quote($quoteId);
+    $preferredIds = is_array($quote) ? [
+        (string)($quote['workflow']['latest_invoice_id'] ?? ''),
+        (string)($quote['workflow']['invoice_id'] ?? ''),
+    ] : [];
+    foreach ($preferredIds as $preferredId) {
+        if ($preferredId === '') { continue; }
+        foreach ($active as $index => $invoice) {
+            if ((string)($invoice['id'] ?? '') !== $preferredId) { continue; }
+            if ($index > 0) {
+                array_unshift($active, ...array_splice($active, $index, 1));
+            }
+            return array_values($active);
+        }
+    }
+    return array_values($active);
 }
 
 function documents_quote_invoice_totals_summary(array $quote, ?float $proposedTotal = null): array
