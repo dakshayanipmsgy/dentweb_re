@@ -55,6 +55,7 @@ $customerMobile = normalize_customer_mobile((string) ($customer['mobile'] ?? '')
 $customerQuotes = array_values(array_filter(documents_list_quotes(), static function (array $quote) use ($customerMobile): bool {
     return normalize_customer_mobile((string) ($quote['customer_mobile'] ?? '')) === $customerMobile
         && documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')) === 'accepted'
+        && !documents_is_archived($quote)
         && !empty($quote['is_current_version']);
 }));
 function customer_dashboard_quote_tax_summary(array $quote): array
@@ -103,6 +104,7 @@ foreach ($customerQuotes as $quote) {
         'payment_summary' => $paymentSummary,
         'payment_requests' => $paymentRequests,
         'receipts' => $receipts,
+        'quotation_value' => documents_project_quotation_amount($quote),
         'invoice_value' => $invoiceValue,
         'taxable_total' => $taxableTotal,
         'gst_total' => $gstTotal,
@@ -453,14 +455,15 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
       <div class="portal-grid">
         <div class="portal-stack">
           <section class="kpi-grid" aria-label="Financial summary">
-            <?php $portfolioTotal = array_sum(array_map(static fn(array $p): float => (float) ($p['payment_summary']['quotation_amount'] ?? 0), $customerProjects)); ?>
+            <?php $projectCount = count($customerProjects); ?>
+            <?php $portfolioTotal = array_sum(array_map(static fn(array $p): float => (float) ($p['quotation_value'] ?? 0), $customerProjects)); ?>
             <?php $portfolioPaid = array_sum(array_map(static fn(array $p): float => (float) ($p['payment_summary']['total_received'] ?? 0), $customerProjects)); ?>
             <?php $portfolioOutstanding = array_sum(array_map(static fn(array $p): float => (float) ($p['payment_summary']['outstanding'] ?? 0), $customerProjects)); ?>
             <?php $portfolioInvoices = array_sum(array_map(static fn(array $p): float => (float) ($p['invoice_value'] ?? 0), $customerProjects)); ?>
-            <article class="kpi-card"><p class="kpi-label">Project value</p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioTotal)) ?></p></article>
-            <article class="kpi-card"><p class="kpi-label">Invoice value</p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioInvoices)) ?></p></article>
-            <article class="kpi-card"><p class="kpi-label">Paid amount</p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioPaid)) ?></p></article>
-            <article class="kpi-card"><p class="kpi-label">Outstanding</p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioOutstanding)) ?></p></article>
+            <article class="kpi-card"><p class="kpi-label"><?= $projectCount > 1 ? 'Total value of all projects' : 'Project value' ?></p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioTotal)) ?></p></article>
+            <article class="kpi-card"><p class="kpi-label"><?= $projectCount > 1 ? 'Total invoice value' : 'Invoice value' ?></p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioInvoices)) ?></p></article>
+            <article class="kpi-card"><p class="kpi-label"><?= $projectCount > 1 ? 'Total paid across projects' : 'Paid amount' ?></p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioPaid)) ?></p></article>
+            <article class="kpi-card"><p class="kpi-label"><?= $projectCount > 1 ? 'Total outstanding across projects' : 'Outstanding' ?></p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioOutstanding)) ?></p></article>
           </section>
 
           <?php if ($customerProjects === []): ?>
@@ -501,7 +504,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
 
               <h3 id="financials" class="section-title" style="margin-top:1.25rem">Financial summary</h3>
               <div class="details-grid">
-                <div class="details-tile"><p class="tile-label">Total project / quotation value</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['payment_summary']['quotation_amount'])) ?></p></div>
+                <div class="details-tile"><p class="tile-label">Total project / quotation value</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['quotation_value'])) ?></p></div>
                 <div class="details-tile"><p class="tile-label">Invoice value</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['invoice_value'])) ?></p></div>
                 <div class="details-tile"><p class="tile-label">Paid amount</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['payment_summary']['total_received'])) ?></p></div>
                 <div class="details-tile"><p class="tile-label">Balance outstanding</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['payment_summary']['outstanding'])) ?></p></div>
