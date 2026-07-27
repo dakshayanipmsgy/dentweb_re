@@ -79,7 +79,7 @@ foreach ($customerQuotes as $quote) {
     $agreements = array_values(array_filter(documents_list_agreements(), static fn(array $row): bool => (string) ($row['linked_quote_id'] ?? '') === $quoteId && !documents_is_archived($row)));
     $dispatchAdvices = documents_dispatch_advices_for_quote($quoteId);
     $challans = documents_challans_for_quote($quoteId);
-    $invoices = documents_invoices_for_quote($quoteId, true);
+    $invoices = documents_customer_visible_invoices_for_quote($quoteId, $quote);
     $paymentSummary = documents_payment_summary_for_quote($quote);
     $paymentRequests = array_values(array_filter($paymentSummary['requests'], static function (array $request): bool {
         return !empty($request['visibility_to_customer']) && empty($request['archived_flag']) && !in_array(strtolower((string) ($request['status'] ?? '')), ['cancelled'], true);
@@ -494,7 +494,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
                   ['Invoice', 'invoice', $project['invoices'], 'Tax invoice'],
                 ]; ?>
                 <?php foreach ($docGroups as [$label, $type, $docs, $fallback]): $doc = $docs[0] ?? null; $docCount = count($docs); ?>
-                  <article class="doc-card"><h3><?= customer_portal_safe($label) ?></h3><p><?= customer_portal_safe($doc ? ($docCount > 1 && in_array($type, ['dispatch_advice', 'challan', 'receipt'], true) ? $docCount . ' documents available' : customer_dashboard_doc_description($type, $doc, $fallback)) : 'Not generated yet') ?></p><?php if ($doc): ?><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe(customer_dashboard_doc_group_url($type, $docs, (string) ($quote['id'] ?? ''))) ?>"><?= customer_portal_safe($docCount > 1 && in_array($type, ['dispatch_advice', 'challan', 'receipt'], true) ? 'View List' : customer_dashboard_doc_action_label($type)) ?></a><?php else: ?><span class="doc-action pending">Pending</span><?php endif; ?></article>
+                  <article class="doc-card"><h3><?= customer_portal_safe($label) ?></h3><p><?= customer_portal_safe($doc ? ($docCount > 1 && in_array($type, ['dispatch_advice', 'challan', 'receipt', 'invoice'], true) ? $docCount . ' documents available' : customer_dashboard_doc_description($type, $doc, $fallback)) : 'Not generated yet') ?></p><?php if ($doc): ?><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe(customer_dashboard_doc_group_url($type, $docs, (string) ($quote['id'] ?? ''))) ?>"><?= customer_portal_safe($docCount > 1 && in_array($type, ['dispatch_advice', 'challan', 'receipt'], true) ? 'View List' : customer_dashboard_doc_action_label($type)) ?></a><?php if ($type === 'invoice' && $docCount > 1): ?> <a class="doc-action" href="<?= customer_portal_safe('customer-document-view.php?' . http_build_query(['type' => 'invoice', 'quote_id' => (string)($quote['id'] ?? '')])) ?>">View All Active Invoices</a><?php endif; ?><?php else: ?><span class="doc-action pending">Pending</span><?php endif; ?></article>
                 <?php endforeach; ?>
                 <?php if ($handoverHtmlPath !== ''): ?><article class="doc-card"><h3>Handover pack</h3><p>System handover documents</p><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe('/' . ltrim($handoverHtmlPath, '/')) ?>">View / Print</a></article><?php endif; ?>
               </div>

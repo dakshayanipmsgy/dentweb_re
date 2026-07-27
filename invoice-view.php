@@ -29,7 +29,11 @@ if ($customerView && is_array($invoice)) {
         }
     }
     if ($customerMobile === '' || $docMobile !== $customerMobile) { http_response_code(403); exit('Access denied.'); }
+    $invoiceQuoteId = (string)($invoice['linked_quote_id'] ?? $invoice['quotation_id'] ?? '');
+    $visibleIds = array_map(static fn(array $row): string => (string)($row['id'] ?? ''), documents_customer_visible_invoices_for_quote($invoiceQuoteId));
+    if (!in_array((string)($invoice['id'] ?? ''), $visibleIds, true)) { http_response_code(404); exit('Invoice unavailable.'); }
 }
+if ($customerView && !is_array($invoice)) { http_response_code(404); exit('Invoice unavailable.'); }
 
 $esc = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 $money = static fn($value): string => '₹' . number_format((float) $value, 2);
