@@ -51,7 +51,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['complaint_action'] ?? '') 
 }
 
 $customerComplaints = get_complaints_by_customer((string) ($customer['mobile'] ?? ''));
-$customerQuotes = documents_customer_projects($customer);
+$customerMobile = normalize_customer_mobile((string) ($customer['mobile'] ?? ''));
+$customerQuotes = array_values(array_filter(documents_list_quotes(), static function (array $quote) use ($customerMobile): bool {
+    return normalize_customer_mobile((string) ($quote['customer_mobile'] ?? '')) === $customerMobile
+        && documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')) === 'accepted'
+        && !empty($quote['is_current_version']);
+}));
+function customer_dashboard_quote_tax_summary(array $quote): array
+{
+    $calc = is_array($quote['calc'] ?? null) ? $quote['calc'] : [];
+    $taxBreakdown = is_array($calc['tax_breakdown'] ?? null) ? $calc['tax_breakdown'] : (is_array($quote['tax_breakdown'] ?? null) ? $quote['tax_breakdown'] : []);
+    $gross = (float) ($taxBreakdown['gross_incl_gst'] ?? $calc['grand_total'] ?? $calc['final_price_incl_gst'] ?? $quote['input_total_gst_inclusive'] ?? 0);
+    $taxable = (float) ($taxBreakdown['basic_total'] ?? $calc['basic_total'] ?? $calc['taxable_total'] ?? $calc['basic_value'] ?? 0);
+    $gst = (float) ($taxBreakdown['gst_total'] ?? $calc['gst_total'] ?? $calc['total_gst'] ?? 0);
+    if ($gst <= 0 && $gross > 0 && $taxable > 0) {
+        $gst = max(0, $gross - $taxable);
+    }
+    return ['taxable' => $taxable, 'gst' => $gst];
+}
 
 $customerProjects = [];
 foreach ($customerQuotes as $quote) {
@@ -63,12 +80,20 @@ foreach ($customerQuotes as $quote) {
     $dispatchAdvices = documents_dispatch_advices_for_quote($quoteId);
     $challans = documents_challans_for_quote($quoteId);
     $invoices = documents_customer_visible_invoices_for_quote($quoteId, $quote);
-    $finance = documents_project_financial_presentation($quote);
     $paymentSummary = documents_payment_summary_for_quote($quote);
     $paymentRequests = array_values(array_filter($paymentSummary['requests'], static function (array $request): bool {
         return !empty($request['visibility_to_customer']) && empty($request['archived_flag']) && !in_array(strtolower((string) ($request['status'] ?? '')), ['cancelled'], true);
     }));
     $receipts = documents_final_receipts_for_quote($quoteId);
+    $invoiceValue = 0.0;
+    foreach (documents_active_invoices_for_quote($quoteId) as $invoice) {
+        if (documents_invoice_is_finalized($invoice)) {
+            $invoiceValue += documents_invoice_final_total($invoice);
+        }
+    }
+    $taxSummary = customer_dashboard_quote_tax_summary($quote);
+    $gstTotal = (float) ($taxSummary['gst'] ?? 0);
+    $taxableTotal = (float) ($taxSummary['taxable'] ?? 0);
     $customerProjects[] = [
         'quote' => $quote,
         'agreements' => $agreements,
@@ -76,12 +101,11 @@ foreach ($customerQuotes as $quote) {
         'challans' => $challans,
         'invoices' => $invoices,
         'payment_summary' => $paymentSummary,
-        'finance' => $finance,
         'payment_requests' => $paymentRequests,
         'receipts' => $receipts,
-        'invoice_value' => $finance['invoice_amount'],
-        'taxable_total' => $finance['taxable_amount'],
-        'gst_total' => $finance['gst_amount'],
+        'invoice_value' => $invoiceValue,
+        'taxable_total' => $taxableTotal,
+        'gst_total' => $gstTotal,
     ];
 }
 $customerQuote = $customerProjects[0]['quote'] ?? null;
@@ -429,9 +453,9 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
       <div class="portal-grid">
         <div class="portal-stack">
           <section class="kpi-grid" aria-label="Financial summary">
-            <?php $portfolioTotal = array_sum(array_map(static fn(array $p): float => (float) ($p['finance']['project_amount'] ?? 0), $customerProjects)); ?>
-            <?php $portfolioPaid = array_sum(array_map(static fn(array $p): float => (float) ($p['finance']['received_amount'] ?? 0), $customerProjects)); ?>
-            <?php $portfolioOutstanding = array_sum(array_map(static fn(array $p): float => (float) ($p['finance']['outstanding_amount'] ?? 0), $customerProjects)); ?>
+            <?php $portfolioTotal = array_sum(array_map(static fn(array $p): float => (float) ($p['payment_summary']['quotation_amount'] ?? 0), $customerProjects)); ?>
+            <?php $portfolioPaid = array_sum(array_map(static fn(array $p): float => (float) ($p['payment_summary']['total_received'] ?? 0), $customerProjects)); ?>
+            <?php $portfolioOutstanding = array_sum(array_map(static fn(array $p): float => (float) ($p['payment_summary']['outstanding'] ?? 0), $customerProjects)); ?>
             <?php $portfolioInvoices = array_sum(array_map(static fn(array $p): float => (float) ($p['invoice_value'] ?? 0), $customerProjects)); ?>
             <article class="kpi-card"><p class="kpi-label">Project value</p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioTotal)) ?></p></article>
             <article class="kpi-card"><p class="kpi-label">Invoice value</p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioInvoices)) ?></p></article>
@@ -472,18 +496,18 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
                 <?php foreach ($docGroups as [$label, $type, $docs, $fallback]): $doc = $docs[0] ?? null; $docCount = count($docs); ?>
                   <article class="doc-card"><h3><?= customer_portal_safe($label) ?></h3><p><?= customer_portal_safe($doc ? ($docCount > 1 && in_array($type, ['dispatch_advice', 'challan', 'receipt', 'invoice'], true) ? $docCount . ' documents available' : customer_dashboard_doc_description($type, $doc, $fallback)) : 'Not generated yet') ?></p><?php if ($doc): ?><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe(customer_dashboard_doc_group_url($type, $docs, (string) ($quote['id'] ?? ''))) ?>"><?= customer_portal_safe($docCount > 1 && in_array($type, ['dispatch_advice', 'challan', 'receipt'], true) ? 'View List' : customer_dashboard_doc_action_label($type)) ?></a><?php if ($type === 'invoice' && $docCount > 1): ?> <a class="doc-action" href="<?= customer_portal_safe('customer-document-view.php?' . http_build_query(['type' => 'invoice', 'quote_id' => (string)($quote['id'] ?? '')])) ?>">View All Active Invoices</a><?php endif; ?><?php else: ?><span class="doc-action pending">Pending</span><?php endif; ?></article>
                 <?php endforeach; ?>
-
+                <?php if ($handoverHtmlPath !== ''): ?><article class="doc-card"><h3>Handover pack</h3><p>System handover documents</p><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe('/' . ltrim($handoverHtmlPath, '/')) ?>">View / Print</a></article><?php endif; ?>
               </div>
 
               <h3 id="financials" class="section-title" style="margin-top:1.25rem">Financial summary</h3>
               <div class="details-grid">
-                <div class="details-tile"><p class="tile-label">Total project / quotation value</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['finance']['project_amount'])) ?></p></div>
+                <div class="details-tile"><p class="tile-label">Total project / quotation value</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['payment_summary']['quotation_amount'])) ?></p></div>
                 <div class="details-tile"><p class="tile-label">Invoice value</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['invoice_value'])) ?></p></div>
-                <div class="details-tile"><p class="tile-label">Paid amount</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['finance']['received_amount'])) ?></p></div>
-                <div class="details-tile"><p class="tile-label">Balance outstanding</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['finance']['outstanding_amount'])) ?></p></div>
+                <div class="details-tile"><p class="tile-label">Paid amount</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['payment_summary']['total_received'])) ?></p></div>
+                <div class="details-tile"><p class="tile-label">Balance outstanding</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['payment_summary']['outstanding'])) ?></p></div>
                 <div class="details-tile"><p class="tile-label">Taxable value</p><p class="tile-value"><?= ((float) $project['taxable_total'] > 0) ? customer_portal_safe($customerInr((float) $project['taxable_total'])) : '—' ?></p></div>
                 <div class="details-tile"><p class="tile-label">GST / tax total</p><p class="tile-value"><?= ((float) $project['gst_total'] > 0) ? customer_portal_safe($customerInr((float) $project['gst_total'])) : '—' ?></p></div>
-                <div class="details-tile"><p class="tile-label">Payment status</p><p class="tile-value"><?= ((float) $project['finance']['outstanding_amount'] <= 0 && (float) $project['finance']['project_amount'] > 0) ? 'Paid' : (((float) $project['finance']['received_amount'] > 0) ? 'Partially paid' : 'Pending') ?></p></div>
+                <div class="details-tile"><p class="tile-label">Payment status</p><p class="tile-value"><?= ((float) $project['payment_summary']['outstanding'] <= 0 && (float) $project['payment_summary']['quotation_amount'] > 0) ? 'Paid' : (((float) $project['payment_summary']['total_received'] > 0) ? 'Partially paid' : 'Pending') ?></p></div>
               </div>
 
               <?php if ($project['payment_requests'] !== []): ?>

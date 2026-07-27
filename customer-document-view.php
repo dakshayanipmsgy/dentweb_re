@@ -43,9 +43,16 @@ function customer_document_quote_tax_summary(array $quote): array
     return ['taxable' => $taxable, 'gst' => $gst, 'gross' => $gross, 'components' => $components];
 }
 
-function customer_document_assert_owner(array $document, array $customer): void
+function customer_document_assert_owner(array $document, string $customerMobile): void
 {
-    if (!documents_customer_document_authorized($customer, $document)) {
+    $docMobile = customer_document_quote_mobile($document);
+    if ($docMobile === '' && ((string) ($document['quotation_id'] ?? $document['linked_quote_id'] ?? '')) !== '') {
+        $quote = documents_get_quote((string) ($document['quotation_id'] ?? $document['linked_quote_id'] ?? ''));
+        if (is_array($quote)) {
+            $docMobile = customer_document_quote_mobile($quote);
+        }
+    }
+    if ($customerMobile === '' || $docMobile !== $customerMobile) {
         http_response_code(403);
         exit('Access denied.');
     }
@@ -100,9 +107,18 @@ if (in_array($type, ['dispatch_advice', 'challan', 'receipt', 'invoice'], true) 
         http_response_code(404);
         exit('Document not found.');
     }
-    customer_document_assert_owner($quote, $customer);
+    customer_document_assert_owner($quote, $customerMobile);
     $documents = $type === 'dispatch_advice' ? documents_dispatch_advices_for_quote($quoteId) : ($type === 'challan' ? documents_challans_for_quote($quoteId) : ($type === 'invoice' ? documents_customer_visible_invoices_for_quote($quoteId, $quote) : documents_final_receipts_for_quote($quoteId)));
-    $documents = array_values(array_filter($documents, static fn(array $document): bool => customer_document_quote_id($document) === $quoteId));
+    $documents = array_values(array_filter($documents, static function (array $document) use ($customerMobile, $quoteId): bool {
+        if (customer_document_quote_id($document) !== $quoteId) {
+            return false;
+        }
+        $docMobile = customer_document_quote_mobile($document);
+        if ($docMobile === '') {
+            return true;
+        }
+        return $docMobile === $customerMobile;
+    }));
     if (count($documents) === 1) {
         header('Location: customer-document-view.php?' . http_build_query(['type' => $type, 'id' => (string) ($documents[0]['id'] ?? '')]));
         exit;
@@ -161,7 +177,7 @@ if ($type === 'quotation' || $type === 'accepted_quotation') {
         http_response_code(404);
         exit('Document not found.');
     }
-    customer_document_assert_owner($quote, $customer);
+    customer_document_assert_owner($quote, $customerMobile);
 
     if ($type === 'quotation') {
         $quoteDefaults = load_quote_defaults();
@@ -197,7 +213,7 @@ if ($type === 'accepted_quotation') {
 } elseif ($type === 'dispatch_advice') {
     $document = documents_get_dispatch_advice($id);
     if (is_array($document)) {
-        customer_document_assert_owner($document, $customer);
+        customer_document_assert_owner($document, $customerMobile);
         header('Location: customer-document-acceptance.php?' . http_build_query(['type' => 'dispatch_advice', 'id' => $id, 'portal' => '1']));
         exit;
     }
@@ -205,7 +221,7 @@ if ($type === 'accepted_quotation') {
 } elseif ($type === 'challan') {
     $document = documents_get_challan($id);
     if (is_array($document)) {
-        customer_document_assert_owner($document, $customer);
+        customer_document_assert_owner($document, $customerMobile);
         header('Location: customer-document-acceptance.php?' . http_build_query(['type' => 'challan', 'id' => $id, 'portal' => '1']));
         exit;
     }
@@ -213,7 +229,7 @@ if ($type === 'accepted_quotation') {
 } elseif ($type === 'invoice') {
     $document = documents_get_invoice($id);
     if (is_array($document)) {
-        customer_document_assert_owner($document, $customer);
+        customer_document_assert_owner($document, $customerMobile);
         $invoiceQuoteId = customer_document_quote_id($document);
         $visibleIds = array_map(static fn(array $invoice): string => (string)($invoice['id'] ?? ''), documents_customer_visible_invoices_for_quote($invoiceQuoteId));
         if (!in_array((string)($document['id'] ?? ''), $visibleIds, true)) {
@@ -233,13 +249,12 @@ if ($type === 'accepted_quotation') {
 }
 
 if (!is_array($document)) { http_response_code(404); exit('Document not found.'); }
-customer_document_assert_owner($document, $customer);
+customer_document_assert_owner($document, $customerMobile);
 $esc = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 $fmt = static fn($v): string => quotation_format_inr_indian((float) $v, true);
 $calc = is_array($document['calc'] ?? null) ? $document['calc'] : [];
 $snapshot = is_array($document['customer_snapshot'] ?? null) ? $document['customer_snapshot'] : [];
-$acceptedFinance = $type === 'accepted_quotation' ? documents_project_financial_presentation($document) : [];
-$acceptedTaxSummary = $type === 'accepted_quotation' ? ['taxable'=>(float)$acceptedFinance['taxable_amount'], 'gst'=>(float)$acceptedFinance['gst_amount'], 'gross'=>(float)$acceptedFinance['total_amount'], 'components'=>[]] : ['taxable' => 0.0, 'gst' => 0.0, 'gross' => 0.0, 'components' => []];
+$acceptedTaxSummary = $type === 'accepted_quotation' ? customer_document_quote_tax_summary($document) : ['taxable' => 0.0, 'gst' => 0.0, 'gross' => 0.0, 'components' => []];
 $acceptedSpecialRequest = $type === 'accepted_quotation' ? trim((string) ($document['special_requests_text'] ?? $document['special_requests_inclusive'] ?? '')) : '';
 $acceptedSummary = [
     'Quotation reference' => $number,
@@ -249,12 +264,11 @@ $acceptedSummary = [
     'Accepted on' => $date ?: '—',
     'Acceptance reference' => (string) ($document['acceptance_ref'] ?? $document['customer_acceptance']['acceptance_ref'] ?? '—'),
     'Acceptance / project status' => ucwords(str_replace('_', ' ', (string) ($document['status'] ?? 'accepted'))),
-    'Calculation basis' => (string)($acceptedFinance['basis_label'] ?? 'Quotation'),
-    'Project value' => $fmt((float)($acceptedFinance['project_amount'] ?? $amount)),
-    'Paid amount' => $fmt((float)($acceptedFinance['received_amount'] ?? 0)),
-    'Outstanding' => $fmt((float)($acceptedFinance['outstanding_amount'] ?? 0)),
+    'Accepted amount' => $fmt($amount),
     'Taxable value' => ((float) $acceptedTaxSummary['taxable'] > 0) ? $fmt((float) $acceptedTaxSummary['taxable']) : '—',
     'GST / tax total' => ((float) $acceptedTaxSummary['gst'] > 0) ? $fmt((float) $acceptedTaxSummary['gst']) : '—',
+    'Expected subsidy' => isset($calc['subsidy_expected_rs']) ? $fmt((float) $calc['subsidy_expected_rs']) : '—',
+    'Net after subsidy' => isset($calc['net_after_subsidy']) ? $fmt((float) $calc['net_after_subsidy']) : '—',
 ];
 if ($type === 'accepted_quotation') {
     foreach ((array) $acceptedTaxSummary['components'] as $label => $value) {

@@ -20,7 +20,15 @@ $id = safe_text((string) ($_GET['id'] ?? ''));
 $invoice = $id !== '' ? documents_get_invoice($id) : null;
 $company = documents_get_company_profile_for_quotes();
 if ($customerView && is_array($invoice)) {
-    if (!documents_customer_document_authorized($customer, $invoice)) { http_response_code(403); exit('Access denied.'); }
+    $customerMobile = normalize_customer_mobile((string) ($customer['mobile'] ?? ''));
+    $docMobile = normalize_customer_mobile((string) ($invoice['customer_mobile'] ?? $invoice['customer_snapshot']['mobile'] ?? ''));
+    if ($docMobile === '') {
+        $ownQuote = documents_get_quote((string) ($invoice['linked_quote_id'] ?? $invoice['quotation_id'] ?? ''));
+        if (is_array($ownQuote)) {
+            $docMobile = normalize_customer_mobile((string) ($ownQuote['customer_mobile'] ?? $ownQuote['customer_snapshot']['mobile'] ?? ''));
+        }
+    }
+    if ($customerMobile === '' || $docMobile !== $customerMobile) { http_response_code(403); exit('Access denied.'); }
     $invoiceQuoteId = (string)($invoice['linked_quote_id'] ?? $invoice['quotation_id'] ?? '');
     $visibleIds = array_map(static fn(array $row): string => (string)($row['id'] ?? ''), documents_customer_visible_invoices_for_quote($invoiceQuoteId));
     if (!in_array((string)($invoice['id'] ?? ''), $visibleIds, true)) { http_response_code(404); exit('Invoice unavailable.'); }
