@@ -86,15 +86,23 @@ foreach ($customerQuotes as $quote) {
         return !empty($request['visibility_to_customer']) && empty($request['archived_flag']) && !in_array(strtolower((string) ($request['status'] ?? '')), ['cancelled'], true);
     }));
     $receipts = documents_final_receipts_for_quote($quoteId);
-    $invoiceValue = 0.0;
+    $invoiceValuePaise = 0;
+    $invoiceTaxablePaise = 0;
+    $invoiceGstPaise = 0;
+    $hasFinalizedInvoices = false;
     foreach (documents_active_invoices_for_quote($quoteId) as $invoice) {
         if (documents_invoice_is_finalized($invoice)) {
-            $invoiceValue += documents_invoice_final_total($invoice);
+            $hasFinalizedInvoices = true;
+            $invoiceTax = documents_invoice_tax_summary($invoice);
+            $invoiceValuePaise += documents_invoice_money_to_paise((float) $invoiceTax['gross']);
+            $invoiceTaxablePaise += documents_invoice_money_to_paise((float) $invoiceTax['taxable']);
+            $invoiceGstPaise += documents_invoice_money_to_paise((float) $invoiceTax['gst']);
         }
     }
     $taxSummary = customer_dashboard_quote_tax_summary($quote);
-    $gstTotal = (float) ($taxSummary['gst'] ?? 0);
-    $taxableTotal = (float) ($taxSummary['taxable'] ?? 0);
+    $invoiceValue = documents_invoice_paise_to_money($invoiceValuePaise);
+    $gstTotal = $hasFinalizedInvoices ? documents_invoice_paise_to_money($invoiceGstPaise) : (float) ($taxSummary['gst'] ?? 0);
+    $taxableTotal = $hasFinalizedInvoices ? documents_invoice_paise_to_money($invoiceTaxablePaise) : (float) ($taxSummary['taxable'] ?? 0);
     $customerProjects[] = [
         'quote' => $quote,
         'agreements' => $agreements,
@@ -108,6 +116,7 @@ foreach ($customerQuotes as $quote) {
         'invoice_value' => $invoiceValue,
         'taxable_total' => $taxableTotal,
         'gst_total' => $gstTotal,
+        'tax_values_from_invoice' => $hasFinalizedInvoices,
     ];
 }
 $customerQuote = $customerProjects[0]['quote'] ?? null;
@@ -508,8 +517,8 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
                 <div class="details-tile"><p class="tile-label">Invoice value</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['invoice_value'])) ?></p></div>
                 <div class="details-tile"><p class="tile-label">Paid amount</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['payment_summary']['total_received'])) ?></p></div>
                 <div class="details-tile"><p class="tile-label">Balance outstanding</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['payment_summary']['outstanding'])) ?></p></div>
-                <div class="details-tile"><p class="tile-label">Taxable value</p><p class="tile-value"><?= ((float) $project['taxable_total'] > 0) ? customer_portal_safe($customerInr((float) $project['taxable_total'])) : '—' ?></p></div>
-                <div class="details-tile"><p class="tile-label">GST / tax total</p><p class="tile-value"><?= ((float) $project['gst_total'] > 0) ? customer_portal_safe($customerInr((float) $project['gst_total'])) : '—' ?></p></div>
+                <div class="details-tile"><p class="tile-label"><?= !empty($project['tax_values_from_invoice']) ? 'Invoice taxable value' : 'Quotation taxable value' ?></p><p class="tile-value"><?= ((float) $project['taxable_total'] > 0) ? customer_portal_safe($customerInr((float) $project['taxable_total'])) : '—' ?></p></div>
+                <div class="details-tile"><p class="tile-label"><?= !empty($project['tax_values_from_invoice']) ? 'Invoice GST / tax total' : 'Quotation GST / tax total' ?></p><p class="tile-value"><?= ((float) $project['gst_total'] > 0) ? customer_portal_safe($customerInr((float) $project['gst_total'])) : '—' ?></p></div>
                 <div class="details-tile"><p class="tile-label">Payment status</p><p class="tile-value"><?= ((float) $project['payment_summary']['outstanding'] <= 0 && (float) $project['payment_summary']['quotation_amount'] > 0) ? 'Paid' : (((float) $project['payment_summary']['total_received'] > 0) ? 'Partially paid' : 'Pending') ?></p></div>
               </div>
 
