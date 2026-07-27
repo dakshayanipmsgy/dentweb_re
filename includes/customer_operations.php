@@ -35,24 +35,14 @@ function customer_operations_handover_state(array $customer): array
 function customer_operations_quote_warnings(array $quote, ?array $customer): array
 {
     if ($customer === null) return [];
-    $mobileEqual=complaint_normalize_mobile((string)($quote['customer_mobile']??''))===complaint_normalize_mobile((string)($customer['mobile']??''));
-    $nameEqual=customer_conflict_normalize_name((string)($quote['customer_name']??''))===customer_conflict_normalize_name((string)($customer['name']??''));
-    $warnings=[];
-    if(!$mobileEqual) $warnings[]='Quotation mobile differs from the linked Customer User. Data was not overwritten.';
-    if(!$nameEqual) $warnings[]='Quotation customer name differs from the Customer User record. Review both records; neither was overwritten.';
+    $warnings = [];
+    $quoteMobile = complaint_normalize_mobile((string) ($quote['customer_mobile'] ?? ''));
+    $customerMobile = complaint_normalize_mobile((string) ($customer['mobile'] ?? ''));
+    if ($quoteMobile !== '' && $customerMobile !== '' && $quoteMobile !== $customerMobile) $warnings[] = 'Quotation mobile differs from the linked Customer User. Data was not overwritten.';
+    $quoteName = trim((string) ($quote['customer_name'] ?? ''));
+    $customerName = trim((string) ($customer['name'] ?? ''));
+    if ($quoteName !== '' && $customerName !== '' && strcasecmp($quoteName, $customerName) !== 0) $warnings[] = 'Quotation customer name differs from the Customer User record. Review both records; neither was overwritten.';
     return $warnings;
-}
-
-/** Stable identity comparison without requiring the optional intl/mbstring extensions. */
-function customer_conflict_normalize_name(string $value): string
-{
-    $value = trim($value);
-    if (class_exists('Normalizer')) {
-        $normalized = Normalizer::normalize($value, Normalizer::FORM_C);
-        if (is_string($normalized)) $value = $normalized;
-    }
-    $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
-    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
 }
 
 /** Fields that may be reconciled. Commercial, workflow and security fields are intentionally absent. */
@@ -75,7 +65,7 @@ function customer_conflict_version(array $quote, ?array $customer): string
 {
     $project=[]; foreach(customer_conflict_field_map() as $key=>$map) $project[$key]=$quote[$map['quote']]??'';
     $user=[]; foreach(customer_conflict_field_map() as $key=>$map) $user[$key]=$customer[$map['customer']]??'';
-    return hash('sha256', json_encode(['id'=>$quote['id']??'','updated'=>$quote['updated_at']??$quote['created_at']??'','link'=>$quote['customer_user_link']??null,'project'=>$project,'user'=>$user,'user_updated'=>$customer['updated_at']??'','archived'=>$customer['archived']??null], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+    return hash('sha256', json_encode(['id'=>$quote['id']??'','updated'=>$quote['updated_at']??$quote['created_at']??'','project'=>$project,'user'=>$user,'user_updated'=>$customer['updated_at']??'','archived'=>$customer['archived']??null], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
 }
 
 /** Issue #831 projection: differences, type, and every active record sharing either mobile key. */
@@ -89,7 +79,7 @@ function customer_conflict_detect(array $quote, ?CustomerFsStore $store=null, ?a
     $differences=[];
     if ($customer!==null) foreach(customer_conflict_field_map() as $key=>$map) {
         $q=trim((string)($quote[$map['quote']]??'')); $c=trim((string)($customer[$map['customer']]??''));
-        $equal=$key==='mobile'?complaint_normalize_mobile($q)===complaint_normalize_mobile($c):customer_conflict_normalize_name($q)===customer_conflict_normalize_name($c);
+        $equal=$key==='mobile'?complaint_normalize_mobile($q)===complaint_normalize_mobile($c):strcasecmp(preg_replace('/\s+/',' ',$q)??$q,preg_replace('/\s+/',' ',$c)??$c)===0;
         if(!$equal) $differences[$key]=['label'=>$map['label'],'quotation'=>$q,'customer_user'=>$c,'identity'=>!empty($map['identity']),'missing_quotation'=>$q==='','missing_customer'=>$c===''];
     }
     $keys=array_filter([$quoteMobile,$linkedMobile,complaint_normalize_mobile((string)($customer['mobile']??''))]);
@@ -101,13 +91,7 @@ function customer_conflict_detect(array $quote, ?CustomerFsStore $store=null, ?a
         if(!in_array($mobile,$keys,true)&&!in_array($linked,$keys,true)) continue;
         $affected[]=['id'=>(string)($row['id']??''),'reference'=>(string)($row['quote_no']??$row['id']??''),'name'=>(string)($row['customer_name']??''),'mobile'=>(string)($row['customer_mobile']??''),'status'=>(string)($row['status']??''),'updated_at'=>(string)($row['updated_at']??$row['created_at']??'')];
     }
-    $metadata=is_array($quote['customer_user_link']??null)?$quote['customer_user_link']:[];
-    $metadataMobile=complaint_normalize_mobile((string)($metadata['mobile']??''));
-    $metadataSerial=trim((string)($metadata['serial_number']??''));
-    $customerSerial=trim((string)($customer['serial_number']??''));
-    $staleLink=$customer!==null && empty($customer['archived']) && $differences===[] && $metadata!==[]
-        && (($metadataMobile!=='' && $metadataMobile!==$quoteMobile) || ($metadataSerial!=='' && $customerSerial!=='' && $metadataSerial!==$customerSerial));
-    $state=$customer===null?'missing':(!empty($customer['archived'])?'archived':($staleLink?'stale_link':($differences===[]?'resolved':'conflict')));
+    $state=$customer===null?'missing':(!empty($customer['archived'])?'archived':($differences===[]?'resolved':'conflict'));
     $identity=isset($differences['mobile']);
     return ['state'=>$state,'label'=>ucfirst($state),'type'=>$identity?'identity':'details','differences'=>$differences,'customer'=>$customer,'affected'=>$affected,'version'=>customer_conflict_version($quote,$customer),'mobile'=>$quoteMobile];
 }
@@ -140,18 +124,6 @@ function customer_conflict_apply(string $quoteId, array $input, array $actor=[],
         if(!hash_equals((string)$fresh['version'],(string)($input['expected_version']??''))) return ['ok'=>false,'state'=>'stale','message'=>'Records changed after preview. Reload and review again.','errors'=>[],'conflict'=>$fresh];
         $customer=$fresh['customer']; $errors=[]; $changed=[];
         if($decision==='ignore') { /* audited below; warnings deliberately remain */ }
-        elseif($decision==='repair_link') {
-            if($fresh['state']!=='stale_link'||!is_array($customer)||!empty($customer['archived'])) $errors[]='The stale link can no longer be safely repaired. Reload and review it.';
-            else {
-                $quote['customer_user_link']=array_merge((array)($quote['customer_user_link']??[]),[
-                    'mobile'=>(string)$fresh['mobile'], 'serial_number'=>(string)($customer['serial_number']??''),
-                    'link_type'=>'confirmed_repair', 'linked_at'=>date('c'),
-                    'linked_by'=>['id'=>(string)($actor['actor_id']??'admin')], 'repair_reason'=>$reason,
-                ]);
-                $saved=documents_save_quote($quote);
-                if(empty($saved['ok'])) $errors[]='Linkage metadata could not be saved.'; else $changed[]='customer_user_link_metadata';
-            }
-        }
         elseif($decision==='create_missing') { $made=documents_project_create_or_link_customer($quote,$store); if(empty($made['ok'])) $errors[]=(string)($made['error']??'Creation failed.'); else { $customer=$made['customer']; $changed[]='customer_created_or_linked'; } }
         elseif($decision==='restore_archived') { if(!is_array($customer)||empty($customer['archived'])||!$store->restoreCustomer((string)$customer['mobile'])) $errors[]='Archived Customer User could not be restored.'; else $changed[]='customer_restored'; }
         elseif(in_array($decision,['identity_customer','identity_project'],true)) {
@@ -245,36 +217,31 @@ function customer_operations_view_model(array $quote, ?CustomerFsStore $store = 
     if ($customer !== null) foreach (['name'=>'name','mobile'=>'mobile','address'=>'address','city'=>'city','pin_code'=>'PIN code'] as $field=>$label) {
         if (trim((string)($customer[$field] ?? '')) === '') $missing[] = $label;
     }
-    $conflict=customer_conflict_detect($quote,$store);
-    $warnings=$conflict['state']==='stale_link'
-        ? ['Customer User linkage metadata is stale. Identity fields already agree; confirm and repair the current link.']
-        : ($conflict['state']==='conflict'?['Quotation/project details differ from the Customer User record. Review both records; neither was overwritten.']:[]);
-    return ['customer'=>$customer, 'mobile'=>$mobile, 'open_complaints'=>count($open), 'warnings'=>$warnings, 'conflict'=>$conflict, 'missing_details'=>$missing, 'handover'=>$customer ? customer_operations_handover_state($customer) : null];
+    return ['customer'=>$customer, 'mobile'=>$mobile, 'open_complaints'=>count($open), 'warnings'=>customer_operations_quote_warnings($quote, $customer), 'missing_details'=>$missing, 'handover'=>$customer ? customer_operations_handover_state($customer) : null];
 }
 
 function customer_conflict_render_resolver(array $quote, string $returnTab, ?CustomerFsStore $store=null): string
 {
-    $conflict=customer_conflict_detect($quote,$store); if(!in_array($conflict['state'],['conflict','missing','archived','stale_link'],true)) return '';
+    $conflict=customer_conflict_detect($quote,$store); if(!in_array($conflict['state'],['conflict','missing','archived'],true)) return '';
     $e=static fn(string $v):string=>htmlspecialchars($v,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8'); $qid=(string)($quote['id']??''); $dialog='customer-conflict-'.$qid;
     $customer=is_array($conflict['customer']??null)?$conflict['customer']:[]; $identity=($conflict['type']??'details')==='identity';
     ob_start(); ?>
-    <button class="btn" type="button" data-open-customer-conflict="<?= $e($dialog) ?>">Resolve conflict</button><span class="resolver-open-error" role="alert" hidden></span>
+    <button class="btn" type="button" onclick="document.getElementById('<?= $e($dialog) ?>').showModal()">Resolve conflict</button>
     <dialog id="<?= $e($dialog) ?>" class="customer-conflict-resolver" aria-labelledby="<?= $e($dialog) ?>-title">
       <form method="dialog" class="resolver-close"><button class="btn secondary" aria-label="Close resolver">Close</button></form>
       <h2 id="<?= $e($dialog) ?>-title">Resolve Customer conflict · <?= $e((string)($quote['quote_no']??$qid)) ?></h2>
       <p><span class="pill warn"><?= $e(ucfirst((string)$conflict['state'])) ?></span> Review the exact quotation/project and every active record before applying. Archived quotations are excluded.</p>
       <?php if($conflict['state']==='missing'): ?><div class="banner error">No Customer User exists for this mobile. Use the issue #809 creation/linkage choice below.</div><?php endif; ?>
       <?php if($conflict['state']==='archived'): ?><div class="banner error">The matching Customer User is archived. Restore it; a duplicate will not be created.</div><?php endif; ?>
-      <?php if($conflict['state']==='stale_link'): ?><div class="banner error">The quotation and active Customer User identity agree, but saved linkage metadata is stale. Only linkage metadata will be repaired.</div><?php endif; ?>
       <div class="responsive-table"><table><thead><tr><th>Field</th><th>Quotation / project</th><th>Customer User</th></tr></thead><tbody>
       <?php foreach($conflict['differences'] as $key=>$difference): ?><tr><th><?= $e((string)$difference['label']) ?></th><td><?= $e((string)($difference['quotation']?:'—')) ?></td><td><?= $e((string)($difference['customer_user']?:'—')) ?></td></tr><?php endforeach; ?>
-      <?php if($conflict['differences']===[]): ?><tr><th>Name</th><td><?= $e((string)($quote['customer_name']??'—')) ?></td><td><?= $e((string)($customer['name']??'—')) ?></td></tr><tr><th>Mobile</th><td><?= $e((string)($quote['customer_mobile']??'—')) ?></td><td><?= $e((string)($customer['mobile']??'—')) ?></td></tr><?php endif; ?>
+      <?php if($conflict['differences']===[]): ?><tr><td colspan="3">Customer User is <?= $e((string)$conflict['state']) ?>; there are no comparable differing values.</td></tr><?php endif; ?>
       </tbody></table></div>
       <h3>Affected active quotations/projects</h3><ul><?php foreach($conflict['affected'] as $a): ?><li><strong><?= $e((string)$a['reference']) ?></strong> · <?= $e((string)$a['name']) ?> · <?= $e((string)$a['mobile']) ?> · <?= $e((string)$a['status']) ?></li><?php endforeach; ?></ul>
       <form method="post" class="resolver-form">
         <input type="hidden" name="csrf_token" value="<?= $e((string)($_SESSION['csrf_token']??'')) ?>"><input type="hidden" name="action" value="resolve_customer_conflict"><input type="hidden" name="quotation_id" value="<?= $e($qid) ?>"><input type="hidden" name="return_tab" value="<?= $e($returnTab) ?>"><input type="hidden" name="expected_version" value="<?= $e((string)$conflict['version']) ?>"><input type="hidden" name="request_id" value="<?= $e(bin2hex(random_bytes(12))) ?>">
         <fieldset><legend>Resolution and before/after preview</legend>
-        <?php if($conflict['state']==='missing'): ?><label><input type="radio" name="resolution" value="create_missing" required> Create missing Customer User and link it (issue #809)</label><?php elseif($conflict['state']==='archived'): ?><label><input type="radio" name="resolution" value="restore_archived" required> Restore archived Customer User instead of duplicating it</label><?php elseif($conflict['state']==='stale_link'): ?><label><input type="radio" name="resolution" value="repair_link" required> Confirm and repair current link</label><?php elseif(!$identity): ?>
+        <?php if($conflict['state']==='missing'): ?><label><input type="radio" name="resolution" value="create_missing" required> Create missing Customer User and link it (issue #809)</label><?php elseif($conflict['state']==='archived'): ?><label><input type="radio" name="resolution" value="restore_archived" required> Restore archived Customer User instead of duplicating it</label><?php elseif(!$identity): ?>
           <label><input type="radio" name="resolution" value="customer_everywhere" required> Use Customer User details everywhere</label>
           <label><input type="radio" name="resolution" value="project_everywhere"> Use quotation/project details everywhere</label>
           <label><input type="radio" name="resolution" value="field_by_field"> Choose field by field</label>
@@ -286,7 +253,7 @@ function customer_conflict_render_resolver(array $quote, string $returnTab, ?Cus
           <a class="btn secondary" href="admin-documents.php?<?= $e(http_build_query(['tab'=>$returnTab,'view'=>$qid])) ?>#mobile-correction-<?= $e(rawurlencode($qid)) ?>">Change quotation mobile through issue #811</a>
           <label><input type="checkbox" name="confirm_identity_migration" value="1"> I explicitly confirm a reviewed migrate/relink operation (no automatic identity overwrite)</label>
         <?php endif; ?>
-          <?php if($conflict['state']!=='stale_link'): ?><label><input type="radio" name="resolution" value="ignore" <?= in_array($conflict['state'],['missing','archived'],true)?'':'required' ?>> Ignore for now (warnings remain visible)</label><?php endif; ?>
+          <label><input type="radio" name="resolution" value="ignore" <?= in_array($conflict['state'],['missing','archived'],true)?'':'required' ?>> Ignore for now (warnings remain visible)</label>
         </fieldset>
         <label><strong>Required reason</strong><textarea name="reason" required minlength="3"></textarea></label>
         <details open><summary>Before/after preview</summary><p>The selected allow-listed contact fields will change on the records listed above. IDs, references, public links, statuses, timestamps, commercial/payment data, finalized snapshots, completion snapshots, passwords and security data are preserved. The resolver reloads and recomputes after apply.</p></details>
@@ -295,7 +262,7 @@ function customer_conflict_render_resolver(array $quote, string $returnTab, ?Cus
     </dialog><?php return (string)ob_get_clean();
 }
 
-function customer_operations_render(array $quote, string $returnTab, bool $detail = false, ?CustomerFsStore $store = null, bool $canResolve = true): string
+function customer_operations_render(array $quote, string $returnTab, bool $detail = false, ?CustomerFsStore $store = null): string
 {
     $m = customer_operations_view_model($quote, $store); $c = $m['customer'];
     $e = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -307,7 +274,7 @@ function customer_operations_render(array $quote, string $returnTab, bool $detai
     <section class="customer-operations" aria-label="Customer Operations">
       <strong>Customer Operations</strong>
       <?php $last=is_array($_SESSION['customer_conflict_result'][$qid]??null)?$_SESSION['customer_conflict_result'][$qid]:null; if($last!==null): $lastState=(string)($last['state']??'failed'); ?><div class="banner <?= in_array($lastState,['resolved','partially_resolved'],true)?'success':'error' ?>"><strong><?= $e(ucwords(str_replace('_',' ',$lastState))) ?>:</strong> <?= $e((string)($last['message']??'')) ?><?php if(($last['errors']??[])!==[]): ?><ul><?php foreach((array)$last['errors'] as $error): ?><li><?= $e((string)$error) ?></li><?php endforeach; ?></ul><?php endif; ?></div><?php endif; ?>
-      <?php if ($c === null): ?><p><span class="pill warn">Customer User: Not linked</span></p><div class="row-action-group"><?= $canResolve?customer_conflict_render_resolver($quote,$returnTab,$store):'' ?><?php if($canResolve): ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= $e((string)($_SESSION['csrf_token']??'')) ?>"><input type="hidden" name="action" value="create_or_link_customer_user"><input type="hidden" name="quotation_id" value="<?= $e($qid) ?>"><input type="hidden" name="return_tab" value="<?= $e($returnTab) ?>"><button class="btn secondary" type="submit">Create in Customer Users</button></form><?php endif; ?></div>
+      <?php if ($c === null): ?><p><span class="pill warn">Customer User: Not linked</span></p><div class="row-action-group"><?= customer_conflict_render_resolver($quote,$returnTab,$store) ?><form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= $e((string)($_SESSION['csrf_token']??'')) ?>"><input type="hidden" name="action" value="create_or_link_customer_user"><input type="hidden" name="quotation_id" value="<?= $e($qid) ?>"><input type="hidden" name="return_tab" value="<?= $e($returnTab) ?>"><button class="btn secondary" type="submit">Create in Customer Users</button></form></div>
       <?php else: $h=$m['handover']; $digits=complaint_normalize_mobile((string)$c['mobile']); ?>
         <p><span class="pill">Customer User: <?= empty($c['archived'])?'Active':'Archived' ?></span> Serial: <strong><?= $e((string)($c['serial_number']??'—')) ?></strong> · Operational status: <strong><?= $e((string)($c['status']??'New')) ?></strong></p>
         <p><a class="btn secondary" href="admin-customers.php?<?= $e(http_build_query(['view'=>(string)$c['mobile'],'return_to'=>$returnTo])) ?>">Open Customer</a> <a class="btn secondary" href="tel:<?= $e($digits) ?>">Call</a> <a class="btn secondary" target="_blank" rel="noopener" href="https://wa.me/91<?= $e($digits) ?>">WhatsApp</a> <button class="btn secondary" type="button" data-copy-mobile="<?= $e((string)$c['mobile']) ?>" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.dataset.copyMobile)">Copy mobile</button></p>
@@ -315,7 +282,7 @@ function customer_operations_render(array $quote, string $returnTab, bool $detai
         <p>Handover: <strong><?= !empty($h['ready'])?'Ready':'Not generated' ?></strong><?php if(!empty($h['generated_at'])): ?> · Generated <?= $e((string)$h['generated_at']) ?><?php endif; ?><?php if(!empty($h['needs_regeneration'])): ?> · <span class="pill warn">Needs regeneration</span><?php endif; ?> · Send status: <strong><?= !empty($h['sent']['sent_at'])?'Sent '.$e((string)$h['sent']['sent_at']).' via '.$e((string)($h['sent']['channel']??'')):'Not marked sent' ?></strong></p>
         <p><?php if(!empty($h['ready'])): ?><a class="btn secondary" target="_blank" href="<?= $e((string)$h['path']) ?>">View</a> <a class="btn secondary" target="_blank" href="<?= $e((string)$h['path']) ?>" onclick="window.print()">Print</a><?php endif; ?> <a class="btn secondary" href="generate-handover.php?mobile=<?= urlencode((string)$c['mobile']) ?>"><?= !empty($h['ready'])?'Regenerate':'Generate' ?></a><?php if(!empty($h['ready'])): ?> <form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= $e((string)($_SESSION['csrf_token']??'')) ?>"><input type="hidden" name="action" value="prepare_handover_whatsapp"><input type="hidden" name="quotation_id" value="<?= $e($qid) ?>"><input type="hidden" name="return_tab" value="<?= $e($returnTab) ?>"><button class="btn secondary" type="submit">Handover WhatsApp</button></form> <form method="post" class="inline-form"><input type="hidden" name="csrf_token" value="<?= $e((string)($_SESSION['csrf_token']??'')) ?>"><input type="hidden" name="action" value="mark_handover_sent"><input type="hidden" name="quotation_id" value="<?= $e($qid) ?>"><input type="hidden" name="return_tab" value="<?= $e($returnTab) ?>"><select name="handover_channel"><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="in_person">In person</option></select><button class="btn" type="submit">Mark Handover Sent</button></form><?php endif; ?></p>
         <p>Open complaints: <strong><?= (int)$m['open_complaints'] ?></strong> · <a href="admin-customers.php?view=<?= urlencode((string)$c['mobile']) ?>#complaints">Add Complaint</a> · <a href="admin-complaints.php?customer_mobile=<?= urlencode((string)$c['mobile']) ?>">View Complaints</a></p>
-        <?php if($canResolve&&($m['warnings']!==[]||!empty($c['archived']))): ?><p><?= customer_conflict_render_resolver($quote,$returnTab,$store) ?></p><?php endif; ?>
+        <?php if($m['warnings']!==[]||!empty($c['archived'])): ?><p><?= customer_conflict_render_resolver($quote,$returnTab,$store) ?></p><?php endif; ?>
         <?php foreach($m['warnings'] as $warning): ?><div class="banner error"><strong>Important mismatch:</strong> <?= $e($warning) ?><br><span>Quotation: name <strong><?= $e((string)($quote['customer_name']??'—')) ?></strong>, mobile <strong><?= $e((string)($quote['customer_mobile']??'—')) ?></strong> · Customer User: name <strong><?= $e((string)($c['name']??'—')) ?></strong>, mobile <strong><?= $e((string)($c['mobile']??'—')) ?></strong></span><div class="row-action-group"><a class="btn secondary" href="admin-customers.php?<?= $e(http_build_query(['view'=>(string)$c['mobile'],'return_to'=>$returnTo])) ?>">Open Customer User</a><a class="btn secondary" href="<?= $e($quoteUrl) ?>">Review quotation</a><a class="btn secondary" href="<?= $e($correctionUrl) ?>">Change quotation mobile</a><a class="btn secondary" href="<?= $e($quoteUrl) ?>#customer-details">Review differences</a><a class="btn secondary" href="admin-customers.php?<?= $e(http_build_query(['view'=>(string)$c['mobile'],'return_to'=>$returnTo])) ?>#customer-details">Complete customer details</a></div></div><?php endforeach; ?>
         <?php if(($m['missing_details']??[])!==[]): ?><div class="banner error"><strong>Handover blocker:</strong> Customer User is missing <?= $e(implode(', ', $m['missing_details'])) ?>. <a class="btn secondary" href="admin-customers.php?<?= $e(http_build_query(['view'=>(string)$c['mobile'],'return_to'=>$returnTo])) ?>#customer-details">Complete customer details</a></div><?php endif; ?>
         <?php if($detail): ?><details open><summary>Recent customer-operation activity</summary><ul><?php foreach(customer_operations_recent_activity((string)$c['mobile']) as $event): ?><li><?= $e((string)($event['timestamp']??'')) ?> — <?= $e(ucwords(str_replace('_',' ',(string)($event['action']??'')))) ?> (<?= $e((string)($event['actor_id']??'system')) ?>)</li><?php endforeach; ?></ul></details><?php endif; ?>
