@@ -3558,6 +3558,39 @@ function documents_invoice_final_total(array $invoice, bool $allowQuotationFallb
     return 0.0;
 }
 
+/**
+ * Return the issued invoice's reconciled tax totals.
+ *
+ * The top-level tax_breakdown is the same authoritative source preferred by
+ * invoice-view.php. Older invoices may only have the breakdown below calc, so
+ * that remains the sole fallback. All arithmetic is performed in paise and a
+ * legacy rounding difference is applied to GST, leaving the stored taxable
+ * value intact while guaranteeing taxable + GST = the displayed invoice total.
+ */
+function documents_invoice_tax_summary(array $invoice): array
+{
+    $calc = is_array($invoice['calc'] ?? null) ? $invoice['calc'] : [];
+    $taxBreakdown = is_array($invoice['tax_breakdown'] ?? null) && $invoice['tax_breakdown'] !== []
+        ? $invoice['tax_breakdown']
+        : (is_array($calc['tax_breakdown'] ?? null) ? $calc['tax_breakdown'] : []);
+
+    $grossPaise = documents_invoice_money_to_paise(documents_invoice_final_total($invoice));
+    $taxablePaise = max(0, documents_invoice_money_to_paise((float) ($taxBreakdown['basic_total'] ?? 0)));
+    $gstPaise = max(0, documents_invoice_money_to_paise((float) ($taxBreakdown['gst_total'] ?? 0)));
+    if ($taxablePaise + $gstPaise !== $grossPaise) {
+        $gstPaise = max(0, $grossPaise - $taxablePaise);
+        if ($taxablePaise > $grossPaise) {
+            $taxablePaise = $grossPaise;
+        }
+    }
+
+    return [
+        'taxable' => documents_invoice_paise_to_money($taxablePaise),
+        'gst' => documents_invoice_paise_to_money($gstPaise),
+        'gross' => documents_invoice_paise_to_money($grossPaise),
+    ];
+}
+
 function documents_invoice_adjustment_type(array $invoice): string
 {
     $type = (string) ($invoice['pricing']['adjustment_type'] ?? DOCUMENTS_INVOICE_ADJUSTMENT_NONE);
