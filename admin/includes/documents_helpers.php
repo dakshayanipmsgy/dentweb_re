@@ -8478,89 +8478,10 @@ function documents_payment_request_is_publicly_payable(array $request): bool
 
 function documents_payment_request_public_url(array $request): string
 {
-    if (empty($request['visibility_to_customer'])) { return ''; }
     $token = documents_payment_request_public_token($request);
     if ($token === '') { return ''; }
-    return 'https://dakshayani.co.in/payment-request.php?t=' . rawurlencode($token);
-}
-
-function documents_payment_request_upi_state_dir(): string
-{
-    return rtrim((string) (getenv('PAYMENT_REQUEST_UPI_STATE_DIR') ?: documents_logs_dir() . '/payment-request-upi'), '/');
-}
-
-function documents_payment_request_upi_nonce(string $token, int $attempts): string
-{
-    $secret = documents_payment_request_token_secret();
-    if ($secret === '' || preg_match('/^[A-Za-z0-9_-]{43}$/D', $token) !== 1) { return ''; }
-    return rtrim(strtr(base64_encode(hash_hmac('sha256', "payment-request-upi\0" . $token . "\0" . $attempts, $secret, true)), '+/', '-_'), '=');
-}
-
-function documents_payment_request_upi_attempts(string $token): int
-{
-    $path = documents_payment_request_upi_state_dir() . '/' . hash('sha256', $token) . '.json';
-    $state = is_file($path) ? json_decode((string) file_get_contents($path), true) : [];
-    return max(0, min(2, (int) ($state['attempts'] ?? 0)));
-}
-
-/**
- * Consume an explicit UPI activation atomically. The idempotency key makes a
- * repeated fetch response safe; it never represents or records a payment.
- *
- * @return array{ok:bool,attempts:int,retries_left:int,uri:string,error:string,idempotent:bool,nonce:string}
- */
-function documents_payment_request_activate_upi(string $token, string $nonce, string $idempotencyKey): array
-{
-    $reject = static fn(string $error, int $attempts = 0): array => ['ok'=>false,'attempts'=>$attempts,'retries_left'=>max(0, 2-$attempts),'uri'=>'','error'=>$error,'idempotent'=>false,'nonce'=>''];
-    if (preg_match('/^[A-Za-z0-9_-]{16,128}$/D', $idempotencyKey) !== 1) { return $reject('Invalid activation request.'); }
-    $request = documents_payment_request_from_public_token($token);
-    if (!is_array($request)) { return $reject('Payment request unavailable.'); }
-    $dir = documents_payment_request_upi_state_dir();
-    if (!is_dir($dir) && !mkdir($dir, 0770, true) && !is_dir($dir)) { return $reject('Unable to start payment action.'); }
-    $key = hash('sha256', $token); $lock = fopen($dir . '/' . $key . '.lock', 'c+');
-    if ($lock === false || !flock($lock, LOCK_EX)) { if (is_resource($lock)) { fclose($lock); } return $reject('Unable to start payment action.'); }
-    try {
-        $path = $dir . '/' . $key . '.json';
-        $state = is_file($path) ? json_decode((string) file_get_contents($path), true) : [];
-        if (!is_array($state)) { $state = []; }
-        $attempts = max(0, min(2, (int) ($state['attempts'] ?? 0)));
-        $used = is_array($state['idempotency_keys'] ?? null) ? $state['idempotency_keys'] : [];
-        if (in_array($idempotencyKey, $used, true)) {
-            $fresh = documents_payment_request_refresh_from_receipts($request);
-            $instructions = documents_payment_instructions($fresh, documents_get_company_profile_for_quotes());
-            $uri = documents_payment_request_is_publicly_payable($fresh) && is_array($instructions['upi'] ?? null) ? (string) $instructions['upi']['uri'] : '';
-            return ['ok'=>$uri !== '','attempts'=>$attempts,'retries_left'=>max(0,2-$attempts),'uri'=>$uri,'error'=>$uri === '' ? 'UPI payment is unavailable.' : '','idempotent'=>true,'nonce'=>$attempts < 2 ? documents_payment_request_upi_nonce($token, $attempts) : ''];
-        }
-        if (!hash_equals(documents_payment_request_upi_nonce($token, $attempts), $nonce)) { return $reject('This payment action has expired. Refresh the page.', $attempts); }
-        $fresh = documents_payment_request_refresh_from_receipts($request);
-        $instructions = documents_payment_instructions($fresh, documents_get_company_profile_for_quotes());
-        if (!documents_payment_request_is_publicly_payable($fresh) || !is_array($instructions['upi'] ?? null)) { return $reject('UPI payment is unavailable.', $attempts); }
-        if ($attempts >= 2) { return $reject('The two UPI launch attempts have already been used.', $attempts); }
-        $attempts++;
-        $used[] = $idempotencyKey;
-        $state = ['attempts'=>$attempts,'idempotency_keys'=>array_slice($used, -20),'updated_at'=>date('c')];
-        $temporary = $path . '.tmp.' . bin2hex(random_bytes(5));
-        if (file_put_contents($temporary, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX) === false || !rename($temporary, $path)) { @unlink($temporary); return $reject('Unable to start payment action.', $attempts - 1); }
-        return ['ok'=>true,'attempts'=>$attempts,'retries_left'=>2-$attempts,'uri'=>(string)$instructions['upi']['uri'],'error'=>'','idempotent'=>false,'nonce'=>$attempts < 2 ? documents_payment_request_upi_nonce($token, $attempts) : ''];
-    } finally { flock($lock, LOCK_UN); fclose($lock); }
-}
-
-function documents_payment_request_portal_guidance(array $request, ?CustomerFsStore $store = null): array
-{
-    $mobile = documents_normalize_mobile((string) ($request['customer_mobile'] ?? ''));
-    if ($mobile === '') { return []; }
-    $store = $store ?? new CustomerFsStore();
-    $matches = array_values(array_filter($store->listCustomers(), static fn(array $customer): bool => documents_normalize_mobile((string)($customer['mobile'] ?? '')) === $mobile));
-    $active = array_values(array_filter($matches, static fn(array $customer): bool => empty($customer['archived'])));
-    if (count($matches) !== 1 || count($active) !== 1) { return []; }
-    $hash = (string) ($active[0]['password_hash'] ?? '');
-    $temporary = $hash !== '' && password_verify('abcd1234', $hash);
-    return [
-        'Customer Portal: https://dakshayani.co.in/login.php',
-        'Log in using your registered mobile number.',
-        'Receipts and available documents can be viewed or downloaded there.',
-        $temporary ? 'Temporary password: abcd1234' : 'Use your existing password, or contact the company for a password reset.',
-    ];
+    $host = preg_replace('/[^A-Za-z0-9.:-]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'dakshayani.co.in')) ?: 'dakshayani.co.in';
+    return 'https://' . $host . '/payment-request.php?t=' . rawurlencode($token);
 }
 
 /** Future WhatsApp Business Platform adapters can map this to an approved CTA. */
@@ -8654,12 +8575,10 @@ function documents_build_payment_request_message(array $request, array $summary 
     $lines[] = 'Total Paid So Far: ' . $fmt($summary['total_received'] ?? 0);
     $lines[] = 'Total Outstanding: ' . $fmt($summary['outstanding'] ?? 0);
     $paymentUrl = documents_payment_request_public_url($request);
-    if ($paymentUrl !== '') { $lines[] = ''; $lines[] = 'View payment request and pay ' . $fmt($request['amount_requested'] ?? 0) . ':'; $lines[] = $paymentUrl; }
+    if ($paymentUrl !== '') { $lines[] = ''; $lines[] = 'Pay securely: ' . $paymentUrl; }
     if (trim((string)($request['message'] ?? '')) !== '') { $lines[] = ''; $lines[] = (string)$request['message']; }
     $instructionLines = documents_payment_instruction_message_lines(documents_payment_instructions($request, documents_get_company_profile_for_quotes()));
     if ($instructionLines !== []) { $lines[] = ''; array_push($lines, ...$instructionLines); }
-    $portalLines = documents_payment_request_portal_guidance($request);
-    if ($portalLines !== []) { $lines[] = ''; array_push($lines, ...$portalLines); }
     $lines[] = ''; $lines[] = 'Kindly make the payment so that we can proceed with the next stage of work.'; $lines[] = ''; $lines[] = 'Regards,'; $lines[] = 'Dakshayani Enterprises';
     return implode("\n", $lines);
 }
