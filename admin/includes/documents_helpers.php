@@ -8366,7 +8366,7 @@ function documents_generate_payment_request_id(): string
 
 function documents_payment_request_defaults(): array
 {
-    return ['id'=>'','quotation_id'=>'','customer_mobile'=>'','customer_name'=>'','quotation_amount'=>0,'amount_requested'=>0,'amount_paid_against_request'=>0,'outstanding_against_request'=>0,'reason'=>'','custom_reason'=>'','message'=>'','due_date'=>'','status'=>'draft','visibility_to_customer'=>true,'request_mode'=>'portal_only','sent_via'=>'','sent_at'=>'','sent_by'=>['role'=>'','id'=>'','name'=>''],'created_by'=>['role'=>'','id'=>'','name'=>''],'created_at'=>'','updated_at'=>'','linked_receipt_ids'=>[],'internal_notes'=>'','customer_response'=>'','follow_up_date'=>'','archived_flag'=>false,'archived_at'=>'','archived_by'=>['role'=>'','id'=>'','name'=>'']];
+    return ['id'=>'','quotation_id'=>'','customer_mobile'=>'','customer_name'=>'','quotation_amount'=>0,'amount_requested'=>0,'amount_paid_against_request'=>0,'outstanding_against_request'=>0,'reason'=>'','custom_reason'=>'','message'=>'','due_date'=>'','status'=>'draft','visibility_to_customer'=>true,'request_mode'=>'portal_only','sent_via'=>'','sent_at'=>'','sent_by'=>['role'=>'','id'=>'','name'=>''],'created_by'=>['role'=>'','id'=>'','name'=>''],'created_at'=>'','updated_at'=>'','linked_receipt_ids'=>[],'internal_notes'=>'','customer_response'=>'','follow_up_date'=>'','archived_flag'=>false,'archived_at'=>'','archived_by'=>['role'=>'','id'=>'','name'=>''],'upi_link'=>['token_hash'=>'','created_at'=>'','expires_at'=>'','launch_count'=>0,'revoked_at'=>'']];
 }
 
 function documents_get_payment_request(string $id): ?array
@@ -8392,6 +8392,95 @@ function documents_save_payment_request(array $request): array
     foreach ($rows as $i => $row) { if ((string)($row['id'] ?? '') === (string)$request['id']) { $rows[$i] = $request; $found = true; break; } }
     if (!$found) { $rows[] = $request; }
     return documents_save_payment_requests($rows);
+}
+
+/** Execute a read/modify/write operation while exclusively locking the payment-request store. */
+function documents_with_payment_request_lock(callable $callback): array
+{
+    documents_ensure_payment_request_store();
+    $handle = fopen(documents_payment_requests_path() . '.lock', 'c');
+    if ($handle === false || !flock($handle, LOCK_EX)) { if (is_resource($handle)) fclose($handle); return ['ok'=>false,'error'=>'Payment request store is busy.']; }
+    try {
+        $rows = json_load(documents_payment_requests_path(), []);
+        $rows = is_array($rows) ? array_values(array_filter($rows, 'is_array')) : [];
+        $result = $callback($rows);
+        if (!is_array($result)) { return ['ok'=>false,'error'=>'Invalid payment request update.']; }
+        if (!empty($result['write'])) {
+            $saved = documents_save_payment_requests($rows);
+            if (empty($saved['ok'])) return ['ok'=>false,'error'=>'Unable to save payment request.'];
+        }
+        return $result;
+    } finally { flock($handle, LOCK_UN); fclose($handle); }
+}
+
+function documents_payment_request_link_available(array $request, ?int $now = null): bool
+{
+    $link = is_array($request['upi_link'] ?? null) ? $request['upi_link'] : [];
+    $status = strtolower((string)($request['status'] ?? ''));
+    $now ??= time();
+    return empty($request['archived_flag']) && !in_array($status, ['paid','cancelled'], true)
+        && (string)($link['token_hash'] ?? '') !== '' && (string)($link['revoked_at'] ?? '') === ''
+        && strtotime((string)($link['expires_at'] ?? '')) > $now && (int)($link['launch_count'] ?? 0) < 2;
+}
+
+function documents_payment_request_public_url(string $token): string
+{
+    $scheme = (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off') ? 'https' : 'http';
+    $host = preg_replace('/[^A-Za-z0-9.:[\]-]/', '', (string)($_SERVER['HTTP_HOST'] ?? 'dakshayani.co.in')) ?: 'dakshayani.co.in';
+    $base = rtrim(str_replace('admin-documents.php', '', (string)($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
+    return $scheme . '://' . $host . $base . '/payment-request.php?token=' . rawurlencode($token);
+}
+
+function documents_payment_request_audit(string $requestId, string $event, array $details = []): void
+{
+    if (function_exists('log_audit_event')) {
+        $actor = function_exists('audit_current_actor') ? audit_current_actor() : ['actor_type'=>'public','actor_id'=>''];
+        log_audit_event((string)($actor['actor_type'] ?? 'public'), (string)($actor['actor_id'] ?? ''), 'payment_request', $requestId, $event, $details);
+    }
+}
+
+/** Creates a 256-bit bearer token. Only its SHA-256 hash is persisted. */
+function documents_payment_request_generate_upi_link(string $requestId, ?int $now = null): array
+{
+    $now ??= time(); $token = bin2hex(random_bytes(32)); $hash = hash('sha256', $token);
+    $result = documents_with_payment_request_lock(function (&$rows) use ($requestId, $now, $hash): array {
+        foreach ($rows as &$row) if ((string)($row['id'] ?? '') === $requestId) {
+            if (!empty($row['archived_flag']) || in_array(strtolower((string)($row['status'] ?? '')), ['paid','cancelled'], true)) return ['ok'=>false,'error'=>'Only active payment requests can have a payment link.'];
+            $row['upi_link']=['token_hash'=>$hash,'created_at'=>date('c',$now),'expires_at'=>date('c',$now+86400),'launch_count'=>0,'revoked_at'=>''];
+            $row['updated_at']=date('c',$now); return ['ok'=>true,'write'=>true,'request_id'=>$requestId,'expires_at'=>$row['upi_link']['expires_at']];
+        }
+        return ['ok'=>false,'error'=>'Payment request not found.'];
+    });
+    if (!empty($result['ok'])) { $result['token']=$token; documents_payment_request_audit($requestId, 'upi_link_created', ['expires_at'=>$result['expires_at']]); }
+    return $result;
+}
+
+function documents_payment_request_find_by_token(string $token): ?array
+{
+    if (!preg_match('/^[a-f0-9]{64}$/', $token)) return null;
+    $hash=hash('sha256',$token);
+    foreach (documents_list_payment_requests() as $row) if (hash_equals((string)($row['upi_link']['token_hash'] ?? ''),$hash)) return array_merge(documents_payment_request_defaults(),$row);
+    return null;
+}
+
+/** Atomically consumes one of two launches and returns server-owned payment data. */
+function documents_payment_request_authorize_upi(string $token, ?int $now = null): array
+{
+    if (!preg_match('/^[a-f0-9]{64}$/', $token)) return ['ok'=>false,'error'=>'This payment link is unavailable.'];
+    $now ??= time(); $hash=hash('sha256',$token);
+    $result=documents_with_payment_request_lock(function (&$rows) use ($hash,$now): array {
+        foreach($rows as &$row) if (hash_equals((string)($row['upi_link']['token_hash']??''),$hash)) {
+            $full=array_merge(documents_payment_request_defaults(),$row);
+            if(!documents_payment_request_link_available($full,$now)) return ['ok'=>false,'error'=>'This payment link is unavailable or has no launches remaining.'];
+            $row['upi_link']['launch_count']=(int)($row['upi_link']['launch_count']??0)+1;
+            $amount=number_format((float)$row['amount_requested'],2,'.',''); $reference=(string)$row['id'];
+            $query=http_build_query(['pa'=>'d.entranchi@ybl','pn'=>'Dakshayani Enterprises','am'=>$amount,'cu'=>'INR','tn'=>$reference],'','&',PHP_QUERY_RFC3986);
+            return ['ok'=>true,'write'=>true,'request_id'=>$reference,'launch_count'=>$row['upi_link']['launch_count'],'remaining'=>2-$row['upi_link']['launch_count'],'upi_uri'=>'upi://pay?'.$query];
+        }
+        return ['ok'=>false,'error'=>'This payment link is unavailable.'];
+    });
+    if(!empty($result['ok'])) documents_payment_request_audit((string)$result['request_id'],'upi_launch_authorized',['launch_count'=>$result['launch_count']]);
+    return $result;
 }
 
 function documents_payment_requests_by_quote(string $quoteId): array
@@ -8439,7 +8528,7 @@ function documents_payment_request_reason_label(array $request): string
     return (string)($request['reason'] ?? '') === 'Custom Reason' ? (string)($request['custom_reason'] ?? '') : (string)($request['reason'] ?? '');
 }
 
-function documents_build_payment_request_message(array $request, array $summary = []): string
+function documents_build_payment_request_message(array $request, array $summary = [], string $publicUrl = ''): string
 {
     $fmt = static fn($n): string => '₹' . number_format((float)$n, 2);
     $lines = ['Dear ' . ((string)($request['customer_name'] ?? '') ?: 'Customer') . ',', '', 'This is a payment request from Dakshayani Enterprises for your solar project.', '', 'Requested Amount: ' . $fmt($request['amount_requested'] ?? 0), 'Reason: ' . documents_payment_request_reason_label($request)];
@@ -8448,6 +8537,7 @@ function documents_build_payment_request_message(array $request, array $summary 
     $lines[] = 'Total Project Amount: ' . $fmt($request['quotation_amount'] ?? ($summary['quotation_amount'] ?? 0));
     $lines[] = 'Total Paid So Far: ' . $fmt($summary['total_received'] ?? 0);
     $lines[] = 'Total Outstanding: ' . $fmt($summary['outstanding'] ?? 0);
+    if ($publicUrl !== '') { $lines[] = ''; $lines[] = 'Secure payment page: ' . $publicUrl; }
     if (trim((string)($request['message'] ?? '')) !== '') { $lines[] = ''; $lines[] = (string)$request['message']; }
     $lines[] = ''; $lines[] = 'Kindly make the payment so that we can proceed with the next stage of work.'; $lines[] = ''; $lines[] = 'Regards,'; $lines[] = 'Dakshayani Enterprises';
     return implode("\n", $lines);
