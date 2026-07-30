@@ -8478,10 +8478,10 @@ function documents_payment_request_is_publicly_payable(array $request): bool
 
 function documents_payment_request_public_url(array $request): string
 {
+    if (empty($request['visibility_to_customer'])) { return ''; }
     $token = documents_payment_request_public_token($request);
     if ($token === '') { return ''; }
-    $host = preg_replace('/[^A-Za-z0-9.:-]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'dakshayani.co.in')) ?: 'dakshayani.co.in';
-    return 'https://' . $host . '/payment-request.php?t=' . rawurlencode($token);
+    return 'https://dakshayani.co.in/payment-request.php?t=' . rawurlencode($token);
 }
 
 /** Future WhatsApp Business Platform adapters can map this to an approved CTA. */
@@ -8575,7 +8575,11 @@ function documents_build_payment_request_message(array $request, array $summary 
     $lines[] = 'Total Paid So Far: ' . $fmt($summary['total_received'] ?? 0);
     $lines[] = 'Total Outstanding: ' . $fmt($summary['outstanding'] ?? 0);
     $paymentUrl = documents_payment_request_public_url($request);
-    if ($paymentUrl !== '') { $lines[] = ''; $lines[] = 'Pay securely: ' . $paymentUrl; }
+    if ($paymentUrl !== '') {
+        $lines[] = '';
+        $lines[] = 'View payment request and pay ' . $fmt($request['amount_requested'] ?? 0) . ':';
+        $lines[] = $paymentUrl;
+    }
     if (trim((string)($request['message'] ?? '')) !== '') { $lines[] = ''; $lines[] = (string)$request['message']; }
     $instructionLines = documents_payment_instruction_message_lines(documents_payment_instructions($request, documents_get_company_profile_for_quotes()));
     if ($instructionLines !== []) { $lines[] = ''; array_push($lines, ...$instructionLines); }
