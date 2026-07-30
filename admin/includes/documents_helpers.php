@@ -585,6 +585,45 @@ function load_company_profile(): array
     return $merged;
 }
 
+/**
+ * Return the canonical, read-only Company Profile bank-transfer fields.
+ *
+ * Supplying a profile is useful to render an already loaded profile without a
+ * second disk read. Missing keys still use the same Company Profile defaults;
+ * no marketing-profile or document-specific fallback is applied to bank data.
+ *
+ * @return array{bank_account_name:string,bank_name:string,bank_account_no:string,bank_ifsc:string,bank_branch:string,fields:array<int,array{key:string,label:string,value:string,copyable:bool}>,has_details:bool}
+ */
+function documents_company_bank_transfer_details(?array $company = null): array
+{
+    $company = array_merge(
+        documents_company_profile_defaults(),
+        $company ?? load_company_profile()
+    );
+    $labels = [
+        'bank_account_name' => 'Account name',
+        'bank_name' => 'Bank name',
+        'bank_account_no' => 'Account number',
+        'bank_ifsc' => 'IFSC',
+        'bank_branch' => 'Branch',
+    ];
+    $details = [];
+    $fields = [];
+    foreach ($labels as $key => $label) {
+        $value = trim((string) ($company[$key] ?? ''));
+        $details[$key] = $value;
+        if ($value !== '') {
+            $fields[] = [
+                'key' => $key,
+                'label' => $label,
+                'value' => $value,
+                'copyable' => in_array($key, ['bank_account_no', 'bank_ifsc'], true),
+            ];
+        }
+    }
+    return $details + ['fields' => $fields, 'has_details' => $fields !== []];
+}
+
 function save_company_profile(array $profile): array
 {
     $merged = array_merge(documents_company_profile_defaults(), $profile);
