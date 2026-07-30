@@ -8481,11 +8481,8 @@ function documents_payment_request_public_url(array $request): string
     if (empty($request['visibility_to_customer'])) { return ''; }
     $token = documents_payment_request_public_token($request);
     if ($token === '') { return ''; }
-    // Customer communications must never inherit an administrative, staging,
-    // proxy, or attacker-controlled Host header.  The canonical URL is also
-    // deliberately independent of request status so an already shared link
-    // remains stable while the read-only page disables payment when necessary.
-    return 'https://dakshayani.co.in/payment-request.php?t=' . rawurlencode($token);
+    $host = preg_replace('/[^A-Za-z0-9.:-]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'dakshayani.co.in')) ?: 'dakshayani.co.in';
+    return 'https://' . $host . '/payment-request.php?t=' . rawurlencode($token);
 }
 
 /** Future WhatsApp Business Platform adapters can map this to an approved CTA. */

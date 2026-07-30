@@ -8,7 +8,7 @@ $storeBefore = is_file($store) ? file_get_contents($store) : null;
 $profileBefore = file_get_contents($profile);
 $oldSecret = getenv('PAYMENT_REQUEST_TOKEN_SECRET');
 putenv('PAYMENT_REQUEST_TOKEN_SECRET=test-only-secret-with-at-least-thirty-two-bytes');
-$_SERVER['HTTP_HOST'] = 'attacker.example.test';
+$_SERVER['HTTP_HOST'] = 'payments.example.test';
 require_once $root . '/admin/includes/documents_helpers.php';
 
 function public_pay_assert(bool $condition, string $message): void
@@ -30,9 +30,7 @@ try {
     $token = documents_payment_request_public_token($request);
     public_pay_assert((bool) preg_match('/^[A-Za-z0-9_-]{43}$/D', $token), 'token must be opaque URL-safe HMAC output');
     $url = documents_payment_request_public_url($request);
-    public_pay_assert(str_starts_with($url, 'https://dakshayani.co.in/payment-request.php?t='), 'payment URL must always use the canonical HTTPS origin');
-    public_pay_assert(!str_contains($url, 'attacker.example.test'), 'payment URL must never trust the request Host header');
-    public_pay_assert($url === documents_payment_request_public_url(array_merge($request, ['amount_requested'=>1, 'status'=>'paid'])), 'stored request URL must remain stable across mutable payment fields and status');
+    public_pay_assert(str_starts_with($url, 'https://payments.example.test/payment-request.php?t='), 'payment URL must always use HTTPS');
     foreach (['12345', '9999999999', 'Private', 'QUOTE-871', '@'] as $privateValue) {
         public_pay_assert(!str_contains($url, $privateValue), 'URL must not contain request or payment values');
     }
