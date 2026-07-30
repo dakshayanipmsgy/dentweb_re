@@ -51,7 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['complaint_action'] ?? '') 
 }
 
 $customerComplaints = get_complaints_by_customer((string) ($customer['mobile'] ?? ''));
-$paymentCompany = documents_get_company_profile_for_quotes();
 $customerMobile = normalize_customer_mobile((string) ($customer['mobile'] ?? ''));
 $customerQuotes = array_values(array_filter(documents_list_quotes(), static function (array $quote) use ($customerMobile): bool {
     return normalize_customer_mobile((string) ($quote['customer_mobile'] ?? '')) === $customerMobile
@@ -269,10 +268,6 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
       font-weight: 700;
       word-break: break-word;
     }
-    .payment-options { display: grid; gap: .4rem; min-width: 220px; }
-    .payment-options strong { color: #0f766e; }
-    .payment-options .upi-action { display: inline-block; width: fit-content; padding: .45rem .7rem; border-radius: 8px; background: #0f766e; color: #fff; font-weight: 700; text-decoration: none; }
-    .copy-payment { border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; padding: .2rem .4rem; cursor: pointer; }
     .handover-actions {
       display: flex;
       gap: 0.5rem;
@@ -529,7 +524,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
 
               <?php if ($project['payment_requests'] !== []): ?>
                 <h3 class="section-title" style="margin-top:1rem">Active payment requests</h3>
-                <div class="portal-table-wrap"><table class="finance-table"><thead><tr><th>Date</th><th>Amount</th><th>Reason</th><th>Due</th><th>Status</th><th>Payment instructions</th></tr></thead><tbody><?php foreach ($project['payment_requests'] as $request): $paymentOptions = documents_payment_instructions($request, $paymentCompany); ?><tr><td><?= customer_portal_safe(substr((string) ($request['created_at'] ?? ''), 0, 10)) ?></td><td><?= customer_portal_safe($customerInr((float) ($request['amount_requested'] ?? 0))) ?></td><td><?= customer_portal_safe(documents_payment_request_reason_label($request)) ?></td><td><?= customer_portal_safe((string) ($request['due_date'] ?? '')) ?></td><td><?= customer_portal_safe(customer_dashboard_status_label((string) ($request['status'] ?? 'draft'))) ?></td><td><div class="payment-options"><?php if (is_array($paymentOptions['upi'] ?? null)): $upi = $paymentOptions['upi']; ?><strong>Pay via UPI</strong><a class="upi-action" href="<?= customer_portal_safe((string) $upi['uri']) ?>"><?= customer_portal_safe((string) $upi['label']) ?></a><span>UPI ID: <?= customer_portal_safe((string) $upi['id']) ?> <button type="button" class="copy-payment" onclick="navigator.clipboard.writeText(<?= customer_portal_safe(json_encode((string) $upi['id'])) ?>)">Copy</button></span><?php endif; ?><?php if (($paymentOptions['bank'] ?? []) !== []): ?><strong>Bank transfer</strong><?php foreach ($paymentOptions['bank'] as $field): ?><span><?= customer_portal_safe((string) $field['label']) ?>: <?= customer_portal_safe((string) $field['value']) ?> <button type="button" class="copy-payment" onclick="navigator.clipboard.writeText(<?= customer_portal_safe(json_encode((string) $field['value'])) ?>)">Copy</button></span><?php endforeach; ?><?php endif; ?><?php if (($paymentOptions['upi'] ?? null) === null && ($paymentOptions['bank'] ?? []) === []): ?><span>Please contact us for payment instructions.</span><?php endif; ?></div></td></tr><?php endforeach; ?></tbody></table></div>
+                <div class="portal-table-wrap"><table class="finance-table"><thead><tr><th>Date</th><th>Amount</th><th>Reason</th><th>Due</th><th>Status</th></tr></thead><tbody><?php foreach ($project['payment_requests'] as $request): ?><tr><td><?= customer_portal_safe(substr((string) ($request['created_at'] ?? ''), 0, 10)) ?></td><td><?= customer_portal_safe($customerInr((float) ($request['amount_requested'] ?? 0))) ?></td><td><?= customer_portal_safe(documents_payment_request_reason_label($request)) ?></td><td><?= customer_portal_safe((string) ($request['due_date'] ?? '')) ?></td><td><?= customer_portal_safe(customer_dashboard_status_label((string) ($request['status'] ?? 'draft'))) ?></td></tr><?php endforeach; ?></tbody></table></div>
               <?php endif; ?>
 
               <h3 class="section-title" style="margin-top:1rem">Payment history / receipts</h3>
