@@ -3,3 +3,6 @@
 storage/*.sqlite
 storage/*.db
 storage/*.wav
+
+# Runtime-only bearer-token vault (PHP guard also prevents HTTP disclosure).
+data/documents/payment_request_tokens.php
