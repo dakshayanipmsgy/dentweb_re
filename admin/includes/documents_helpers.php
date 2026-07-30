@@ -8440,57 +8440,6 @@ function documents_payment_request_reason_label(array $request): string
 }
 
 /**
- * Return the secret used for public payment-request lookup tokens.
- *
- * PAYMENT_REQUEST_TOKEN_SECRET permits independent rotation; SESSION_SECRET is
- * the backwards-compatible deployment fallback. No payment/customer data is
- * embedded in the token.
- */
-function documents_payment_request_token_secret(): string
-{
-    return trim((string) (getenv('PAYMENT_REQUEST_TOKEN_SECRET') ?: getenv('SESSION_SECRET') ?: ''));
-}
-
-function documents_payment_request_public_token(array $request): string
-{
-    $id = (string) ($request['id'] ?? '');
-    $created = (string) ($request['created_at'] ?? '');
-    $secret = documents_payment_request_token_secret();
-    if ($id === '' || $secret === '') { return ''; }
-    return rtrim(strtr(base64_encode(hash_hmac('sha256', "payment-request\0" . $id . "\0" . $created, $secret, true)), '+/', '-_'), '=');
-}
-
-function documents_payment_request_from_public_token(string $token): ?array
-{
-    if (preg_match('/^[A-Za-z0-9_-]{43}$/D', $token) !== 1 || documents_payment_request_token_secret() === '') { return null; }
-    foreach (documents_list_payment_requests() as $request) {
-        $expected = documents_payment_request_public_token($request);
-        if ($expected !== '' && hash_equals($expected, $token)) { return array_merge(documents_payment_request_defaults(), $request); }
-    }
-    return null;
-}
-
-function documents_payment_request_is_publicly_payable(array $request): bool
-{
-    if (empty($request['visibility_to_customer']) || !empty($request['archived_flag'])) { return false; }
-    return !in_array(strtolower(trim((string) ($request['status'] ?? 'draft'))), ['cancelled', 'paid', 'archived'], true);
-}
-
-function documents_payment_request_public_url(array $request): string
-{
-    $token = documents_payment_request_public_token($request);
-    if ($token === '') { return ''; }
-    $host = preg_replace('/[^A-Za-z0-9.:-]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'dakshayani.co.in')) ?: 'dakshayani.co.in';
-    return 'https://' . $host . '/payment-request.php?t=' . rawurlencode($token);
-}
-
-/** Future WhatsApp Business Platform adapters can map this to an approved CTA. */
-function documents_payment_request_cta(array $request): array
-{
-    return ['type' => 'url', 'text' => 'Pay Now', 'url' => documents_payment_request_public_url($request)];
-}
-
-/**
  * Build customer-facing payment options from the current Company Profile.
  *
  * This is deliberately a presentation-only helper: it does not save the request,
@@ -8550,6 +8499,8 @@ function documents_payment_instruction_message_lines(array $instructions): array
 {
     $lines = [];
     if (is_array($instructions['upi'] ?? null)) {
+        $lines[] = 'Pay via UPI:';
+        $lines[] = (string) $instructions['upi']['uri'];
         $lines[] = 'UPI ID: ' . (string) $instructions['upi']['id'];
     }
     if (is_array($instructions['bank'] ?? null) && $instructions['bank'] !== []) {
@@ -8574,8 +8525,6 @@ function documents_build_payment_request_message(array $request, array $summary 
     $lines[] = 'Total Project Amount: ' . $fmt($request['quotation_amount'] ?? ($summary['quotation_amount'] ?? 0));
     $lines[] = 'Total Paid So Far: ' . $fmt($summary['total_received'] ?? 0);
     $lines[] = 'Total Outstanding: ' . $fmt($summary['outstanding'] ?? 0);
-    $paymentUrl = documents_payment_request_public_url($request);
-    if ($paymentUrl !== '') { $lines[] = ''; $lines[] = 'Pay securely: ' . $paymentUrl; }
     if (trim((string)($request['message'] ?? '')) !== '') { $lines[] = ''; $lines[] = (string)$request['message']; }
     $instructionLines = documents_payment_instruction_message_lines(documents_payment_instructions($request, documents_get_company_profile_for_quotes()));
     if ($instructionLines !== []) { $lines[] = ''; array_push($lines, ...$instructionLines); }
