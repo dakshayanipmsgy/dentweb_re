@@ -57,7 +57,8 @@ $partialBank = documents_payment_instructions($request, array_merge($company, ['
 payment_instructions_assert(array_column($partialBank['bank'], 'label') === ['Account Name', 'IFSC'], 'blank bank fields should be omitted individually');
 
 $messageLines = documents_payment_instruction_message_lines($instructions);
-payment_instructions_assert(in_array('Pay via UPI:', $messageLines, true) && in_array('Bank transfer:', $messageLines, true), 'message instructions should include UPI and bank sections');
+payment_instructions_assert(in_array('UPI ID: accounts.solar@example-bank', $messageLines, true) && in_array('Bank transfer:', $messageLines, true), 'message fallback should include UPI ID and bank details');
+payment_instructions_assert(!str_contains(implode("\n", $messageLines), 'upi://'), 'message fallback must not expose a raw UPI URI');
 
 $helperSource = file_get_contents($root . '/admin/includes/documents_helpers.php');
 $adminSource = file_get_contents($root . '/admin-documents.php');
