@@ -870,12 +870,12 @@ function documents_company_profile_defaults(): array
         'pan' => '',
         'jreda_license' => '',
         'dwsd_license' => '',
-        'bank_name' => '',
-        'bank_account_name' => '',
-        'bank_account_no' => '',
-        'bank_ifsc' => '',
-        'bank_branch' => '',
-        'upi_id' => '',
+        'bank_name' => 'Punjab National Bank',
+        'bank_account_name' => 'Dakshayani Enterprises',
+        'bank_account_no' => '4670002100003474',
+        'bank_ifsc' => 'PUNB0467000',
+        'bank_branch' => 'Hinoo',
+        'upi_id' => 'd.entranchi@ybl',
         'default_cta_line' => '',
         'logo_path' => '',
         'updated_at' => '',
@@ -8439,6 +8439,52 @@ function documents_payment_request_reason_label(array $request): string
     return (string)($request['reason'] ?? '') === 'Custom Reason' ? (string)($request['custom_reason'] ?? '') : (string)($request['reason'] ?? '');
 }
 
+/** Build payment instructions exclusively from the persisted request amount. */
+function documents_payment_request_payment_options(array $request, ?array $company = null): array
+{
+    $company = array_merge(documents_company_profile_defaults(), $company ?? load_company_profile());
+    $status = strtolower(trim((string)($request['status'] ?? 'draft')));
+    $active = empty($request['archived_flag']) && in_array($status, ['draft', 'sent', 'phone_requested', 'phone requested', 'overdue'], true);
+    $amount = round((float)($request['amount_requested'] ?? 0), 2);
+    $reference = trim((string)($request['id'] ?? '')) . ' / ' . trim((string)($request['quotation_id'] ?? ''));
+    $bank = [
+        'bank_name' => (string)$company['bank_name'], 'bank_branch' => (string)$company['bank_branch'],
+        'account_name' => (string)$company['bank_account_name'], 'account_number' => (string)$company['bank_account_no'],
+        'ifsc' => (string)$company['bank_ifsc'], 'amount' => number_format($amount, 2, '.', ''), 'reference' => $reference,
+    ];
+    $upiUrl = '';
+    if ($active && $amount < 75000 && $amount > 0 && trim((string)$company['upi_id']) !== '') {
+        $query = http_build_query(['pa'=>(string)$company['upi_id'], 'pn'=>(string)$company['bank_account_name'], 'am'=>number_format($amount, 2, '.', ''), 'cu'=>'INR', 'tn'=>'Payment request ' . $reference], '', '&', PHP_QUERY_RFC3986);
+        $upiUrl = 'upi://pay?' . $query;
+    }
+    return ['active'=>$active, 'amount'=>$amount, 'reference'=>$reference, 'bank'=>$bank, 'upi_url'=>$upiUrl];
+}
+
+function documents_payment_request_payment_options_text(array $request, ?array $company = null): string
+{
+    $o = documents_payment_request_payment_options($request, $company);
+    if (!$o['active']) { return ''; }
+    $b = $o['bank'];
+    $lines = ['', 'Payment options:', 'Bank: '.$b['bank_name'], 'Branch: '.$b['bank_branch'], 'Account name: '.$b['account_name'], 'Account number: '.$b['account_number'], 'IFSC: '.$b['ifsc'], 'Amount: ₹'.$b['amount'], 'Reference: '.$b['reference']];
+    if ($o['upi_url'] !== '') { $lines[] = 'Pay via UPI: '.$o['upi_url']; }
+    $lines[] = 'Payment is recorded only after a receipt is verified.';
+    return implode("\n", $lines);
+}
+
+function documents_payment_request_payment_options_html(array $request, ?array $company = null, bool $copyControls = true): string
+{
+    $o = documents_payment_request_payment_options($request, $company);
+    if (!$o['active']) { return ''; }
+    $e = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES);
+    $b = $o['bank'];
+    $rows = [['Bank',$b['bank_name'],false],['Branch',$b['bank_branch'],false],['Account name',$b['account_name'],false],['Account number',$b['account_number'],true],['IFSC',$b['ifsc'],true],['Amount','₹'.$b['amount'],true],['Reference',$b['reference'],true]];
+    $html = '<section class="payment-options"><h3>Payment Options</h3><div class="payment-bank-details">';
+    foreach ($rows as [$label,$value,$copy]) { $html .= '<div><strong>'.$e($label).':</strong> <span>'.$e($value).'</span>'.($copyControls && $copy ? ' <button type="button" class="copy-payment-value" data-copy="'.$e($value).'" onclick="navigator.clipboard&amp;&amp;navigator.clipboard.writeText(this.dataset.copy)">Copy</button>' : '').'</div>'; }
+    $html .= '</div>';
+    if ($o['upi_url'] !== '') { $html .= '<p><a class="btn pay-via-upi" href="'.$e($o['upi_url']).'">Pay via UPI</a></p>'; }
+    return $html.'<small>Payment is recorded only after a receipt is verified.</small></section>';
+}
+
 function documents_build_payment_request_message(array $request, array $summary = []): string
 {
     $fmt = static fn($n): string => '₹' . number_format((float)$n, 2);
@@ -8449,7 +8495,10 @@ function documents_build_payment_request_message(array $request, array $summary 
     $lines[] = 'Total Paid So Far: ' . $fmt($summary['total_received'] ?? 0);
     $lines[] = 'Total Outstanding: ' . $fmt($summary['outstanding'] ?? 0);
     if (trim((string)($request['message'] ?? '')) !== '') { $lines[] = ''; $lines[] = (string)$request['message']; }
-    $lines[] = ''; $lines[] = 'Kindly make the payment so that we can proceed with the next stage of work.'; $lines[] = ''; $lines[] = 'Regards,'; $lines[] = 'Dakshayani Enterprises';
+    $lines[] = ''; $lines[] = 'Kindly make the payment so that we can proceed with the next stage of work.';
+    $options = documents_payment_request_payment_options_text($request);
+    if ($options !== '') { $lines[] = $options; }
+    $lines[] = ''; $lines[] = 'Regards,'; $lines[] = 'Dakshayani Enterprises';
     return implode("\n", $lines);
 }
 
