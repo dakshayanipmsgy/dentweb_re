@@ -48,10 +48,10 @@ try {
     public_pay_assert(!str_contains($message, 'upi://'), 'message must not contain a raw UPI URI');
     public_pay_assert(!str_contains($message, 'Never expose this note'), 'internal notes must never enter customer messages');
 
-    $page = file_get_contents($root . '/payment-request.php');
+    $page = file_get_contents($root . '/payment-request.php') . file_get_contents($root . '/includes/payment_request_renderer.php');
     public_pay_assert(str_contains($page, 'noindex,nofollow') && str_contains($page, 'no-store'), 'public page must prevent indexing and caching');
     public_pay_assert(str_contains($page, "documents_payment_request_refresh_from_receipts") && !str_contains($page, 'documents_save_payment_request'), 'public page must refresh from receipts without mutation');
-    public_pay_assert(!str_contains($page, "internal_notes"), 'public page must not render internal notes');
+    public_pay_assert(!str_contains($page, "['internal_notes']") && !str_contains($page, "['customer_response']"), 'public renderer must not access internal-only fields');
     public_pay_assert(str_contains($page, "['uri']") && str_contains($page, 'data-copy'), 'public page must retain exact UPI deep link and copy controls');
     public_pay_assert(file_get_contents($profile) === $profileBefore, 'Company Profile must remain unchanged');
 } finally {
