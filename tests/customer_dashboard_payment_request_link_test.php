@@ -29,6 +29,31 @@ $created = documents_payment_request_generate_upi_link($request['id']);
 $request = documents_get_payment_request($request['id']);
 $url = documents_customer_payment_request_public_url($request, $quote, $mobile, $created['token']);
 dashboard_link_ok(str_contains($url, '/payment-request.php?token=') && str_contains($url, rawurlencode($created['token'])), 'valid request uses canonical tokenized public URL');
+
+$serverBackup = $_SERVER;
+$_SERVER['HTTPS'] = 'on';
+$_SERVER['HTTP_HOST'] = 'example.test';
+foreach ([
+    '/admin-documents.php' => '/payment-request.php',
+    '/customer-dashboard.php' => '/payment-request.php',
+    '/app/admin-documents.php' => '/app/payment-request.php',
+    '/app/customer-dashboard.php' => '/app/payment-request.php',
+    '/' => '/payment-request.php',
+    'customer-dashboard.php' => '/payment-request.php',
+] as $scriptName => $expectedPath) {
+    $_SERVER['SCRIPT_NAME'] = $scriptName;
+    $routeUrl = documents_payment_request_public_url('route token');
+    dashboard_link_ok(
+        $routeUrl === 'https://example.test' . $expectedPath . '?token=route%20token',
+        "$scriptName resolves the dedicated payment-request route"
+    );
+    dashboard_link_ok(
+        !str_contains($routeUrl, 'customer-dashboard.php/payment-request.php')
+            && !str_contains($routeUrl, 'admin-documents.php/payment-request.php'),
+        "$scriptName never appends the payment route to a PHP filename"
+    );
+}
+$_SERVER = $serverBackup;
 dashboard_link_ok(documents_customer_payment_request_public_url($request, $quote, $mobile, '') === '', 'missing bearer is unavailable');
 
 $expired = $request; $expired['upi_link']['expires_at'] = date('c', time()-1);
@@ -61,5 +86,6 @@ dashboard_link_ok(documents_customer_payment_request_public_url($request,$quote,
 
 $dashboardSource=file_get_contents(__DIR__.'/../customer-dashboard.php');
 dashboard_link_ok(str_contains($dashboardSource,'Payment link not available') && str_contains($dashboardSource,'Pay via UPI'), 'dashboard renders actionable and safe fallback states');
+dashboard_link_ok(str_contains($dashboardSource, "href=\"<?= customer_portal_safe(\$paymentLink['url']) ?>\"") && str_contains($dashboardSource, 'target="_blank"'), 'dashboard action opens the dedicated public URL in a new tab');
 dashboard_link_ok(!str_contains(substr($dashboardSource, strpos($dashboardSource,'Active payment requests'), 2500), 'internal_notes'), 'payment table exposes no internal notes');
 echo "customer_dashboard_payment_request_link_test passed ($assertions assertions)\n";

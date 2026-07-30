@@ -51,6 +51,7 @@ upi_ok(str_contains(documents_payment_request_whatsapp_url($request,$message),ra
 upi_ok(str_contains(documents_payment_request_mailto($request,$message),rawurlencode($url)),'email contains encoded public URL');
 $publicSource=(string)file_get_contents(__DIR__.'/../payment-request.php');
 upi_ok(!str_contains($publicSource,'internal_notes') && !str_contains($publicSource,'customer_response') && str_contains($publicSource,"documents_payment_request_authorize_upi"),'public page reveals URI only after authorization and omits private fields');
+upi_ok(str_contains($publicSource, "if (\$_SERVER['REQUEST_METHOD'] === 'POST')") && str_contains($publicSource, 'Opening this page does not use a UPI launch.'), 'opening the public page does not authorize or consume a UPI launch');
 upi_ok(($profileHash==='' || hash_file('sha256',$profilePath)===$profileHash),'company profile is unchanged');
 upi_ok(($receiptHash==='' || hash_file('sha256',$receiptPath)===$receiptHash),'UPI authorization creates no receipt');
 upi_ok(!str_contains((string)@file_get_contents(documents_logs_dir().'/documents.log'),$created['token']),'audit/log output contains no raw token');
