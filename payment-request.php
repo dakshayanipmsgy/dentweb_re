@@ -18,6 +18,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $request = documents_payment_request_find_by_token($token);
 $available = $request !== null && documents_payment_request_link_available($request);
+// Remember an already-issued bearer in this browser so an authenticated
+// customer can reopen the same request from the dashboard. This GET neither
+// creates a link nor consumes one of its two authorized UPI launches.
+if ($available) {
+    if (function_exists('start_session')) {
+        start_session();
+    } elseif (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+    $_SESSION['payment_request_upi_tokens'][(string) $request['id']] = $token;
+}
 $link = is_array($request['upi_link'] ?? null) ? $request['upi_link'] : [];
 $h = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
 $amount = $request ? '₹' . number_format((float)$request['amount_requested'], 2) : '—';

@@ -8431,6 +8431,23 @@ function documents_payment_request_public_url(string $token): string
     return $scheme . '://' . $host . $base . '/payment-request.php?token=' . rawurlencode($token);
 }
 
+/** Resolve an existing public payment-request link for one customer quotation. */
+function documents_customer_payment_request_public_url(array $request, array $quote, string $customerMobile, string $token): string
+{
+    $requestQuoteId = (string)($request['quotation_id'] ?? '');
+    $quoteId = (string)($quote['id'] ?? '');
+    $owner = normalize_customer_mobile((string)($request['customer_mobile'] ?? ''));
+    $quoteOwner = normalize_customer_mobile((string)($quote['customer_mobile'] ?? ''));
+    $customerMobile = normalize_customer_mobile($customerMobile);
+    if (empty($request['visibility_to_customer']) || $requestQuoteId === '' || $requestQuoteId !== $quoteId
+        || $customerMobile === '' || $owner !== $customerMobile || $quoteOwner !== $customerMobile
+        || !documents_payment_request_link_available($request)) return '';
+    $linked = documents_payment_request_find_by_token($token);
+    if ($linked === null || (string)($linked['id'] ?? '') !== (string)($request['id'] ?? '')
+        || (string)($linked['quotation_id'] ?? '') !== $quoteId) return '';
+    return documents_payment_request_public_url($token);
+}
+
 function documents_payment_request_audit(string $requestId, string $event, array $details = []): void
 {
     if (function_exists('log_audit_event')) {
