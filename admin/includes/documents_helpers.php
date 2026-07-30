@@ -8336,6 +8336,40 @@ function documents_payment_requests_path(): string
     return documents_base_dir() . '/payment_requests.json';
 }
 
+/**
+ * Server-only vault for active payment-request bearer tokens.
+ *
+ * The PHP guard prevents the contents being served if the data directory is
+ * accidentally exposed by the web server. Payment-request records continue to
+ * contain only a SHA-256 hash, so the public authorization path is unchanged.
+ */
+function documents_payment_request_token_vault_path(): string
+{
+    return documents_base_dir() . '/payment_request_tokens.php';
+}
+
+function documents_payment_request_token_vault_read(): array
+{
+    $contents = @file_get_contents(documents_payment_request_token_vault_path());
+    if (!is_string($contents)) return [];
+    $separator = strpos($contents, "\n");
+    if ($separator === false || substr($contents, 0, $separator) !== '<?php exit; ?>') return [];
+    $tokens = json_decode(substr($contents, $separator + 1), true);
+    return is_array($tokens) ? $tokens : [];
+}
+
+function documents_payment_request_token_vault_write(array $tokens): bool
+{
+    documents_ensure_dir(documents_base_dir());
+    $path = documents_payment_request_token_vault_path();
+    $temporary = $path . '.tmp.' . bin2hex(random_bytes(6));
+    $payload = "<?php exit; ?>\n" . json_encode($tokens, JSON_UNESCAPED_SLASHES);
+    if (@file_put_contents($temporary, $payload, LOCK_EX) === false) return false;
+    @chmod($temporary, 0600);
+    if (!@rename($temporary, $path)) { @unlink($temporary); return false; }
+    return true;
+}
+
 function documents_ensure_payment_request_store(): void
 {
     $path = documents_payment_requests_path();
@@ -8448,6 +8482,41 @@ function documents_customer_payment_request_public_url(array $request, array $qu
     return documents_payment_request_public_url($token);
 }
 
+/**
+ * Return dashboard-safe state for the canonical link owned by this customer.
+ * Reading this state never increments the global UPI launch count.
+ *
+ * @return array{available:bool,url:string,status:string,label:string}
+ */
+function documents_customer_payment_request_link_state(array $request, array $quote, string $customerMobile): array
+{
+    $unavailable = static fn(string $status): array => [
+        'available' => false,
+        'url' => '',
+        'status' => $status,
+        'label' => 'Payment link not available',
+    ];
+    $requestId = (string)($request['id'] ?? '');
+    $quoteId = (string)($quote['id'] ?? '');
+    $customerMobile = normalize_customer_mobile($customerMobile);
+    $canonical = $requestId !== '' ? documents_get_payment_request($requestId) : null;
+    if ($canonical === null || (string)($canonical['quotation_id'] ?? '') !== $quoteId
+        || (string)($request['quotation_id'] ?? '') !== $quoteId) return $unavailable('ownership_mismatch');
+    $owner = normalize_customer_mobile((string)($canonical['customer_mobile'] ?? ''));
+    $quoteOwner = normalize_customer_mobile((string)($quote['customer_mobile'] ?? ''));
+    if ($customerMobile === '' || $owner !== $customerMobile || $quoteOwner !== $customerMobile
+        || empty($canonical['visibility_to_customer'])) return $unavailable('ownership_mismatch');
+    if (!documents_payment_request_link_available($canonical)) return $unavailable('unavailable');
+
+    $tokens = documents_payment_request_token_vault_read();
+    $token = is_string($tokens[$requestId] ?? null) ? $tokens[$requestId] : '';
+    $hash = (string)($canonical['upi_link']['token_hash'] ?? '');
+    if (!preg_match('/^[a-f0-9]{64}$/', $token) || $hash === '' || !hash_equals($hash, hash('sha256', $token))) {
+        return $unavailable('unavailable');
+    }
+    return ['available'=>true, 'url'=>documents_payment_request_public_url($token), 'status'=>'available', 'label'=>'Pay via UPI'];
+}
+
 function documents_payment_request_audit(string $requestId, string $event, array $details = []): void
 {
     if (function_exists('log_audit_event')) {
@@ -8460,9 +8529,12 @@ function documents_payment_request_audit(string $requestId, string $event, array
 function documents_payment_request_generate_upi_link(string $requestId, ?int $now = null): array
 {
     $now ??= time(); $token = bin2hex(random_bytes(32)); $hash = hash('sha256', $token);
-    $result = documents_with_payment_request_lock(function (&$rows) use ($requestId, $now, $hash): array {
+    $result = documents_with_payment_request_lock(function (&$rows) use ($requestId, $now, $hash, $token): array {
         foreach ($rows as &$row) if ((string)($row['id'] ?? '') === $requestId) {
             if (!empty($row['archived_flag']) || in_array(strtolower((string)($row['status'] ?? '')), ['paid','cancelled'], true)) return ['ok'=>false,'error'=>'Only active payment requests can have a payment link.'];
+            $tokens = documents_payment_request_token_vault_read();
+            $tokens[$requestId] = $token;
+            if (!documents_payment_request_token_vault_write($tokens)) return ['ok'=>false,'error'=>'Unable to securely store payment link.'];
             $row['upi_link']=['token_hash'=>$hash,'created_at'=>date('c',$now),'expires_at'=>date('c',$now+86400),'launch_count'=>0,'revoked_at'=>''];
             $row['updated_at']=date('c',$now); return ['ok'=>true,'write'=>true,'request_id'=>$requestId,'expires_at'=>$row['upi_link']['expires_at']];
         }
