@@ -8439,7 +8439,7 @@ function documents_payment_request_reason_label(array $request): string
     return (string)($request['reason'] ?? '') === 'Custom Reason' ? (string)($request['custom_reason'] ?? '') : (string)($request['reason'] ?? '');
 }
 
-function documents_build_payment_request_message(array $request, array $summary = [], string $paymentUrl = ''): string
+function documents_build_payment_request_message(array $request, array $summary = []): string
 {
     $fmt = static fn($n): string => '₹' . number_format((float)$n, 2);
     $lines = ['Dear ' . ((string)($request['customer_name'] ?? '') ?: 'Customer') . ',', '', 'This is a payment request from Dakshayani Enterprises for your solar project.', '', 'Requested Amount: ' . $fmt($request['amount_requested'] ?? 0), 'Reason: ' . documents_payment_request_reason_label($request)];
@@ -8448,7 +8448,6 @@ function documents_build_payment_request_message(array $request, array $summary 
     $lines[] = 'Total Project Amount: ' . $fmt($request['quotation_amount'] ?? ($summary['quotation_amount'] ?? 0));
     $lines[] = 'Total Paid So Far: ' . $fmt($summary['total_received'] ?? 0);
     $lines[] = 'Total Outstanding: ' . $fmt($summary['outstanding'] ?? 0);
-    if ($paymentUrl !== '' && !empty(documents_payment_request_link_status($request)['usable'])) { $lines[] = ''; $lines[] = 'Secure UPI Payment Link: ' . $paymentUrl; }
     if (trim((string)($request['message'] ?? '')) !== '') { $lines[] = ''; $lines[] = (string)$request['message']; }
     $lines[] = ''; $lines[] = 'Kindly make the payment so that we can proceed with the next stage of work.'; $lines[] = ''; $lines[] = 'Regards,'; $lines[] = 'Dakshayani Enterprises';
     return implode("\n", $lines);
@@ -8493,112 +8492,4 @@ function documents_payment_request_unarchive(array $request): array
     $request['archived_at'] = '';
     $request['archived_by'] = ['role'=>'','id'=>'','name'=>''];
     return $request;
-}
-
-/* Secure, short-lived UPI links.  The token store deliberately contains only
- * SHA-256 token hashes; the clear token is returned once to the authenticated
- * caller and may be retained in that caller's PHP session for sharing. */
-function documents_payment_request_links_path(): string
-{
-    return documents_base_dir() . '/payment_request_links.json';
-}
-
-function documents_payment_request_link_eligible(array $request): bool
-{
-    $request = documents_payment_request_refresh_from_receipts(array_merge(documents_payment_request_defaults(), $request));
-    $status = strtolower((string) ($request['status'] ?? ''));
-    return empty($request['archived_flag'])
-        && !in_array($status, ['paid', 'cancelled', 'archived'], true)
-        && (float) ($request['outstanding_against_request'] ?? 0) > 0;
-}
-
-function documents_payment_request_link_mutate(callable $callback): array
-{
-    $path = documents_payment_request_links_path();
-    documents_ensure_dir(dirname($path));
-    $handle = fopen($path, 'c+');
-    if ($handle === false || !flock($handle, LOCK_EX)) { if (is_resource($handle)) fclose($handle); return ['ok'=>false,'error'=>'Unable to lock payment link store.']; }
-    rewind($handle); $raw = stream_get_contents($handle); $rows = json_decode(is_string($raw) ? $raw : '', true);
-    if (!is_array($rows)) $rows = [];
-    $result = $callback($rows);
-    if (!is_array($result)) $result = ['ok'=>false,'error'=>'Invalid payment link operation.'];
-    if (!empty($result['write'])) {
-        $json = json_encode(array_values($rows), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        if (!is_string($json)) $result = ['ok'=>false,'error'=>'Unable to encode payment link store.'];
-        else { rewind($handle); ftruncate($handle, 0); $ok = fwrite($handle, $json . PHP_EOL) !== false; fflush($handle); if (!$ok) $result = ['ok'=>false,'error'=>'Unable to save payment link store.']; }
-    }
-    flock($handle, LOCK_UN); fclose($handle); unset($result['write']); return $result;
-}
-
-function documents_create_payment_request_link(array $request, array $actor = []): array
-{
-    $request = documents_payment_request_refresh_from_receipts($request);
-    if (!documents_payment_request_link_eligible($request)) return ['ok'=>false,'error'=>'Only active, payable payment requests can have a link.'];
-    $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-    $result = documents_payment_request_link_mutate(static function (array &$rows) use ($request, $token, $actor): array {
-        $generation = 1;
-        foreach ($rows as &$row) if ((string)($row['payment_request_id']??'') === (string)$request['id']) { $generation = max($generation, (int)($row['generation']??0) + 1); $row['revoked_at'] = date('c'); }
-        unset($row);
-        $rows[] = ['payment_request_id'=>(string)$request['id'],'generation'=>$generation,'token_hash'=>hash('sha256',$token),'created_at'=>date('c'),'expires_at'=>date('c',time()+86400),'revoked_at'=>'','access_sessions'=>[],'upi_launches'=>0,'actor'=>['role'=>(string)($actor['role']??''),'id'=>(string)($actor['id']??'')]];
-        return ['ok'=>true,'write'=>true,'generation'=>$generation];
-    });
-    if (!empty($result['ok'])) $result['token'] = $token;
-    return $result;
-}
-
-function documents_payment_request_public_url(string $token): string
-{
-    if ($token === '') return '';
-    $scheme = (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off') ? 'https' : 'http';
-    $host = preg_replace('/[^A-Za-z0-9.:-]/', '', (string)($_SERVER['HTTP_HOST'] ?? 'dakshayani.co.in')) ?: 'dakshayani.co.in';
-    return $scheme . '://' . $host . '/payment-request-pay.php?token=' . rawurlencode($token);
-}
-
-function documents_payment_request_link_is_crawler(string $userAgent): bool
-{
-    return $userAgent === '' || (bool)preg_match('/bot|crawl|spider|preview|scanner|slack|whatsapp|facebook|telegram|discord|curl|wget|headless/i', $userAgent);
-}
-
-function documents_resolve_payment_request_link(string $token, string $operation = 'inspect', string $sessionKey = '', array $context = []): array
-{
-    if (strlen($token) < 43 || strlen($token) > 128) return ['ok'=>false,'error'=>'Payment link is invalid.'];
-    $candidate = hash('sha256', $token); $now = time();
-    return documents_payment_request_link_mutate(static function (array &$rows) use ($candidate,$operation,$sessionKey,$context,$now): array {
-        foreach ($rows as &$row) {
-            $stored = (string)($row['token_hash']??'');
-            if (strlen($stored) !== 64 || !hash_equals($stored, $candidate)) continue;
-            $request = documents_get_payment_request((string)($row['payment_request_id']??''));
-            if (!$request || !documents_payment_request_link_eligible($request) || (string)($row['revoked_at']??'') !== '' || strtotime((string)($row['expires_at']??'')) <= $now) return ['ok'=>false,'error'=>'This payment link is no longer available.'];
-            $request = documents_payment_request_refresh_from_receipts($request);
-            $write = false;
-            if ($operation === 'access' && strtoupper((string)($context['method']??'GET')) !== 'HEAD' && !documents_payment_request_link_is_crawler((string)($context['user_agent']??''))) {
-                $key = hash('sha256', $sessionKey);
-                $sessions = is_array($row['access_sessions']??null) ? $row['access_sessions'] : [];
-                if (!in_array($key, $sessions, true)) { if (count($sessions) >= 2) return ['ok'=>false,'error'=>'This payment link has reached its access limit.']; $sessions[]=$key; $row['access_sessions']=$sessions; $write=true; }
-            } elseif ($operation === 'launch') {
-                if ((int)($row['upi_launches']??0) >= 2) return ['ok'=>false,'error'=>'This payment link has reached its UPI launch limit.'];
-                $row['upi_launches']=(int)($row['upi_launches']??0)+1; $write=true;
-            }
-            return ['ok'=>true,'write'=>$write,'request'=>$request,'link'=>$row];
-        }
-        // Perform a constant amount of hash-comparison work even when no row matched.
-        hash_equals(str_repeat('0', 64), $candidate);
-        return ['ok'=>false,'error'=>'Payment link is invalid.'];
-    });
-}
-
-function documents_payment_request_link_status(array $request): array
-{
-    return documents_payment_request_link_mutate(static function (array &$rows) use ($request): array {
-        $current = null; foreach ($rows as $row) if ((string)($row['payment_request_id']??'') === (string)($request['id']??'') && ($current===null || (int)$row['generation']>(int)$current['generation'])) $current=$row;
-        if (!$current) return ['ok'=>false,'error'=>'No payment link.'];
-        $usable=documents_payment_request_link_eligible($request)&&(string)($current['revoked_at']??'')===''&&strtotime((string)($current['expires_at']??''))>time()&&count((array)($current['access_sessions']??[]))<2&&(int)($current['upi_launches']??0)<2;
-        return ['ok'=>true,'usable'=>$usable,'link'=>$current,'remaining_accesses'=>max(0,2-count((array)($current['access_sessions']??[]))),'remaining_launches'=>max(0,2-(int)($current['upi_launches']??0))];
-    });
-}
-
-function documents_payment_request_upi_uri(array $request): string
-{
-    $amount = number_format((float)($request['outstanding_against_request']??$request['amount_requested']??0), 2, '.', '');
-    return 'upi://pay?' . http_build_query(['pa'=>'d.entranchi@ybl','pn'=>'Dakshayani Enterprises','am'=>$amount,'cu'=>'INR','tn'=>(string)($request['id']??'')], '', '&', PHP_QUERY_RFC3986);
 }
