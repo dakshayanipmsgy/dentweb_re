@@ -876,6 +876,8 @@ function documents_company_profile_defaults(): array
         'bank_ifsc' => '',
         'bank_branch' => '',
         'upi_id' => '',
+        'upi_max_amount' => 75000.00,
+        'payment_settings_version' => '2026-07-upi-bank-v1',
         'default_cta_line' => '',
         'logo_path' => '',
         'updated_at' => '',
@@ -8366,7 +8368,49 @@ function documents_generate_payment_request_id(): string
 
 function documents_payment_request_defaults(): array
 {
-    return ['id'=>'','quotation_id'=>'','customer_mobile'=>'','customer_name'=>'','quotation_amount'=>0,'amount_requested'=>0,'amount_paid_against_request'=>0,'outstanding_against_request'=>0,'reason'=>'','custom_reason'=>'','message'=>'','due_date'=>'','status'=>'draft','visibility_to_customer'=>true,'request_mode'=>'portal_only','sent_via'=>'','sent_at'=>'','sent_by'=>['role'=>'','id'=>'','name'=>''],'created_by'=>['role'=>'','id'=>'','name'=>''],'created_at'=>'','updated_at'=>'','linked_receipt_ids'=>[],'internal_notes'=>'','customer_response'=>'','follow_up_date'=>'','archived_flag'=>false,'archived_at'=>'','archived_by'=>['role'=>'','id'=>'','name'=>'']];
+    return ['id'=>'','quotation_id'=>'','customer_mobile'=>'','customer_name'=>'','quotation_amount'=>0,'amount_requested'=>0,'amount_paid_against_request'=>0,'outstanding_against_request'=>0,'reason'=>'','custom_reason'=>'','message'=>'','due_date'=>'','status'=>'draft','visibility_to_customer'=>true,'request_mode'=>'portal_only','sent_via'=>'','sent_at'=>'','sent_by'=>['role'=>'','id'=>'','name'=>''],'created_by'=>['role'=>'','id'=>'','name'=>''],'created_at'=>'','updated_at'=>'','linked_receipt_ids'=>[],'internal_notes'=>'','customer_response'=>'','follow_up_date'=>'','archived_flag'=>false,'archived_at'=>'','archived_by'=>['role'=>'','id'=>'','name'=>''],'payment_instructions_snapshot'=>[]];
+}
+
+function documents_payment_request_payment_config(array $company): array
+{
+    return [
+        'version' => (string) ($company['payment_settings_version'] ?? ''),
+        'upi_id' => (string) ($company['upi_id'] ?? ''),
+        'upi_max_amount' => round((float) ($company['upi_max_amount'] ?? 75000), 2),
+        'account_name' => (string) ($company['bank_account_name'] ?? ''),
+        'account_number' => (string) ($company['bank_account_no'] ?? ''),
+        'ifsc' => (string) ($company['bank_ifsc'] ?? ''),
+        'bank' => (string) ($company['bank_name'] ?? ''),
+        'branch' => (string) ($company['bank_branch'] ?? ''),
+    ];
+}
+
+/** Return the immutable payment directions issued with a request. */
+function documents_payment_request_payment_instructions(array $request, array $company): array
+{
+    $snapshot = $request['payment_instructions_snapshot'] ?? [];
+    $config = is_array($snapshot) && $snapshot !== [] ? $snapshot : documents_payment_request_payment_config($company);
+    $amount = round((float) ($request['amount_requested'] ?? 0), 2);
+    $status = strtolower(trim((string) ($request['status'] ?? 'draft')));
+    $active = $amount > 0 && empty($request['archived_flag']) && !in_array($status, ['paid', 'cancelled', 'archived'], true);
+    $upiEligible = $active && (string) ($config['upi_id'] ?? '') !== '' && $amount <= (float) ($config['upi_max_amount'] ?? 75000);
+    $bank = [
+        'Account Name' => (string) ($config['account_name'] ?? ''),
+        'Account Number' => (string) ($config['account_number'] ?? ''),
+        'IFSC' => (string) ($config['ifsc'] ?? ''),
+        'Bank' => (string) ($config['bank'] ?? ''),
+        'Branch' => (string) ($config['branch'] ?? ''),
+    ];
+    $bank = array_filter($bank, static fn(string $value): bool => $value !== '');
+    $reference = (string) (($request['id'] ?? '') ?: ($request['quotation_id'] ?? ''));
+    $params = ['pa'=>(string)($config['upi_id'] ?? ''),'pn'=>(string)($config['account_name'] ?? ''),'am'=>number_format($amount, 2, '.', ''),'cu'=>'INR','tn'=>$reference];
+    $upiUri = $upiEligible ? 'upi://pay?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986) : '';
+    $lines = [];
+    if ($active) {
+        if ($upiEligible) { $lines[] = 'UPI ID: ' . (string) $config['upi_id']; $lines[] = 'UPI payment link: ' . $upiUri; }
+        foreach ($bank as $label => $value) { $lines[] = $label . ': ' . $value; }
+    }
+    return ['active'=>$active,'upi_eligible'=>$upiEligible,'upi_uri'=>$upiUri,'upi_id'=>$upiEligible?(string)$config['upi_id']:'','bank_details'=>$active?$bank:[],'lines'=>$lines,'config_version'=>(string)($config['version'] ?? '')];
 }
 
 function documents_get_payment_request(string $id): ?array
@@ -8386,6 +8430,9 @@ function documents_save_payment_request(array $request): array
     $request['archived_flag'] = !empty($request['archived_flag']);
     $request['archived_by'] = is_array($request['archived_by'] ?? null) ? array_merge(['role'=>'','id'=>'','name'=>''], $request['archived_by']) : ['role'=>'','id'=>'','name'=>''];
     $request['amount_requested'] = round((float)$request['amount_requested'], 2);
+    if (!is_array($request['payment_instructions_snapshot'] ?? null) || $request['payment_instructions_snapshot'] === []) {
+        $request['payment_instructions_snapshot'] = documents_payment_request_payment_config(documents_get_company_profile_for_quotes());
+    }
     $request['amount_paid_against_request'] = round((float)$request['amount_paid_against_request'], 2);
     $request['outstanding_against_request'] = max(0, round($request['amount_requested'] - $request['amount_paid_against_request'], 2));
     $rows = documents_list_payment_requests(); $found = false;
@@ -8449,6 +8496,8 @@ function documents_build_payment_request_message(array $request, array $summary 
     $lines[] = 'Total Paid So Far: ' . $fmt($summary['total_received'] ?? 0);
     $lines[] = 'Total Outstanding: ' . $fmt($summary['outstanding'] ?? 0);
     if (trim((string)($request['message'] ?? '')) !== '') { $lines[] = ''; $lines[] = (string)$request['message']; }
+    $instructions = documents_payment_request_payment_instructions($request, documents_get_company_profile_for_quotes());
+    if ($instructions['lines'] !== []) { $lines[] = ''; $lines[] = 'Payment Instructions:'; array_push($lines, ...$instructions['lines']); }
     $lines[] = ''; $lines[] = 'Kindly make the payment so that we can proceed with the next stage of work.'; $lines[] = ''; $lines[] = 'Regards,'; $lines[] = 'Dakshayani Enterprises';
     return implode("\n", $lines);
 }
