@@ -8457,11 +8457,20 @@ function documents_payment_request_link_available(array $request, ?int $now = nu
         && strtotime((string)($link['expires_at'] ?? '')) > $now && (int)($link['launch_count'] ?? 0) < 2;
 }
 
+/** Return the URL path at which the application is deployed. */
+function documents_application_base_path(): string
+{
+    $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? '/'));
+    $scriptDirectory = str_replace('\\', '/', dirname($scriptName));
+    if ($scriptDirectory === '/' || $scriptDirectory === '.' || $scriptDirectory === '') return '';
+    return '/' . trim($scriptDirectory, '/');
+}
+
 function documents_payment_request_public_url(string $token): string
 {
     $scheme = (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off') ? 'https' : 'http';
     $host = preg_replace('/[^A-Za-z0-9.:[\]-]/', '', (string)($_SERVER['HTTP_HOST'] ?? 'dakshayani.co.in')) ?: 'dakshayani.co.in';
-    $base = rtrim(str_replace('admin-documents.php', '', (string)($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
+    $base = documents_application_base_path();
     return $scheme . '://' . $host . $base . '/payment-request.php?token=' . rawurlencode($token);
 }
 
