@@ -8478,7 +8478,6 @@ function documents_payment_request_is_publicly_payable(array $request): bool
 
 function documents_payment_request_public_url(array $request): string
 {
-    if (empty($request['visibility_to_customer'])) { return ''; }
     $token = documents_payment_request_public_token($request);
     if ($token === '') { return ''; }
     $host = preg_replace('/[^A-Za-z0-9.:-]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'dakshayani.co.in')) ?: 'dakshayani.co.in';
@@ -8566,41 +8565,6 @@ function documents_payment_instruction_message_lines(array $instructions): array
     return $lines;
 }
 
-/**
- * Return portal guidance only for a single active account that resolves to the
- * same quotation identity and normalized mobile. Password hashes are neither
- * read nor returned; default-password text requires explicit account state.
- */
-function documents_payment_request_portal_guidance(array $request, ?CustomerFsStore $store = null): array
-{
-    $mobile = documents_normalize_mobile((string) ($request['customer_mobile'] ?? ''));
-    $quoteId = trim((string) ($request['quotation_id'] ?? ''));
-    if ($mobile === '' || $quoteId === '') { return []; }
-    $quote = documents_get_quote($quoteId);
-    if (!is_array($quote)) { return []; }
-    $store = $store ?? new CustomerFsStore();
-    $link = documents_project_customer_user_link($quote, $store);
-    $customer = is_array($link['customer'] ?? null) ? $link['customer'] : null;
-    if (!in_array((string) ($link['state'] ?? ''), ['created', 'existing'], true)
-        || (string) ($link['mobile'] ?? '') !== $mobile
-        || $customer === null
-        || !empty($customer['archived'])
-        || documents_normalize_mobile((string) ($customer['mobile'] ?? '')) !== $mobile) {
-        return [];
-    }
-
-    $lines = [
-        'Customer Portal: https://dakshayani.co.in/customer-login.php',
-        'Log in with your registered mobile to access receipts and available quotation, agreement, dispatch, challan, invoice and handover documents.',
-        'A receipt becomes downloadable after payment is received and the receipt is finalized.',
-    ];
-    $verifiedDefaultState = !empty($customer['first_login']) && (string) ($customer['password_state'] ?? '') === 'default';
-    $lines[] = $verifiedDefaultState
-        ? 'First-time default password: abcd1234'
-        : 'Use your existing password or the password-reset/help flow.';
-    return $lines;
-}
-
 function documents_build_payment_request_message(array $request, array $summary = []): string
 {
     $fmt = static fn($n): string => '₹' . number_format((float)$n, 2);
@@ -8611,22 +8575,11 @@ function documents_build_payment_request_message(array $request, array $summary 
     $lines[] = 'Total Paid So Far: ' . $fmt($summary['total_received'] ?? 0);
     $lines[] = 'Total Outstanding: ' . $fmt($summary['outstanding'] ?? 0);
     $paymentUrl = documents_payment_request_public_url($request);
-    if ($paymentUrl !== '') {
-        $lines[] = '';
-        $lines[] = 'Open the secure Payment Request to view payment options:';
-        $lines[] = $paymentUrl;
-    }
+    if ($paymentUrl !== '') { $lines[] = ''; $lines[] = 'Pay securely: ' . $paymentUrl; }
     if (trim((string)($request['message'] ?? '')) !== '') { $lines[] = ''; $lines[] = (string)$request['message']; }
     $instructionLines = documents_payment_instruction_message_lines(documents_payment_instructions($request, documents_get_company_profile_for_quotes()));
     if ($instructionLines !== []) { $lines[] = ''; array_push($lines, ...$instructionLines); }
-    $portalLines = documents_payment_request_portal_guidance($request);
-    if ($portalLines !== []) { $lines[] = ''; array_push($lines, ...$portalLines); }
-    $lines[] = '';
-    $lines[] = 'This payment request is not a receipt.';
-    $lines[] = 'Kindly make the payment so that we can proceed with the next stage of work.';
-    $lines[] = '';
-    $lines[] = 'Regards,';
-    $lines[] = 'Dakshayani Enterprises';
+    $lines[] = ''; $lines[] = 'Kindly make the payment so that we can proceed with the next stage of work.'; $lines[] = ''; $lines[] = 'Regards,'; $lines[] = 'Dakshayani Enterprises';
     return implode("\n", $lines);
 }
 
