@@ -83,7 +83,7 @@ foreach ($customerQuotes as $quote) {
     $invoices = documents_customer_visible_invoices_for_quote($quoteId, $quote);
     $paymentSummary = documents_payment_summary_for_quote($quote);
     $paymentRequests = array_values(array_filter($paymentSummary['requests'], static function (array $request): bool {
-        return !empty($request['visibility_to_customer']) && empty($request['archived_flag']) && !in_array(strtolower((string) ($request['status'] ?? '')), ['cancelled', 'paid', 'archived'], true);
+        return !empty($request['visibility_to_customer']) && empty($request['archived_flag']) && !in_array(strtolower((string) ($request['status'] ?? '')), ['cancelled'], true);
     }));
     $receipts = documents_final_receipts_for_quote($quoteId);
     $invoiceValuePaise = 0;
@@ -524,7 +524,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
 
               <?php if ($project['payment_requests'] !== []): ?>
                 <h3 class="section-title" style="margin-top:1rem">Active payment requests</h3>
-                <div class="portal-table-wrap"><table class="finance-table"><thead><tr><th>Date</th><th>Amount</th><th>Reason</th><th>Due</th><th>Status</th><th>Payment instructions</th></tr></thead><tbody><?php foreach ($project['payment_requests'] as $request): $instructions = documents_payment_request_payment_instructions($request, documents_get_company_profile_for_quotes()); ?><tr><td><?= customer_portal_safe(substr((string) ($request['created_at'] ?? ''), 0, 10)) ?></td><td><?= customer_portal_safe($customerInr((float) ($request['amount_requested'] ?? 0))) ?></td><td><?= customer_portal_safe(documents_payment_request_reason_label($request)) ?></td><td><?= customer_portal_safe((string) ($request['due_date'] ?? '')) ?></td><td><?= customer_portal_safe(customer_dashboard_status_label((string) ($request['status'] ?? 'draft'))) ?></td><td><?php if ($instructions['upi_eligible']): ?><a class="doc-action" href="<?= customer_portal_safe($instructions['upi_uri']) ?>">Pay <?= customer_portal_safe($customerInr((float) ($request['amount_requested'] ?? 0))) ?> via UPI</a><br><?php endif; ?><?php foreach ($instructions['bank_details'] as $label => $value): ?><small><strong><?= customer_portal_safe($label) ?>:</strong> <?= customer_portal_safe($value) ?></small><br><?php endforeach; ?></td></tr><?php endforeach; ?></tbody></table></div>
+                <div class="portal-table-wrap"><table class="finance-table"><thead><tr><th>Date</th><th>Amount</th><th>Reason</th><th>Due</th><th>Status</th></tr></thead><tbody><?php foreach ($project['payment_requests'] as $request): ?><tr><td><?= customer_portal_safe(substr((string) ($request['created_at'] ?? ''), 0, 10)) ?></td><td><?= customer_portal_safe($customerInr((float) ($request['amount_requested'] ?? 0))) ?></td><td><?= customer_portal_safe(documents_payment_request_reason_label($request)) ?></td><td><?= customer_portal_safe((string) ($request['due_date'] ?? '')) ?></td><td><?= customer_portal_safe(customer_dashboard_status_label((string) ($request['status'] ?? 'draft'))) ?></td></tr><?php endforeach; ?></tbody></table></div>
               <?php endif; ?>
 
               <h3 class="section-title" style="margin-top:1rem">Payment history / receipts</h3>
