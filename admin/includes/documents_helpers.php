@@ -8439,6 +8439,83 @@ function documents_payment_request_reason_label(array $request): string
     return (string)($request['reason'] ?? '') === 'Custom Reason' ? (string)($request['custom_reason'] ?? '') : (string)($request['reason'] ?? '');
 }
 
+/**
+ * Build customer-facing payment options from the current Company Profile.
+ *
+ * This is deliberately a presentation-only helper: it does not save the request,
+ * create a receipt, or alter any payment totals or statuses.
+ */
+function documents_payment_instructions(array $request, array $company): array
+{
+    $amount = round((float) ($request['amount_requested'] ?? 0), 2);
+    $upiId = trim((string) ($company['upi_id'] ?? ''));
+    $payee = trim((string) ($company['bank_account_name'] ?? ''));
+    if ($payee === '') {
+        $payee = trim((string) (($company['company_name'] ?? '') ?: ($company['brand_name'] ?? '')));
+    }
+
+    $upi = null;
+    $validUpiId = preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{1,255}@[A-Za-z0-9][A-Za-z0-9.-]{1,63}$/D', $upiId) === 1;
+    if ($amount > 0 && $amount <= 75000.00 && $validUpiId) {
+        $reference = trim((string) (($request['id'] ?? '') ?: ($request['quotation_id'] ?? 'Payment Request')));
+        $parameters = [
+            'pa' => $upiId,
+            'pn' => $payee,
+            'am' => number_format($amount, 2, '.', ''),
+            'cu' => 'INR',
+            'tn' => $reference,
+        ];
+        $query = [];
+        foreach ($parameters as $key => $value) {
+            $query[] = rawurlencode($key) . '=' . rawurlencode($value);
+        }
+        $upi = [
+            'id' => $upiId,
+            'uri' => 'upi://pay?' . implode('&', $query),
+            'amount' => number_format($amount, 2, '.', ''),
+            'label' => 'Pay ₹' . number_format($amount, 2) . ' via UPI',
+        ];
+    }
+
+    $bankLabels = [
+        'bank_account_name' => 'Account Name',
+        'bank_name' => 'Bank Name',
+        'bank_account_no' => 'Account Number',
+        'bank_ifsc' => 'IFSC',
+        'bank_branch' => 'Branch',
+    ];
+    $bank = [];
+    foreach ($bankLabels as $field => $label) {
+        $value = trim((string) ($company[$field] ?? ''));
+        if ($value !== '') {
+            $bank[] = ['field' => $field, 'label' => $label, 'value' => $value];
+        }
+    }
+
+    return ['upi' => $upi, 'bank' => $bank];
+}
+
+function documents_payment_instruction_message_lines(array $instructions): array
+{
+    $lines = [];
+    if (is_array($instructions['upi'] ?? null)) {
+        $lines[] = 'Pay via UPI:';
+        $lines[] = (string) $instructions['upi']['uri'];
+        $lines[] = 'UPI ID: ' . (string) $instructions['upi']['id'];
+    }
+    if (is_array($instructions['bank'] ?? null) && $instructions['bank'] !== []) {
+        if ($lines !== []) { $lines[] = ''; }
+        $lines[] = 'Bank transfer:';
+        foreach ($instructions['bank'] as $field) {
+            $label = (string) ($field['label'] ?? '');
+            if ($label === 'Bank Name') { $label = 'Bank'; }
+            if ($label === 'Account Number') { $label = 'Account No.'; }
+            $lines[] = $label . ': ' . (string) ($field['value'] ?? '');
+        }
+    }
+    return $lines;
+}
+
 function documents_build_payment_request_message(array $request, array $summary = []): string
 {
     $fmt = static fn($n): string => '₹' . number_format((float)$n, 2);
@@ -8449,6 +8526,8 @@ function documents_build_payment_request_message(array $request, array $summary 
     $lines[] = 'Total Paid So Far: ' . $fmt($summary['total_received'] ?? 0);
     $lines[] = 'Total Outstanding: ' . $fmt($summary['outstanding'] ?? 0);
     if (trim((string)($request['message'] ?? '')) !== '') { $lines[] = ''; $lines[] = (string)$request['message']; }
+    $instructionLines = documents_payment_instruction_message_lines(documents_payment_instructions($request, documents_get_company_profile_for_quotes()));
+    if ($instructionLines !== []) { $lines[] = ''; array_push($lines, ...$instructionLines); }
     $lines[] = ''; $lines[] = 'Kindly make the payment so that we can proceed with the next stage of work.'; $lines[] = ''; $lines[] = 'Regards,'; $lines[] = 'Dakshayani Enterprises';
     return implode("\n", $lines);
 }
