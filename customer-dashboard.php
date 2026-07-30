@@ -160,6 +160,7 @@ function customer_dashboard_status_label(string $value): string
     $value = trim(str_replace('_', ' ', $value));
     return $value === '' ? 'Pending' : ucwords($value);
 }
+
 $customerInr = static fn(float $amount): string => quotation_format_inr_indian($amount, true);
 
 ?>
@@ -524,7 +525,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
 
               <?php if ($project['payment_requests'] !== []): ?>
                 <h3 class="section-title" style="margin-top:1rem">Active payment requests</h3>
-                <div class="portal-table-wrap"><table class="finance-table"><thead><tr><th>Date</th><th>Amount</th><th>Reason</th><th>Due</th><th>Status</th></tr></thead><tbody><?php foreach ($project['payment_requests'] as $request): ?><tr><td><?= customer_portal_safe(substr((string) ($request['created_at'] ?? ''), 0, 10)) ?></td><td><?= customer_portal_safe($customerInr((float) ($request['amount_requested'] ?? 0))) ?></td><td><?= customer_portal_safe(documents_payment_request_reason_label($request)) ?></td><td><?= customer_portal_safe((string) ($request['due_date'] ?? '')) ?></td><td><?= customer_portal_safe(customer_dashboard_status_label((string) ($request['status'] ?? 'draft'))) ?></td></tr><?php endforeach; ?></tbody></table></div>
+                <div class="portal-table-wrap"><table class="finance-table"><thead><tr><th>Date</th><th>Amount</th><th>Reason</th><th>Due</th><th>Status</th><th>Payment</th></tr></thead><tbody><?php foreach ($project['payment_requests'] as $request): $paymentToken = (string) ($_SESSION['payment_request_upi_tokens'][(string) ($request['id'] ?? '')] ?? ''); $paymentUrl = documents_customer_payment_request_public_url($request, $quote, $customerMobile, $paymentToken); ?><tr><td><?= customer_portal_safe(substr((string) ($request['created_at'] ?? ''), 0, 10)) ?></td><td><?= customer_portal_safe($customerInr((float) ($request['amount_requested'] ?? 0))) ?></td><td><?= customer_portal_safe(documents_payment_request_reason_label($request)) ?></td><td><?= customer_portal_safe((string) ($request['due_date'] ?? '')) ?></td><td><?= customer_portal_safe(customer_dashboard_status_label((string) ($request['status'] ?? 'draft'))) ?></td><td><?php if ($paymentUrl !== ''): ?><a class="doc-action" target="_blank" rel="noopener noreferrer" href="<?= customer_portal_safe($paymentUrl) ?>">Pay via UPI</a><?php else: ?><span class="doc-action pending">Payment link not available</span><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div>
               <?php endif; ?>
 
               <h3 class="section-title" style="margin-top:1rem">Payment history / receipts</h3>
