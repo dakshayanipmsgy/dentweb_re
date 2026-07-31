@@ -2,6 +2,54 @@
 declare(strict_types=1);
 
 /** Pure, read-only helpers for the Accepted/Completed operational lists. */
+function project_workspace_money_paise(float|int $amount): int
+{
+    return (int) round((float) $amount * 100, 0, PHP_ROUND_HALF_UP);
+}
+
+function project_workspace_accepted_financial_fields(array $presentation): array
+{
+    $due = (float) ($presentation['outstanding_amount'] ?? 0);
+    $credit = (float) ($presentation['customer_credit'] ?? 0);
+
+    return [
+        'quotation_amount' => (float) ($presentation['project_amount'] ?? 0),
+        'received' => (float) ($presentation['received_amount'] ?? 0),
+        // Both values are already canonical. In particular, credit must not be
+        // subtracted from outstanding a second time.
+        'due' => $due,
+        'credit' => $credit,
+        'has_due' => project_workspace_money_paise($due) > 1,
+        'has_credit' => project_workspace_money_paise($credit) > 1,
+    ];
+}
+
+function project_workspace_accepted_kpis(array $activeRows): array
+{
+    $businessPaise = $receivedPaise = $duesPaise = $creditsPaise = 0;
+    $withDues = 0;
+    foreach ($activeRows as $row) {
+        $businessPaise += project_workspace_money_paise((float) ($row['quotation_amount'] ?? 0));
+        $receivedPaise += project_workspace_money_paise((float) ($row['received'] ?? 0));
+        $duePaise = project_workspace_money_paise((float) ($row['due'] ?? 0));
+        $creditPaise = project_workspace_money_paise((float) ($row['credit'] ?? 0));
+        if ($duePaise > 1) {
+            $duesPaise += $duePaise;
+            $withDues++;
+        }
+        if ($creditPaise > 1) $creditsPaise += $creditPaise;
+    }
+    return [
+        'count' => count($activeRows),
+        'business' => $businessPaise / 100,
+        'received' => $receivedPaise / 100,
+        'dues' => $duesPaise / 100,
+        'credits' => $creditsPaise / 100,
+        'with_dues' => $withDues,
+        'collection_pct' => $businessPaise > 0 ? min(100.0, $receivedPaise / $businessPaise * 100) : null,
+    ];
+}
+
 function project_workspace_params(array $input, string $kind): array
 {
     $accepted = $kind === 'accepted';
@@ -65,7 +113,9 @@ function project_workspace_filter(array $rows, array $state, string $kind): arra
         if ($state['documents'] !== 'all' && (($state['documents'] === 'ready') !== !empty($row['documents_ready']))) return false;
         if ($state['link'] !== 'all' && (($state['link'] === 'linked') !== !empty($row['link_ready']))) return false;
         if ($kind === 'accepted') {
-            $due=(float)$row['due']; $financial=$due > .01 ? 'due' : ($due < -.01 ? 'credit' : 'paid');
+            $hasDue = project_workspace_money_paise((float)($row['due'] ?? 0)) > 1;
+            $hasCredit = project_workspace_money_paise((float)($row['credit'] ?? 0)) > 1;
+            $financial = $hasDue ? 'due' : ($hasCredit ? 'credit' : 'paid');
             if ($state['financial'] !== 'all' && $state['financial'] !== $financial) return false;
             $days=(int)$row['due_days']; $age=$days<=0?'current':($days<=30?'1_30':($days<=60?'31_60':'61_plus'));
             if ($state['age'] !== 'all' && $state['age'] !== $age) return false;
