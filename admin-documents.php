@@ -7,6 +7,7 @@ require_once __DIR__ . '/includes/commercial_lifecycle.php';
 require_once __DIR__ . '/includes/business_pulse_helpers.php';
 require_once __DIR__ . '/includes/audit_log.php';
 require_once __DIR__ . '/includes/customer_operations.php';
+require_once __DIR__ . '/includes/project_workspace.php';
 
 require_login_any_role(['admin', 'employee']);
 
@@ -497,11 +498,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $returnTab = 'completed_customers'; $success = 'Site marked completed.';
         } else {
             $result = documents_project_reopen($quote, $actor, (string)($_POST['reopen_reason']??''));
-            $returnTab = 'accepted_customers'; $success = 'Project reopened for review.';
+            $returnTab = 'completed_customers'; $success = 'Project reopened for review.';
         }
-        if (empty($result['ok'])) { $redirectDocuments(documents_project_completion_state($quote)==='completed'?'completed_customers':'accepted_customers', 'error', (string)($result['error']??'Unable to update project.'), ['view'=>$qid]); }
+        $listExtra = $action === 'reopen_project' ? project_workspace_return_query((string)($_POST['list_state']??''), 'completed') : [];
+        unset($listExtra['tab']);
+        if (empty($result['ok'])) { $redirectDocuments(documents_project_completion_state($quote)==='completed'?'completed_customers':'accepted_customers', 'error', (string)($result['error']??'Unable to update project.'), $action === 'reopen_project' ? $listExtra : ['view'=>$qid]); }
         $saved = documents_save_quote((array)$result['quote']);
-        $redirectDocuments($returnTab, empty($saved['ok'])?'error':'success', empty($saved['ok'])?'Unable to save project state.':$success, empty($saved['ok'])?['view'=>$qid]:[]);
+        $redirectDocuments($returnTab, empty($saved['ok'])?'error':'success', empty($saved['ok'])?'Unable to save project state.':$success, $action === 'reopen_project' ? $listExtra : (empty($saved['ok'])?['view'=>$qid]:[]));
     }
 
     if (in_array($action, ['create_payment_request', 'create_payment_request_upi_link', 'refresh_payment_request_upi_link', 'cancel_payment_request', 'mark_payment_request_sent', 'archive_payment_request', 'unarchive_payment_request'], true)) {
@@ -1379,7 +1382,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!in_array($returnTab, ['accepted_customers', 'archived'], true)) {
             $returnTab = 'accepted_customers';
         }
-        $redirectDocuments($returnTab, 'success', $messageText);
+        $listExtra = $returnTab === 'accepted_customers' ? project_workspace_return_query((string)($_POST['list_state']??''), 'accepted') : [];
+        unset($listExtra['tab']);
+        $redirectDocuments($returnTab, 'success', $messageText, $listExtra);
     }
 
 
@@ -3455,55 +3460,57 @@ foreach ($salesReceipts as $receipt) {
     $receiptsByQuote[$qid][] = $receipt;
 }
 
-$acceptedRows = [];
-$completedRows = [];
-foreach ($quotes as $quote) {
-    if (!is_array($quote)) {
-        continue;
+$acceptedState = project_workspace_params($_GET, 'accepted');
+$completedState = project_workspace_params($_GET, 'completed');
+$acceptedAllRows = [];
+$completedAllRows = [];
+$documentPresence = [];
+foreach (['agreement'=>$salesAgreements,'challan'=>$salesChallans,'invoice'=>$salesInvoices] as $type=>$documentRows) {
+    foreach ($documentRows as $documentRow) {
+        if (!is_array($documentRow) || $isArchivedRecord($documentRow)) continue;
+        $documentQid=(string)($documentRow['quotation_id']??$documentRow['linked_quote_id']??'');
+        if ($documentQid!=='') $documentPresence[$documentQid][$type]=true;
     }
-    $statusNormalized = documents_quote_normalize_status((string) ($quote['status'] ?? 'draft'));
-    if ($statusNormalized !== 'accepted' || !((bool) ($quote['is_current_version'] ?? false))) {
-        continue;
-    }
-    $isArchived = $isArchivedRecord($quote);
-    $completionState = documents_project_completion_state($quote);
-    if ($completionState === 'completed') {
-        $review = documents_project_completion_review($quote, $receiptsByQuote[(string)($quote['id']??'')]??[]);
-        $completedRows[] = ['quote'=>$quote, 'review'=>$review, 'completion'=>(array)($quote['project_completion']??[])];
-        continue;
-    }
-    if ($isArchived && !$includeArchivedAccepted) {
-        continue;
-    }
-    $mobile = normalize_customer_mobile((string) ($quote['customer_mobile'] ?? ''));
-    $name = (string) ($quote['customer_name'] ?? '');
-    $hay = strtolower($name . ' ' . $mobile);
-    if ($acceptedSearch !== '' && !str_contains($hay, $acceptedSearch)) {
-        continue;
-    }
-    $presentation = documents_project_financial_presentation($quote, $receiptsByQuote[(string) ($quote['id'] ?? '')] ?? []);
-    $quotationAmount = (float) $presentation['project_amount'];
-    $received = (float) $presentation['received_amount'];
-    $receivable = (float) $presentation['outstanding_amount'];
-    $paymentSummary = documents_payment_summary_for_quote($quote, $receiptsByQuote[(string) ($quote['id'] ?? '')] ?? []);
-    $acceptedRows[] = [
-        'quote' => $quote,
-        'quotation_amount' => $quotationAmount,
-        'payment_received' => $received,
-        'receivables' => $receivable,
-        'advance' => (float)$presentation['customer_credit'] > 0,
-        'finance_presentation' => $presentation,
-        'is_archived' => $isArchived,
-        'payment_summary' => $paymentSummary,
-    ];
 }
-
-$acceptedSummary = business_pulse_summary();
-$acceptedKpis = ['count'=>count($acceptedRows),'business'=>0.0,'received'=>0.0,'dues'=>0.0,'with_dues'=>0];
-foreach ($acceptedRows as $row) { $acceptedKpis['business']+=(float)$row['quotation_amount']; $acceptedKpis['received']+=(float)$row['payment_received']; $acceptedKpis['dues']+=(float)$row['receivables']; if((float)$row['receivables']>0.01)$acceptedKpis['with_dues']++; }
+foreach (documents_list_dispatch_advices() as $dispatchRow) {
+    if (!is_array($dispatchRow) || $isArchivedRecord($dispatchRow)) continue;
+    $dispatchQid=(string)($dispatchRow['quotation_id']??'');
+    if ($dispatchQid!=='') $documentPresence[$dispatchQid]['dispatch']=true;
+}
+$paymentRequestsByQuote=[];
+foreach (documents_list_payment_requests() as $requestRow) {
+    if (!is_array($requestRow)) continue;
+    $requestQid=(string)($requestRow['quotation_id']??'');
+    if ($requestQid!=='') $paymentRequestsByQuote[$requestQid][]=$requestRow;
+}
+$customerStore = new CustomerFsStore();
+foreach ($quotes as $quote) {
+    if (!is_array($quote)) continue;
+    if (documents_quote_normalize_status((string)($quote['status']??'draft')) !== 'accepted' || empty($quote['is_current_version'])) continue;
+    $qid=(string)($quote['id']??''); $isArchived=$isArchivedRecord($quote);
+    $docs=(array)($documentPresence[$qid]??[]); $documentsReady=count(array_filter([$docs['agreement']??false,$docs['dispatch']??false,$docs['challan']??false,$docs['invoice']??false]))===4;
+    $conflict=customer_conflict_detect($quote,$customerStore,$quotes); $linkReady=(string)($conflict['state']??'missing')==='resolved';
+    $base=['quote'=>$quote,'id'=>$qid,'customer'=>(string)($quote['customer_name']??''),'mobile'=>normalize_customer_mobile((string)($quote['customer_mobile']??'')),'quotation'=>(string)($quote['quote_no']??$qid),'documents'=>$docs,'documents_ready'=>$documentsReady,'link_state'=>(string)($conflict['state']??'missing'),'link_ready'=>$linkReady,'attention'=>!$documentsReady||!$linkReady];
+    if (documents_project_completion_state($quote)==='completed') {
+        $review=documents_project_completion_review($quote,$receiptsByQuote[$qid]??[]); $completion=(array)($quote['project_completion']??[]); $snapshot=(array)($completion['snapshot']??[]);
+        $completedAllRows[]=array_merge($base,['review'=>$review,'completion'=>$completion,'amount'=>(float)($snapshot['reference_amount']??0),'paid'=>(float)($snapshot['paid_amount']??0),'completed_date'=>substr((string)($completion['completed_at']??''),0,10),'review_changed'=>!empty($review['financial_data_changed'])]);
+        continue;
+    }
+    $presentation=documents_project_financial_presentation($quote,$receiptsByQuote[$qid]??[]); $dueSince=(string)($presentation['due_since']??'');
+    $days=$dueSince!==''?max(0,(int)floor((strtotime(date('Y-m-d'))-strtotime($dueSince))/86400)):0;
+    $activeRequests=count(array_filter($paymentRequestsByQuote[$qid]??[],static fn(array $r):bool=>empty($r['archived_flag'])&&!in_array(strtolower((string)($r['status']??'')),['cancelled','paid'],true)));
+    $acceptedAllRows[]=array_merge($base,['quotation_amount'=>(float)$presentation['project_amount'],'received'=>(float)$presentation['received_amount'],'due'=>(float)$presentation['outstanding_amount']-(float)$presentation['customer_credit'],'due_since'=>$dueSince,'due_days'=>$days,'active_requests'=>$activeRequests,'finance_presentation'=>$presentation,'archived'=>$isArchived]);
+}
+$acceptedKpis=['count'=>count($acceptedAllRows),'business'=>0.0,'received'=>0.0,'dues'=>0.0,'with_dues'=>0];
+foreach($acceptedAllRows as $row){$acceptedKpis['business']+=(float)$row['quotation_amount'];$acceptedKpis['received']+=(float)$row['received'];$acceptedKpis['dues']+=max(0,(float)$row['due']);if((float)$row['due']>.01)$acceptedKpis['with_dues']++;}
 $acceptedKpis['collection_pct']=$acceptedKpis['business']>0?min(100,$acceptedKpis['received']/$acceptedKpis['business']*100):null;
-$completedKpis=['count'=>count($completedRows),'business'=>0.0,'received'=>0.0,'changed'=>0];
-foreach($completedRows as $row){$snap=(array)($row['completion']['snapshot']??[]);$completedKpis['business']+=(float)($snap['reference_amount']??0);$completedKpis['received']+=(float)($snap['paid_amount']??0);if(!empty($row['review']['financial_data_changed']))$completedKpis['changed']++;}
+$completedKpis=['count'=>count($completedAllRows),'business'=>0.0,'received'=>0.0,'changed'=>0];
+foreach($completedAllRows as $row){$completedKpis['business']+=(float)$row['amount'];$completedKpis['received']+=(float)$row['paid'];if($row['review_changed'])$completedKpis['changed']++;}
+$acceptedPage=project_workspace_paginate(project_workspace_filter($acceptedAllRows,$acceptedState,'accepted'),$acceptedState); $acceptedRows=$acceptedPage['rows']; $acceptedState['page']=$acceptedPage['page'];
+$completedPage=project_workspace_paginate(project_workspace_filter($completedAllRows,$completedState,'completed'),$completedState); $completedRows=$completedPage['rows']; $completedState['page']=$completedPage['page'];
+$acceptedListQuery=project_workspace_query($acceptedState,'accepted'); $completedListQuery=project_workspace_query($completedState,'completed');
+$packReturnTab = safe_text((string)($_GET['return_tab'] ?? 'accepted_customers')) === 'completed_customers' ? 'completed_customers' : 'accepted_customers';
+$packReturnQuery = $packReturnTab === 'completed_customers' ? $completedListQuery : $acceptedListQuery;
 $packQuote = null;
 $packVersions = [];
 $packCurrentVersionNo = 1;
@@ -3845,6 +3852,10 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
       .more-actions__menu { max-width:calc(100vw - 24px); }
     }
     .document-action-form{margin:0}.document-action-dialog::backdrop{background:rgba(15,23,42,.45)}.document-action-dialog{border:0;border-radius:18px;box-shadow:0 24px 80px rgba(15,23,42,.3);max-width:560px;width:calc(100% - 32px);padding:0}.document-action-modal{padding:22px}.document-action-modal__header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:1px solid #dbe7e3;padding-bottom:12px}.document-action-modal__body{display:grid;gap:12px;padding:16px 0}.document-action-modal__context{background:#f8fbfa;border:1px solid #dbe7e3;border-radius:12px;padding:12px}.document-action-modal__status{border-radius:12px;padding:12px;background:#eef6ff;color:#1e3a8a}.document-action-modal__status.is-success{background:#ecfdf5;color:#065f46}.document-action-modal__status.is-error{background:#fef2f2;color:#991b1b}.document-action-modal__footer{display:flex;justify-content:flex-end;gap:10px;border-top:1px solid #dbe7e3;padding-top:14px}.document-action-modal__open[hidden]{display:none}
+    .workspace-filter{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:.65rem;align-items:end;padding:.8rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px}.workspace-filter label{margin:0}.result-count{margin:.8rem 0;color:#475569}.operations-table{font-size:.86rem;border-collapse:separate;border-spacing:0}.operations-table th{white-space:nowrap}.operations-table td{padding:.65rem .5rem;border-bottom:1px solid #e2e8f0}.operations-table td:first-child span{display:block;margin-top:.18rem}.workspace-pagination{display:flex;flex-wrap:wrap;gap:.35rem}.workspace-pagination .active{background:#1d4ed8;color:#fff}.reopen-dialog{width:min(480px,calc(100vw - 24px));border:0;border-radius:16px;padding:1.2rem;box-shadow:0 24px 80px rgba(15,23,42,.35)}.reopen-dialog::backdrop{background:rgba(15,23,42,.62)}.dialog-actions{display:flex;gap:.5rem;justify-content:flex-end}.reopen-dialog textarea{min-height:100px}
+    @media (max-width:1024px) and (min-width:769px){.operations-table th:nth-child(7),.operations-table td:nth-child(7){display:none}.operations-table{font-size:.8rem}}
+    @media (max-width:768px){.operations-table-wrap{overflow:visible}.operations-table,.operations-table tbody,.operations-table tr,.operations-table td{display:block;width:100%}.operations-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.operations-table tr{box-sizing:border-box;margin:0 0 .75rem;padding:.75rem;border:1px solid #dbe7ef;border-radius:14px;background:#fff}.operations-table td{box-sizing:border-box;display:grid;grid-template-columns:8.2rem 1fr;gap:.5rem;padding:.34rem 0;border:0}.operations-table td::before{content:attr(data-label);font-weight:700;color:#64748b}.operations-table td:first-child span{grid-column:2}.operations-table .row-action-group{grid-column:2}.workspace-filter{grid-template-columns:1fr 1fr}.reopen-dialog{max-height:calc(100vh - 24px);overflow:auto}}
+    @media (max-width:480px){.workspace-filter{grid-template-columns:1fr}.operations-table td{grid-template-columns:7.2rem 1fr}}
 
   </style>
 </head>
@@ -3956,7 +3967,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           ?>
           <div data-accepted-customer-workbench data-quote-id="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" data-workbench-endpoint="<?= htmlspecialchars($documentActionEndpoint, ENT_QUOTES) ?>">
           <div class="accepted-workbench-message" data-accepted-workbench-message role="status" aria-live="polite"></div>
-          <p><a class="btn secondary" href="?tab=accepted_customers">&larr; Back to Accepted Customers</a></p>
+          <p><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query($packReturnQuery),ENT_QUOTES) ?>">&larr; Back to <?= $packReturnTab === 'completed_customers' ? 'Completed' : 'Accepted' ?> Customers</a></p>
           <section class="accepted-context">
             <h2 style="margin-top:0;">Accepted Customer Commercial Summary: <?= htmlspecialchars((string) ($packQuote['customer_name'] ?? ''), ENT_QUOTES) ?></h2>
             <?= $renderCustomerUserLink($packQuote, documents_project_completion_state($packQuote)==='completed'?'completed_customers':'accepted_customers', $isAdmin, true) ?>
@@ -4312,28 +4323,42 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           </div>
           </div>
         <?php else: ?>
-          <div class="commercial-toolbar"><div><h2>Accepted Customers</h2><p class="muted-helper">Enter an accepted customer workbench to manage payment requests, receipts, summaries, and lifecycle documents.</p></div></div>
-
-          <div class="summary-cards" aria-label="Accepted customer summary">
+          <div class="commercial-toolbar"><div><h2>Accepted Customers</h2><p class="muted-helper">Compact operational view. Open a project for full customer, document, payment and handover operations.</p></div></div>
+          <div class="summary-cards" aria-label="Accepted customer global summary">
             <?php foreach ([['Active Projects',number_format($acceptedKpis['count'])],['Active Business',$inr($acceptedKpis['business'])],['Total Received',$inr($acceptedKpis['received'])],['Total Dues',$inr($acceptedKpis['dues'])],['Collection %',business_pulse_format_pct($acceptedKpis['collection_pct'])],['Customers With Dues',number_format($acceptedKpis['with_dues'])]] as $m): ?><div class="summary-card"><span><?= htmlspecialchars($m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach; ?>
           </div>
-          <form method="get" class="filter-grid list-toolbar"><input type="hidden" name="tab" value="accepted_customers" /><div><label>Search customer / mobile</label><input type="text" name="accepted_q" value="<?= htmlspecialchars((string) ($_GET['accepted_q'] ?? ''), ENT_QUOTES) ?>" /></div><div><label>Archive visibility</label><label class="checkbox-field"><input type="checkbox" name="include_archived_accepted" value="1" <?= $includeArchivedAccepted ? 'checked' : '' ?> /> Show archived</label></div><div><button class="btn secondary" type="submit">Apply Filters</button></div></form>
-          <div class="responsive-table accepted-customers-table-wrap" style="overflow:visible"><table class="accepted-customers-table"><thead><tr><th>Accepted Quotation</th><th>Customer</th><th>System</th><th>Finance</th><th>Dues Since</th><th>Documents</th><th>Complaints/Tasks</th><th>Actions</th></tr></thead><tbody>
-          <?php foreach ($acceptedRows as $row): $quote=$row['quote']; $qid=(string)($quote['id']??''); $paymentSummary=is_array($row['payment_summary']??null)?$row['payment_summary']:[]; $finance=is_array($row['finance_presentation']??null)?$row['finance_presentation']:documents_project_financial_presentation($quote); $activePaymentRequests=(int)($paymentSummary['active_request_count']??0); $collectionPct=$finance['collection_pct']; $dueSince=((string)($finance['due_since']??'')!=='')?(string)$finance['due_since']:'—'; $workflow=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Dispatch Advice'=>array_values(array_filter(documents_dispatch_advices_for_quote($qid), static fn(array $row): bool => !documents_is_archived($row)))!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[]]; ?>
-          <tr><td><strong><?= htmlspecialchars((string)($quote['quote_no']??$qid),ENT_QUOTES) ?></strong><?php if(!empty($row['is_archived'])):?><br><span class="status-badge status-badge--archived">Archived</span><?php endif;?></td><td><span class="quote-customer"><?= htmlspecialchars((string)($quote['customer_name']??''),ENT_QUOTES) ?></span><br><span class="muted-helper"><?= htmlspecialchars((string)($quote['customer_mobile']??''),ENT_QUOTES) ?></span><?= $renderCustomerUserLink($quote, 'accepted_customers', $isAdmin) ?><?= customer_operations_render($quote, 'accepted_customers', false, null, $isAdmin) ?></td><td><?= htmlspecialchars((string)($quote['capacity_kwp']??'—'),ENT_QUOTES) ?> kWp<br><span class="muted-helper"><?= htmlspecialchars((string)($quote['system_type']??$quote['segment']??''),ENT_QUOTES) ?></span></td><td><div class="accepted-finance"><div class="accepted-finance__row"><span class="accepted-finance__label">Total</span><span class="accepted-finance__value"><?= htmlspecialchars($inr((float)($row['quotation_amount']??0)),ENT_QUOTES) ?></span></div><div class="accepted-finance__row"><span class="accepted-finance__label">Received</span><span class="accepted-finance__value"><?= htmlspecialchars($inr((float)($row['payment_received']??0)),ENT_QUOTES) ?></span></div><div class="accepted-finance__row"><span class="accepted-finance__label">Due</span><span class="accepted-finance__value"><?= htmlspecialchars($inr(max(0,(float)($row['receivables']??0))),ENT_QUOTES) ?></span></div><?php if(!empty($row['advance'])):?><span class="pill warn">Overpaid / advance <?= htmlspecialchars($inr(abs((float)($row['receivables']??0))),ENT_QUOTES) ?></span><?php endif;?><?php if($activePaymentRequests>0):?><span class="pill"><?= $activePaymentRequests ?> active request<?= $activePaymentRequests===1?'':'s' ?></span><?php endif;?><div class="accepted-finance__row"><span class="accepted-finance__label">Collection</span><span class="accepted-finance__value"><?= htmlspecialchars(business_pulse_format_pct($collectionPct),ENT_QUOTES) ?></span></div></div></td><td><span class="due-age"><?= htmlspecialchars($dueSince,ENT_QUOTES) ?></span></td><td><div class="workflow-badges"><?php foreach($workflow as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>" title="<?= $exists?'Document exists':'Document missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span><?php endforeach;?></div></td><td><span class="muted">Reliable matching unavailable</span></td><td><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Enter</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php foreach ([['create_agreement','Create/Open Agreement'],['create_dispatch_advice','Create/Open Dispatch Advice'],['create_delivery_challan','Create/Open Challan'],['create_invoice','Create/Open Invoice']] as $docAction): ?><form method="post" data-accepted-ajax-form="1" action="<?= htmlspecialchars($documentActionEndpoint, ENT_QUOTES) ?>" class="document-action-form" data-document-action="1" data-document-label="<?= htmlspecialchars($docAction[1], ENT_QUOTES) ?>" data-quote-no="<?= htmlspecialchars((string)($quote['quote_no']??$qid), ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)($quote['customer_name']??''), ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars((string)($quote['customer_mobile']??''), ENT_QUOTES) ?>"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="<?= htmlspecialchars($docAction[0], ENT_QUOTES) ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><input type="hidden" name="response_format" value="json"><button class="btn secondary" type="submit"><?= htmlspecialchars($docAction[1], ENT_QUOTES) ?></button></form><?php endforeach; ?><?php if($isAdmin && empty($row['is_archived'])):?><form method="post" data-accepted-ajax-form="1"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><button class="btn warn" type="submit">Archive</button></form><?php endif;?></div></details></div></td></tr>
-          <?php endforeach; if($acceptedRows===[]):?><tr><td colspan="8" class="empty-state">No accepted customers found.</td></tr><?php endif;?></tbody></table></div>
+          <form method="get" class="workspace-filter" aria-label="Filter accepted customers"><input type="hidden" name="tab" value="accepted_customers">
+            <label>Customer, mobile or quotation<input name="accepted_q" value="<?= htmlspecialchars($acceptedState['q'],ENT_QUOTES) ?>"></label>
+            <label>Financial state<select name="accepted_financial"><?php foreach(['all'=>'All','due'=>'Due','paid'=>'Paid','credit'=>'Credit / advance'] as $v=>$l):?><option value="<?= $v ?>" <?= $acceptedState['financial']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach;?></select></label>
+            <label>Due ageing<select name="accepted_age"><?php foreach(['all'=>'All','current'=>'Current','1_30'=>'1–30 days','31_60'=>'31–60 days','61_plus'=>'61+ days'] as $v=>$l):?><option value="<?= $v ?>" <?= $acceptedState['age']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach;?></select></label>
+            <label>Active request<select name="accepted_request"><?php foreach(['all'=>'All','yes'=>'Present','no'=>'None'] as $v=>$l):?><option value="<?= $v ?>" <?= $acceptedState['request']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach;?></select></label>
+            <label>Documents<select name="accepted_documents"><?php foreach(['all'=>'All','ready'=>'Ready','missing'=>'Missing'] as $v=>$l):?><option value="<?= $v ?>" <?= $acceptedState['documents']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach;?></select></label>
+            <label>Customer User<select name="accepted_link"><?php foreach(['all'=>'All','linked'=>'Linked','attention'=>'Needs attention'] as $v=>$l):?><option value="<?= $v ?>" <?= $acceptedState['link']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach;?></select></label>
+            <label>Archive visibility<select name="accepted_archive"><?php foreach(['active'=>'Active only','with_archived'=>'Include archived','archived'=>'Archived only'] as $v=>$l):?><option value="<?= $v ?>" <?= $acceptedState['archive']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach;?></select></label>
+            <label>Sort<select name="accepted_sort"><?php foreach(['due_desc'=>'Due: high first','due_asc'=>'Due: low first','age_desc'=>'Oldest due first','customer_asc'=>'Customer A–Z','quotation_asc'=>'Quotation A–Z','received_desc'=>'Received: high first'] as $v=>$l):?><option value="<?= $v ?>" <?= $acceptedState['sort']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach;?></select></label>
+            <label>Rows<select name="accepted_per_page"><?php foreach([25,50,100] as $v):?><option <?= $acceptedState['per_page']===$v?'selected':'' ?>><?= $v ?></option><?php endforeach;?></select></label><button class="btn" type="submit">Apply</button><a class="btn secondary" href="?tab=accepted_customers">Reset</a>
+          </form>
+          <p class="result-count" role="status"><strong><?= number_format($acceptedPage['total']) ?></strong> filtered result<?= $acceptedPage['total']===1?'':'s' ?> from <?= number_format($acceptedKpis['count']) ?> eligible projects.</p>
+          <div class="responsive-table operations-table-wrap"><table class="operations-table"><thead><tr><th>Customer / quotation</th><th>Due</th><th>Received</th><th>Due age</th><th>Documents</th><th>Customer User</th><th>Attention</th><th>Action</th></tr></thead><tbody>
+          <?php foreach($acceptedRows as $row):$quote=$row['quote'];$qid=$row['id'];$open=project_workspace_query($acceptedState,'accepted',['view'=>$qid]);?>
+            <tr><td data-label="Customer"><strong><?= htmlspecialchars($row['customer'],ENT_QUOTES) ?></strong><span class="mobile-detail"><?= htmlspecialchars($row['mobile'],ENT_QUOTES) ?></span><span class="muted-helper"><?= htmlspecialchars($row['quotation'],ENT_QUOTES) ?></span><?php if($row['archived']):?><span class="pill archived">Archived</span><?php endif;?></td><td data-label="Due"><strong><?= htmlspecialchars($inr(max(0,(float)$row['due'])),ENT_QUOTES) ?></strong></td><td data-label="Received"><?= htmlspecialchars($inr((float)$row['received']),ENT_QUOTES) ?></td><td data-label="Due age"><?= $row['due_since']!==''?htmlspecialchars((string)$row['due_days'].' days',ENT_QUOTES):'—' ?></td><td data-label="Documents"><span class="pill <?= $row['documents_ready']?'':'warn' ?>"><?= $row['documents_ready']?'4/4 ready':count(array_filter($row['documents'])).'/4 ready' ?></span></td><td data-label="Customer User"><span class="pill <?= $row['link_ready']?'':'warn' ?>"><?= htmlspecialchars($row['link_ready']?'Linked':ucwords(str_replace('_',' ',$row['link_state'])),ENT_QUOTES) ?></span></td><td data-label="Attention"><?php if($row['attention']):?><span class="pill warn">Review</span><?php else:?><span class="pill">Clear</span><?php endif;?><?php if($row['active_requests']):?><span class="pill"><?= (int)$row['active_requests'] ?> request<?= $row['active_requests']===1?'':'s' ?></span><?php endif;?></td><td data-label="Action"><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query($open),ENT_QUOTES) ?>">Open project</a><details class="more-actions"><summary class="btn secondary">More</summary><div class="more-actions__menu"><a class="btn secondary" href="admin-quotations.php?tab=editor&amp;edit=<?= urlencode($qid) ?>">Edit quotation</a><?php foreach([['create_agreement','Create/Open Agreement'],['create_dispatch_advice','Create/Open Dispatch Advice'],['create_delivery_challan','Create/Open Challan'],['create_invoice','Create/Open Invoice']] as $docAction):?><form method="post" data-accepted-ajax-form="1" action="<?= htmlspecialchars($documentActionEndpoint, ENT_QUOTES) ?>" class="document-action-form" data-document-action="1" data-document-label="<?= htmlspecialchars($docAction[1], ENT_QUOTES) ?>" data-quote-no="<?= htmlspecialchars((string)$row['quotation'], ENT_QUOTES) ?>" data-customer-name="<?= htmlspecialchars((string)$row['customer'], ENT_QUOTES) ?>" data-customer-mobile="<?= htmlspecialchars((string)$row['mobile'], ENT_QUOTES) ?>"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'],ENT_QUOTES) ?>"><input type="hidden" name="action" value="<?= $docAction[0] ?>"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><input type="hidden" name="response_format" value="json"><button class="btn secondary" type="submit"><?= $docAction[1] ?></button></form><?php endforeach;?><?php if($isAdmin&&!$row['archived']):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'],ENT_QUOTES) ?>"><input type="hidden" name="action" value="archive_accepted_customer"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="accepted_customers"><input type="hidden" name="list_state" value="<?= htmlspecialchars(http_build_query($acceptedListQuery),ENT_QUOTES) ?>"><button class="btn warn">Archive</button></form><?php endif;?></div></details></div></td></tr>
+          <?php endforeach;if($acceptedRows===[]):?><tr><td colspan="8" class="empty-state">No accepted customers match these filters.</td></tr><?php endif;?></tbody></table></div>
+          <?= project_workspace_pagination_html($acceptedPage,$acceptedState,'accepted') ?>
         <?php endif; ?>
       </section>
     <?php endif; ?>
 
     <?php if ($activeTab === 'completed_customers'): ?>
       <section class="panel">
-        <div class="commercial-toolbar"><div><h2>Completed Customers</h2><p class="muted-helper">Only projects explicitly marked Site Completed appear here. Completion figures remain an immutable snapshot.</p></div></div>
-        <div class="summary-cards" aria-label="Completed customer summary"><?php foreach([['Completed Sites',$completedKpis['count']],['Final Amount',$inr($completedKpis['business'])],['Paid at Completion',$inr($completedKpis['received'])],['Require Review',$completedKpis['changed']]] as $m):?><div class="summary-card"><span><?= htmlspecialchars((string)$m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach;?></div>
-        <div class="responsive-table"><table><thead><tr><th>Customer</th><th>Customer Users</th><th>Quotation</th><th>Final Amount</th><th>Paid Amount</th><th>Completion Date</th><th>Completed By</th><th>Document Status</th><th>Review / Action</th></tr></thead><tbody>
-        <?php foreach($completedRows as $row):$q=$row['quote'];$c=$row['completion'];$s=(array)($c['snapshot']??[]);$qid=(string)($q['id']??'');$docs=['Agreement'=>$collectByQuote($salesAgreements,$qid,false)!==[],'Dispatch Advice'=>documents_dispatch_advices_for_quote($qid)!==[],'Challan'=>$collectByQuote($salesChallans,$qid,false)!==[],'Invoice'=>$collectByQuote($salesInvoices,$qid,false)!==[]];?>
-          <tr><td><?= htmlspecialchars((string)($q['customer_name']??''),ENT_QUOTES) ?><br><span class="muted-helper"><?= htmlspecialchars((string)($q['customer_mobile']??''),ENT_QUOTES) ?></span><?= customer_operations_render($q, 'completed_customers', false, null, $isAdmin) ?></td><td><?= $renderCustomerUserLink($q, 'completed_customers', $isAdmin) ?><?= $renderMobileCorrection($q, 'completed_customers', $isAdmin) ?></td><td><?= htmlspecialchars((string)($q['quote_no']??$qid),ENT_QUOTES) ?></td><td><?= htmlspecialchars($inr((float)($s['reference_amount']??0)),ENT_QUOTES) ?></td><td><?= htmlspecialchars($inr((float)($s['paid_amount']??0)),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($c['completed_at']??''),ENT_QUOTES) ?></td><td><?= htmlspecialchars((string)($c['completed_by']['name']??'—'),ENT_QUOTES) ?></td><td><?php foreach($docs as $label=>$exists):?><span class="workflow-badge <?= $exists?'is-complete':'is-missing' ?>"><?= htmlspecialchars($label,ENT_QUOTES) ?></span> <?php endforeach;?></td><td><?php if(!empty($row['review']['financial_data_changed'])):?><div class="banner error">Financial data changed; snapshot preserved. Review and reopen required.</div><?php endif;?><a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab'=>'accepted_customers','view'=>$qid]),ENT_QUOTES) ?>">Open document pack</a><?php if($isAdmin):?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="reopen_project"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><label>Reason<input name="reopen_reason" required></label><button class="btn warn" type="submit">Reopen Project</button></form><?php endif;?></td></tr>
-        <?php endforeach;if($completedRows===[]):?><tr><td colspan="9" class="empty-state">No explicitly completed projects found.</td></tr><?php endif;?></tbody></table></div>
+        <div class="commercial-toolbar"><div><h2>Completed Customers</h2><p class="muted-helper">Immutable completion snapshots in a compact, read-only list. Open a project for full operations.</p></div></div>
+        <div class="summary-cards" aria-label="Completed customer global summary"><?php foreach([['Completed Sites',$completedKpis['count']],['Final Amount',$inr($completedKpis['business'])],['Paid at Completion',$inr($completedKpis['received'])],['Require Review',$completedKpis['changed']]] as $m):?><div class="summary-card"><span><?= htmlspecialchars((string)$m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach;?></div>
+        <form method="get" class="workspace-filter" aria-label="Filter completed customers"><input type="hidden" name="tab" value="completed_customers"><label>Customer, mobile or quotation<input name="completed_q" value="<?= htmlspecialchars($completedState['q'],ENT_QUOTES) ?>"></label><label>Completed from<input type="date" name="completed_from" value="<?= $completedState['from'] ?>"></label><label>Completed to<input type="date" name="completed_to" value="<?= $completedState['to'] ?>"></label><label>Review<select name="completed_review"><?php foreach(['all'=>'All','clear'=>'Clear','changed'=>'Changed'] as $v=>$l):?><option value="<?= $v ?>" <?= $completedState['review']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach;?></select></label><label>Payment at completion<select name="completed_payment"><?php foreach(['all'=>'All','paid'=>'Paid','due'=>'Due'] as $v=>$l):?><option value="<?= $v ?>" <?= $completedState['payment']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach;?></select></label><label>Documents<select name="completed_documents"><?php foreach(['all'=>'All','ready'=>'Ready','missing'=>'Missing'] as $v=>$l):?><option value="<?= $v ?>" <?= $completedState['documents']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach;?></select></label><label>Customer User<select name="completed_link"><?php foreach(['all'=>'All','linked'=>'Linked','attention'=>'Needs attention'] as $v=>$l):?><option value="<?= $v ?>" <?= $completedState['link']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach;?></select></label><label>Sort<select name="completed_sort"><?php foreach(['completed_desc'=>'Newest completion','completed_asc'=>'Oldest completion','customer_asc'=>'Customer A–Z','quotation_asc'=>'Quotation A–Z','amount_desc'=>'Final amount high','paid_desc'=>'Paid high'] as $v=>$l):?><option value="<?= $v ?>" <?= $completedState['sort']===$v?'selected':'' ?>><?= $l ?></option><?php endforeach;?></select></label><label>Rows<select name="completed_per_page"><?php foreach([25,50,100] as $v):?><option <?= $completedState['per_page']===$v?'selected':'' ?>><?= $v ?></option><?php endforeach;?></select></label><button class="btn">Apply</button><a class="btn secondary" href="?tab=completed_customers">Reset</a></form>
+        <p class="result-count" role="status"><strong><?= number_format($completedPage['total']) ?></strong> filtered result<?= $completedPage['total']===1?'':'s' ?> from <?= number_format($completedKpis['count']) ?> eligible projects.</p>
+        <div class="responsive-table operations-table-wrap"><table class="operations-table"><thead><tr><th>Customer / quotation</th><th>Completion date</th><th>Final amount</th><th>Paid at completion</th><th>Documents</th><th>Review</th><th>Customer User</th><th>Action</th></tr></thead><tbody>
+        <?php foreach($completedRows as $row):$q=$row['quote'];$qid=$row['id'];$open=project_workspace_query($completedState,'completed',['tab'=>'accepted_customers','view'=>$qid,'return_tab'=>'completed_customers']);$dialogId='reopen-project-'.preg_replace('/[^A-Za-z0-9_-]/','-',$qid);?>
+          <tr><td data-label="Customer"><strong><?= htmlspecialchars($row['customer'],ENT_QUOTES) ?></strong><span class="mobile-detail"><?= htmlspecialchars($row['mobile'],ENT_QUOTES) ?></span><span class="muted-helper"><?= htmlspecialchars($row['quotation'],ENT_QUOTES) ?></span></td><td data-label="Completion date"><?= htmlspecialchars($row['completed_date'],ENT_QUOTES) ?></td><td data-label="Final amount"><?= htmlspecialchars($inr($row['amount']),ENT_QUOTES) ?></td><td data-label="Paid at completion"><?= htmlspecialchars($inr($row['paid']),ENT_QUOTES) ?></td><td data-label="Documents"><span class="pill <?= $row['documents_ready']?'':'warn' ?>"><?= $row['documents_ready']?'4/4 ready':count(array_filter($row['documents'])).'/4 ready' ?></span></td><td data-label="Review"><span class="pill <?= $row['review_changed']?'warn':'' ?>"><?= $row['review_changed']?'Changed':'Clear' ?></span></td><td data-label="Customer User"><span class="pill <?= $row['link_ready']?'':'warn' ?>"><?= htmlspecialchars($row['link_ready']?'Linked':ucwords(str_replace('_',' ',$row['link_state'])),ENT_QUOTES) ?></span></td><td data-label="Action"><div class="row-action-group"><a class="btn" href="?<?= htmlspecialchars(http_build_query($open),ENT_QUOTES) ?>">Open project</a><?php if($isAdmin):?><button class="btn warn" type="button" data-dialog-open="<?= htmlspecialchars($dialogId,ENT_QUOTES) ?>">Reopen</button><dialog class="reopen-dialog" id="<?= htmlspecialchars($dialogId,ENT_QUOTES) ?>" aria-labelledby="<?= htmlspecialchars($dialogId.'-title',ENT_QUOTES) ?>"><form method="post"><h3 id="<?= htmlspecialchars($dialogId.'-title',ENT_QUOTES) ?>">Reopen <?= htmlspecialchars($row['customer'],ENT_QUOTES) ?></h3><p>Quotation <strong><?= htmlspecialchars($row['quotation'],ENT_QUOTES) ?></strong></p><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)$_SESSION['csrf_token'],ENT_QUOTES) ?>"><input type="hidden" name="action" value="reopen_project"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($qid,ENT_QUOTES) ?>"><input type="hidden" name="return_tab" value="completed_customers"><input type="hidden" name="list_state" value="<?= htmlspecialchars(http_build_query($completedListQuery),ENT_QUOTES) ?>"><label>Reason required<textarea name="reopen_reason" required></textarea></label><div class="dialog-actions"><button class="btn warn" type="submit">Confirm reopen</button><button class="btn secondary" type="button" data-dialog-close>Cancel</button></div></form></dialog><?php endif;?></div></td></tr>
+        <?php endforeach;if($completedRows===[]):?><tr><td colspan="8" class="empty-state">No completed customers match these filters.</td></tr><?php endif;?></tbody></table></div>
+        <?= project_workspace_pagination_html($completedPage,$completedState,'completed') ?>
       </section>
     <?php endif; ?>
 
@@ -5509,6 +5534,19 @@ document.addEventListener('submit', function (event) {
   form.dataset.submitting = '1';
   var button = form.querySelector('button[type="submit"]');
   if (button) { button.disabled = true; button.textContent = 'Creating…'; }
+});
+</script>
+
+<script>
+document.addEventListener('click', function (event) {
+  var opener = event.target.closest && event.target.closest('[data-dialog-open]');
+  if (opener) {
+    var dialog = document.getElementById(opener.getAttribute('data-dialog-open'));
+    if (dialog) { if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', 'open'); }
+    return;
+  }
+  var closer = event.target.closest && event.target.closest('[data-dialog-close]');
+  if (closer) { var parent = closer.closest('dialog'); if (parent && typeof parent.close === 'function') parent.close(); else if (parent) parent.removeAttribute('open'); }
 });
 </script>
 
