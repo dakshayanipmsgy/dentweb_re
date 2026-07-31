@@ -21,11 +21,18 @@ $loaded=documents_payment_request_find_by_token($created['token']);
 upi_ok($loaded!==null && (string)$loaded['id']===$request['id'],'token is bound to one request');
 upi_ok(strtotime((string)$loaded['upi_link']['expires_at'])===1086400,'link expires after exactly 24 hours');
 
-$first=documents_payment_request_authorize_upi($created['token'],1000001);
+$first=documents_payment_request_authorize_upi($created['token'],1000001,'direct');
 upi_ok(!empty($first['ok']) && $first['remaining']===1,'first launch succeeds');
 upi_ok($first['upi_uri']==='upi://pay?pa=d.entranchi%40ybl&pn=Dakshayani%20Enterprises&am=1234.50&cu=INR&tn=PAYREQ-UPI-888','URI uses exact server amount and configured payee');
-$second=documents_payment_request_authorize_upi($created['token'],1000002); $third=documents_payment_request_authorize_upi($created['token'],1000003);
-upi_ok(!empty($second['ok']) && empty($third['ok']),'exactly two launches are enforced');
+$second=documents_payment_request_authorize_upi($created['token'],1000002,'qr'); $third=documents_payment_request_authorize_upi($created['token'],1000003,'direct');
+upi_ok(!empty($second['ok']) && $second['method']==='qr' && empty($third['ok']),'one direct launch plus one QR generation exhausts the shared limit');
+
+$qrOnly=documents_payment_request_generate_upi_link($request['id'],1000004);
+$qrFirst=documents_payment_request_authorize_upi($qrOnly['token'],1000004,'qr');
+$qrSecond=documents_payment_request_authorize_upi($qrOnly['token'],1000004,'qr');
+$qrThird=documents_payment_request_authorize_upi($qrOnly['token'],1000004,'qr');
+upi_ok(!empty($qrFirst['ok']) && !empty($qrSecond['ok']) && empty($qrThird['ok']),'two QR generations exhaust the shared limit');
+upi_ok(empty(documents_payment_request_authorize_upi($qrOnly['token'],1000004,'invalid')['ok']),'unknown payment methods are rejected without consuming an attempt');
 
 // Start three authorizations together; the store lock and in-lock count update must permit only two.
 $concurrent=documents_payment_request_generate_upi_link($request['id'],1000005); $resultFiles=[]; $children=[]; $gate=tempnam(sys_get_temp_dir(),'upi_gate_'); @unlink($gate);
