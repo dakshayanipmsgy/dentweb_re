@@ -39,17 +39,8 @@ function employee_portal_attempt_login(EmployeeFsStore $store, string $loginId, 
         return ['success' => false, 'message' => 'Invalid login or password.'];
     }
 
-    $employee = $store->findByLoginId($loginInput);
-    if ($employee === null || ($employee['status'] ?? 'active') !== 'active') {
-        return ['success' => false, 'message' => 'Invalid login or password.'];
-    }
-
-    $hash = $employee['password_hash'] ?? '';
-    if (!is_string($hash) || trim($hash) === '') {
-        return ['success' => false, 'message' => 'Password not set. Please contact admin.'];
-    }
-
-    if (!password_verify($passwordInput, $hash)) {
+    $employee = $store->authenticate($loginInput, $passwordInput);
+    if ($employee === null) {
         return ['success' => false, 'message' => 'Invalid login or password.'];
     }
 
@@ -63,6 +54,8 @@ function employee_portal_attempt_login(EmployeeFsStore $store, string $loginId, 
         'full_name' => (string) ($employee['name'] ?? ''),
         'email' => '',
         'username' => (string) ($employee['login_id'] ?? $loginInput),
+        'phone' => (string) ($employee['phone'] ?? ''),
+        'designation' => (string) ($employee['designation'] ?? ''),
         'role_name' => 'employee',
         'offline_mode' => false,
     ];
