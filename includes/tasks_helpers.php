@@ -53,20 +53,8 @@ function ensure_tasks_storage(): bool
  */
 function load_tasks(): array
 {
-    ensure_tasks_storage();
-
-    $path = tasks_data_path();
-    $contents = @file_get_contents($path);
-    if ($contents === false) {
-        return [];
-    }
-
-    $decoded = json_decode($contents, true);
-    if (!is_array($decoded)) {
-        return [];
-    }
-
-    return $decoded;
+    require_once __DIR__ . '/bootstrap.php';
+    return (new CanonicalTaskRepository(get_db()))->all();
 }
 
 /**
@@ -78,27 +66,14 @@ function save_tasks(array $tasks): bool
 {
     $GLOBALS['tasks_last_error'] = null;
 
-    if (!ensure_tasks_storage()) {
-        if (!is_string($GLOBALS['tasks_last_error'] ?? null) || $GLOBALS['tasks_last_error'] === '') {
-            $GLOBALS['tasks_last_error'] = 'Tasks storage is not writable.';
-        }
+    require_once __DIR__ . '/bootstrap.php';
+    try {
+        (new CanonicalTaskRepository(get_db()))->replaceLegacyShape($tasks);
+        return true;
+    } catch (Throwable $exception) {
+        $GLOBALS['tasks_last_error'] = $exception->getMessage();
         return false;
     }
-
-    $encoded = json_encode(array_values($tasks), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    if ($encoded === false) {
-        $GLOBALS['tasks_last_error'] = 'Failed to encode tasks payload.';
-        return false;
-    }
-
-    $result = @file_put_contents(tasks_data_path(), $encoded, LOCK_EX);
-    if ($result === false) {
-        $error = error_get_last();
-        $GLOBALS['tasks_last_error'] = is_array($error) ? ($error['message'] ?? 'Unknown error writing tasks.') : 'Unknown error writing tasks.';
-        return false;
-    }
-
-    return true;
 }
 
 function tasks_last_error(): string

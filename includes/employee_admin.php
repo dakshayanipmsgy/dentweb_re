@@ -28,6 +28,10 @@ final class EmployeeFsStore
      */
     public function listEmployees(): array
     {
+        if (function_exists('get_db') || is_file(__DIR__ . '/bootstrap.php')) {
+            require_once __DIR__ . '/bootstrap.php';
+            return (new CanonicalEmployeeRepository(get_db()))->all();
+        }
         $data = $this->readData();
         $employees = $data['employees'] ?? [];
 
@@ -40,6 +44,9 @@ final class EmployeeFsStore
 
     public function findById(string $id): ?array
     {
+        require_once __DIR__ . '/bootstrap.php';
+        return (new CanonicalEmployeeRepository(get_db()))->byId($id);
+        /* legacy reader retained only for rollback reference
         $data = $this->readData();
         foreach ($data['employees'] as $employee) {
             if (($employee['id'] ?? '') === $id) {
@@ -47,11 +54,14 @@ final class EmployeeFsStore
             }
         }
 
-        return null;
+        return null; */
     }
 
     public function findByLoginId(string $loginId): ?array
     {
+        require_once __DIR__ . '/bootstrap.php';
+        return (new CanonicalEmployeeRepository(get_db()))->byLogin($loginId);
+        /* legacy reader retained only for rollback reference
         $normalized = trim($loginId);
         if ($normalized === '') {
             return null;
@@ -64,7 +74,7 @@ final class EmployeeFsStore
             }
         }
 
-        return null;
+        return null; */
     }
 
     /**
@@ -72,6 +82,17 @@ final class EmployeeFsStore
      */
     public function addEmployee(array $input): array
     {
+        require_once __DIR__ . '/bootstrap.php';
+        $db=get_db(); $login=trim((string)($input['login_id']??'')); $name=trim((string)($input['name']??''));
+        if($login===''||$name==='') return ['success'=>false,'errors'=>['Employee name and login ID are required.'],'employee'=>null];
+        try {
+            $role=(int)$db->query("SELECT id FROM roles WHERE name='employee'")->fetchColumn();
+            $email=filter_var($login,FILTER_VALIDATE_EMAIL)?$login:'employee+'.substr(hash('sha256',strtolower($login)),0,16).'@local.invalid';
+            $stmt=$db->prepare('INSERT INTO users(full_name,email,username,password_hash,role_id,status,permissions_note,created_at,updated_at) VALUES(:n,:e,:u,:p,:r,:s,:d,datetime(\'now\'),datetime(\'now\'))');
+            $stmt->execute([':n'=>$name,':e'=>$email,':u'=>$login,':p'=>(string)($input['password_hash']??''),':r'=>$role,':s'=>(string)($input['status']??'active'),':d'=>(string)($input['designation']??'')]);
+            return ['success'=>true,'errors'=>[],'employee'=>(new CanonicalEmployeeRepository($db))->byId((string)$db->lastInsertId())];
+        } catch(Throwable $e) { return ['success'=>false,'errors'=>['Login ID already exists or employee could not be saved.'],'employee'=>null]; }
+        /* legacy implementation retained for rollback reference
         $payload = $this->normaliseInput($input);
         $errors = $this->validate($payload, null);
         if ($errors !== []) {
@@ -91,7 +112,7 @@ final class EmployeeFsStore
             $data['employees'][] = $payload;
 
             return [$data, ['success' => true, 'errors' => [], 'employee' => $payload]];
-        }, ['success' => false, 'errors' => ['Could not save employee.'], 'employee' => null]);
+        }, ['success' => false, 'errors' => ['Could not save employee.'], 'employee' => null]); */
     }
 
     /**
@@ -99,6 +120,16 @@ final class EmployeeFsStore
      */
     public function updateEmployee(string $id, array $input): array
     {
+        require_once __DIR__ . '/bootstrap.php'; $db=get_db(); $existing=(new CanonicalEmployeeRepository($db))->byId($id);
+        if($existing===null)return ['success'=>false,'errors'=>['Employee not found.'],'employee'=>null];
+        $login=trim((string)($input['login_id']??$existing['login_id'])); $name=trim((string)($input['name']??$existing['name']));
+        try {
+            $email=filter_var($login,FILTER_VALIDATE_EMAIL)?$login:'employee+'.substr(hash('sha256',strtolower($login)),0,16).'@local.invalid';
+            $sql='UPDATE users SET full_name=:n,email=:e,username=:u,status=:s,permissions_note=:d,password_hash=:p,updated_at=datetime(\'now\') WHERE id=:id';
+            $stmt=$db->prepare($sql);$stmt->execute([':n'=>$name,':e'=>$email,':u'=>$login,':s'=>(string)($input['status']??$existing['status']),':d'=>(string)($input['designation']??$existing['designation']),':p'=>(string)($input['password_hash']??$existing['password_hash']),':id'=>(int)$existing['id']]);
+            return ['success'=>true,'errors'=>[],'employee'=>(new CanonicalEmployeeRepository($db))->byId((string)$existing['id'])];
+        } catch(Throwable $e){return ['success'=>false,'errors'=>['Login ID already exists or employee could not be updated.'],'employee'=>null];}
+        /* legacy implementation retained for rollback reference
         $existing = $this->findById($id);
         if ($existing === null) {
             return ['success' => false, 'errors' => ['Employee not found.'], 'employee' => null];
@@ -124,7 +155,7 @@ final class EmployeeFsStore
             }
 
             return [$data, ['success' => true, 'errors' => [], 'employee' => $payload]];
-        }, ['success' => false, 'errors' => ['Could not update employee.'], 'employee' => null]);
+        }, ['success' => false, 'errors' => ['Could not update employee.'], 'employee' => null]); */
     }
 
     private function normaliseInput(array $input, ?array $existing = null): array

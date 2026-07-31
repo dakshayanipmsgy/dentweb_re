@@ -8,6 +8,7 @@ require_once __DIR__ . '/customer_records.php';
 require_once __DIR__ . '/portal_file_storage.php';
 require_once __DIR__ . '/website_settings.php';
 require_once __DIR__ . '/solar_finance_settings.php';
+require_once __DIR__ . '/canonical_work_storage.php';
 
 if (date_default_timezone_get() !== 'Asia/Kolkata') {
     date_default_timezone_set('Asia/Kolkata');
@@ -750,6 +751,7 @@ SQL
     $db->exec('CREATE INDEX IF NOT EXISTS idx_blog_post_tags_tag ON blog_post_tags(tag_id)');
 
     apply_schema_patches($db);
+    canonical_work_initialize_schema($db);
 }
 
 function seed_defaults(PDO $db): void
@@ -770,6 +772,9 @@ function seed_defaults(PDO $db): void
         ]);
     }
 
+    // Known sample credentials are opt-in for disposable development only. Never
+    // create them silently in a production database.
+    if (getenv('PORTAL_SEED_DEMO_USERS') === '1') {
     ensure_default_user($db, [
         'role' => 'admin',
         'full_name' => 'Primary Administrator',
@@ -790,7 +795,6 @@ function seed_defaults(PDO $db): void
         'permissions_note' => 'Employee workspace access',
         'legacy_usernames' => ['employee'],
     ]);
-
     ensure_default_user($db, [
         'role' => 'installer',
         'full_name' => 'Lead Installer',
@@ -800,6 +804,7 @@ function seed_defaults(PDO $db): void
         'permissions_note' => 'Installer workspace access',
         'legacy_usernames' => ['installer'],
     ]);
+    }
 
     $defaultMetrics = [
         'last_backup' => 'Not recorded',
@@ -2507,6 +2512,7 @@ function portal_normalize_task_row(array $row): array
         'createdAt' => $row['created_at'] ?? '',
         'updatedAt' => $row['updated_at'] ?? '',
         'completedAt' => $row['completed_at'] ?? '',
+        'version' => (int) ($row['version'] ?? 1),
     ];
 }
 
@@ -2547,7 +2553,9 @@ function portal_save_task(PDO $db, array $input, int $actorId): array
 
     $taskId = isset($input['id']) ? (int) $input['id'] : 0;
     if ($taskId > 0) {
-        $stmt = $db->prepare('UPDATE portal_tasks SET title = :title, description = :description, status = :status, priority = :priority, due_date = :due_date, linked_reference = :linked_reference, notes = :notes, assignee_id = :assignee_id, updated_at = :updated_at WHERE id = :id');
+        $expectedVersion = (int) ($input['version'] ?? 0);
+        if ($expectedVersion <= 0) { throw new RuntimeException('Task version is required for updates.'); }
+        $stmt = $db->prepare('UPDATE portal_tasks SET title = :title, description = :description, status = :status, priority = :priority, due_date = :due_date, linked_reference = :linked_reference, notes = :notes, assignee_id = :assignee_id, updated_at = :updated_at, version = version + 1 WHERE id = :id AND version = :version');
         $stmt->execute([
             ':title' => $title,
             ':description' => $description,
@@ -2559,7 +2567,9 @@ function portal_save_task(PDO $db, array $input, int $actorId): array
             ':assignee_id' => $assigneeId,
             ':updated_at' => $now,
             ':id' => $taskId,
+            ':version' => $expectedVersion,
         ]);
+        if ($stmt->rowCount() !== 1) { throw new RuntimeException('Task was changed by another request; reload before saving.'); }
         portal_log_action($db, $actorId, 'update', 'task', $taskId, 'Task updated via admin portal');
     } else {
         $stmt = $db->prepare('INSERT INTO portal_tasks(title, description, status, priority, due_date, linked_reference, notes, assignee_id, created_by, created_at, updated_at) VALUES(:title, :description, :status, :priority, :due_date, :linked_reference, :notes, :assignee_id, :created_by, :created_at, :updated_at)');
@@ -2602,7 +2612,7 @@ function portal_save_task(PDO $db, array $input, int $actorId): array
     return $normalized;
 }
 
-function portal_update_task_status(PDO $db, int $taskId, string $status, int $actorId): array
+function portal_update_task_status(PDO $db, int $taskId, string $status, int $actorId, ?int $expectedVersion = null): array
 {
     if (!in_array($status, ['todo', 'in_progress', 'done'], true)) {
         throw new RuntimeException('Invalid task status.');
@@ -2616,13 +2626,16 @@ function portal_update_task_status(PDO $db, int $taskId, string $status, int $ac
     }
 
     $now = now_ist();
-    $update = $db->prepare('UPDATE portal_tasks SET status = :status, updated_at = :updated_at, completed_at = :completed_at WHERE id = :id');
+    $expectedVersion ??= (int) ($row['version'] ?? 1);
+    $update = $db->prepare('UPDATE portal_tasks SET status = :status, updated_at = :updated_at, completed_at = :completed_at, version = version + 1 WHERE id = :id AND version = :version');
     $update->execute([
         ':status' => $status,
         ':updated_at' => $now,
         ':completed_at' => $status === 'done' ? $now : null,
         ':id' => $taskId,
+        ':version' => $expectedVersion,
     ]);
+    if ($update->rowCount() !== 1) { throw new RuntimeException('Task was changed by another request; reload before saving.'); }
 
     portal_log_action($db, $actorId, 'status_change', 'task', $taskId, 'Task status updated to ' . $status);
 

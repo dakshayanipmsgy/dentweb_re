@@ -84,7 +84,7 @@ try {
                 throw new RuntimeException('Task ID is required.');
             }
             $status = (string) ($payload['status'] ?? '');
-            respond_success(['task' => portal_update_task_status($db, $taskId, $status, $actorId), 'tasks' => portal_list_tasks($db)]);
+            respond_success(['task' => portal_update_task_status($db, $taskId, $status, $actorId, isset($payload['version']) ? (int) $payload['version'] : null), 'tasks' => portal_list_tasks($db)]);
             break;
         case 'save-document':
             require_method('POST');
