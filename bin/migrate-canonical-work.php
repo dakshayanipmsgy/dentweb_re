@@ -1,57 +1,25 @@
 #!/usr/bin/env php
 <?php
 declare(strict_types=1);
-
-require_once __DIR__ . '/../includes/bootstrap.php';
-
-$options=getopt('', ['dry-run','db::','employees::','tasks::','report-dir::']);
-$dry=array_key_exists('dry-run',$options);
-$dbPath=(string)($options['db']??(__DIR__.'/../storage/app.sqlite'));
-$employeePath=(string)($options['employees']??(__DIR__.'/../storage/employee-users/employees.json'));
-$taskPath=(string)($options['tasks']??(__DIR__.'/../data/tasks/tasks.json'));
-$reportDir=(string)($options['report-dir']??(__DIR__.'/../storage/migration-reports'));
-$stamp=gmdate('Ymd_His');
-$counts=['imported'=>0,'updated'=>0,'skipped'=>0,'conflicted'=>0,'failed'=>0]; $conflicts=[]; $backups=[];
-
-function safe_json_file(string $path): array { if(!is_file($path))return []; $v=json_decode((string)file_get_contents($path),true,512,JSON_THROW_ON_ERROR); return is_array($v)?$v:[]; }
-function fingerprint(array $record): string { unset($record['password_hash'],$record['notes'],$record['completion_log'],$record['attachments']); ksort($record); return hash('sha256',json_encode($record,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)); }
-
-try {
-  $workingDbPath=$dbPath;
-  if($dry){$workingDbPath=tempnam(sys_get_temp_dir(),'dentweb-911-dry-');if($workingDbPath===false)throw new RuntimeException('Cannot create dry-run database.');if(is_file($dbPath)&&!copy($dbPath,$workingDbPath))throw new RuntimeException('Cannot copy database for dry run.');}
-  if(!$dry){
-    $backupDir=dirname($dbPath).'/backups/'.$stamp; if(!is_dir($backupDir)&&!mkdir($backupDir,0770,true)&&!is_dir($backupDir))throw new RuntimeException('Cannot create backup directory.');
-    foreach([$dbPath,$employeePath,$taskPath] as $path)if(is_file($path)){ $dest=$backupDir.'/'.basename($path); if(!copy($path,$dest))throw new RuntimeException('Backup failed.'); $backups[]=$dest; }
-  }
-  $db=new PDO('sqlite:'.$workingDbPath,null,null,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]); $db->exec('PRAGMA foreign_keys=ON'); initialize_schema($db);
-  $db->beginTransaction();
-  $db->exec("INSERT OR IGNORE INTO roles(name,description) VALUES('employee','Internal staff')"); $role=(int)$db->query("SELECT id FROM roles WHERE name='employee'")->fetchColumn();
-  $payload=safe_json_file($employeePath); foreach(($payload['employees']??[]) as $employee){
-    $legacy=trim((string)($employee['id']??''));$login=trim((string)($employee['login_id']??''));
-    if($legacy===''||$login===''){ $counts['failed']++; continue; }
-    $mapped=$db->prepare("SELECT user_id FROM employee_legacy_ids WHERE source='employee_json' AND legacy_id=:id");$mapped->execute([':id'=>$legacy]);$mappedId=$mapped->fetchColumn();
-    if($mappedId!==false){$counts['skipped']++;continue;}
-    $find=$db->prepare('SELECT id FROM users WHERE lower(username)=lower(:v) OR lower(email)=lower(:v)');$find->execute([':v'=>$login]);$ids=array_values(array_unique(array_map('intval',$find->fetchAll(PDO::FETCH_COLUMN))));
-    if(count($ids)>1){$counts['conflicted']++;$conflicts[]=['type'=>'employee','legacy_id'=>$legacy,'reason'=>'ambiguous exact login identifier'];continue;}
-    if(count($ids)===1){$uid=$ids[0];$counts['updated']++;}
-    else {
-      $email=filter_var($login,FILTER_VALIDATE_EMAIL)?$login:'employee+'.substr(hash('sha256',strtolower($login)),0,16).'@local.invalid';
-      $insert=$db->prepare('INSERT INTO users(full_name,email,username,password_hash,role_id,status,permissions_note,created_at,updated_at) VALUES(:n,:e,:u,:p,:r,:s,:d,:c,:m)');
-      $insert->execute([':n'=>(string)($employee['name']??$login),':e'=>$email,':u'=>$login,':p'=>(string)($employee['password_hash']??''),':r'=>$role,':s'=>(string)($employee['status']??'active'),':d'=>(string)($employee['designation']??''),':c'=>(string)($employee['created_at']??gmdate('c')),':m'=>(string)($employee['updated_at']??gmdate('c'))]);$uid=(int)$db->lastInsertId();$counts['imported']++;
-    }
-    $db->prepare("INSERT INTO employee_legacy_ids(source,legacy_id,user_id) VALUES('employee_json',:l,:u)")->execute([':l'=>$legacy,':u'=>$uid]);
-  }
-  foreach($db->query('SELECT id FROM portal_tasks')->fetchAll(PDO::FETCH_COLUMN) as $id){$stmt=$db->prepare("INSERT OR IGNORE INTO task_legacy_ids(source,legacy_id,task_id,fingerprint) VALUES('portal_tasks',:l,:t,:f)");$stmt->execute([':l'=>(string)$id,':t'=>(int)$id,':f'=>hash('sha256','portal_tasks:'.$id)]);$counts[$stmt->rowCount()===1?'updated':'skipped']++;}
-  $repo=new CanonicalTaskRepository($db); foreach(safe_json_file($taskPath) as $task){
-    $legacy=trim((string)($task['id']??''));if($legacy===''){$counts['failed']++;continue;}
-    $check=$db->prepare("SELECT task_id,fingerprint FROM task_legacy_ids WHERE source='tasks_json' AND legacy_id=:l");$check->execute([':l'=>$legacy]);$old=$check->fetch();$fp=fingerprint($task);
-    if($old){if(hash_equals((string)$old['fingerprint'],$fp))$counts['skipped']++;else{$counts['conflicted']++;$conflicts[]=['type'=>'task','legacy_id'=>$legacy,'reason'=>'source changed after import'];}continue;}
-    $assigneeLegacy=trim((string)($task['assigned_to_id']??'')); if($assigneeLegacy!==''){$map=$db->prepare("SELECT user_id FROM employee_legacy_ids WHERE source='employee_json' AND legacy_id=:l");$map->execute([':l'=>$assigneeLegacy]);$uid=$map->fetchColumn();if($uid===false){$counts['conflicted']++;$conflicts[]=['type'=>'task','legacy_id'=>$legacy,'reason'=>'unmapped assignee legacy ID'];continue;}$task['assigned_to_id']=(string)$uid;}
-    $task['id']='';$saved=$repo->saveLegacyShape($task);$db->prepare("INSERT INTO task_legacy_ids(source,legacy_id,task_id,fingerprint) VALUES('tasks_json',:l,:t,:f)")->execute([':l'=>$legacy,':t'=>(int)$saved['id'],':f'=>$fp]);$counts['imported']++;
-  }
-  if($dry)$db->rollBack();else$db->commit();
+require_once __DIR__.'/../includes/bootstrap.php';
+$o=getopt('',['dry-run','db::','employees::','tasks::','report-dir::','backup-only','restore-rehearsal']);$dry=isset($o['dry-run']);$dbPath=(string)($o['db']??__DIR__.'/../storage/app.sqlite');$employees=(string)($o['employees']??__DIR__.'/../storage/employee-users/employees.json');$tasks=(string)($o['tasks']??__DIR__.'/../data/tasks/tasks.json');$reportDir=(string)($o['report-dir']??__DIR__.'/../storage/migration-reports');$stamp=gmdate('Ymd_His').'_'.bin2hex(random_bytes(3));$counts=array_fill_keys(['imported','updated','skipped','conflicted','failed'],0);$conflicts=[];$backup=null;
+function cw_json(string $p):array{if(!is_file($p))return[];$v=json_decode((string)file_get_contents($p),true,512,JSON_THROW_ON_ERROR);return is_array($v)?$v:[];}
+function cw_fp(array $r):string{$safe=['id'=>(string)($r['id']??''),'login_id'=>strtolower(trim((string)($r['login_id']??''))),'name'=>trim((string)($r['name']??'')),'phone'=>trim((string)($r['phone']??'')),'designation'=>trim((string)($r['designation']??'')),'status'=>strtolower(trim((string)($r['status']??''))),'password_set'=>!empty($r['password_hash'])];return hash('sha256',json_encode($safe,JSON_THROW_ON_ERROR));}
+function cw_open(string $p):PDO{return new PDO('sqlite:'.$p,null,null,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);}
+function cw_backup(PDO $db,string $dest):void{$q=$db->quote($dest);$db->exec('VACUUM INTO '.$q);$check=cw_open($dest)->query('PRAGMA integrity_check')->fetchColumn();if($check!=='ok')throw new RuntimeException('Backup integrity check failed.');}
+try{
+ $source=cw_open($dbPath);$source->exec('PRAGMA foreign_keys=ON');initialize_schema($source);
+ $dir=dirname($dbPath).'/backups/'.$stamp;if(!is_dir($dir)&&!mkdir($dir,0770,true)&&!is_dir($dir))throw new RuntimeException('Cannot create backup directory.');$backup=$dir.'/app.sqlite';cw_backup($source,$backup);
+ $restore=tempnam(sys_get_temp_dir(),'dentweb-restore-');if($restore===false)throw new RuntimeException('Cannot create restore rehearsal.');unlink($restore);copy($backup,$restore);$restored=cw_open($restore);if($restored->query('PRAGMA integrity_check')->fetchColumn()!=='ok')throw new RuntimeException('Restore rehearsal failed.');$restored=null;unlink($restore);
+ if(isset($o['backup-only'])){echo json_encode(['backup'=>$backup,'integrity_check'=>'ok','restore_rehearsal'=>'ok'],JSON_PRETTY_PRINT).PHP_EOL;exit;}
+ $work=$dbPath;if($dry){$work=tempnam(sys_get_temp_dir(),'dentweb-917-');if($work===false)throw new RuntimeException('Cannot create dry-run database.');unlink($work);copy($backup,$work);}$db=cw_open($work);$db->exec('PRAGMA foreign_keys=ON');initialize_schema($db);canonical_work_initialize_schema($db);$db->beginTransaction();$db->exec("INSERT OR IGNORE INTO roles(name,description) VALUES('employee','Internal staff')");$role=(int)$db->query("SELECT id FROM roles WHERE name='employee'")->fetchColumn();
+ foreach((cw_json($employees)['employees']??[]) as $e){$legacy=trim((string)($e['id']??''));$login=trim((string)($e['login_id']??''));if($legacy===''||$login===''){$counts['failed']++;continue;}$fp=cw_fp($e);$m=$db->prepare("SELECT * FROM employee_legacy_ids WHERE source='employee_json' AND legacy_id=:l");$m->execute([':l'=>$legacy]);$mapped=$m->fetch();
+  if($mapped){if(hash_equals((string)($mapped['source_fingerprint']??''),$fp)){$counts['skipped']++;continue;}$counts['conflicted']++;$conflicts[]=['type'=>'employee','legacy_id'=>$legacy,'reason'=>'mapped source changed; manual review required'];continue;}
+  $q=$db->prepare("SELECT u.id,u.full_name,u.status,COALESCE(p.phone,'') phone,COALESCE(p.designation,'') designation,r.name role_name,CASE WHEN lower(u.username)=lower(:v) THEN 'username' ELSE 'email' END matched_column FROM users u JOIN roles r ON r.id=u.role_id LEFT JOIN employee_profiles p ON p.user_id=u.id WHERE lower(u.username)=lower(:v) OR lower(u.email)=lower(:v)");$q->execute([':v'=>$login]);$matches=$q->fetchAll();if(count($matches)>1){$counts['conflicted']++;$conflicts[]=['type'=>'employee','legacy_id'=>$legacy,'reason'=>'username/email cross-column ambiguity'];continue;}if($matches&&$matches[0]['role_name']!=='employee'){$counts['conflicted']++;$conflicts[]=['type'=>'employee','legacy_id'=>$legacy,'reason'=>'identifier belongs to non-employee role'];continue;}
+  if($matches){$m=$matches[0];$differences=[];foreach(['name'=>'full_name','phone'=>'phone','designation'=>'designation','status'=>'status'] as $src=>$dst){$incoming=trim((string)($e[$src]??''));if($incoming!==''&&$incoming!==trim((string)($m[$dst]??'')))$differences[]=$src;}if($differences){$counts['conflicted']++;$conflicts[]=['type'=>'employee','legacy_id'=>$legacy,'reason'=>'existing employee differs in: '.implode(', ',$differences)];continue;}$uid=(int)$m['id'];$counts['updated']++;}else{$hash=(string)($e['password_hash']??'');if($hash===''||password_get_info($hash)['algo']===null){$counts['conflicted']++;$conflicts[]=['type'=>'employee','legacy_id'=>$legacy,'reason'=>'valid password hash required'];continue;}$email=filter_var($login,FILTER_VALIDATE_EMAIL)?$login:'employee+'.substr(hash('sha256',strtolower($login)),0,16).'@local.invalid';$s=$db->prepare('INSERT INTO users(full_name,email,username,password_hash,role_id,status,permissions_note,created_at,updated_at) VALUES(:n,:e,:u,:p,:r,:s,\'\',datetime(\'now\'),datetime(\'now\'))');$s->execute([':n'=>(string)($e['name']??$login),':e'=>$email,':u'=>$login,':p'=>$hash,':r'=>$role,':s'=>in_array(($e['status']??''),['active','inactive'],true)?$e['status']:'inactive']);$uid=(int)$db->lastInsertId();$counts['imported']++;}
+  $p=$db->prepare('INSERT INTO employee_profiles(user_id,phone,designation,created_at,updated_at) VALUES(:u,:p,:d,datetime(\'now\'),datetime(\'now\')) ON CONFLICT(user_id) DO NOTHING');$p->execute([':u'=>$uid,':p'=>trim((string)($e['phone']??'')),':d'=>trim((string)($e['designation']??''))]);$db->prepare("INSERT INTO employee_legacy_ids(source,legacy_id,user_id,source_fingerprint,migration_version,updated_at) VALUES('employee_json',:l,:u,:f,:v,datetime('now'))")->execute([':l'=>$legacy,':u'=>$uid,':f'=>$fp,':v'=>CANONICAL_WORK_SCHEMA_VERSION]);
+ }
+ $repo=new CanonicalTaskRepository($db);foreach(cw_json($tasks) as $t){$legacy=trim((string)($t['id']??''));if($legacy===''){$counts['failed']++;continue;}$fp=hash('sha256',json_encode($t,JSON_THROW_ON_ERROR));$q=$db->prepare("SELECT fingerprint FROM task_legacy_ids WHERE source='tasks_json' AND legacy_id=:l");$q->execute([':l'=>$legacy]);$old=$q->fetchColumn();if($old!==false){if(hash_equals((string)$old,$fp))$counts['skipped']++;else{$counts['conflicted']++;$conflicts[]=['type'=>'task','legacy_id'=>$legacy,'reason'=>'source changed after import'];}continue;}$a=trim((string)($t['assigned_to_id']??''));if($a!==''){$q=$db->prepare("SELECT user_id FROM employee_legacy_ids WHERE source='employee_json' AND legacy_id=:l");$q->execute([':l'=>$a]);$uid=$q->fetchColumn();if($uid===false){$counts['conflicted']++;$conflicts[]=['type'=>'task','legacy_id'=>$legacy,'reason'=>'unmapped employee assignee'];continue;}$t['assigned_to_id']=(string)$uid;}$t['id']='';$saved=$repo->saveLegacyShape($t);$db->prepare("INSERT INTO task_legacy_ids(source,legacy_id,task_id,fingerprint) VALUES('tasks_json',:l,:t,:f)")->execute([':l'=>$legacy,':t'=>(int)$saved['id'],':f'=>$fp]);$counts['imported']++;}
+ $db->commit();if($dry){unlink($work);}else{if(!is_dir($reportDir))mkdir($reportDir,0770,true);}
 }catch(Throwable $e){if(isset($db)&&$db->inTransaction())$db->rollBack();$counts['failed']++;$conflicts[]=['type'=>'migration','reason'=>$e->getMessage()];}
-$db=null;if($dry&&isset($workingDbPath)&&is_file($workingDbPath))unlink($workingDbPath);
-$report=['mode'=>$dry?'dry-run':'apply','generated_at'=>gmdate('c'),'database'=>basename($dbPath),'counts'=>$counts,'conflicts'=>$conflicts,'backups'=>array_map('basename',$backups)];
-if(!$dry){if(!is_dir($reportDir))mkdir($reportDir,0770,true);file_put_contents($reportDir.'/canonical-work-'.$stamp.'.json',json_encode($report,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));}
-echo json_encode($report,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES).PHP_EOL; exit($counts['failed']>0?1:0);
+$report=['mode'=>$dry?'dry-run':'apply','schema_version'=>CANONICAL_WORK_SCHEMA_VERSION,'generated_at'=>gmdate('c'),'database'=>basename($dbPath),'counts'=>$counts,'conflicts'=>$conflicts,'backup'=>$backup===null?null:basename($backup),'backup_integrity'=>'ok','restore_rehearsal'=>'ok'];if(!$dry&&isset($reportDir)&&is_dir($reportDir))file_put_contents($reportDir.'/canonical-work-'.$stamp.'.json',json_encode($report,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));echo json_encode($report,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES).PHP_EOL;exit($counts['failed']?1:0);

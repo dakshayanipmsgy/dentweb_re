@@ -92,6 +92,9 @@ function admin_users_apply_employee_password(array $source, array &$input, array
 
     $hasPassword = ($password !== '') || ($confirm !== '');
     if (!$hasPassword) {
+        if ($existingEmployee === null) {
+            $errors[] = 'A password is required for a new employee.';
+        }
         return;
     }
 
@@ -599,9 +602,9 @@ function admin_users_apply_employee_password(array $source, array &$input, array
               <input id="employee-designation" class="users-input" name="designation" type="text" />
             </div>
             <div>
-              <label for="employee-password">Password (optional)</label>
-              <input id="employee-password" class="users-input" name="password" type="password" minlength="6" />
-              <p class="admin-muted" style="margin-top: 0.25rem;">Leave blank to keep the password unset.</p>
+              <label for="employee-password">Password *</label>
+              <input id="employee-password" class="users-input" name="password" type="password" minlength="6" required />
+              <p class="admin-muted" style="margin-top: 0.25rem;">A password is required for every new employee.</p>
             </div>
             <div>
               <label for="employee-password-confirm">Confirm Password</label>

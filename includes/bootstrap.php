@@ -494,7 +494,7 @@ CREATE TABLE IF NOT EXISTS portal_tasks (
     title TEXT NOT NULL,
     description TEXT,
     status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo','in_progress','done')),
-    priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('low','medium','high')),
+    priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('low','medium','high','urgent')),
     due_date TEXT,
     linked_reference TEXT,
     notes TEXT,
@@ -2502,7 +2502,7 @@ function portal_normalize_task_row(array $row): array
         'title' => $row['title'],
         'description' => $row['description'] ?? '',
         'status' => $row['status'],
-        'priority' => $row['priority'],
+        'priority' => $row['workflow_priority'] ?? $row['priority'],
         'dueDate' => $row['due_date'] ?? '',
         'linkedTo' => $row['linked_reference'] ?? '',
         'notes' => $row['notes'] ?? '',
@@ -2529,7 +2529,7 @@ function portal_save_task(PDO $db, array $input, int $actorId): array
     }
 
     $priority = $input['priority'] ?? 'medium';
-    if (!in_array($priority, ['low', 'medium', 'high'], true)) {
+    if (!in_array($priority, ['low', 'medium', 'high', 'urgent'], true)) {
         $priority = 'medium';
     }
 
@@ -2555,12 +2555,13 @@ function portal_save_task(PDO $db, array $input, int $actorId): array
     if ($taskId > 0) {
         $expectedVersion = (int) ($input['version'] ?? 0);
         if ($expectedVersion <= 0) { throw new RuntimeException('Task version is required for updates.'); }
-        $stmt = $db->prepare('UPDATE portal_tasks SET title = :title, description = :description, status = :status, priority = :priority, due_date = :due_date, linked_reference = :linked_reference, notes = :notes, assignee_id = :assignee_id, updated_at = :updated_at, version = version + 1 WHERE id = :id AND version = :version');
+        $stmt = $db->prepare('UPDATE portal_tasks SET title = :title, description = :description, status = :status, priority = :storage_priority, workflow_priority = :priority, due_date = :due_date, linked_reference = :linked_reference, notes = :notes, assignee_id = :assignee_id, updated_at = :updated_at, version = version + 1 WHERE id = :id AND version = :version');
         $stmt->execute([
             ':title' => $title,
             ':description' => $description,
             ':status' => $status,
             ':priority' => $priority,
+            ':storage_priority' => $priority === 'urgent' ? 'high' : $priority,
             ':due_date' => $dueDate !== '' ? $dueDate : null,
             ':linked_reference' => $linked !== '' ? $linked : null,
             ':notes' => $notes !== '' ? $notes : null,
@@ -2572,12 +2573,13 @@ function portal_save_task(PDO $db, array $input, int $actorId): array
         if ($stmt->rowCount() !== 1) { throw new RuntimeException('Task was changed by another request; reload before saving.'); }
         portal_log_action($db, $actorId, 'update', 'task', $taskId, 'Task updated via admin portal');
     } else {
-        $stmt = $db->prepare('INSERT INTO portal_tasks(title, description, status, priority, due_date, linked_reference, notes, assignee_id, created_by, created_at, updated_at) VALUES(:title, :description, :status, :priority, :due_date, :linked_reference, :notes, :assignee_id, :created_by, :created_at, :updated_at)');
+        $stmt = $db->prepare('INSERT INTO portal_tasks(title, description, status, priority, workflow_priority, due_date, linked_reference, notes, assignee_id, created_by, created_at, updated_at) VALUES(:title, :description, :status, :storage_priority, :priority, :due_date, :linked_reference, :notes, :assignee_id, :created_by, :created_at, :updated_at)');
         $stmt->execute([
             ':title' => $title,
             ':description' => $description,
             ':status' => $status,
             ':priority' => $priority,
+            ':storage_priority' => $priority === 'urgent' ? 'high' : $priority,
             ':due_date' => $dueDate !== '' ? $dueDate : null,
             ':linked_reference' => $linked !== '' ? $linked : null,
             ':notes' => $notes !== '' ? $notes : null,
@@ -2617,6 +2619,9 @@ function portal_update_task_status(PDO $db, int $taskId, string $status, int $ac
     if (!in_array($status, ['todo', 'in_progress', 'done'], true)) {
         throw new RuntimeException('Invalid task status.');
     }
+    if ($expectedVersion === null || $expectedVersion < 1) {
+        throw new RuntimeException('Task version is required; reload before saving.');
+    }
     enforce_task_access($db, $taskId, $actorId);
     $stmt = $db->prepare('SELECT * FROM portal_tasks WHERE id = :id LIMIT 1');
     $stmt->execute([':id' => $taskId]);
@@ -2626,7 +2631,6 @@ function portal_update_task_status(PDO $db, int $taskId, string $status, int $ac
     }
 
     $now = now_ist();
-    $expectedVersion ??= (int) ($row['version'] ?? 1);
     $update = $db->prepare('UPDATE portal_tasks SET status = :status, updated_at = :updated_at, completed_at = :completed_at, version = version + 1 WHERE id = :id AND version = :version');
     $update->execute([
         ':status' => $status,
