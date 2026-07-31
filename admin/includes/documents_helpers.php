@@ -8650,23 +8650,24 @@ function documents_payment_request_find_by_token(string $token): ?array
     return null;
 }
 
-/** Atomically consumes one of two launches and returns server-owned payment data. */
-function documents_payment_request_authorize_upi(string $token, ?int $now = null): array
+/** Atomically consumes one of two UPI uses, shared by direct launches and QR generations. */
+function documents_payment_request_authorize_upi(string $token, ?int $now = null, string $method = 'direct'): array
 {
     if (!preg_match('/^[a-f0-9]{64}$/', $token)) return ['ok'=>false,'error'=>'This payment link is unavailable.'];
+    if (!in_array($method, ['direct','qr'], true)) return ['ok'=>false,'error'=>'Unsupported UPI payment method.'];
     $now ??= time(); $hash=hash('sha256',$token);
-    $result=documents_with_payment_request_lock(function (&$rows) use ($hash,$now): array {
+    $result=documents_with_payment_request_lock(function (&$rows) use ($hash,$now,$method): array {
         foreach($rows as &$row) if (hash_equals((string)($row['upi_link']['token_hash']??''),$hash)) {
             $full=array_merge(documents_payment_request_defaults(),$row);
             if(!documents_payment_request_link_available($full,$now)) return ['ok'=>false,'error'=>'This payment link is unavailable or has no launches remaining.'];
             $row['upi_link']['launch_count']=(int)($row['upi_link']['launch_count']??0)+1;
             $amount=number_format((float)$row['amount_requested'],2,'.',''); $reference=(string)$row['id'];
             $query=http_build_query(['pa'=>'d.entranchi@ybl','pn'=>'Dakshayani Enterprises','am'=>$amount,'cu'=>'INR','tn'=>$reference],'','&',PHP_QUERY_RFC3986);
-            return ['ok'=>true,'write'=>true,'request_id'=>$reference,'launch_count'=>$row['upi_link']['launch_count'],'remaining'=>2-$row['upi_link']['launch_count'],'upi_uri'=>'upi://pay?'.$query];
+            return ['ok'=>true,'write'=>true,'request_id'=>$reference,'method'=>$method,'launch_count'=>$row['upi_link']['launch_count'],'remaining'=>2-$row['upi_link']['launch_count'],'upi_uri'=>'upi://pay?'.$query];
         }
         return ['ok'=>false,'error'=>'This payment link is unavailable.'];
     });
-    if(!empty($result['ok'])) documents_payment_request_audit((string)$result['request_id'],'upi_launch_authorized',['launch_count'=>$result['launch_count']]);
+    if(!empty($result['ok'])) documents_payment_request_audit((string)$result['request_id'],'upi_use_authorized',['method'=>$result['method'],'launch_count'=>$result['launch_count']]);
     return $result;
 }
 
