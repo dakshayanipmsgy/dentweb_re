@@ -1,8 +1,8 @@
-const CACHE_VERSION = 'dakshayani-pwa-v4-task-workflow';
+const CACHE_VERSION = 'dakshayani-pwa-v3-release-audit';
 const CACHE_NAME = CACHE_VERSION;
 
-// Only public shell assets are cached. Authenticated PHP pages, task data,
-// generated documents and API responses always come from the network.
+// Increment CACHE_VERSION after changing cached assets so deployed users receive
+// fresh CSS/JS/manifest files. Activation removes all older Dakshayani caches.
 const SW_BASE = new URL('./', self.location.href);
 const SAFE_ASSETS = [
   'manifest.webmanifest',
@@ -63,6 +63,9 @@ function isSafeStaticAsset(request, url) {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
+
+  // Never cache POST responses, authenticated navigation/PHP pages, generated
+  // documents, uploads, storage files, or API-like responses.
   if (request.method !== 'GET') return;
 
   if (request.mode === 'navigate') {
