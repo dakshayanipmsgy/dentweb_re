@@ -5,7 +5,7 @@ $n=0; function wsok($v,$m){global $n;$n++;if(!$v)throw new RuntimeException($m);
 $accepted=[];$completed=[];
 for($i=1;$i<=120;$i++){
  $base=['id'=>sprintf('q%03d',$i),'customer'=>'Customer '.sprintf('%03d',$i),'mobile'=>'98765'.sprintf('%05d',$i),'quotation'=>'DE/Q/'.sprintf('%03d',$i),'documents_ready'=>$i%2===0,'link_ready'=>$i%3===0];
- $accepted[]=array_merge($base,['due'=>$i%4===0?-10:($i%4===1?0:$i*100),'received'=>$i*50,'due_days'=>$i===1?0:$i,'active_requests'=>$i%5===0?1:0,'archived'=>$i%7===0]);
+ $accepted[]=array_merge($base,['due'=>$i%4===0?0:($i%4===1?0:$i*100),'credit'=>$i%4===0?10:0,'received'=>$i*50,'due_days'=>$i===1?0:$i,'active_requests'=>$i%5===0?1:0,'archived'=>$i%7===0]);
  $completed[]=array_merge($base,['completed_date'=>'2026-'.sprintf('%02d',($i%12)+1).'-'.sprintf('%02d',($i%27)+1),'review_changed'=>$i%4===0,'amount'=>1000+$i,'paid'=>$i%5===0?1000+$i:500]);
 }
 $a=project_workspace_params([], 'accepted'); wsok($a['per_page']===25&&$a['page']===1,'default pagination');
