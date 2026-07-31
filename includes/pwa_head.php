@@ -8,8 +8,6 @@ if (!function_exists('pwa_asset')) {
         if ($scriptDir === '/' || $scriptDir === '.') {
             $scriptDir = '';
         }
-        // Build relative-to-current-script URLs so hosted subdirectories on cPanel
-        // load the manifest, service worker helper, and icons from the same app root.
         return ($scriptDir === '' ? '' : rtrim($scriptDir, '/') . '/') . ltrim($path, '/');
     }
 }
@@ -22,8 +20,8 @@ if (!defined('DAKSHAYANI_PWA_HEAD_PRINTED')):
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Dakshayani">
-<meta name="application-name" content="Dakshayani Enterprises">
+<meta name="apple-mobile-web-app-title" content="Dakshayani Work">
+<meta name="application-name" content="Dakshayani Work">
 <meta name="format-detection" content="telephone=no">
 <link rel="icon" type="image/svg+xml" href="<?= htmlspecialchars(pwa_asset('assets/icons/app-icon.svg'), ENT_QUOTES) ?>">
 <link rel="apple-touch-icon" href="<?= htmlspecialchars(pwa_asset('assets/icons/app-icon.svg'), ENT_QUOTES) ?>">
