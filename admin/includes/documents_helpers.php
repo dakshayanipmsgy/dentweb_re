@@ -8513,6 +8513,56 @@ function documents_payment_request_public_url(string $token): string
     return $scheme . '://' . $host . $base . '/payment-request.php?token=' . rawurlencode($token);
 }
 
+/**
+ * Build privacy-safe Customer Portal guidance for a payment request.
+ *
+ * The mobile number is used only as an exact normalized lookup key and is
+ * deliberately absent from the returned presentation data.
+ *
+ * @return array{available:bool,login_url:string,password_instruction:string,show_default_password:bool,message:string}
+ */
+function documents_payment_request_portal_guidance(array $request, ?CustomerFsStore $store = null): array
+{
+    $unavailable = static fn(string $message): array => [
+        'available' => false,
+        'login_url' => '',
+        'password_instruction' => '',
+        'show_default_password' => false,
+        'message' => $message,
+    ];
+    $mobile = normalize_customer_mobile((string) ($request['customer_mobile'] ?? ''));
+    $ownerName = preg_replace('/\s+/', ' ', strtolower(trim((string) ($request['customer_name'] ?? '')))) ?? '';
+    if ($mobile === '' || $ownerName === '') {
+        return $unavailable('Customer Portal access could not be confirmed for this payment request.');
+    }
+
+    $store = $store ?? new CustomerFsStore();
+    $matches = array_values(array_filter($store->listCustomers(), static function (array $customer) use ($mobile, $ownerName): bool {
+        $customerMobile = normalize_customer_mobile((string) ($customer['mobile'] ?? $customer['mobile_key'] ?? ''));
+        $customerName = preg_replace('/\s+/', ' ', strtolower(trim((string) ($customer['name'] ?? '')))) ?? '';
+        return $customerMobile === $mobile && $customerName === $ownerName && empty($customer['archived']);
+    }));
+    if (count($matches) !== 1) {
+        return $unavailable('Customer Portal login is not shown because a unique active Customer User could not be confirmed. Please contact Dakshayani Enterprises.');
+    }
+
+    $hash = (string) ($matches[0]['password_hash'] ?? '');
+    if ($hash === '') {
+        return $unavailable('Customer Portal login is not ready. Please contact Dakshayani Enterprises.');
+    }
+    $usesDefault = password_verify('abcd1234', $hash);
+    $instruction = $usesDefault
+        ? 'Login with your registered mobile number and default password abcd1234. For security, change your password after signing in.'
+        : 'Login with your registered mobile number and your current password.';
+    return [
+        'available' => true,
+        'login_url' => documents_application_base_path() . '/login.php?login_type=customer',
+        'password_instruction' => $instruction,
+        'show_default_password' => $usesDefault,
+        'message' => 'Customer Portal access is available for this project.',
+    ];
+}
+
 /** Resolve an existing public payment-request link for one customer quotation. */
 function documents_customer_payment_request_public_url(array $request, array $quote, string $customerMobile, string $token): string
 {
