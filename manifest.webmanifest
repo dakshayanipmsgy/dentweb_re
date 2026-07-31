@@ -1,29 +1,13 @@
 {
-  "id": "./employee-work",
-  "name": "Dakshayani Work - Employee Portal",
-  "short_name": "Dakshayani Work",
-  "description": "Secure employee access to assigned tasks, progress updates, customers and Dakshayani Enterprises work tools.",
-  "start_url": "employee-dashboard.php?source=pwa",
+  "name": "Dakshayani Enterprises",
+  "short_name": "Dakshayani",
+  "description": "Secure access for Dakshayani Enterprises admin, employee, and customer portals.",
+  "start_url": "login.php?source=pwa",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f8fafc",
   "theme_color": "#0f766e",
-  "categories": ["business", "productivity"],
-  "shortcuts": [
-    {
-      "name": "My Tasks",
-      "short_name": "Tasks",
-      "url": "employee-tasks.php?source=pwa",
-      "icons": [{"src": "assets/icons/app-icon.svg", "sizes": "any", "type": "image/svg+xml"}]
-    },
-    {
-      "name": "Employee Dashboard",
-      "short_name": "Dashboard",
-      "url": "employee-dashboard.php?source=pwa",
-      "icons": [{"src": "assets/icons/app-icon.svg", "sizes": "any", "type": "image/svg+xml"}]
-    }
-  ],
   "icons": [
     {
       "src": "assets/icons/app-icon.svg",
