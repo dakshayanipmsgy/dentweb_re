@@ -39,7 +39,7 @@ Deep links must be relative `admin-tasks.php` or `employee-tasks.php` routes app
 {"ok":true,"data":{"notifications":[{"id":42,"title":"Task submitted","message":"Ravi submitted “Rooftop survey” for review.","tone":"warning","notification_type":"submitted","link":"admin-tasks.php?view=active&task=8#task-8","source_task_id":8,"created_at":"2026-08-01 14:30:00","status":"unread"}],"page":1,"view":"unread","has_more":false,"unread_count":1}}
 ```
 
-The shared 44px bell is present on admin/employee dashboards, workspaces, and mobile navigation. It hides zero, shows 1–99 or 99+, maintains a textual accessible label, polls every 45 seconds by default, pauses while hidden (with reduced scheduling), prevents overlapping requests, times out after eight seconds, refreshes on visibility/action events, and silently tolerates transient failures.
+The shared 44px bell is present on admin/employee dashboards, workspaces, and mobile navigation. It hides zero, shows 1–99 or 99+, maintains a textual accessible label, polls every 45 seconds by default, stops scheduling while hidden, prevents overlapping requests, times out after eight seconds, refreshes on visibility/action events, and silently tolerates transient failures.
 
 ## Reminders and configuration
 
@@ -62,3 +62,32 @@ On first schema application, its timestamp becomes the deterministic cutoff. Old
 Deploy by backing up the database, releasing files, setting optional environment values, running the CLI once, verifying its report, and installing cron. Roll back application files first; additive columns/tables are safe for the earlier code. A full schema rollback requires restoring the backup (preferred). Do not drop notification tables while old code is running.
 
 Known limitations: this is polling-based in-app delivery only. There is no browser/OS push, service-worker push, app-badge API, email, WhatsApp, marketing delivery, or #914 redesign. Retention is recorded but not purged automatically. A task deleted outside supported foreign-key workflows produces a graceful unavailable message.
+
+## Issue #924 corrective contract
+
+### Post-commit lifecycle and recovery
+
+Every workflow transaction now captures all event IDs it inserts (including the event for a recurrence created while approving a task). The workflow commits task state, immutable events, messages, attachments and recurrence state first. Only after that commit does it project each exact ID. Projection uses a separate `BEGIN IMMEDIATE` transaction and deterministic per-event/per-user keys, so competing immediate and recovery workers cannot create duplicate notification/status pairs. A projection exception is logged only as `Task notification projection failed for event <id>`; the successful task mutation remains committed and the missing projection checkpoint lets `task_notification_project_pending()` retry it. Scheduled reminder generation remains a separate operation. The API count/list path performs no reminder scan.
+
+### Assignment timestamp and migration
+
+`portal_tasks.assigned_at` is the current-assignment projection in Asia/Kolkata wall time. Initial assignment and recurring occurrence creation set it; reassignment resets it. Acknowledge and reopen do not alter it. Immutable `assigned`, `reassigned`, and `recurrence_created` events preserve assignment history. The idempotent backfill selects the latest such event only when its new assignee matches the current assignee. A task with no events safely falls back to creation; mismatched or otherwise ambiguous history is counted in the migration report and left unset rather than invented. Unacknowledged timing reads only `assigned_at`; ambiguous rows remain ineligible until reviewed and corrected.
+
+### Recipient-state invariants
+
+* **Read:** status `read`; set `read_at`; clear `dismissed_at`; retain `unread_at` as historical “last became unread”.
+* **Unread:** status `unread`; set `unread_at`; clear `read_at` and `dismissed_at`.
+* **Dismissed:** status `dismissed`; set `dismissed_at`; retain historical `read_at`/`unread_at`; exclude from lists and unread totals.
+* **Mark all read:** apply the read rule only to that user’s unread rows.
+
+Mutations are ownership-bound, transactional, and idempotent. The centre enhances ordinary POST forms: successful actions update cards, counts, all shared bells, focus and an ARIA live message without reload; failures remain inline. Without JavaScript, the same forms submit and redirect back.
+
+### Time and reminder boundaries
+
+Event wall times are interpreted explicitly as Asia/Kolkata and converted to `Y-m-dTH:i:sZ` before comparison with the once-persisted UTC rollout cutoff. Before-cutoff events receive one durable `skipped/pre_rollout` checkpoint; exactly-at and later events project. Retries cannot move the cutoff or reverse a checkpoint. Operational reminders remain based on current Kolkata business time and are unaffected by event rollout skips. Due-today begins at the configured hour and stops after the due instant; absent due time means 23:59. Overdue reminders use configured epoch-aligned cadence windows. Unacknowledged cadence begins at current assignment. A keep-blocked admin response updates task activity, so the blocked threshold restarts; resolution/closure/archive removes eligibility.
+
+### Schema, deployment, and rollback
+
+Corrective migration `92401` adds nullable `portal_tasks.assigned_at` and `task_notification_meta(meta_key, meta_value)`, plus the existing additive notification schema when absent. Deploy by backing up `storage/app.sqlite`, releasing the PHP files, and running `php bin/generate-task-notifications.php` once. Review the assignment backfill counts and a sanitized report such as `task-notifications: scanned=28 created=4 deduplicated=9 ineligible=15`; no payloads are logged. Roll back PHP first. The additive column/table are safe to retain; restore the database backup for a full schema rollback. Do not remove notification records/status rows independently.
+
+No push subscription, VAPID, service-worker push/click handler, Badging API, employee manifest, install page, or PWA shell work is included; issue #914 can consume these stable in-app records later.
