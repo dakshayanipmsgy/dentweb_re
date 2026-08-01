@@ -127,13 +127,14 @@ $today = tasks_today_date();
 $tz = new DateTimeZone(TASKS_TIMEZONE);
 $upcomingAdminLimit = (new DateTimeImmutable('today', $tz))->modify('+3 days')->format('Y-m-d');
 
-$allTasks = load_tasks();
+$allTasks = get_db()->query("SELECT *, assignee_id AS assigned_to_id, workflow_priority AS priority FROM portal_tasks WHERE official_flag=1")->fetchAll();
 $pendingTasks = array_values(array_filter($allTasks, static function (array $task): bool {
     if (!empty($task['archived_flag'])) {
         return false;
     }
-    return strcasecmp((string) ($task['status'] ?? ''), 'open') === 0;
+    return !in_array((string) ($task['workflow_status'] ?? ''), ['completed', 'cancelled'], true);
 }));
+$needsAdminAction = count(array_filter($pendingTasks, static fn(array $task): bool => ($task['responsibility'] ?? '') === 'admin'));
 
 $pendingOverdue = 0;
 $pendingToday = 0;
@@ -656,8 +657,8 @@ $cardConfigs[] = [
     <section class="admin-task-widget" aria-label="Pending tasks across employees">
       <div class="admin-task-widget__header">
         <div>
-          <h2 style="margin:0;">Pending Tasks (All Employees)</h2>
-          <p class="admin-muted" style="margin:0;">Lightweight view of overdue, today, and near-term tasks.</p>
+          <h2 style="margin:0;">Official Task Operations</h2>
+          <p class="admin-muted" style="margin:0;">Workflow routing, overdue work, and review accountability.</p>
         </div>
         <a href="<?= htmlspecialchars($pathFor('admin-tasks.php'), ENT_QUOTES) ?>" class="btn btn-ghost">
           <i class="fa-solid fa-list-check" aria-hidden="true"></i>
@@ -666,6 +667,10 @@ $cardConfigs[] = [
       </div>
 
       <div class="admin-task-widget__counts">
+        <a class="admin-task-widget__count" href="<?= htmlspecialchars($pathFor('admin-tasks.php?next_action=admin'), ENT_QUOTES) ?>">
+          <p class="admin-task-widget__count-title">Needs admin action</p>
+          <p class="admin-task-widget__count-value admin-task-widget__count-value--danger"><?= number_format($needsAdminAction) ?></p>
+        </a>
         <div class="admin-task-widget__count">
           <p class="admin-task-widget__count-title">Total pending</p>
           <p class="admin-task-widget__count-value"><?= number_format((int) $pendingTotal) ?></p>
