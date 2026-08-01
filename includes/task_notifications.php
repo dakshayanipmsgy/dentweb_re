@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-const TASK_NOTIFICATION_SCHEMA_VERSION = 91301;
+const TASK_NOTIFICATION_SCHEMA_VERSION = 92401;
 
 function task_notification_config(): array
 {
@@ -23,9 +23,31 @@ function task_notification_config(): array
     ];
 }
 
+function task_notification_kolkata_to_utc(string $stamp): string
+{
+    return (new DateTimeImmutable($stamp, new DateTimeZone('Asia/Kolkata')))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
+}
+
+function task_notification_backfill_assignments(PDO $db): array
+{
+    $report=['updated'=>0,'ambiguous'=>0];
+    foreach($db->query("SELECT id,created_at,assignee_id FROM portal_tasks WHERE assigned_at IS NULL OR assigned_at='' ")->fetchAll(PDO::FETCH_ASSOC) as $task){
+        $q=$db->prepare("SELECT created_at,event_data FROM task_events WHERE task_id=? AND event_type IN ('assigned','reassigned','recurrence_created') ORDER BY id DESC");$q->execute([(int)$task['id']]);$events=$q->fetchAll(PDO::FETCH_ASSOC);$stamp=null;
+        if($events){$payload=json_decode((string)$events[0]['event_data'],true);if(is_array($payload)&&(int)($payload['new_assignee_id']??0)===(int)$task['assignee_id'])$stamp=(string)$events[0]['created_at'];else $report['ambiguous']++;}
+        else {$count=$db->prepare('SELECT COUNT(*) FROM task_events WHERE task_id=?');$count->execute([(int)$task['id']]);if((int)$count->fetchColumn()===0)$stamp=(string)$task['created_at'];else $report['ambiguous']++;}
+        if($stamp!==''){ $u=$db->prepare("UPDATE portal_tasks SET assigned_at=? WHERE id=? AND (assigned_at IS NULL OR assigned_at='')");$u->execute([$stamp,(int)$task['id']]);$report['updated']+=$u->rowCount();}
+    } return $report;
+}
+
 function task_notification_initialize_schema(PDO $db): void
 {
     $columns = static fn(string $table): array => $db->query('PRAGMA table_info(' . $table . ')')->fetchAll(PDO::FETCH_COLUMN, 1);
+    $taskColumns = $columns('portal_tasks');
+    if (!in_array('assigned_at', $taskColumns, true)) $db->exec('ALTER TABLE portal_tasks ADD COLUMN assigned_at TEXT');
+    $db->exec('CREATE TABLE IF NOT EXISTS task_notification_meta (meta_key TEXT PRIMARY KEY, meta_value TEXT NOT NULL)');
+    $utcNow=(new DateTimeImmutable('now',new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
+    $cutoff=$db->prepare("INSERT OR IGNORE INTO task_notification_meta(meta_key,meta_value) VALUES('rollout_cutoff_utc',?)");$cutoff->execute([$utcNow]);
+    task_notification_backfill_assignments($db);
     $notificationColumns = $columns('portal_notifications');
     $add = [
         'notification_type' => "TEXT NOT NULL DEFAULT 'general'",
@@ -48,7 +70,7 @@ function task_notification_initialize_schema(PDO $db): void
     $db->exec('CREATE INDEX IF NOT EXISTS idx_notification_status_user ON portal_notification_status(user_id,status,notification_id DESC)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_notification_listing ON portal_notification_status(user_id,dismissed_at,notification_id DESC)');
     $stmt = $db->prepare("INSERT OR IGNORE INTO schema_migrations(version,name,applied_at) VALUES(?,?,datetime('now'))");
-    $stmt->execute([TASK_NOTIFICATION_SCHEMA_VERSION, 'issue_913_task_notifications']);
+    $stmt->execute([TASK_NOTIFICATION_SCHEMA_VERSION, 'issue_924_notification_corrections']);
 }
 
 function task_notification_safe_text(string $value, int $limit = 140): string
@@ -120,8 +142,10 @@ function task_notification_project_event(PDO $db, int $eventId, ?string $rollout
         $stmt = $db->prepare('SELECT e.*,t.title FROM task_events e JOIN portal_tasks t ON t.id=e.task_id WHERE e.id=?'); $stmt->execute([$eventId]);
         $event = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$event) throw new InvalidArgumentException('Task event not found.');
-        if ($rolloutAt !== null && strcmp((string) $event['created_at'], $rolloutAt) < 0) {
-            $db->prepare("INSERT INTO task_notification_projection VALUES(?,'skipped','pre_rollout',?)")->execute([$eventId, date('Y-m-d H:i:s')]);
+        if ($rolloutAt === null) $rolloutAt=(string)$db->query("SELECT meta_value FROM task_notification_meta WHERE meta_key='rollout_cutoff_utc'")->fetchColumn();
+        $eventUtc=task_notification_kolkata_to_utc((string)$event['created_at']);
+        if ($rolloutAt !== '' && strcmp($eventUtc, $rolloutAt) < 0) {
+            $db->prepare("INSERT INTO task_notification_projection VALUES(?,'skipped','pre_rollout',?)")->execute([$eventId,(new DateTimeImmutable('now',new DateTimeZone('UTC')))->format(DateTimeInterface::ATOM)]);
             $db->commit(); return ['created' => 0, 'skipped' => 1];
         }
         $payload = json_decode((string) $event['event_data'], true, 32, JSON_THROW_ON_ERROR);
@@ -143,7 +167,7 @@ function task_notification_project_event(PDO $db, int $eventId, ?string $rollout
                 if ($insert->rowCount()) { $nid=(int)$db->lastInsertId(); $db->prepare("INSERT INTO portal_notification_status(notification_id,user_id,status,updated_at,unread_at) VALUES(?,?,'unread',?,?)")->execute([$nid,$uid,$payload['occurred_at'],$payload['occurred_at']]); $created++; }
             }
         }
-        $db->prepare("INSERT INTO task_notification_projection VALUES(?,'projected',NULL,?)")->execute([$eventId,date('Y-m-d H:i:s')]);
+        $db->prepare("INSERT INTO task_notification_projection VALUES(?,'projected',NULL,?)")->execute([$eventId,(new DateTimeImmutable('now',new DateTimeZone('UTC')))->format(DateTimeInterface::ATOM)]);
         $db->commit(); return ['created'=>$created,'skipped'=>0];
     } catch (Throwable $e) { if ($db->inTransaction()) $db->rollBack(); throw $e; }
 }
@@ -151,7 +175,7 @@ function task_notification_project_event(PDO $db, int $eventId, ?string $rollout
 function task_notification_project_pending(PDO $db, ?int $limit = null): array
 {
     task_notification_initialize_schema($db); $limit ??= task_notification_config()['projection_batch'];
-    $rollout = $db->query("SELECT applied_at FROM schema_migrations WHERE version=" . TASK_NOTIFICATION_SCHEMA_VERSION)->fetchColumn() ?: date('Y-m-d H:i:s');
+    $rollout = $db->query("SELECT meta_value FROM task_notification_meta WHERE meta_key='rollout_cutoff_utc'")->fetchColumn();
     $stmt = $db->query('SELECT e.id FROM task_events e LEFT JOIN task_notification_projection p ON p.task_event_id=e.id WHERE p.task_event_id IS NULL ORDER BY e.id LIMIT ' . max(1,min(500,$limit)));
     $report=['events'=>0,'created'=>0,'skipped'=>0,'failed'=>0];
     foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $id) { try {$r=task_notification_project_event($db,(int)$id,(string)$rollout);$report['events']++;$report['created']+=$r['created'];$report['skipped']+=$r['skipped'];} catch(Throwable $e){$report['failed']++;} }
@@ -162,25 +186,35 @@ function task_notification_list(PDO $db, int $userId, string $view='all', int $p
 {
     task_notification_initialize_schema($db); $limit=max(1,min(50,$limit));$page=max(1,$page);$where=$view==='unread'?" AND s.status='unread'":'';
     $stmt=$db->prepare("SELECT n.id,n.title,n.message,n.tone,n.notification_type,n.link,n.source_task_id,n.created_at,s.status FROM portal_notification_status s JOIN portal_notifications n ON n.id=s.notification_id WHERE s.user_id=? AND s.status!='dismissed'$where ORDER BY n.created_at DESC,n.id DESC LIMIT ? OFFSET ?");
-    $stmt->bindValue(1,$userId,PDO::PARAM_INT);$stmt->bindValue(2,$limit,PDO::PARAM_INT);$stmt->bindValue(3,($page-1)*$limit,PDO::PARAM_INT);$stmt->execute();return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt->bindValue(1,$userId,PDO::PARAM_INT);$stmt->bindValue(2,$limit+1,PDO::PARAM_INT);$stmt->bindValue(3,($page-1)*$limit,PDO::PARAM_INT);$stmt->execute();$rows=$stmt->fetchAll(PDO::FETCH_ASSOC);return array_slice($rows,0,$limit);
+}
+
+function task_notification_page(PDO $db,int $userId,string $view='all',int $page=1,int $limit=20):array
+{
+    $items=task_notification_list($db,$userId,$view,$page,$limit);$where=$view==='unread'?" AND s.status='unread'":'';$s=$db->prepare("SELECT COUNT(*) FROM portal_notification_status s WHERE s.user_id=? AND s.status!='dismissed'$where");$s->execute([$userId]);$total=(int)$s->fetchColumn();return ['notifications'=>$items,'page'=>max(1,$page),'view'=>$view,'has_more'=>max(1,$page)*max(1,$limit)<$total,'total'=>$total];
 }
 function task_notification_unread_count(PDO $db,int $userId):int{$s=$db->prepare("SELECT COUNT(*) FROM portal_notification_status WHERE user_id=? AND status='unread'");$s->execute([$userId]);return (int)$s->fetchColumn();}
 function task_notification_mutate(PDO $db,int $userId,string $action,?int $id=null):void
 {
-    $status=match($action){'read'=>'read','unread'=>'unread','dismiss'=>'dismissed',default=>null}; if($action!=='read-all'&&$status===null)throw new InvalidArgumentException('Invalid action.');
-    $db->beginTransaction();try{$now=date('Y-m-d H:i:s');if($action==='read-all'){$s=$db->prepare("UPDATE portal_notification_status SET status='read',read_at=?,dismissed_at=NULL,updated_at=? WHERE user_id=? AND status='unread'");$s->execute([$now,$now,$userId]);}else{$field=match($status){'read'=>'read_at','unread'=>'unread_at',default=>'dismissed_at'};$s=$db->prepare("UPDATE portal_notification_status SET status=?,$field=?,updated_at=? WHERE notification_id=? AND user_id=?");$s->execute([$status,$now,$now,$id,$userId]);if($s->rowCount()!==1)throw new OutOfBoundsException('Notification not found.');}$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+    if(!in_array($action,['read','unread','dismiss','read-all'],true))throw new InvalidArgumentException('Invalid action.');
+    if($action!=='read-all'&&(!$id||$id<1))throw new InvalidArgumentException('Notification ID is required.');
+    $now=(new DateTimeImmutable('now',new DateTimeZone('Asia/Kolkata')))->format('Y-m-d H:i:s');$db->beginTransaction();try{
+        if($action==='read-all'){$s=$db->prepare("UPDATE portal_notification_status SET status='read',read_at=?,dismissed_at=NULL,updated_at=? WHERE user_id=? AND status='unread'");$s->execute([$now,$now,$userId]);}
+        else {$sets=match($action){'read'=>"status='read',read_at=?,dismissed_at=NULL",'unread'=>"status='unread',unread_at=?,read_at=NULL,dismissed_at=NULL",'dismiss'=>"status='dismissed',dismissed_at=?"};$s=$db->prepare("UPDATE portal_notification_status SET $sets,updated_at=? WHERE notification_id=? AND user_id=?");$s->execute([$now,$now,$id,$userId]);if($s->rowCount()!==1){$owns=$db->prepare('SELECT 1 FROM portal_notification_status WHERE notification_id=? AND user_id=?');$owns->execute([$id,$userId]);if(!$owns->fetchColumn())throw new OutOfBoundsException('Notification not found.');}}
+        $db->commit();
+    }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
 }
 
 function task_notification_generate_reminders(PDO $db, ?DateTimeImmutable $now=null, int $budget=500): array
 {
     task_notification_initialize_schema($db);$now=($now??new DateTimeImmutable('now',new DateTimeZone('Asia/Kolkata')))->setTimezone(new DateTimeZone('Asia/Kolkata'));$cfg=task_notification_config();
-    task_notification_project_pending($db);$tasks=$db->query("SELECT t.*,o.series_id,o.occurrence_number,u.status assignee_status FROM portal_tasks t LEFT JOIN task_occurrences o ON o.task_id=t.id LEFT JOIN users u ON u.id=t.assignee_id WHERE t.official_flag=1 AND t.archived_flag=0 AND t.workflow_status NOT IN ('completed','cancelled')")->fetchAll(PDO::FETCH_ASSOC);
+    $tasks=$db->query("SELECT t.*,o.series_id,o.occurrence_number,u.status assignee_status FROM portal_tasks t LEFT JOIN task_occurrences o ON o.task_id=t.id LEFT JOIN users u ON u.id=t.assignee_id WHERE t.official_flag=1 AND t.archived_flag=0 AND t.workflow_status NOT IN ('completed','cancelled')")->fetchAll(PDO::FETCH_ASSOC);
     $admins=$db->query("SELECT u.id FROM users u JOIN roles r ON r.id=u.role_id WHERE r.name='admin' AND u.status='active'")->fetchAll(PDO::FETCH_COLUMN);$report=['scanned'=>0,'created'=>0,'deduplicated'=>0,'ineligible'=>0];$today=$now->format('Y-m-d');
     foreach($tasks as $t){if(++$report['scanned']>$budget)break;$rules=[];$due=(string)($t['due_date']??'');$dueAt=$due!==''?new DateTimeImmutable($due.' '.(($t['due_time']??'')?:'23:59'),new DateTimeZone('Asia/Kolkata')):null;
         if(($t['assignee_status']??'')==='active'&&$due===$today&&$now->format('G')>=$cfg['due_today_hour']&&$now<=$dueAt)$rules[]=['due_today',(int)$t['assignee_id'],'employee','Due today',"Due today: “{$t['title']}”.",'warning',$today];
         if(($t['assignee_status']??'')==='active'&&$dueAt&&$now>$dueAt)$rules[]=['overdue_employee',(int)$t['assignee_id'],'employee','Task overdue',"Overdue: “{$t['title']}”.",'danger',(string)floor($now->getTimestamp()/($cfg['employee_overdue_hours']*3600))];
-        $age=(int)floor(($now->getTimestamp()-(new DateTimeImmutable((string)$t['created_at'],new DateTimeZone('Asia/Kolkata')))->getTimestamp())/3600);
-        if(empty($t['acknowledged_at'])&&$age>=$cfg['unacknowledged_hours']){if(($t['assignee_status']??'')==='active')$rules[]=['unacknowledged_employee',(int)$t['assignee_id'],'employee','Please acknowledge task',"Please acknowledge “{$t['title']}”.",'warning',(string)floor($age/$cfg['unacknowledged_hours'])];foreach($admins as $a)$rules[]=['unacknowledged_admin',(int)$a,'admin','Assignment not acknowledged',"Assignment not acknowledged: “{$t['title']}”.",'warning',(string)floor($age/$cfg['unacknowledged_hours'])];}
+        $assignment=(string)($t['assigned_at']??'');$age=$assignment===''?null:(int)floor(($now->getTimestamp()-(new DateTimeImmutable($assignment,new DateTimeZone('Asia/Kolkata')))->getTimestamp())/3600);
+        if(empty($t['acknowledged_at'])&&$age!==null&&$age>=$cfg['unacknowledged_hours']){if(($t['assignee_status']??'')==='active')$rules[]=['unacknowledged_employee',(int)$t['assignee_id'],'employee','Please acknowledge task',"Please acknowledge “{$t['title']}”.",'warning',(string)floor($age/$cfg['unacknowledged_hours'])];foreach($admins as $a)$rules[]=['unacknowledged_admin',(int)$a,'admin','Assignment not acknowledged',"Assignment not acknowledged: “{$t['title']}”.",'warning',(string)floor($age/$cfg['unacknowledged_hours'])];}
         if($dueAt&&$now>$dueAt&&in_array($t['workflow_priority'],['high','urgent'],true))foreach($admins as $a)$rules[]=['overdue_admin',(int)$a,'admin','Priority task overdue',"Priority task overdue: “{$t['title']}”.",'danger',(string)floor($now->getTimestamp()/($cfg['admin_overdue_hours']*3600))];
         if($t['workflow_status']==='blocked'){$blocked=(int)floor(($now->getTimestamp()-(new DateTimeImmutable((string)$t['last_activity_at'],new DateTimeZone('Asia/Kolkata')))->getTimestamp())/3600);if($blocked>=$cfg['blocked_hours'])foreach($admins as $a)$rules[]=['blocked_admin',(int)$a,'admin','Task remains blocked',"Blocked task needs attention: “{$t['title']}”.",'danger',(string)floor($blocked/$cfg['blocked_hours'])];}
         foreach($rules as [$type,$uid,$role,$title,$message,$tone,$window]){$series=(string)($t['series_id']??$t['recurrence_series_id']??'');$key="reminder:$type:task:{$t['id']}:series:$series:occurrence:".(int)($t['occurrence_number']??1).":user:$uid:window:$window";$link=TaskWorkflowService::taskLink($role,$t);$db->beginTransaction();try{$s=$db->prepare("INSERT OR IGNORE INTO portal_notifications(audience,tone,icon,title,message,link,scope_user_id,created_at,notification_type,category,source_task_id,source_series_id,source_occurrence,deduplication_key,retention_until) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime(?, '+' || ? || ' days'))");$stamp=$now->format('Y-m-d H:i:s');$s->execute([$role,$tone,'fa-solid fa-clock',$title,task_notification_safe_text($message),$link,$uid,$stamp,$type,'reminder',(int)$t['id'],$series,(int)($t['occurrence_number']??1),$key,$stamp,$cfg['retention_days']]);if($s->rowCount()){$nid=(int)$db->lastInsertId();$db->prepare("INSERT INTO portal_notification_status(notification_id,user_id,status,updated_at,unread_at) VALUES(?,?,'unread',?,?)")->execute([$nid,$uid,$stamp,$stamp]);$report['created']++;}else $report['deduplicated']++;$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}}
@@ -190,5 +224,5 @@ function task_notification_generate_reminders(PDO $db, ?DateTimeImmutable $now=n
 
 function task_notification_fallback(PDO $db): void
 {
-    $cfg=task_notification_config();$now=date('Y-m-d H:i:s');$until=date('Y-m-d H:i:s',time()+$cfg['fallback_seconds']);$db->beginTransaction();try{$s=$db->prepare("INSERT INTO notification_leases(lease_key,lease_until,updated_at) VALUES('fallback',?,?) ON CONFLICT(lease_key) DO UPDATE SET lease_until=excluded.lease_until,updated_at=excluded.updated_at WHERE notification_leases.lease_until<?");$s->execute([$until,$now,$now]);$won=$s->rowCount()===1;$db->commit();if($won)task_notification_generate_reminders($db,null,20);}catch(Throwable $e){if($db->inTransaction())$db->rollBack();error_log('Task notification fallback failed: '.$e->getMessage());}
+    $cfg=task_notification_config();$now=date('Y-m-d H:i:s');$until=date('Y-m-d H:i:s',time()+$cfg['fallback_seconds']);$db->beginTransaction();try{$s=$db->prepare("INSERT INTO notification_leases(lease_key,lease_until,updated_at) VALUES('fallback',?,?) ON CONFLICT(lease_key) DO UPDATE SET lease_until=excluded.lease_until,updated_at=excluded.updated_at WHERE notification_leases.lease_until<?");$s->execute([$until,$now,$now]);$won=$s->rowCount()===1;$db->commit();if($won){task_notification_project_pending($db,20);task_notification_generate_reminders($db,null,20);}}catch(Throwable $e){if($db->inTransaction())$db->rollBack();error_log('Task notification fallback failed: '.$e->getMessage());}
 }
