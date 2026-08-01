@@ -1,27 +1,37 @@
-# Official task workflow (#912)
+# Canonical official-task workflow (issues #912 and #920)
 
-`TaskWorkflowService` is the only writer for official work. It derives actor ID and role from the authenticated session; employee access is additionally restricted to the current assignee. Every mutation requires the last-read positive task version and runs under one `BEGIN IMMEDIATE` transaction covering task state/routing, typed message, immutable event, attachment metadata, recurrence, and version increment.
+Personal reminders are intentionally separate records. They never participate in official task counts, dashboards, performance metrics, workflow events, or notification inputs.
 
-## State and routing model
+## Responsibility and recipient invariants
 
-The canonical states are `assigned`, `acknowledged`, `in_progress`, `blocked`, `submitted`, `correction_required`, `completed`, and `cancelled`. Employee transitions are acknowledge, start/resume, block, and submit. Admin transitions are blocker response, correction, approval, reopen, and cancellation. Only admin approval changes submitted official work to completed.
+* `employee` means the active current assignee must act and `attention_owner_id` equals `assignee_id`.
+* `admin` means the administrator audience must act and `attention_owner_id` is `NULL`. It never points at the employee actor.
+* `none` means no action is expected and `attention_owner_id` is `NULL`.
 
-`responsibility` is explicit: `admin`, `employee`, or `none`. `attention_owner_id` is maintained as a compatibility/convenience projection and is never used to infer responsibility. Replies hand responsibility to the other role; blockers and submissions route to admin; corrections, responses, reopening, and reassignment route to the employee; approved or cancelled work routes to none.
+Schema initialization safely repairs rows written by PR #919 that contradict these rules. Assignment and reassignment accept only an existing, active user with the employee role. Inactive assignees remain visible on historical task cards but are absent from selectors.
 
-## Legacy compatibility
+## State machine
 
-`portal_tasks.status` remains constrained to `todo`, `in_progress`, and `done`. `workflow_status` is canonical. The service projects assigned/acknowledged/blocked/correction-required to `todo`, in-progress/submitted to `in_progress`, and completed/cancelled to `done`. Existing rows are safely backfilled on first schema initialization. Legacy JSON is not written.
+Employees may acknowledge an assigned task or start it directly (direct start records both acknowledgement and start). They can report a blocker from active work. An admin can respond while keeping it blocked, or resolve it and return responsibility to the assignee. An employee explicitly acknowledges/resumes requested corrections. First and corrected submissions use the same validated submission edge. Admins can request correction, approve, reopen, or cancel where applicable. Archived work exposes no workflow actions. Optimistic versions reject stale and simultaneous mutations.
 
-## Attachments and recurrence
+## Timestamp rules
 
-Files are stored outside the public asset tree with 192-bit random names. Extension and detected MIME must match, executable formats are excluded, and the limit is 10 MiB. Metadata and SHA-256 live in `task_attachments`; authenticated `task-attachment.php` checks admin role or current assignee ownership, validates the storage key, and prevents traversal before streaming with `nosniff`.
+Times are Asia/Kolkata wall times. `acknowledged_at` and `started_at` project acknowledgement/start; `correction_acknowledged_at` projects correction resume. Every submission sets `submitted_at`, while earlier submission values survive in events. Approval sets `approved_at`, `approved_by`, `completed_at`, and `last_completed_at`. Cancellation sets `cancelled_at`. Reopening clears current `submitted_at`, `approved_at`, `approved_by`, `completed_at`, `cancelled_at`, and archive values, but deliberately retains `last_completed_at`. Immutable events preserve all prior state transitions.
 
-Each recurring occurrence is a new `portal_tasks` record linked by `task_occurrences`, `parent_task_id`, and a random series ID. Submission creates nothing. Approval creates exactly one next occurrence, anchored at the later of the prior due date and current Asia/Kolkata business date, preventing overdue backlog generation.
+Business-day overdue, due-today, and completed-this-week classifications are calculated in PHP using `Asia/Kolkata`, not SQLite UTC `date('now')`.
 
-## Deployment and rollback
+## Recurrence
 
-Back up `storage/app.sqlite` and protected task attachments, deploy PHP files, then exercise `php tests/task_workflow_test.php`. Schema initialization is repeatable and records version `91202`. No standalone SQL migration file is required. For rollback, stop writers, restore the database and attachment directory from the same pre-deployment backup, and restore the prior PHP release; database and file backups must remain paired.
+`once`, daily, weekly, monthly, and custom schedules are supported; custom intervals must be at least one day. Approval creates at most one successor from the occurrence's scheduled date, not from a delayed approval date. The successor retains the series ID, increments the occurrence number, links to the approved parent, begins assigned to the validated current employee, and emits `recurrence_created`.
 
-## Limitations
+## Immutable event contract for issue #913
 
-The workspace implements server-rendered request/response actions; notification bubbles, scheduled delivery, browser push, and employee PWA work are intentionally excluded. Existing personal-reminder creation remains outside the official workflow and official metrics.
+Every important mutation inserts a `task_events` record whose JSON `event_data` has `contract_version`, `task_id`, `occurrence_number`, `series_id`, `event_type`, `actor` (`id`, `role`), old/new workflow state, old/new assignee ID, resulting `responsibility`, `intended_recipient` (`type`, `user_id`, `audience`), `occurred_at`, resulting `task_version`, safe role-specific `deep_link`, and event-specific `details`.
+
+The catalogue is: `assigned`, `acknowledged`, `started`, `reply`, `progress`, `blocker_reported`, `blocker_response`, `blocker_resolved`, `submitted`, `correction_requested`, `correction_resumed`, `approved`, `reopened`, `reassigned`, `schedule_priority_revised`, `cancelled`, `archived`, `unarchived`, `recurrence_created`, and `proof_uploaded`. Consumers must use the explicit recipient object and must not reinterpret workflow rules. Issue #913 notification delivery is not implemented here.
+
+## Attachments and deployment
+
+Files created within a mutation are tracked. Any later database, optimistic-version, or commit failure rolls back rows and deletes those files. Attachment rows are inserted only after a file is safely stored; downloads revalidate the protected storage key and authorization.
+
+Deployment requires normal application startup (or the canonical migration command) to run the repeatable schema initializer and #919 routing backfill. Back up the application database and protected attachment directory first. Rollback should restore both together; reverting only code after the schema is safe because added columns/tables are additive, but the responsibility backfill is intentionally not reversed.
