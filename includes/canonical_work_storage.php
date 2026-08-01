@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 const CANONICAL_WORK_SCHEMA_VERSION = 91701;
+const TASK_WORKFLOW_SCHEMA_VERSION = 91202;
 
 function canonical_work_columns(PDO $db, string $table): array
 {
@@ -27,18 +28,28 @@ function canonical_work_initialize_schema(PDO $db): void
       'proof_required'=>'INTEGER NOT NULL DEFAULT 0', 'due_time'=>'TEXT', 'due_timezone'=>"TEXT NOT NULL DEFAULT 'Asia/Kolkata'", 'submitted_at'=>'TEXT',
       'approved_at'=>'TEXT', 'cancelled_at'=>'TEXT', 'archived_at'=>'TEXT', 'last_activity_at'=>'TEXT', 'parent_task_id'=>'INTEGER', 'recurrence_series_id'=>'TEXT',
       'workflow_priority'=>"TEXT NOT NULL DEFAULT 'medium' CHECK(workflow_priority IN ('low','medium','high','urgent'))"
+      ,'workflow_status'=>"TEXT NOT NULL DEFAULT 'assigned' CHECK(workflow_status IN ('assigned','acknowledged','in_progress','blocked','submitted','correction_required','completed','cancelled'))"
+      ,'responsibility'=>"TEXT NOT NULL DEFAULT 'employee' CHECK(responsibility IN ('admin','employee','none'))"
+      ,'submission_summary'=>'TEXT', 'approved_by'=>'INTEGER', 'approval_note'=>'TEXT', 'closed_reason'=>'TEXT', 'created_by'=>'INTEGER', 'official_flag'=>'INTEGER NOT NULL DEFAULT 1'
     ];
     $needsPriorityBackfill=!in_array('workflow_priority',$columns,true);
+    $needsWorkflowBackfill=!in_array('workflow_status',$columns,true);
     foreach($add as $name=>$definition) if(!in_array($name,$columns,true)) $db->exec("ALTER TABLE portal_tasks ADD COLUMN $name $definition");
     if($needsPriorityBackfill)$db->exec('UPDATE portal_tasks SET workflow_priority=priority');
+    if($needsWorkflowBackfill){
+        $db->exec("UPDATE portal_tasks SET workflow_status=CASE status WHEN 'done' THEN 'completed' WHEN 'in_progress' THEN 'in_progress' ELSE 'assigned' END");
+        $db->exec("UPDATE portal_tasks SET responsibility=CASE WHEN workflow_status='completed' THEN 'none' ELSE 'employee' END, attention_owner_id=CASE WHEN workflow_status='completed' THEN NULL ELSE assignee_id END");
+    }
     $db->exec("CREATE TABLE IF NOT EXISTS task_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, author_id INTEGER NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL, edited_at TEXT, FOREIGN KEY(task_id) REFERENCES portal_tasks(id) ON DELETE CASCADE, FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE RESTRICT)");
+    $messageColumns=canonical_work_columns($db,'task_messages');
+    if(!in_array('message_type',$messageColumns,true))$db->exec("ALTER TABLE task_messages ADD COLUMN message_type TEXT NOT NULL DEFAULT 'reply'");
     $db->exec("CREATE TABLE IF NOT EXISTS task_events (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, actor_id INTEGER, event_type TEXT NOT NULL, event_data TEXT NOT NULL DEFAULT '{}', task_version INTEGER NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(task_id) REFERENCES portal_tasks(id) ON DELETE RESTRICT, FOREIGN KEY(actor_id) REFERENCES users(id) ON DELETE SET NULL)");
     $db->exec("CREATE TRIGGER IF NOT EXISTS task_events_immutable_update BEFORE UPDATE ON task_events BEGIN SELECT RAISE(ABORT,'task events are immutable'); END");
     $db->exec("CREATE TRIGGER IF NOT EXISTS task_events_immutable_delete BEFORE DELETE ON task_events BEGIN SELECT RAISE(ABORT,'task events are immutable'); END");
     $db->exec("CREATE TABLE IF NOT EXISTS task_attachments (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, message_id INTEGER, uploaded_by INTEGER NOT NULL, storage_key TEXT NOT NULL UNIQUE, original_name TEXT NOT NULL, media_type TEXT NOT NULL, byte_size INTEGER NOT NULL CHECK(byte_size>=0), sha256 TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(task_id) REFERENCES portal_tasks(id) ON DELETE RESTRICT, FOREIGN KEY(message_id) REFERENCES task_messages(id) ON DELETE SET NULL, FOREIGN KEY(uploaded_by) REFERENCES users(id) ON DELETE RESTRICT)");
     $db->exec("CREATE TABLE IF NOT EXISTS task_occurrences (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL UNIQUE, series_id TEXT NOT NULL, parent_task_id INTEGER, occurrence_number INTEGER NOT NULL CHECK(occurrence_number>0), scheduled_for TEXT, created_at TEXT NOT NULL, UNIQUE(series_id,occurrence_number), FOREIGN KEY(task_id) REFERENCES portal_tasks(id) ON DELETE RESTRICT, FOREIGN KEY(parent_task_id) REFERENCES portal_tasks(id) ON DELETE RESTRICT)");
     foreach(['CREATE INDEX IF NOT EXISTS idx_tasks_assignee_status_due ON portal_tasks(assignee_id,status,due_date)','CREATE INDEX IF NOT EXISTS idx_tasks_activity ON portal_tasks(last_activity_at)','CREATE INDEX IF NOT EXISTS idx_tasks_linked ON portal_tasks(linked_entity_type,linked_entity_id)','CREATE INDEX IF NOT EXISTS idx_task_messages_task ON task_messages(task_id,created_at)','CREATE INDEX IF NOT EXISTS idx_task_events_task ON task_events(task_id,id)','CREATE INDEX IF NOT EXISTS idx_task_attachments_task ON task_attachments(task_id)','CREATE INDEX IF NOT EXISTS idx_task_occurrences_series ON task_occurrences(series_id,occurrence_number)'] as $sql)$db->exec($sql);
-    $stmt=$db->prepare('INSERT OR IGNORE INTO schema_migrations(version,name,applied_at) VALUES(:v,:n,datetime(\'now\'))');$stmt->execute([':v'=>CANONICAL_WORK_SCHEMA_VERSION,':n'=>'issue_917_corrective_foundation']);
+    $stmt=$db->prepare('INSERT OR IGNORE INTO schema_migrations(version,name,applied_at) VALUES(:v,:n,datetime(\'now\'))');$stmt->execute([':v'=>CANONICAL_WORK_SCHEMA_VERSION,':n'=>'issue_917_corrective_foundation']);$stmt->execute([':v'=>TASK_WORKFLOW_SCHEMA_VERSION,':n'=>'issue_912_official_task_workflow']);
 }
 
 final class CanonicalEmployeeRepository

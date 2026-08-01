@@ -24,7 +24,9 @@ if ($employee === null) {
 }
 
 $today = tasks_today_date();
-$tasks = load_tasks();
+$taskStmt = get_db()->prepare("SELECT *, workflow_priority AS priority FROM portal_tasks WHERE assignee_id=? AND official_flag=1 AND archived_flag=0");
+$taskStmt->execute([(int) ($employee['id'] ?? 0)]);
+$tasks = $taskStmt->fetchAll();
 $tz = new DateTimeZone(TASKS_TIMEZONE);
 $upcomingWindowEnd = (new DateTimeImmutable('today', $tz))->modify('+7 days')->format('Y-m-d');
 
@@ -32,11 +34,11 @@ $pendingTasksForEmployee = array_values(array_filter($tasks, static function (ar
     if (!empty($task['archived_flag'])) {
         return false;
     }
-    if (strcasecmp((string) ($task['status'] ?? ''), 'open') !== 0) {
+    if (in_array((string) ($task['workflow_status'] ?? ''), ['completed', 'cancelled'], true)) {
         return false;
     }
 
-    return (string) ($task['assigned_to_id'] ?? '') === (string) ($employee['id'] ?? '');
+    return (string) ($task['assignee_id'] ?? '') === (string) ($employee['id'] ?? '');
 }));
 
 usort($pendingTasksForEmployee, static function (array $left, array $right): int {
@@ -72,6 +74,7 @@ $remainingSlots = max(0, 6 - count($overdueTasks) - count($todayTasks));
 $upcomingTasks = array_slice($upcomingTasks, 0, max(0, min(3, $remainingSlots)));
 
 $hasPendingTasks = ($overdueTasks !== [] || $todayTasks !== [] || $upcomingTasks !== []);
+$needsMyAction = count(array_filter($pendingTasksForEmployee, static fn(array $task): bool => ($task['responsibility'] ?? '') === 'employee'));
 
 $formatTaskDate = static function (string $dateValue) use ($tz): string {
     if ($dateValue === '') {
@@ -473,10 +476,10 @@ function employee_dashboard_safe(string $value): string
       <div class="tasks-widget" aria-labelledby="pending-tasks-title">
         <div class="tasks-widget__header">
           <div>
-            <p id="pending-tasks-title" class="tasks-widget__title">My Pending Tasks</p>
-            <p class="tasks-widget__meta" style="margin:0;color:#475569;">Overdue, due today, and upcoming</p>
+            <p id="pending-tasks-title" class="tasks-widget__title">My Official Work</p>
+            <p class="tasks-widget__meta" style="margin:0;color:#475569;"><?= number_format($needsMyAction) ?> need my action · overdue, today, and upcoming</p>
           </div>
-          <a class="tasks-widget__view-all" href="employee-tasks.php">View all tasks</a>
+          <a class="tasks-widget__view-all" href="employee-tasks.php?next_action=employee">View work needing my action</a>
         </div>
 
         <?php if (!$hasPendingTasks): ?>
