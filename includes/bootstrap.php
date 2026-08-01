@@ -9,6 +9,7 @@ require_once __DIR__ . '/portal_file_storage.php';
 require_once __DIR__ . '/website_settings.php';
 require_once __DIR__ . '/solar_finance_settings.php';
 require_once __DIR__ . '/canonical_work_storage.php';
+require_once __DIR__ . '/task_notifications.php';
 
 if (date_default_timezone_get() !== 'Asia/Kolkata') {
     date_default_timezone_set('Asia/Kolkata');
@@ -752,6 +753,7 @@ SQL
 
     apply_schema_patches($db);
     canonical_work_initialize_schema($db);
+    task_notification_initialize_schema($db);
 }
 
 function seed_defaults(PDO $db): void
