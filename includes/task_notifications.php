@@ -237,7 +237,30 @@ function task_notification_generate_reminders(PDO $db, ?DateTimeImmutable $now=n
     }return $report;
 }
 
-function task_notification_fallback(PDO $db): void
+function task_notification_fallback(PDO $db): bool
 {
-    $cfg=task_notification_config();$now=date('Y-m-d H:i:s');$until=date('Y-m-d H:i:s',time()+$cfg['fallback_seconds']);$db->beginTransaction();try{$s=$db->prepare("INSERT INTO notification_leases(lease_key,lease_until,updated_at) VALUES('fallback',?,?) ON CONFLICT(lease_key) DO UPDATE SET lease_until=excluded.lease_until,updated_at=excluded.updated_at WHERE notification_leases.lease_until<?");$s->execute([$until,$now,$now]);$won=$s->rowCount()===1;$db->commit();if($won){task_notification_project_pending($db,20);task_notification_generate_reminders($db,null,20);}}catch(Throwable $e){if($db->inTransaction())$db->rollBack();error_log('Task notification fallback failed: '.$e->getMessage());}
+    $cfg=task_notification_config();$clock=new DateTimeImmutable('now',new DateTimeZone('UTC'));$now=$clock->format('Y-m-d H:i:s');$until=$clock->modify('+'.$cfg['fallback_seconds'].' seconds')->format('Y-m-d H:i:s');
+    try {
+        // A losing request performs only this short, indexed lease write.
+        $db->beginTransaction();
+        $s=$db->prepare("INSERT INTO notification_leases(lease_key,lease_until,updated_at) VALUES('fallback',?,?) ON CONFLICT(lease_key) DO UPDATE SET lease_until=excluded.lease_until,updated_at=excluded.updated_at WHERE notification_leases.lease_until<=?");
+        $s->execute([$until,$now,$now]);$won=$s->rowCount()===1;$db->commit();
+        if(!$won)return false;
+        // Recovery and scheduled scans are separate and independently bounded.
+        task_notification_project_pending($db,20);
+        task_notification_generate_reminders($db,null,20);
+        return true;
+    } catch(Throwable $e) {
+        if($db->inTransaction())$db->rollBack();
+        error_log('Task notification fallback worker failed.');
+        return false; // A won lease expires naturally, preventing a hot failure loop.
+    }
+}
+
+/** Trigger the safety net only for the active canonical user represented by the session. */
+function task_notification_authenticated_fallback(PDO $db, ?array $sessionUser): bool
+{
+    $uid=(int)($sessionUser['id']??0);$role=(string)($sessionUser['role_name']??'');
+    if($uid<1||!in_array($role,['admin','employee'],true))return false;
+    try{$s=$db->prepare("SELECT r.name FROM users u JOIN roles r ON r.id=u.role_id WHERE u.id=? AND u.status='active'");$s->execute([$uid]);if($s->fetchColumn()!==$role)return false;return task_notification_fallback($db);}catch(Throwable $e){error_log('Task notification fallback eligibility check failed.');return false;}
 }
