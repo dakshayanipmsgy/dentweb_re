@@ -1,12 +1,16 @@
 (() => {
   if (window.__dakshayaniPwaLoaded) return;
   window.__dakshayaniPwaLoaded = true;
+  if (new URLSearchParams(window.location.search).get('logged_out') === '1') {
+    try { if (navigator.clearAppBadge) navigator.clearAppBadge(); } catch (error) { /* Badging is optional. */ }
+  }
 
   const manifestLink = document.querySelector('link[rel="manifest"]');
+  const employeeApp = manifestLink?.href.includes('employee-manifest.webmanifest') === true;
   const base = manifestLink?.href || document.baseURI;
   const swUrl = new URL('service-worker.js', base).toString();
   const swScope = new URL('./', swUrl).toString();
-  const installHelpUrl = new URL('app-install-help.php', base).toString();
+  const installHelpUrl = new URL(employeeApp ? 'employee-app.php' : 'app-install-help.php', base).toString();
 
   const storage = {
     get(key) { try { return window.localStorage.getItem(key); } catch (error) { return null; } },
@@ -75,19 +79,19 @@
     }, { once: true });
   }
 
-  const welcomeKey = 'dakshayani-standalone-welcome-dismissed-v1';
+  const welcomeKey = employeeApp ? 'dakshayani-work-standalone-welcome-v1' : 'dakshayani-standalone-welcome-dismissed-v1';
   const showStandaloneWelcome = () => {
     if (!getDisplayMode().standalone || storage.get(welcomeKey) === '1') return;
-    const welcome = createNotice('pwa-welcome-note', 'Welcome to the Dakshayani app. Sign in as Admin, Customer, or Employee to access your secure workspace.', '<button type="button" class="pwa-welcome-close" aria-label="Dismiss welcome note">Not now</button>');
+    const welcome = createNotice('pwa-welcome-note', employeeApp ? 'Welcome to Dakshayani Work. Current work data requires an internet connection.' : 'Welcome to the Dakshayani app. Sign in as Admin, Customer, or Employee to access your secure workspace.', '<button type="button" class="pwa-welcome-close" aria-label="Dismiss welcome note">Not now</button>');
     if (!welcome) return;
     welcome.querySelector('.pwa-welcome-close').addEventListener('click', () => { storage.set(welcomeKey, '1'); welcome.remove(); });
   };
 
   let deferredPrompt;
-  const dismissedKey = 'dakshayani-install-dismissed-v3';
+  const dismissedKey = employeeApp ? 'dakshayani-work-install-dismissed-v1' : 'dakshayani-install-dismissed-v3';
   const showInstallPrompt = () => {
     if (!deferredPrompt || getDisplayMode().standalone || storage.get(dismissedKey) === '1' || document.querySelector('.pwa-install-banner')) return;
-    const banner = createNotice('pwa-install-banner', 'Install Dakshayani app for quicker access to your secure workspace.', '<button type="button" class="pwa-install-action">Install</button><button type="button" class="pwa-install-close">Not now</button><a class="pwa-install-help" href="' + installHelpUrl + '">Install help</a>');
+    const banner = createNotice('pwa-install-banner', employeeApp ? 'Install Dakshayani Work for focused access to My Work.' : 'Install Dakshayani app for quicker access to your secure workspace.', '<button type="button" class="pwa-install-action">Install</button><button type="button" class="pwa-install-close">Not now</button><a class="pwa-install-help" href="' + installHelpUrl + '">Install help</a>');
     if (!banner) return;
     banner.querySelector('.pwa-install-close').addEventListener('click', () => { storage.set(dismissedKey, '1'); banner.remove(); });
     banner.querySelector('.pwa-install-action').addEventListener('click', async () => {

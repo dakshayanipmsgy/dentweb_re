@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Dakshayani Work</title><desc id="desc">White briefcase and check mark on a teal rounded square.</desc>
+  <rect width="512" height="512" rx="112" fill="#0f766e"/>
+  <rect x="104" y="174" width="304" height="222" rx="38" fill="#ffffff"/>
+  <path d="M196 174v-28c0-25 20-46 46-46h28c26 0 46 21 46 46v28h-38v-25c0-7-6-13-13-13h-18c-7 0-13 6-13 13v25z" fill="#ffffff"/>
+  <path d="m180 286 45 45 107-113" fill="none" stroke="#0f766e" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
