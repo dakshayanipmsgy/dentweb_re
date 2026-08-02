@@ -1,114 +1,40 @@
 <?php
 declare(strict_types=1);
 
-/** Optional push transport. Canonical notifications continue to live in SQLite. */
-function push_env(string $name): string
-{
-    foreach ([getenv($name), $_ENV[$name] ?? null, $_SERVER[$name] ?? null] as $value) {
-        if (is_string($value) && trim($value) !== '') return trim($value);
-    }
-    return '';
-}
+const PUSH_SCHEMA_VERSION = 92901;
+const PUSH_SYNC_CUTOFF_DAYS = 7;
+const PUSH_MAX_ATTEMPTS = 8;
 
-function push_config(): array
-{
-    $autoload = __DIR__ . '/../vendor/autoload.php';
-    $key = push_env('PUSH_SUBSCRIPTION_ENCRYPTION_KEY');
-    $decoded = $key === '' ? false : base64_decode($key, true);
-    $encryptionReady = function_exists('sodium_crypto_secretbox') && is_string($decoded) && strlen($decoded) === SODIUM_CRYPTO_SECRETBOX_KEYBYTES;
-    return [
-        'enabled' => filter_var(push_env('PUSH_ENABLED'), FILTER_VALIDATE_BOOL) === true,
-        'encryption_ready' => $encryptionReady,
-        'dependency_ready' => is_file($autoload),
-        'vapid_public' => push_env('WEB_PUSH_VAPID_PUBLIC_KEY'),
-        'vapid_private' => push_env('WEB_PUSH_VAPID_PRIVATE_KEY'),
-        'vapid_subject' => push_env('WEB_PUSH_VAPID_SUBJECT'),
-        'key' => $decoded,
-        'store' => __DIR__ . '/../storage/push',
-    ];
+function push_env(string $name): string { foreach ([getenv($name),$_ENV[$name]??null,$_SERVER[$name]??null] as $v) if(is_string($v)&&trim($v)!=='') return trim($v); return ''; }
+function push_config(): array {
+    $raw=push_env('PUSH_SUBSCRIPTION_ENCRYPTION_KEY'); $key=$raw===''?false:base64_decode($raw,true);
+    return ['enabled'=>filter_var(push_env('PUSH_ENABLED'),FILTER_VALIDATE_BOOL)===true,'encryption_ready'=>function_exists('sodium_crypto_secretbox')&&is_string($key)&&strlen($key)===32,'dependency_ready'=>is_file(__DIR__.'/../vendor/autoload.php'),'vapid_public'=>push_env('WEB_PUSH_VAPID_PUBLIC_KEY'),'vapid_private'=>push_env('WEB_PUSH_VAPID_PRIVATE_KEY'),'vapid_subject'=>push_env('WEB_PUSH_VAPID_SUBJECT'),'key'=>$key,'legacy_store'=>__DIR__.'/../storage/push'];
 }
+function push_encrypt(string $plain): string { $c=push_config(); if(!$c['encryption_ready'])throw new RuntimeException('Push encryption configuration unavailable.');$nonce=random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);return 'v1.'.rtrim(strtr(base64_encode($nonce.sodium_crypto_secretbox($plain,$nonce,$c['key'])),'+/','-_'),'='); }
+function push_decrypt(string $envelope): string { $c=push_config();if(!$c['encryption_ready'])throw new RuntimeException('Push encryption configuration unavailable.');$p=explode('.',$envelope,2);if(count($p)!==2||$p[0]!=='v1')throw new RuntimeException('Unsupported push encryption envelope.');$s=strtr($p[1],'-_','+/');$s.=str_repeat('=',(4-strlen($s)%4)%4);$raw=base64_decode($s,true);if(!is_string($raw)||strlen($raw)<=SODIUM_CRYPTO_SECRETBOX_NONCEBYTES)throw new RuntimeException('Invalid encrypted subscription.');$plain=sodium_crypto_secretbox_open(substr($raw,24),substr($raw,0,24),$c['key']);if(!is_string($plain))throw new RuntimeException('Push subscription decryption failed.');return $plain; }
 
-function push_encrypt(string $plaintext): string
-{
-    $cfg = push_config();
-    if (!$cfg['encryption_ready']) throw new RuntimeException('Push subscription encryption is unavailable.');
-    $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-    return 'v1.' . rtrim(strtr(base64_encode($nonce . sodium_crypto_secretbox($plaintext, $nonce, $cfg['key'])), '+/', '-_'), '=');
+function push_initialize_schema(PDO $db): void {
+    $db->exec('PRAGMA foreign_keys=ON');
+    $db->exec("CREATE TABLE IF NOT EXISTS push_subscriptions(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,endpoint_hash TEXT NOT NULL UNIQUE,endpoint_encrypted TEXT NOT NULL,p256dh_encrypted TEXT NOT NULL,auth_encrypted TEXT NOT NULL,envelope_version INTEGER NOT NULL DEFAULT 1 CHECK(envelope_version>0),device_label TEXT NOT NULL,user_agent TEXT NOT NULL DEFAULT '',status TEXT NOT NULL CHECK(status IN ('active','revoked','expired','invalid')),created_at TEXT NOT NULL,updated_at TEXT NOT NULL,last_used_at TEXT,revoked_at TEXT,invalidated_at TEXT,failure_count INTEGER NOT NULL DEFAULT 0 CHECK(failure_count>=0),last_failure_category TEXT,last_response_status INTEGER,FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE RESTRICT)");
+    $db->exec("CREATE TABLE IF NOT EXISTS push_deliveries(id INTEGER PRIMARY KEY AUTOINCREMENT,notification_id INTEGER NOT NULL,subscription_id INTEGER NOT NULL,status TEXT NOT NULL CHECK(status IN ('pending','claimed','sent','retry','skipped','invalid','failed')),attempt_count INTEGER NOT NULL DEFAULT 0 CHECK(attempt_count>=0),next_attempt_at TEXT,claim_token TEXT,claim_expires_at TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,sent_at TEXT,skipped_at TEXT,invalidated_at TEXT,last_response_status INTEGER,last_failure_category TEXT,UNIQUE(notification_id,subscription_id),FOREIGN KEY(notification_id) REFERENCES portal_notifications(id) ON DELETE RESTRICT,FOREIGN KEY(subscription_id) REFERENCES push_subscriptions(id) ON DELETE RESTRICT)");
+    $db->exec("CREATE TABLE IF NOT EXISTS push_worker_leases(lease_key TEXT PRIMARY KEY,lease_token TEXT NOT NULL,lease_expires_at TEXT NOT NULL,updated_at TEXT NOT NULL)");
+    $db->exec("CREATE TABLE IF NOT EXISTS push_migration_meta(meta_key TEXT PRIMARY KEY,meta_value TEXT NOT NULL,updated_at TEXT NOT NULL)");
+    foreach(['CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_status ON push_subscriptions(user_id,status)','CREATE INDEX IF NOT EXISTS idx_push_deliveries_ready ON push_deliveries(status,next_attempt_at)','CREATE INDEX IF NOT EXISTS idx_push_deliveries_claim ON push_deliveries(status,claim_expires_at)','CREATE INDEX IF NOT EXISTS idx_push_deliveries_subscription ON push_deliveries(subscription_id,status)'] as $sql)$db->exec($sql);
+    $s=$db->prepare("INSERT OR IGNORE INTO schema_migrations(version,name,applied_at) VALUES(?, 'issue_929_canonical_push', datetime('now'))");$s->execute([PUSH_SCHEMA_VERSION]);
 }
+function push_db(?PDO $db=null): PDO { $db??=get_db();push_initialize_schema($db);return $db; }
+function push_employee_active(PDO $db,int $uid): bool {$s=$db->prepare("SELECT 1 FROM users u JOIN roles r ON r.id=u.role_id WHERE u.id=? AND u.status='active' AND r.name='employee'");$s->execute([$uid]);return (bool)$s->fetchColumn();}
+function push_safe_text(string $v,int $max): string {$v=trim((string)preg_replace('/[^\pL\pN ._()\-\/]/u','',strip_tags($v)));return mb_substr($v,0,$max);}
+function push_endpoint_valid(string $endpoint): bool {if(strlen($endpoint)<12||strlen($endpoint)>2048||filter_var($endpoint,FILTER_VALIDATE_URL)===false)return false;$p=parse_url($endpoint);if(!is_array($p)||strtolower((string)($p['scheme']??''))!=='https'||isset($p['user'])||isset($p['pass'])||isset($p['fragment']))return false;$h=strtolower((string)($p['host']??''));if($h===''||$h==='localhost'||str_ends_with($h,'.local'))return false;if(filter_var($h,FILTER_VALIDATE_IP))return filter_var($h,FILTER_VALIDATE_IP,FILTER_FLAG_NO_PRIV_RANGE|FILTER_FLAG_NO_RES_RANGE)!==false;$records=@dns_get_record($h,DNS_A|DNS_AAAA);if(!is_array($records)||!$records)return false;foreach($records as $r){$ip=(string)($r['ip']??$r['ipv6']??'');if(!$ip||filter_var($ip,FILTER_VALIDATE_IP,FILTER_FLAG_NO_PRIV_RANGE|FILTER_FLAG_NO_RES_RANGE)===false)return false;}return true;}
+function push_base64url_key_valid(string $v,int $min,int $max): bool{return strlen($v)>=$min&&strlen($v)<=$max&&preg_match('/^[A-Za-z0-9_-]+$/D',$v)===1;}
+function push_devices(int $uid,?PDO $db=null): array {$db=push_db($db);$s=$db->prepare('SELECT id,device_label AS label,status,created_at,last_used_at FROM push_subscriptions WHERE user_id=? ORDER BY id DESC');$s->execute([$uid]);return $s->fetchAll(PDO::FETCH_ASSOC);}
+function push_register(int $uid,array $sub,string $label,string $agent,?PDO $db=null): array {
+ $db=push_db($db);if(!push_employee_active($db,$uid))throw new DomainException('Active employee required.');$ep=(string)($sub['endpoint']??'');$keys=$sub['keys']??null;if(!push_endpoint_valid($ep)||!is_array($keys)||!push_base64url_key_valid((string)($keys['p256dh']??''),40,200)||!push_base64url_key_valid((string)($keys['auth']??''),16,100))throw new InvalidArgumentException('Invalid push subscription.');$label=push_safe_text($label,60)?:'This browser';$agent=push_safe_text($agent,160);$hash=hash('sha256',$ep);$now=gmdate('Y-m-d H:i:s');$db->beginTransaction();try{$q=$db->prepare('SELECT id,user_id FROM push_subscriptions WHERE endpoint_hash=?');$q->execute([$hash]);$old=$q->fetch(PDO::FETCH_ASSOC);if($old&&(int)$old['user_id']!==$uid)throw new DomainException('Subscription is already registered.');if($old){$s=$db->prepare("UPDATE push_subscriptions SET endpoint_encrypted=?,p256dh_encrypted=?,auth_encrypted=?,envelope_version=1,device_label=?,user_agent=?,status='active',updated_at=?,last_used_at=?,revoked_at=NULL,invalidated_at=NULL,failure_count=0,last_failure_category=NULL,last_response_status=NULL WHERE id=?");$s->execute([push_encrypt($ep),push_encrypt((string)$keys['p256dh']),push_encrypt((string)$keys['auth']),$label,$agent,$now,$now,(int)$old['id']]);$id=(int)$old['id'];}else{$s=$db->prepare("INSERT INTO push_subscriptions(user_id,endpoint_hash,endpoint_encrypted,p256dh_encrypted,auth_encrypted,envelope_version,device_label,user_agent,status,created_at,updated_at,last_used_at) VALUES(?,?,?,?,?,1,?,?,'active',?,?,?)");$s->execute([$uid,$hash,push_encrypt($ep),push_encrypt((string)$keys['p256dh']),push_encrypt((string)$keys['auth']),$label,$agent,$now,$now,$now]);$id=(int)$db->lastInsertId();}$db->commit();return ['id'=>$id,'label'=>$label,'status'=>'active'];}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+}
+function push_revoke(int $uid,?int $id,?PDO $db=null): int {$db=push_db($db);$sql="UPDATE push_subscriptions SET status='revoked',revoked_at=datetime('now'),updated_at=datetime('now') WHERE user_id=? AND status='active'";$a=[$uid];if($id!==null){$sql.=' AND id=?';$a[]=$id;}$s=$db->prepare($sql);$s->execute($a);return $s->rowCount();}
 
-function push_decrypt(string $envelope): string
-{
-    $cfg = push_config();
-    if (!$cfg['encryption_ready'] || !str_starts_with($envelope, 'v1.')) throw new RuntimeException('Push subscription encryption is unavailable.');
-    $raw = base64_decode(strtr(substr($envelope, 3), '-_', '+/'), true);
-    if (!is_string($raw) || strlen($raw) <= SODIUM_CRYPTO_SECRETBOX_NONCEBYTES) throw new RuntimeException('Invalid encrypted subscription.');
-    $nonce = substr($raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-    $plain = sodium_crypto_secretbox_open(substr($raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), $nonce, $cfg['key']);
-    if (!is_string($plain)) throw new RuntimeException('Invalid encrypted subscription.');
-    return $plain;
-}
-
-function push_endpoint_valid(string $endpoint): bool
-{
-    if (strlen($endpoint) < 12 || strlen($endpoint) > 2048 || !filter_var($endpoint, FILTER_VALIDATE_URL)) return false;
-    $parts = parse_url($endpoint);
-    if (!is_array($parts) || strtolower((string)($parts['scheme'] ?? '')) !== 'https' || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) return false;
-    $host = (string)($parts['host'] ?? '');
-    if ($host === '' || $host === 'localhost' || str_ends_with(strtolower($host), '.local')) return false;
-    if (filter_var($host, FILTER_VALIDATE_IP)) return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
-    $records = @dns_get_record($host, DNS_A | DNS_AAAA);
-    if (!is_array($records) || $records === []) return false;
-    foreach ($records as $record) {
-        $ip = (string)($record['ip'] ?? $record['ipv6'] ?? '');
-        if ($ip === '' || filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) return false;
-    }
-    return true;
-}
-
-function push_base64url_key_valid(string $value, int $min, int $max): bool
-{
-    return strlen($value) >= $min && strlen($value) <= $max && preg_match('/^[A-Za-z0-9_-]+$/D', $value) === 1;
-}
-
-function push_with_store(callable $callback): mixed
-{
-    $dir = push_config()['store'];
-    if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) throw new RuntimeException('Push storage is unavailable.');
-    $file = $dir . '/subscriptions.json'; $lock = fopen($dir . '/subscriptions.lock', 'c+');
-    if (!$lock || !flock($lock, LOCK_EX)) throw new RuntimeException('Push storage is busy.');
-    try {
-        $data = is_file($file) ? json_decode((string)file_get_contents($file), true) : [];
-        if (!is_array($data)) $data = [];
-        $result = $callback($data);
-        $tmp = $file . '.tmp.' . bin2hex(random_bytes(4));
-        file_put_contents($tmp, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX); chmod($tmp, 0600); rename($tmp, $file);
-        return $result;
-    } finally { flock($lock, LOCK_UN); fclose($lock); }
-}
-
-function push_devices(int $userId): array
-{
-    return push_with_store(static function(array &$data) use ($userId): array {
-        $out=[]; foreach($data as $row) if((int)($row['user_id']??0)===$userId) $out[]=['id'=>$row['id'],'label'=>$row['label'],'status'=>$row['status'],'created_at'=>$row['created_at'],'last_used_at'=>$row['last_used_at']]; return $out;
-    });
-}
-
-function push_register(int $userId, array $subscription, string $label, string $agent): array
-{
-    $endpoint=(string)($subscription['endpoint']??'');$keys=$subscription['keys']??null;
-    if(!push_endpoint_valid($endpoint)||!is_array($keys)||!push_base64url_key_valid((string)($keys['p256dh']??''),40,200)||!push_base64url_key_valid((string)($keys['auth']??''),16,100)) throw new InvalidArgumentException('Invalid push subscription.');
-    $label=trim(preg_replace('/[^\pL\pN ._()-]/u','',mb_substr($label,0,60))??''); if($label==='')$label='This browser';
-    $hash=hash('sha256',$endpoint);$now=gmdate(DATE_ATOM);
-    return push_with_store(static function(array &$data)use($userId,$endpoint,$keys,$label,$agent,$hash,$now):array{
-        foreach($data as &$row)if(hash_equals((string)($row['endpoint_hash']??''),$hash)){
-            if((int)$row['user_id']!==$userId)throw new RuntimeException('Subscription is already registered.');
-            $row['endpoint']=push_encrypt($endpoint);$row['p256dh']=push_encrypt((string)$keys['p256dh']);$row['auth']=push_encrypt((string)$keys['auth']);$row['label']=$label;$row['status']='active';$row['updated_at']=$now;$row['last_used_at']=$now;$row['revoked_at']=null;return ['id'=>$row['id'],'label'=>$label,'status'=>'active'];
-        }
-        $id=bin2hex(random_bytes(12));$data[]=['id'=>$id,'user_id'=>$userId,'endpoint_hash'=>$hash,'endpoint'=>push_encrypt($endpoint),'p256dh'=>push_encrypt((string)$keys['p256dh']),'auth'=>push_encrypt((string)$keys['auth']),'label'=>$label,'user_agent'=>mb_substr(preg_replace('/[^\x20-\x7E]/','',$agent)??'',0,160),'status'=>'active','created_at'=>$now,'updated_at'=>$now,'last_used_at'=>$now,'revoked_at'=>null,'failure_count'=>0,'last_failure_code'=>null];return ['id'=>$id,'label'=>$label,'status'=>'active'];
-    });
-}
-
-function push_revoke(int $userId, ?string $id): int
-{
-    return push_with_store(static function(array &$data)use($userId,$id):int{$n=0;$now=gmdate(DATE_ATOM);foreach($data as &$r)if((int)($r['user_id']??0)===$userId&&($id===null||hash_equals((string)$r['id'],$id))&&$r['status']==='active'){$r['status']='revoked';$r['revoked_at']=$now;$r['updated_at']=$now;$n++;}return $n;});
-}
+function push_supported_types(): array{return ['assigned','reassigned','recurrence_created','reply','progress','blocker_response','blocker_resolved','schedule_priority_revised','correction_requested','approved','cancelled','reopened','due_today','overdue_employee','unacknowledged_employee'];}
+function push_safe_copy(string $type): ?array {$message=match($type){'assigned'=>'A task was assigned to you.','reassigned'=>'A task was reassigned to you.','recurrence_created'=>'A recurring task is available.','reply'=>'A task has a new reply.','progress'=>'Task progress was updated.','blocker_response'=>'A blocker received a response.','blocker_resolved'=>'A blocker was resolved.','schedule_priority_revised'=>'A task schedule or priority changed.','correction_requested'=>'A correction was requested.','approved'=>'A task was approved.','cancelled'=>'A task was cancelled.','reopened'=>'A task was reopened.','due_today'=>'A task is due today.','overdue_employee'=>'A task is overdue.','unacknowledged_employee'=>'A task needs acknowledgement.',default=>null};return $message===null?null:['title'=>'Dakshayani Work','message'=>$message,'category'=>'task'];}
+function push_synchronize(PDO $db,int $limit=500,?int $notificationId=null,bool $dry=false): int {$db=push_db($db);$sql="SELECT n.id,s.user_id FROM portal_notifications n JOIN portal_notification_status s ON s.notification_id=n.id JOIN users u ON u.id=s.user_id JOIN roles r ON r.id=u.role_id WHERE n.audience='employee' AND s.status='unread' AND s.dismissed_at IS NULL AND u.status='active' AND r.name='employee' AND n.notification_type IN (".implode(',',array_fill(0,count(push_supported_types()),'?')).") AND n.created_at>=datetime('now','-".PUSH_SYNC_CUTOFF_DAYS." days')";$args=push_supported_types();if($notificationId){$sql.=' AND n.id=?';$args[]=$notificationId;}$sql.=' ORDER BY n.id DESC LIMIT ?';$args[]=$limit;$s=$db->prepare($sql);$s->execute($args);$rows=$s->fetchAll(PDO::FETCH_ASSOC);if($dry){$n=0;foreach($rows as $r){$q=$db->prepare("SELECT COUNT(*) FROM push_subscriptions p WHERE p.user_id=? AND p.status='active' AND NOT EXISTS(SELECT 1 FROM push_deliveries d WHERE d.notification_id=? AND d.subscription_id=p.id)");$q->execute([$r['user_id'],$r['id']]);$n+=(int)$q->fetchColumn();}return $n;}$db->beginTransaction();try{$insert=$db->prepare("INSERT OR IGNORE INTO push_deliveries(notification_id,subscription_id,status,attempt_count,next_attempt_at,created_at,updated_at) SELECT ?,id,'pending',0,datetime('now'),datetime('now'),datetime('now') FROM push_subscriptions WHERE user_id=? AND status='active'");$n=0;foreach($rows as $r){$insert->execute([$r['id'],$r['user_id']]);$n+=$insert->rowCount();}$db->commit();return $n;}catch(Throwable $e){$db->rollBack();throw $e;}}
+function push_unread_count(PDO $db,int $uid): int {$s=$db->prepare("SELECT COUNT(*) FROM portal_notification_status WHERE user_id=? AND status='unread' AND dismissed_at IS NULL");$s->execute([$uid]);return (int)$s->fetchColumn();}
+function push_backoff_seconds(int $attempt): int{return min(86400,60*(2**min(11,max(0,$attempt))));}
