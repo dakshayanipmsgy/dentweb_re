@@ -17,16 +17,17 @@ if (!function_exists('pwa_asset')) {
 if (!defined('DAKSHAYANI_PWA_HEAD_PRINTED')):
     define('DAKSHAYANI_PWA_HEAD_PRINTED', true);
 ?>
-<link rel="manifest" href="<?= htmlspecialchars(pwa_asset('manifest.webmanifest'), ENT_QUOTES) ?>">
+<?php $employeePwa = isset($employee) || (($taskWorkspaceRole ?? '') === 'employee') || (($u['role_name'] ?? '') === 'employee'); ?>
+<link rel="manifest" href="<?= htmlspecialchars(pwa_asset($employeePwa ? 'employee-manifest.webmanifest' : 'manifest.webmanifest'), ENT_QUOTES) ?>">
 <meta name="theme-color" content="#0f766e">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Dakshayani">
-<meta name="application-name" content="Dakshayani Enterprises">
+<meta name="apple-mobile-web-app-title" content="<?= $employeePwa ? 'Dakshayani Work' : 'Dakshayani' ?>">
+<meta name="application-name" content="<?= $employeePwa ? 'Dakshayani Work' : 'Dakshayani Enterprises' ?>">
 <meta name="format-detection" content="telephone=no">
 <link rel="icon" type="image/svg+xml" href="<?= htmlspecialchars(pwa_asset('assets/icons/app-icon.svg'), ENT_QUOTES) ?>">
-<link rel="apple-touch-icon" href="<?= htmlspecialchars(pwa_asset('assets/icons/app-icon.svg'), ENT_QUOTES) ?>">
+<link rel="apple-touch-icon" href="<?= htmlspecialchars(pwa_asset($employeePwa ? 'assets/icons/employee/apple-touch-icon.png' : 'images/pwa/apple-touch-icon.png'), ENT_QUOTES) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(pwa_asset('assets/css/pwa-shell.css'), ENT_QUOTES) ?>">
 <script defer src="<?= htmlspecialchars(pwa_asset('assets/js/pwa.js'), ENT_QUOTES) ?>"></script>
 <?php endif; ?>
