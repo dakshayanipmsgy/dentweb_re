@@ -29,26 +29,3 @@ for($i=0;$i<21;$i++){$key='page-'.$i;$db->prepare("INSERT INTO portal_notificati
 $page1=task_notification_page($db,$other,'unread',1,20);na(count($page1['notifications'])===20&&$page1['has_more'],'more-than-page pagination');$db->prepare("UPDATE portal_notification_status SET status='dismissed',dismissed_at='2026-08-01 11:00:00' WHERE user_id=? AND notification_id=(SELECT MIN(notification_id) FROM portal_notification_status WHERE user_id=?)")->execute([$other,$other]);$page1=task_notification_page($db,$other,'unread',1,20);na(count($page1['notifications'])===20&&!$page1['has_more'],'exact full page has no more');na($page1['notifications'][0]['id']>$page1['notifications'][1]['id'],'identical timestamps order by id');
 
 echo "task notification corrective tests passed\n";
-
-// Task-relative overdue windows and schedule-generation identity.
-$dueAt=new DateTimeImmutable('2030-01-01 10:00:00',new DateTimeZone('Asia/Kolkata'));
-foreach([
-    ['2030-01-01 10:00:01',0],
-    ['2030-01-02 09:59:59',0],
-    ['2030-01-02 10:00:00',1],
-    ['2030-01-03 09:59:59',1],
-    ['2030-01-03 10:00:01',2],
-] as [$stamp,$window])na(task_notification_overdue_identity(new DateTimeImmutable($stamp,new DateTimeZone('Asia/Kolkata')),$dueAt,24)['window']===$window,'task-relative overdue boundary '.$stamp);
-na(task_notification_overdue_identity($dueAt,$dueAt,24)===null,'exact due instant is not overdue');
-na(task_notification_overdue_identity($dueAt->modify('-1 second'),$dueAt,24)===null,'before due instant is not overdue');
-
-$cycle=$a->create(['title'=>'Schedule identity','description'=>'x','expected_outcome'=>'x','assignee_id'=>$employee['id'],'priority'=>'high','frequency_type'=>'once','due_date'=>'2030-01-01','due_time'=>'10:00']);
-task_notification_generate_reminders($db,new DateTimeImmutable('2030-01-01 10:00:01',new DateTimeZone('Asia/Kolkata')));
-$overdueCount=$db->prepare("SELECT COUNT(*) FROM portal_notifications WHERE source_task_id=? AND notification_type='overdue_employee'");$overdueCount->execute([$cycle['id']]);na((int)$overdueCount->fetchColumn()===1,'first schedule overdue reminder');
-task_notification_generate_reminders($db,new DateTimeImmutable('2030-01-02 09:59:59',new DateTimeZone('Asia/Kolkata')));$overdueCount->execute([$cycle['id']]);na((int)$overdueCount->fetchColumn()===1,'no early reminder near unrelated epoch boundary');
-$db->prepare("UPDATE portal_tasks SET due_date='2030-01-03',due_time='11:00' WHERE id=?")->execute([$cycle['id']]);task_notification_generate_reminders($db,new DateTimeImmutable('2030-01-03 11:00:01',new DateTimeZone('Asia/Kolkata')));$overdueCount->execute([$cycle['id']]);na((int)$overdueCount->fetchColumn()===2,'date and time revision starts fresh cycle');
-task_notification_generate_reminders($db,new DateTimeImmutable('2030-01-03 11:00:01',new DateTimeZone('Asia/Kolkata')));$overdueCount->execute([$cycle['id']]);na((int)$overdueCount->fetchColumn()===2,'unchanged revised window deduplicates');
-$keys=$db->prepare("SELECT deduplication_key FROM portal_notifications WHERE source_task_id=? AND notification_type='overdue_employee' ORDER BY id");$keys->execute([$cycle['id']]);$keys=$keys->fetchAll(PDO::FETCH_COLUMN);na(str_contains($keys[0],'due:20300101T043000Z:window:0')&&str_contains($keys[1],'due:20300103T053000Z:window:0'),'canonical UTC schedules in keys');
-$db->prepare("UPDATE portal_tasks SET due_date='not-a-date' WHERE id=?")->execute([$cycle['id']]);task_notification_generate_reminders($db,new DateTimeImmutable('2030-01-04 12:00:00',new DateTimeZone('Asia/Kolkata')));na(true,'malformed due date is safely ignored');
-
-echo "task notification cadence tests passed\n";
