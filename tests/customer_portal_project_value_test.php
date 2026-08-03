@@ -97,7 +97,7 @@ try {
     projectValueOk(str_contains($dashboard, "'quotation_value' => documents_project_quotation_amount(\$quote)"), 'each customer project stores a separate canonical quotation value');
     projectValueOk(str_contains($dashboard, "\$p['quotation_value'] ?? 0") && str_contains($dashboard, "\$project['quotation_value']"), 'portfolio and project cards use quotation_value');
     projectValueOk(str_contains($dashboard, "'Total value of all projects' : 'Project value'"), 'combined total is correctly labelled while one project keeps Project value');
-    projectValueOk(str_contains($dashboard, "'Total invoice value' : 'Invoice value'") && str_contains($dashboard, "'Total paid across projects' : 'Paid amount'") && str_contains($dashboard, "'Total outstanding across projects' : 'Outstanding'"), 'multi-project invoice, paid, and outstanding labels are portfolio-level');
+    projectValueOk(str_contains($dashboard, "'Current invoice totals' : 'Current invoice total'") && str_contains($dashboard, "'Total paid across projects' : 'Paid amount'") && str_contains($dashboard, "'Total outstanding across projects' : 'Outstanding'"), 'multi-project invoice, paid, and outstanding labels are portfolio-level');
     projectValueOk(str_contains($dashboard, '!documents_is_archived($quote)') && str_contains($dashboard, "!empty(\$quote['is_current_version'])"), 'archived and non-current quotations are excluded');
 } finally {
     if ($invoiceId !== '') {

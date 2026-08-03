@@ -95,11 +95,11 @@ foreach ($customerQuotes as $quote) {
     $invoiceTaxablePaise = 0;
     $invoiceGstPaise = 0;
     $hasFinalizedInvoices = false;
-    foreach (documents_active_invoices_for_quote($quoteId) as $invoice) {
+    foreach ($invoices as $invoice) {
+        $invoiceValuePaise += documents_invoice_money_to_paise(documents_invoice_final_total($invoice));
         if (documents_invoice_is_finalized($invoice)) {
             $hasFinalizedInvoices = true;
             $invoiceTax = documents_invoice_tax_summary($invoice);
-            $invoiceValuePaise += documents_invoice_money_to_paise((float) $invoiceTax['gross']);
             $invoiceTaxablePaise += documents_invoice_money_to_paise((float) $invoiceTax['taxable']);
             $invoiceGstPaise += documents_invoice_money_to_paise((float) $invoiceTax['gst']);
         }
@@ -147,6 +147,9 @@ function customer_dashboard_doc_description(string $type, array $doc, string $fa
     }
     if ($type === 'accepted_quotation') {
         return 'Your accepted project summary and customer-specific details.';
+    }
+    if ($type === 'invoice') {
+        return (string) ($doc['invoice_no'] ?? 'Invoice') . ' · ' . documents_invoice_status_label((string)($doc['status'] ?? 'draft'));
     }
     return (string) ($doc['quote_no'] ?? $doc['agreement_no'] ?? $doc['dispatch_advice_no'] ?? $doc['challan_no'] ?? $doc['invoice_no'] ?? $fallback);
 }
@@ -476,7 +479,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
             <?php $portfolioOutstanding = array_sum(array_map(static fn(array $p): float => (float) ($p['payment_summary']['outstanding'] ?? 0), $customerProjects)); ?>
             <?php $portfolioInvoices = array_sum(array_map(static fn(array $p): float => (float) ($p['invoice_value'] ?? 0), $customerProjects)); ?>
             <article class="kpi-card"><p class="kpi-label"><?= $projectCount > 1 ? 'Total value of all projects' : 'Project value' ?></p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioTotal)) ?></p></article>
-            <article class="kpi-card"><p class="kpi-label"><?= $projectCount > 1 ? 'Total invoice value' : 'Invoice value' ?></p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioInvoices)) ?></p></article>
+            <article class="kpi-card"><p class="kpi-label"><?= $projectCount > 1 ? 'Current invoice totals' : 'Current invoice total' ?></p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioInvoices)) ?></p></article>
             <article class="kpi-card"><p class="kpi-label"><?= $projectCount > 1 ? 'Total paid across projects' : 'Paid amount' ?></p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioPaid)) ?></p></article>
             <article class="kpi-card"><p class="kpi-label"><?= $projectCount > 1 ? 'Total outstanding across projects' : 'Outstanding' ?></p><p class="kpi-value"><?= customer_portal_safe($customerInr($portfolioOutstanding)) ?></p></article>
           </section>
@@ -520,7 +523,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
               <h3 id="financials" class="section-title" style="margin-top:1.25rem">Financial summary</h3>
               <div class="details-grid">
                 <div class="details-tile"><p class="tile-label">Total project / quotation value</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['quotation_value'])) ?></p></div>
-                <div class="details-tile"><p class="tile-label">Invoice value</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['invoice_value'])) ?></p></div>
+                <div class="details-tile"><p class="tile-label">Current invoice total (Drafts included)</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['invoice_value'])) ?></p></div>
                 <div class="details-tile"><p class="tile-label">Paid amount</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['payment_summary']['total_received'])) ?></p></div>
                 <div class="details-tile"><p class="tile-label">Balance outstanding</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['payment_summary']['outstanding'])) ?></p></div>
                 <div class="details-tile"><p class="tile-label"><?= !empty($project['tax_values_from_invoice']) ? 'Invoice taxable value' : 'Quotation taxable value' ?></p><p class="tile-value"><?= ((float) $project['taxable_total'] > 0) ? customer_portal_safe($customerInr((float) $project['taxable_total'])) : '—' ?></p></div>
@@ -540,7 +543,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
               <h3 class="section-title" style="margin-top:1rem">Payment history / receipts</h3>
               <div class="portal-table-wrap">
                 <table class="finance-table"><thead><tr><th>Date</th><th>Amount</th><th>Mode / Reference</th><th>Receipt</th></tr></thead><tbody>
-                  <?php foreach ($project['receipts'] as $receipt): ?><tr><td><?= customer_portal_safe((string) ($receipt['date_received'] ?? $receipt['receipt_date'] ?? '')) ?></td><td><?= customer_portal_safe($customerInr((float) ($receipt['amount_rs'] ?? $receipt['amount_received'] ?? 0))) ?></td><td><?= customer_portal_safe(trim((string) ($receipt['mode'] ?? '') . ' ' . (string) ($receipt['txn_ref'] ?? $receipt['reference'] ?? ''))) ?></td><td><a target="_blank" rel="noreferrer" href="<?= customer_portal_safe(customer_dashboard_doc_url('receipt', $receipt)) ?>"><?= customer_portal_safe((string) ($receipt['receipt_number'] ?? $receipt['id'] ?? 'Receipt')) ?></a></td></tr><?php endforeach; ?>
+                  <?php foreach ($project['receipts'] as $receipt): ?><tr><td><?= customer_portal_safe((string) ($receipt['date_received'] ?? $receipt['receipt_date'] ?? '')) ?></td><td><?= customer_portal_safe($customerInr(documents_receipt_amount_total($receipt))) ?></td><td><?= customer_portal_safe(trim((string) ($receipt['mode'] ?? '') . ' ' . (string) ($receipt['txn_ref'] ?? $receipt['reference'] ?? ''))) ?></td><td><a target="_blank" rel="noreferrer" href="<?= customer_portal_safe(customer_dashboard_doc_url('receipt', $receipt)) ?>"><?= customer_portal_safe((string) ($receipt['receipt_number'] ?? $receipt['id'] ?? 'Receipt')) ?></a></td></tr><?php endforeach; ?>
                   <?php if ($project['receipts'] === []): ?><tr><td colspan="4">No finalized payment receipts are available yet.</td></tr><?php endif; ?>
                 </tbody></table>
               </div>

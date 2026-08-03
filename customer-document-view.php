@@ -45,13 +45,9 @@ function customer_document_quote_tax_summary(array $quote): array
 
 function customer_document_assert_owner(array $document, string $customerMobile): void
 {
-    $docMobile = customer_document_quote_mobile($document);
-    if ($docMobile === '' && ((string) ($document['quotation_id'] ?? $document['linked_quote_id'] ?? '')) !== '') {
-        $quote = documents_get_quote((string) ($document['quotation_id'] ?? $document['linked_quote_id'] ?? ''));
-        if (is_array($quote)) {
-            $docMobile = customer_document_quote_mobile($quote);
-        }
-    }
+    $quoteId = customer_document_quote_id($document);
+    $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
+    $docMobile = is_array($quote) ? customer_document_quote_mobile($quote) : customer_document_quote_mobile($document);
     if ($customerMobile === '' || $docMobile !== $customerMobile) {
         http_response_code(403);
         exit('Access denied.');
@@ -109,16 +105,7 @@ if (in_array($type, ['dispatch_advice', 'challan', 'receipt', 'invoice'], true) 
     }
     customer_document_assert_owner($quote, $customerMobile);
     $documents = $type === 'dispatch_advice' ? documents_dispatch_advices_for_quote($quoteId) : ($type === 'challan' ? documents_challans_for_quote($quoteId) : ($type === 'invoice' ? documents_customer_visible_invoices_for_quote($quoteId, $quote) : documents_final_receipts_for_quote($quoteId)));
-    $documents = array_values(array_filter($documents, static function (array $document) use ($customerMobile, $quoteId): bool {
-        if (customer_document_quote_id($document) !== $quoteId) {
-            return false;
-        }
-        $docMobile = customer_document_quote_mobile($document);
-        if ($docMobile === '') {
-            return true;
-        }
-        return $docMobile === $customerMobile;
-    }));
+    $documents = array_values(array_filter($documents, static fn(array $document): bool => customer_document_quote_id($document) === $quoteId));
     if (count($documents) === 1) {
         header('Location: customer-document-view.php?' . http_build_query(['type' => $type, 'id' => (string) ($documents[0]['id'] ?? '')]));
         exit;
@@ -242,10 +229,14 @@ if ($type === 'accepted_quotation') {
     $title = 'Invoice';
 } elseif ($type === 'receipt') {
     $document = documents_get_sales_document('receipt', $id);
+    if (is_array($document)) {
+        $qualifiedIds=array_map(static fn(array $row):string=>(string)($row['id']??''),documents_receipt_ledger(documents_receipt_quote_id($document)));
+        if(!in_array((string)($document['id']??''),$qualifiedIds,true)){$document=null;}
+    }
     $title = 'Payment Receipt';
     $number = (string) ($document['receipt_number'] ?? $document['id'] ?? '');
     $date = (string) ($document['date_received'] ?? $document['receipt_date'] ?? $document['created_at'] ?? '');
-    $amount = (float) ($document['amount_rs'] ?? $document['amount_received'] ?? $document['amount'] ?? 0);
+    $amount = is_array($document) ? documents_receipt_amount_total($document) : 0.0;
 }
 
 if (!is_array($document)) { http_response_code(404); exit('Document not found.'); }
