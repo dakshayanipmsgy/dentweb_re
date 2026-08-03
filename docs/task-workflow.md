@@ -1,63 +1,37 @@
 # Canonical official-task workflow (issues #912 and #920)
 
-Personal reminders remain separate records and do not participate in official task metrics, workflow events, notification inputs, or performance reporting. This change prepares an event contract for #913; it does **not** implement a notification centre, badge, reminder generator, push delivery, or PWA.
+Personal reminders are intentionally separate records. They never participate in official task counts, dashboards, performance metrics, workflow events, or notification inputs.
 
-## Responsibility is not notification intent
+## Responsibility and recipient invariants
 
-`responsibility` is the mutable next-action projection. `employee` requires the active current assignee and sets `attention_owner_id` to that employee; `admin` represents the admin audience and requires a `NULL` owner ID; `none` has no owner. Event `intended_recipients` is a separate immutable collection selected from event meaning. It can contain one user, an audience, several entries, or be empty. Consumers must never derive recipients from responsibility.
+* `employee` means the active current assignee must act and `attention_owner_id` equals `assignee_id`.
+* `admin` means the administrator audience must act and `attention_owner_id` is `NULL`. It never points at the employee actor.
+* `none` means no action is expected and `attention_owner_id` is `NULL`.
 
-| Event | Explicit recipients |
-| --- | --- |
-| `assigned`, `recurrence_created`, `reassigned` | new/current assignee |
-| `acknowledged`, `started` | admin audience |
-| employee `reply`, attention-worthy `progress` | admin audience |
-| admin `reply` | current assignee |
-| `blocker_reported` | admin audience |
-| `blocker_response`, `blocker_resolved` | current assignee |
-| `submitted`, `resubmitted`, `correction_resumed` | admin audience |
-| `correction_requested`, `approved`, `cancelled`, `schedule_priority_revised` | current assignee |
-| `reopened` | audience/user owning the reopened action |
-| `proof_uploaded` | admin audience for employee proof; assignee for admin proof |
-| `archived`, `unarchived` | empty collection (audit event only) |
+Schema initialization safely repairs rows written by PR #919 that contradict these rules. Assignment and reassignment accept only an existing, active user with the employee role. Inactive assignees remain visible on historical task cards but are absent from selectors.
 
-Approval and cancellation intentionally notify the employee even though the resulting responsibility is `none`. A keep-blocked admin response intentionally notifies the employee while responsibility remains `admin`.
+## State machine
 
-## Links and visibility
+Employees may acknowledge an assigned task or start it directly (direct start records both acknowledgement and start). They can report a blocker from active work. An admin can respond while keeping it blocked, or resolve it and return responsibility to the assignee. An employee explicitly acknowledges/resumes requested corrections. First and corrected submissions use the same validated submission edge. Admins can request correction, approve, reopen, or cancel where applicable. Archived work exposes no workflow actions. Optimistic versions reject stale and simultaneous mutations.
 
-`TaskWorkflowService::taskLink()` is the only event link builder. It selects the workspace from each recipient (`employee-tasks.php` or `admin-tasks.php`) and selects `active`, `completed`, `cancelled`, or `archived` from the resulting record. Every URL includes `task=<id>#task-<id>`. Deep-link selection is applied after the view filter, so closed and archived records remain visible.
+## Timestamp rules
 
-## State, projection resets, and closed work
+Times are Asia/Kolkata wall times. `acknowledged_at` and `started_at` project acknowledgement/start; `correction_acknowledged_at` projects correction resume. Every submission sets `submitted_at`, while earlier submission values survive in events. Approval sets `approved_at`, `approved_by`, `completed_at`, and `last_completed_at`. Cancellation sets `cancelled_at`. Reopening clears current `submitted_at`, `approved_at`, `approved_by`, `completed_at`, `cancelled_at`, and archive values, but deliberately retains `last_completed_at`. Immutable events preserve all prior state transitions.
 
-The state machine and optimistic version checks remain authoritative. Reassignment is permitted only for active, unarchived work and resets it to `assigned`. It clears these current projections: `acknowledged_at`, `started_at`, `submitted_at`, `submission_summary`, `correction_acknowledged_at`, `approved_at`, `approved_by`, `approval_note`, `completed_at`, `cancelled_at`, `archived_at`, `archived_flag`, and `closed_reason`. It preserves identity, series/occurrence lineage, `last_completed_at`, messages, attachments, and immutable events. Those retained historical records are the audit trail; cleared columns describe only the current projection.
-
-Completed, cancelled, and archived work rejects reassignment, schedule/priority revision, ordinary replies, and proof uploads. The workspace does not render those active-work controls. An audited reopen transition must occur first. Closed work may expose only state-valid actions such as reopen or archive/unarchive.
+Business-day overdue, due-today, and completed-this-week classifications are calculated in PHP using `Asia/Kolkata`, not SQLite UTC `date('now')`.
 
 ## Recurrence
 
-For daily, weekly, monthly, and custom recurrence, approval takes the later of the prior scheduled/due date and the current Asia/Kolkata business date, then advances exactly one interval. Consequently a late approval creates one future occurrence, never an overdue successor or a backlog. The unique series occurrence and parent-child constraints plus the existing child check make approval retries idempotent.
+`once`, daily, weekly, monthly, and custom schedules are supported; custom intervals must be at least one day. Approval creates at most one successor from the occurrence's scheduled date, not from a delayed approval date. The successor retains the series ID, increments the occurrence number, links to the approved parent, begins assigned to the validated current employee, and emits `recurrence_created`.
 
-## Filtering, cards, and progressive disclosure
+## Immutable event contract for issue #913
 
-Both workspaces support search, employee (admin), workflow status, next-action responsibility, priority, overdue, due today, upcoming, no due date, category/reference, and active/completed/cancelled/archived views. Selected values are preserved. All date buckets use Asia/Kolkata business dates.
+Every important mutation inserts a `task_events` record whose JSON `event_data` has `contract_version`, `task_id`, `occurrence_number`, `series_id`, `event_type`, `actor` (`id`, `role`), old/new workflow state, old/new assignee ID, resulting `responsibility`, `intended_recipient` (`type`, `user_id`, `audience`), `occurred_at`, resulting `task_version`, safe role-specific `deep_link`, and event-specific `details`.
 
-Admin cards are Needs admin action, Awaiting review, Blocked, Not acknowledged, Overdue, Due today, and Completed this week. Employee cards are New assignments, Needs my action, In progress, Overdue, Waiting for admin, Correction required, and Approved complete. Each card links to its corresponding filtered view.
+The catalogue is: `assigned`, `acknowledged`, `started`, `reply`, `progress`, `blocker_reported`, `blocker_response`, `blocker_resolved`, `submitted`, `correction_requested`, `correction_resumed`, `approved`, `reopened`, `reassigned`, `schedule_priority_revised`, `cancelled`, `archived`, `unarchived`, `recurrence_created`, and `proof_uploaded`. Consumers must use the explicit recipient object and must not reinterpret workflow rules. Issue #913 notification delivery is not implemented here.
 
-The custom recurrence input is ordinary visible HTML when JavaScript is absent. Progressive enhancement hides it unless the keyboard-accessible recurrence select is `custom`, and toggles its required state without disabling the form's no-script fallback.
+## Attachments and deployment
 
-## Canonical event contract (version 2)
+Files created within a mutation are tracked. Any later database, optimistic-version, or commit failure rolls back rows and deletes those files. Attachment rows are inserted only after a file is safely stored; downloads revalidate the protected storage key and authorization.
 
-Every immutable `task_events.event_data` document contains `contract_version`, `canonical_task_id` (and compatible `task_id`), `series_id`, `occurrence_number`, `event_type`, actor ID/role, old/new state, old/new assignee, resulting responsibility, `intended_recipients`, occurrence time, resulting task version, recipient-correct `deep_links`, and safe structured `details`. Details contain booleans, IDs, schedule values, and similar notification-safe metadata—not message bodies, secrets, storage keys, paths, hashes, or attachment contents.
-
-Representative sanitized approval payload:
-
-```json
-{"contract_version":2,"canonical_task_id":42,"task_id":42,"series_id":"opaque-series-id","occurrence_number":3,"event_type":"approved","actor":{"id":7,"role":"admin"},"old_workflow_state":"submitted","new_workflow_state":"completed","old_assignee_id":18,"new_assignee_id":18,"responsibility":"none","intended_recipients":[{"type":"user","user_id":18,"deep_link":"employee-tasks.php?view=completed&task=42#task-42"}],"occurred_at":"2026-08-01 14:30:00","task_version":12,"deep_links":["employee-tasks.php?view=completed&task=42#task-42"],"details":{"has_explanation":true}}
-```
-
-Representative keep-blocked payload excerpt demonstrates safe divergence:
-
-```json
-{"event_type":"blocker_response","new_workflow_state":"blocked","responsibility":"admin","intended_recipients":[{"type":"user","user_id":18,"deep_link":"employee-tasks.php?view=active&task=42#task-42"}]}
-```
-
-Deployment runs the repeatable schema initializer/migration. Back up the application database and protected attachment directory together. Added schema remains additive; event records remain update/delete protected.
+Deployment requires normal application startup (or the canonical migration command) to run the repeatable schema initializer and #919 routing backfill. Back up the application database and protected attachment directory first. Rollback should restore both together; reverting only code after the schema is safe because added columns/tables are additive, but the responsibility backfill is intentionally not reversed.
