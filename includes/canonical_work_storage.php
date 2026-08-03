@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 const CANONICAL_WORK_SCHEMA_VERSION = 91701;
-const TASK_WORKFLOW_SCHEMA_VERSION = 92001;
+const TASK_WORKFLOW_SCHEMA_VERSION = 92000;
 
 function canonical_work_columns(PDO $db, string $table): array
 {
@@ -55,7 +55,7 @@ function canonical_work_initialize_schema(PDO $db): void
     $db->exec("CREATE TABLE IF NOT EXISTS personal_reminders (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id INTEGER NOT NULL, title TEXT NOT NULL, due_at TEXT, completed_at TEXT, created_at TEXT NOT NULL, FOREIGN KEY(employee_id) REFERENCES users(id) ON DELETE CASCADE)");
     foreach(['CREATE INDEX IF NOT EXISTS idx_tasks_assignee_status_due ON portal_tasks(assignee_id,status,due_date)','CREATE INDEX IF NOT EXISTS idx_tasks_activity ON portal_tasks(last_activity_at)','CREATE INDEX IF NOT EXISTS idx_tasks_linked ON portal_tasks(linked_entity_type,linked_entity_id)','CREATE INDEX IF NOT EXISTS idx_task_messages_task ON task_messages(task_id,created_at)','CREATE INDEX IF NOT EXISTS idx_task_events_task ON task_events(task_id,id)','CREATE INDEX IF NOT EXISTS idx_task_attachments_task ON task_attachments(task_id)','CREATE INDEX IF NOT EXISTS idx_task_occurrences_series ON task_occurrences(series_id,occurrence_number)'] as $sql)$db->exec($sql);
     $stmt=$db->prepare('INSERT OR IGNORE INTO schema_migrations(version,name,applied_at) VALUES(:v,:n,datetime(\'now\'))');$stmt->execute([':v'=>CANONICAL_WORK_SCHEMA_VERSION,':n'=>'issue_917_corrective_foundation']);$stmt->execute([':v'=>TASK_WORKFLOW_SCHEMA_VERSION,':n'=>'issue_912_official_task_workflow']);
-    $stmt->execute([':v'=>92001,':n'=>'issue_920_post_merge_audit']);
+    $stmt->execute([':v'=>92000,':n'=>'issue_920_corrective_task_workflow']);
 }
 
 final class CanonicalEmployeeRepository
