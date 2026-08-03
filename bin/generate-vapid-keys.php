@@ -1,3 +1,0 @@
-#!/usr/bin/env php
-<?php
-declare(strict_types=1);$autoload=__DIR__.'/../vendor/autoload.php';if(!is_file($autoload)){fwrite(STDERR,"Install locked Composer dependencies first. No keys were generated.\n");exit(2);}require $autoload;if(!class_exists(Minishlink\WebPush\VAPID::class)){fwrite(STDERR,"Web Push dependency unavailable.\n");exit(2);}$keys=Minishlink\WebPush\VAPID::createVapidKeys();echo "WEB_PUSH_VAPID_PUBLIC_KEY={$keys['publicKey']}\nWEB_PUSH_VAPID_PRIVATE_KEY={$keys['privateKey']}\n";fwrite(STDERR,"Store the private key in protected environment configuration; never commit or log it.\n");

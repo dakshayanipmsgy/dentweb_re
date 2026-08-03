@@ -348,7 +348,7 @@ if ($requestMethod === 'POST') {
                     $loginResult = employee_portal_attempt_login($store, $identifier, $password);
                     if ($loginResult['success']) {
                         $success = 'Login successful. Redirecting…';
-                        header('Location: ' . (consume_employee_login_return() ?? $roleRoutes['employee']));
+                        header('Location: ' . $roleRoutes['employee']);
                         exit;
                     }
 

@@ -114,10 +114,7 @@ function require_login_any_role(array $roles = []): void
 
     $user = session_user();
     if ($user === null) {
-        $candidate = (string)($_SERVER['REQUEST_URI'] ?? '');
-        $employeeReturn = employee_safe_return_path($candidate);
-        if ($employeeReturn !== null) $_SESSION['employee_login_return'] = $employeeReturn;
-        header('Location: login.php' . ($employeeReturn !== null ? '?login_type=employee' : ''));
+        header('Location: login.php');
         exit;
     }
 
@@ -126,24 +123,6 @@ function require_login_any_role(array $roles = []): void
         echo 'Access denied.';
         exit;
     }
-}
-
-function employee_safe_return_path(string $candidate): ?string
-{
-    if($candidate===''||strlen($candidate)>500||str_contains($candidate,"\0"))return null;
-    $decoded=$candidate;for($i=0;$i<2;$i++){$next=rawurldecode($decoded);if($next===$decoded)break;$decoded=$next;}
-    if(str_starts_with($decoded,'//')||str_contains($decoded,'\\')||preg_match('/^[a-z][a-z0-9+.-]*:/i',$decoded))return null;
-    $parts=parse_url($decoded);if(!is_array($parts)||isset($parts['scheme'])||isset($parts['host'])||isset($parts['user'])||isset($parts['fragment']))return null;
-    $path=ltrim((string)($parts['path']??''),'/');$query=(string)($parts['query']??'');
-    $simple=['employee-dashboard.php','employee-tasks.php','notifications.php','employee-app.php'];
-    if(in_array($path,$simple,true)&&($query===''||preg_match('/^(?:source=employee-pwa|view=(?:all|unread)(?:&page=\d+)?)$/D',$query)))return $path.($query!==''?'?'.$query:'');
-    if($path==='notification-open.php'&&preg_match('/^id=([1-9]\d*)$/D',$query))return $path.'?'.$query;
-    return null;
-}
-
-function consume_employee_login_return(): ?string
-{
-    start_session();$value=(string)($_SESSION['employee_login_return']??'');unset($_SESSION['employee_login_return']);return employee_safe_return_path($value);
 }
 
 function require_login(): void
