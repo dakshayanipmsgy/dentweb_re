@@ -24,9 +24,6 @@ foreach ($links as $link) {
     }
 }
 if ($existing) {
-    if (in_array($role, ['admin', 'employee'], true)) {
-        $existing[] = ['Notifications', 'notifications.php'];
-    }
     $existing[] = ['Logout', 'logout.php'];
 }
 if ($existing): ?>
