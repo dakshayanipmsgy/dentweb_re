@@ -32,6 +32,7 @@ $created = documents_project_create_or_link_customer($quote, $store);
 project_customer_assert($created['ok'] && $created['created'], 'customer is created from the snapshot');
 project_customer_assert((string) ($created['customer']['serial_number'] ?? '') !== '', 'store generated a serial number');
 project_customer_assert((string) ($created['customer']['address'] ?? '') === 'Safe snapshot address', 'safe quotation fields were copied');
+project_customer_assert(password_verify('abcd1234', (string) ($created['customer']['password_hash'] ?? '')), 'new customer can use the default portal password');
 
 $again = documents_project_create_or_link_customer($quote, $store);
 project_customer_assert($again['ok'] && !$again['created'], 'double click links instead of duplicating');

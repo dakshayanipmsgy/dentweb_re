@@ -2,4 +2,6 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home/tegwf0aqgwek/public_html/portal
-    - /bin/rsync -a --delete --exclude='.git' --exclude='.cpanel.yml' ./ $DEPLOYPATH/
+    # Portal records are written at runtime. Excluding them prevents a code
+    # deployment from overwriting or deleting live users, documents and uploads.
+    - /bin/rsync -a --delete --exclude='.git' --exclude='.cpanel.yml' --exclude='.env' --exclude='.user.ini' --exclude='error_log' --exclude='storage/' --exclude='data/' --exclude='handovers/' --exclude='uploads/' --exclude='images/hero/' --exclude='images/documents/branding/' --exclude='images/documents/backgrounds/' --exclude='images/documents/watermarks/' --exclude='images/documents/diagrams/' --exclude='images/documents/uploads/' --exclude='assets/vendor/browser-export/' --exclude='vendor/' ./ "$DEPLOYPATH/"
