@@ -53,7 +53,7 @@ if ($companyAddress === '') {
 
 $companyLogo = trim((string) ($company['logo_path'] ?? ''));
 
-$amount = (float) ($receipt['amount_rs'] ?? $receipt['amount_received'] ?? $receipt['amount'] ?? 0);
+$amount = documents_receipt_amount_total($receipt);
 $dateReceived = (string) ($receipt['date_received'] ?? $receipt['receipt_date'] ?? $receipt['created_at'] ?? date('Y-m-d'));
 $receiptNo = (string) ($receipt['receipt_number'] ?? $receipt['id'] ?? '');
 $customerName = (string) ($receipt['customer_name_snapshot'] ?? $receipt['customer_name'] ?? '');

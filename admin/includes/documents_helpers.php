@@ -34,7 +34,8 @@ documents_configure_php_error_logging();
 
 function documents_base_dir(): string
 {
-    return dirname(__DIR__, 2) . '/data/documents';
+    $override = trim((string) getenv('DOCUMENTS_BASE_DIR'));
+    return $override !== '' ? rtrim($override, '/\\') : dirname(__DIR__, 2) . '/data/documents';
 }
 
 function documents_inventory_dir(): string
@@ -3838,10 +3839,40 @@ function documents_invoice_payment_status_label(string $status): string
 
 function documents_receipt_is_finalized_active(array $receipt): bool
 {
-    $status = strtolower(trim((string)($receipt['status'] ?? '')));
-    return in_array($status, ['final','finalized','posted','paid'], true)
-        && !in_array($status, ['draft','cancelled','canceled','reversed','voided','archived'], true)
+    $status = strtolower(str_replace([' ', '-'], '_', trim((string)($receipt['status'] ?? $receipt['payment_status'] ?? ''))));
+    return in_array($status, ['final','finalized','posted','paid','completed','received'], true)
         && empty($receipt['archived_flag']) && empty($receipt['archived']) && empty($receipt['voided']) && empty($receipt['reversed']);
+}
+
+/** Immutable project key. Snapshot identity fields are deliberately not used. */
+function documents_receipt_quote_id(array $receipt): string
+{
+    foreach (['quotation_id','linked_quote_id','quote_id','project_id','linked_quotation_id'] as $key) {
+        $value = safe_text((string)($receipt[$key] ?? ''));
+        if ($value !== '') { return $value; }
+    }
+    return '';
+}
+
+function documents_receipt_identity(array $receipt): string
+{
+    foreach (['id','receipt_id'] as $key) { if (trim((string)($receipt[$key] ?? '')) !== '') return $key . ':' . trim((string)$receipt[$key]); }
+    return 'legacy:' . hash('sha256', implode('|', [documents_receipt_quote_id($receipt), (string)($receipt['receipt_number'] ?? ''), (string)($receipt['date_received'] ?? $receipt['receipt_date'] ?? ''), (string)documents_invoice_money_to_paise(documents_receipt_amount_total($receipt))]));
+}
+
+/** Canonical qualified, normalized and deduplicated receipt ledger. */
+function documents_receipt_ledger(?string $quoteId = null, ?array $rows = null): array
+{
+    $out=[]; $seen=[];
+    foreach (($rows ?? documents_list_sales_documents('receipt')) as $row) {
+        if (!is_array($row) || !documents_receipt_is_finalized_active($row)) continue;
+        $qid=documents_receipt_quote_id($row); if ($qid === '' || ($quoteId !== null && $qid !== $quoteId)) continue;
+        $key=documents_receipt_identity($row); if(isset($seen[$key])) continue; $seen[$key]=true;
+        $row['quotation_id']=$qid; $row['amount_paise']=max(0,documents_invoice_money_to_paise(documents_receipt_amount_total($row)));
+        $row['amount_rs']=documents_invoice_paise_to_money($row['amount_paise']); $out[]=$row;
+    }
+    usort($out, static fn(array $a,array $b):int => strcmp((string)($a['date_received']??$a['receipt_date']??'').documents_receipt_identity($a),(string)($b['date_received']??$b['receipt_date']??'').documents_receipt_identity($b)));
+    return $out;
 }
 
 function documents_receipt_amount_total(array $receipt): float
@@ -3967,12 +3998,12 @@ function documents_receipt_allocations_normalize(array $receipt, array $invoices
     $receiptTotal = documents_invoice_money_to_paise(documents_receipt_amount_total($receipt)); $allocs=[]; $seen=[]; $errors=[];
     $raw = is_array($receipt['allocations'] ?? null) ? $receipt['allocations'] : [];
     if ($raw === [] && (string)($receipt['invoice_id'] ?? '') !== '') { $raw[]=['invoice_id'=>(string)$receipt['invoice_id'],'amount_rs'=>documents_receipt_amount_total($receipt)]; }
-    if ($raw === [] && (string)($receipt['quotation_id'] ?? '') !== '') {
-        $qid=(string)$receipt['quotation_id']; $eligible=array_values(array_filter($invoices, static fn($i):bool => (string)($i['linked_quote_id']??$i['quotation_id']??'')===$qid && in_array(documents_invoice_normalize_status((string)($i['status']??'draft')), ['draft','finalized'], true) && !documents_is_archived($i)));
+    if ($raw === [] && documents_receipt_quote_id($receipt) !== '') {
+        $qid=documents_receipt_quote_id($receipt); $eligible=array_values(array_filter($invoices, static fn($i):bool => (string)($i['linked_quote_id']??$i['quotation_id']??'')===$qid && documents_invoice_is_active_for_quote($i)));
         if (count($eligible) === 1) { $raw[]=['invoice_id'=>(string)$eligible[0]['id'], 'amount_rs'=>documents_receipt_amount_total($receipt), 'migrated_from'=>'quotation']; }
     }
     $sum=0;
-    foreach($raw as $a){ if(!is_array($a)) continue; $iid=(string)($a['invoice_id']??''); $paise=documents_invoice_money_to_paise((float)($a['amount_rs']??$a['amount']??0)); if($iid===''||!isset($byId[$iid])){$errors[]='invalid_invoice_id'; continue;} if($paise<0){$errors[]='negative_allocation'; continue;} $key=$iid.':'.$paise; if(isset($seen[$key])) continue; $seen[$key]=true; $inv=$byId[$iid]; $rc=(string)($receipt['customer_mobile']??''); $ic=(string)($inv['customer_mobile']??$inv['customer_snapshot']['mobile']??''); if($rc!==''&&$ic!==''&&normalize_customer_mobile($rc)!==normalize_customer_mobile($ic) && empty($a['authorized_override'])){$errors[]='cross_customer_allocation'; continue;} $sum+=$paise; $allocs[]=['invoice_id'=>$iid,'amount_rs'=>documents_invoice_paise_to_money($paise)]; }
+    foreach($raw as $a){ if(!is_array($a)) continue; $iid=(string)($a['invoice_id']??''); $paise=documents_invoice_money_to_paise((float)($a['amount_rs']??$a['amount']??0)); if($iid===''||!isset($byId[$iid])){$errors[]='invalid_invoice_id'; continue;} if($paise<0){$errors[]='negative_allocation'; continue;} if(isset($seen[$iid])){$errors[]='duplicate_invoice_allocation'; continue;} $seen[$iid]=true; $inv=$byId[$iid]; $rq=documents_receipt_quote_id($receipt); $iq=(string)($inv['linked_quote_id']??$inv['quotation_id']??''); if($rq===''||$iq===''||$rq!==$iq){$errors[]='cross_project_allocation'; continue;} $sum+=$paise; $allocs[]=['invoice_id'=>$iid,'amount_rs'=>documents_invoice_paise_to_money($paise)]; }
     if($sum>$receiptTotal){ $errors[]='allocation_exceeds_receipt'; return ['ok'=>false,'allocations'=>[],'errors'=>array_values(array_unique($errors))]; }
     return ['ok'=>$errors===[], 'allocations'=>$allocs, 'errors'=>array_values(array_unique($errors))];
 }
@@ -3985,13 +4016,40 @@ function documents_receipt_allocation_for_invoice(array $receipt, string $invoic
     return documents_invoice_paise_to_money($sum);
 }
 
+function documents_invoice_allocated_paise(string $invoiceId, string $exceptReceiptId = ''): int
+{
+    $sum=0;
+    foreach(documents_receipt_ledger() as $receipt){ if($exceptReceiptId!=='' && documents_receipt_identity($receipt)===$exceptReceiptId) continue; foreach((array)($receipt['allocations']??[]) as $a)if(is_array($a)&&(string)($a['invoice_id']??'')===$invoiceId)$sum+=max(0,documents_invoice_money_to_paise((float)($a['amount_rs']??$a['amount']??0))); }
+    return $sum;
+}
+
+/** Validate and persist an administrator's explicit split. Empty balances remain project credit. */
+function documents_allocate_receipt(string $receiptId, array $requested, array $actor = []): array
+{
+    $receipt=documents_get_sales_document('receipt',$receiptId); if(!$receipt||!documents_receipt_is_finalized_active($receipt))return ['ok'=>false,'error'=>'Finalized active receipt not found.'];
+    $invoices=documents_all_invoices(); $byId=[]; foreach($invoices as $invoice)$byId[(string)($invoice['id']??'')]=$invoice;
+    $alloc=[]; $sum=0; foreach($requested as $iid=>$amount){$paise=documents_invoice_money_to_paise((float)$amount); if($paise<=0)continue; if(!isset($byId[$iid])||!documents_invoice_is_active_for_quote($byId[$iid]))return ['ok'=>false,'error'=>'Unknown or inactive invoice.']; $capacity=documents_invoice_money_to_paise(documents_invoice_final_total($byId[$iid]))-documents_invoice_allocated_paise((string)$iid,documents_receipt_identity($receipt)); if($paise>$capacity)return ['ok'=>false,'error'=>'Allocation exceeds the invoice outstanding amount.']; $sum+=$paise; $alloc[]=['invoice_id'=>(string)$iid,'amount_rs'=>documents_invoice_paise_to_money($paise)];}
+    if($sum>documents_invoice_money_to_paise(documents_receipt_amount_total($receipt)))return ['ok'=>false,'error'=>'Allocation exceeds the receipt amount.'];
+    $candidate=$receipt; $candidate['allocations']=$alloc; $norm=documents_receipt_allocations_normalize($candidate,$invoices); if(empty($norm['ok']))return ['ok'=>false,'error'=>implode(', ',(array)$norm['errors'])];
+    $receipt['allocations']=$norm['allocations']; $receipt['allocation_updated_at']=date('c'); $receipt['allocation_updated_by']=['id'=>(string)($actor['id']??''),'name'=>(string)($actor['name']??'Admin')];
+    $saved=documents_save_sales_document('receipt',$receipt); return !empty($saved['ok'])?['ok'=>true,'receipt'=>$receipt,'unallocated'=>documents_invoice_paise_to_money(documents_invoice_money_to_paise(documents_receipt_amount_total($receipt))-$sum)]:$saved;
+}
+
+/** Persist only unambiguous allocations; never finalizes an invoice or guesses a split. */
+function documents_reconcile_receipts_for_quote(string $quoteId): array
+{
+    $active=documents_active_invoices_for_quote($quoteId); $changed=[]; $ambiguous=[];
+    foreach(documents_receipt_ledger($quoteId) as $receipt){$raw=is_array($receipt['allocations']??null)?$receipt['allocations']:[]; if($raw!==[])continue; if(count($active)!==1){$ambiguous[]=(string)($receipt['id']??''); continue;} $invoice=$active[0]; $capacity=max(0,documents_invoice_money_to_paise(documents_invoice_final_total($invoice))-documents_invoice_allocated_paise((string)$invoice['id'])); $amount=documents_invoice_money_to_paise(documents_receipt_amount_total($receipt)); $allocate=min($amount,$capacity); if($allocate<=0){$ambiguous[]=(string)($receipt['id']??'');continue;} $receipt['allocations']=[['invoice_id'=>(string)$invoice['id'],'amount_rs'=>documents_invoice_paise_to_money($allocate)]]; $receipt['allocation_basis']='single_active_invoice'; $receipt['allocation_created_at']=date('c'); $saved=documents_save_sales_document('receipt',$receipt); if(!empty($saved['ok']))$changed[]=(string)($receipt['id']??''); if($allocate<$amount)$ambiguous[]=(string)($receipt['id']??'');}
+    return ['ok'=>true,'changed'=>$changed,'ambiguous'=>array_values(array_unique($ambiguous))];
+}
+
 function documents_invoice_payment_summary(array $invoice): array
 {
     $invoice=documents_invoice_normalize_commercial_snapshot($invoice); $iid=(string)($invoice['id']??''); $invoices=documents_all_invoices(); if($iid!=='' && !isset(array_column($invoices,null,'id')[$iid])) $invoices[]=$invoice;
     $totalPaise=documents_invoice_money_to_paise(documents_invoice_final_total($invoice)); $received=0; $receipts=[]; $unallocated=[]; $last=''; $seen=[]; $qid=(string)($invoice['linked_quote_id']??$invoice['quotation_id']??'');
-    foreach(documents_list_sales_documents('receipt') as $r){ if(!is_array($r)||!documents_receipt_is_finalized_active($r)) continue; $rid=(string)($r['id']??$r['receipt_id']??$r['receipt_number']??''); if(isset($seen[$rid])) continue; $seen[$rid]=true; $norm=documents_receipt_allocations_normalize($r,$invoices); $amt=0; if(!empty($norm['ok'])) foreach($norm['allocations'] as $a){ if((string)$a['invoice_id']===$iid) $amt += documents_invoice_money_to_paise((float)$a['amount_rs']); }
+    foreach(documents_receipt_ledger() as $r){ $rid=documents_receipt_identity($r); if(isset($seen[$rid])) continue; $seen[$rid]=true; $norm=documents_receipt_allocations_normalize($r,$invoices); $amt=0; if(!empty($norm['ok'])) foreach($norm['allocations'] as $a){ if((string)$a['invoice_id']===$iid) $amt += documents_invoice_money_to_paise((float)$a['amount_rs']); }
         $date=(string)($r['date_received']??$r['receipt_date']??$r['created_at']??''); if($amt>0){$received+=$amt; if(substr($date,0,10)>$last)$last=substr($date,0,10); $receipts[]=['id'=>$rid,'receipt_number'=>(string)($r['receipt_number']??$rid),'date'=>$date,'amount_rs'=>documents_invoice_paise_to_money($amt)];}
-        elseif($qid!=='' && (string)($r['quotation_id']??'')===$qid && (is_array($r['allocations']??null)?$r['allocations']:[])===[]) $unallocated[]=['id'=>$rid,'receipt_number'=>(string)($r['receipt_number']??$rid),'date'=>$date,'amount_rs'=>documents_receipt_amount_total($r)]; }
+        elseif($qid!=='' && documents_receipt_quote_id($r)===$qid && (is_array($r['allocations']??null)?$r['allocations']:[])===[]) $unallocated[]=['id'=>(string)($r['id']??$rid),'receipt_number'=>(string)($r['receipt_number']??$rid),'date'=>$date,'amount_rs'=>documents_receipt_amount_total($r)]; }
     usort($receipts, static fn($a,$b)=>strcmp(($a['date']??'').($a['id']??''),($b['date']??'').($b['id']??''))); usort($unallocated, static fn($a,$b)=>strcmp(($a['date']??'').($a['id']??''),($b['date']??'').($b['id']??'')));
     $diff=$totalPaise-$received; $tol=1; $status=$totalPaise<=0?'not_applicable':($received===0?'unpaid':(abs($diff)<=$tol?'paid':($diff>0?'partially_paid':'overpaid')));
     return ['invoice_id'=>$iid,'invoice_total'=>documents_invoice_paise_to_money($totalPaise),'total_received'=>documents_invoice_paise_to_money($received),'outstanding'=>documents_invoice_paise_to_money(max(0,$diff)),'overpayment'=>documents_invoice_paise_to_money(max(0,-$diff)),'payment_status'=>$status,'receipt_count'=>count($receipts),'receipts'=>$receipts,'unallocated_receipts'=>$unallocated,'last_payment_at'=>$last];
@@ -4034,12 +4092,15 @@ function documents_project_financial_summary(array $quote, array $receipts = nul
     $quoteAmount = documents_project_quotation_amount($quote); $quotePaise = documents_invoice_money_to_paise($quoteAmount);
     $snapshot = documents_project_invoice_set_snapshot($quote); $invoicePaise = (int)$snapshot['total_paise'];
     $paidPaise = 0; $allocatedPaise = 0; $receiptIds = [];
-    foreach (($receipts ?? documents_final_receipts_for_quote((string)($quote['id'] ?? ''))) as $receipt) {
+    $allInvoices=documents_all_invoices();
+    foreach (($receipts ?? documents_receipt_ledger((string)($quote['id'] ?? ''))) as $receipt) {
         if (!is_array($receipt) || !documents_receipt_is_finalized_active($receipt)) { continue; }
         $rid = (string)($receipt['id'] ?? $receipt['receipt_id'] ?? md5(json_encode($receipt)));
         if (isset($receiptIds[$rid])) { continue; }
         $receiptIds[$rid] = true; $amountPaise = documents_invoice_money_to_paise(documents_receipt_amount_total($receipt)); $paidPaise += $amountPaise;
-        foreach ((array)($receipt['allocations'] ?? []) as $allocation) { if (is_array($allocation)) { $allocatedPaise += min($amountPaise, documents_invoice_money_to_paise((float)($allocation['amount_rs'] ?? $allocation['amount'] ?? 0))); } }
+        $norm=documents_receipt_allocations_normalize($receipt,$allInvoices); $receiptAllocated=0;
+        if(!empty($norm['ok'])) foreach ($norm['allocations'] as $allocation) { $receiptAllocated += documents_invoice_money_to_paise((float)$allocation['amount_rs']); }
+        $allocatedPaise += min($amountPaise,$receiptAllocated);
     }
     $settlement = is_array($quote['commercial_settlement'] ?? null) ? $quote['commercial_settlement'] : [];
     $basis = in_array((string)($settlement['basis'] ?? 'quotation'), ['quotation','finalized_invoices'], true) ? (string)($settlement['basis'] ?? 'quotation') : 'quotation';
@@ -4246,6 +4307,7 @@ function documents_save_invoice(array $doc): array
     $saved = json_save(documents_invoices_dir() . '/' . $id . '.json', $doc);
     if (!empty($saved['ok'])) {
         $quoteId = (string)($doc['linked_quote_id'] ?? $doc['quotation_id'] ?? '');
+        if ($quoteId !== '') { documents_reconcile_receipts_for_quote($quoteId); }
         $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         if (is_array($quote)) {
             $updated = documents_project_mark_basis_reconfirmation_if_needed($quote, 'invoice_saved');
@@ -5671,7 +5733,12 @@ function documents_save_sales_document(string $type, array $document): array
         $rows[] = $document;
     }
 
-    return documents_write_sales_store($path, $rows);
+    $saved = documents_write_sales_store($path, $rows);
+    if ($type === 'receipt' && !empty($saved['ok']) && documents_receipt_is_finalized_active($document)) {
+        $quoteId = documents_receipt_quote_id($document);
+        if ($quoteId !== '') { documents_reconcile_receipts_for_quote($quoteId); }
+    }
+    return $saved;
 }
 
 function documents_quote_link_workflow_doc(array &$quote, string $type, string $id): void
@@ -8691,7 +8758,7 @@ function documents_payment_requests_by_mobile(string $mobile): array
 
 function documents_final_receipts_for_quote(string $quoteId): array
 {
-    return array_values(array_filter(documents_list_sales_documents('receipt'), static function(array $r) use ($quoteId): bool { return (string)($r['quotation_id'] ?? '') === $quoteId && strtolower(trim((string)($r['status'] ?? ''))) === 'final' && empty($r['archived_flag']) && empty($r['archived']); }));
+    return documents_receipt_ledger($quoteId);
 }
 
 function documents_payment_request_refresh_from_receipts(array $request): array
@@ -8700,7 +8767,7 @@ function documents_payment_request_refresh_from_receipts(array $request): array
     foreach (documents_final_receipts_for_quote((string)($request['quotation_id'] ?? '')) as $receipt) {
         if ($linked !== [] && !in_array((string)($receipt['id'] ?? ''), $linked, true)) { continue; }
         if ($linked === []) { continue; }
-        $paid += (float)($receipt['amount_rs'] ?? $receipt['amount_received'] ?? $receipt['amount'] ?? 0);
+        $paid += documents_receipt_amount_total($receipt);
     }
     $request['amount_paid_against_request'] = round($paid, 2);
     $request['outstanding_against_request'] = max(0, round((float)($request['amount_requested'] ?? 0) - $paid, 2));

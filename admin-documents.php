@@ -1158,6 +1158,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
 
+    if ($action === 'allocate_receipt') {
+        if (!$isAdmin) { $redirectWith('accepted_customers', 'error', 'Administrator access required.'); }
+        $view=safe_text($_POST['quotation_id']??''); $receiptId=safe_text($_POST['receipt_id']??'');
+        $amounts=is_array($_POST['allocation']??null)?$_POST['allocation']:[];
+        $result=documents_allocate_receipt($receiptId,$amounts,(array)$viewer);
+        $redirectDocuments('accepted_customers',!empty($result['ok'])?'success':'error',!empty($result['ok'])?'Receipt allocation saved. Unallocated project payment: ₹'.number_format((float)($result['unallocated']??0),2):(string)($result['error']??'Unable to allocate receipt.'),['view'=>$view]);
+    }
+
     if (in_array($action, ['save_receipt_draft', 'finalize_receipt'], true)) {
         $tab = safe_text($_POST['return_tab'] ?? 'accepted_customers');
         $view = safe_text($_POST['quotation_id'] ?? safe_text($_POST['return_view'] ?? ''));
@@ -3946,11 +3954,8 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             $packInvoices = $collectByQuote($salesInvoices, $packQuoteId, $includeArchivedPack);
             $packReceiptsActive = array_values(array_filter($packReceipts, static fn(array $r): bool => !documents_is_archived($r)));
             $packFinalReceived = 0.0;
-            foreach ($packReceiptsActive as $receiptRow) {
-                if (strtolower(trim((string) ($receiptRow['status'] ?? 'draft'))) !== 'final') {
-                    continue;
-                }
-                $packFinalReceived += (float) ($receiptRow['amount_rs'] ?? $receiptRow['amount_received'] ?? $receiptRow['amount'] ?? 0);
+            foreach (documents_receipt_ledger($packQuoteId, $packReceiptsActive) as $receiptRow) {
+                $packFinalReceived += documents_receipt_amount_total($receiptRow);
             }
             $packQuoteAmount = (float) ($packQuote['calc']['gross_payable'] ?? $packQuote['calc']['final_price_incl_gst'] ?? $packQuote['calc']['grand_total'] ?? 0);
             $packRemainingReceivable = $packQuoteAmount - $packFinalReceived;
@@ -4040,7 +4045,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
           </section>
 
 
-            <?php $packQuoteAmount=(float)$packProjectSummary['project_amount']; $packFinalReceived=(float)$packProjectSummary['received_amount']; $packRemainingReceivable=(float)$packProjectSummary['outstanding_amount']; $packCollectionPct=$packProjectSummary['collection_pct']; $packDueSince=((string)$packProjectSummary['due_since'] !== '') ? (string)$packProjectSummary['due_since'] : '—'; $packLastRequest=$packPaymentRequests[0] ?? null; $packLastPaymentDate=''; foreach($packReceipts as $r){ if(!$isArchivedRecord($r) && strtolower((string)($r['status']??''))==='final'){ $d=business_pulse_date($r,['date_received','receipt_date','created_at']); if($d>$packLastPaymentDate)$packLastPaymentDate=$d; }} $packDocStatus=['Agreement'=>$packAgreements!==[],'Dispatch Advice'=>$packDispatchAdvices!==[],'Challan'=>$packChallans!==[],'Invoice'=>$packInvoices!==[]]; ?>
+            <?php $packQuoteAmount=(float)$packProjectSummary['project_amount']; $packFinalReceived=(float)$packProjectSummary['received_amount']; $packRemainingReceivable=(float)$packProjectSummary['outstanding_amount']; $packCollectionPct=$packProjectSummary['collection_pct']; $packDueSince=((string)$packProjectSummary['due_since'] !== '') ? (string)$packProjectSummary['due_since'] : '—'; $packLastRequest=$packPaymentRequests[0] ?? null; $packLastPaymentDate=''; foreach(documents_receipt_ledger($packQuoteId,$packReceipts) as $r){ $d=business_pulse_date($r,['date_received','receipt_date','created_at']); if($d>$packLastPaymentDate)$packLastPaymentDate=$d; } $packDocStatus=['Agreement'=>$packAgreements!==[],'Dispatch Advice'=>$packDispatchAdvices!==[],'Challan'=>$packChallans!==[],'Invoice'=>$packInvoices!==[]]; ?>
             <div class="workbench-command" aria-label="Accepted customer command center">
               <?php foreach ([['Project Amount',$inr((float)$packProjectSummary['project_amount'])],['Received',$inr((float)$packProjectSummary['received_amount'])],['Outstanding',$inr((float)$packProjectSummary['outstanding_amount'])],['Collection %',business_pulse_format_pct($packCollectionPct)],['Due Since',$packDueSince],['Last Payment Date',$packLastPaymentDate ?: '—'],['Last Payment Request',is_array($packLastRequest)?(string)($packLastRequest['created_at'] ?? $packLastRequest['id'] ?? '—'):'—'],['Next Follow-up Date',is_array($packLastRequest)?((string)($packLastRequest['follow_up_date'] ?? '') ?: '—'):'—'],['Document Status',implode(' · ',array_map(fn($k,$v)=>$k.': '.($v?'Done':'Pending'),array_keys($packDocStatus),$packDocStatus))],['Open Complaints','—'],['Pending Tasks','—']] as $m): ?><div class="summary-card"><span><?= htmlspecialchars($m[0],ENT_QUOTES) ?></span><strong><?= htmlspecialchars((string)$m[1],ENT_QUOTES) ?></strong></div><?php endforeach; ?>
             </div>
@@ -4237,16 +4242,18 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             <thead><tr><th>Receipt No</th><th>Date</th><th>Amount</th><th>Mode</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               <?php foreach ($packReceipts as $row): ?>
+                <?php $rowNorm=documents_receipt_allocations_normalize($row); $rowAllocated=0; foreach((array)($rowNorm['allocations']??[]) as $a){$rowAllocated+=documents_invoice_money_to_paise((float)($a['amount_rs']??0));} $rowUnallocated=max(0,documents_invoice_money_to_paise(documents_receipt_amount_total($row))-$rowAllocated); ?>
                 <tr>
                   <td><?= htmlspecialchars((string) ($row['receipt_number'] ?? $row['id'] ?? ''), ENT_QUOTES) ?> <?= $isArchivedRecord($row) ? '<span class="pill archived">ARCHIVED</span>' : '' ?></td>
                   <td><?= htmlspecialchars((string) ($row['date_received'] ?? $row['receipt_date'] ?? $row['created_at'] ?? ''), ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars($inr((float) ($row['amount_rs'] ?? $row['amount_received'] ?? $row['amount'] ?? 0)), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars($inr(documents_receipt_amount_total($row)), ENT_QUOTES) ?></td>
                   <td><?= htmlspecialchars((string) ($row['mode'] ?? ''), ENT_QUOTES) ?> <?= htmlspecialchars((string) ($row['txn_ref'] ?? $row['reference'] ?? ''), ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars((string) ($row['status'] ?? 'draft'), ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars((string) ($row['status'] ?? 'draft'), ENT_QUOTES) ?><?php if(documents_receipt_is_finalized_active($row)&&$rowUnallocated>0): ?><br><strong>Unallocated project payment: <?= htmlspecialchars($inr(documents_invoice_paise_to_money($rowUnallocated)),ENT_QUOTES) ?></strong><?php endif; ?></td>
                   <td class="row-actions">
                     <a class="btn secondary" href="?<?= htmlspecialchars(http_build_query(['tab' => 'accepted_customers', 'view' => $packQuoteId, 'action' => 'edit_receipt', 'receipt_id' => (string) ($row['id'] ?? ''), 'include_archived_pack' => $includeArchivedPack ? '1' : '0']), ENT_QUOTES) ?>">Edit</a>
                     <a class="btn secondary" href="receipt-view.php?rid=<?= urlencode((string) ($row['id'] ?? '')) ?>" target="_blank" rel="noopener">View HTML</a>
                     <?php if ($isAdmin): ?>
+                      <?php if(documents_receipt_is_finalized_active($row) && count(documents_active_invoices_for_quote($packQuoteId))>1): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($_SESSION['csrf_token']??''),ENT_QUOTES) ?>"><input type="hidden" name="action" value="allocate_receipt"><input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId,ENT_QUOTES) ?>"><input type="hidden" name="receipt_id" value="<?= htmlspecialchars((string)($row['id']??''),ENT_QUOTES) ?>"><?php foreach(documents_active_invoices_for_quote($packQuoteId) as $allocationInvoice): $aid=(string)($allocationInvoice['id']??''); $existing=0; foreach((array)($rowNorm['allocations']??[]) as $a)if((string)($a['invoice_id']??'')===$aid)$existing=(float)$a['amount_rs']; ?><label><?= htmlspecialchars((string)($allocationInvoice['invoice_no']??$aid),ENT_QUOTES) ?> <input type="number" min="0" step="0.01" name="allocation[<?= htmlspecialchars($aid,ENT_QUOTES) ?>]" value="<?= htmlspecialchars(number_format($existing,2,'.',''),ENT_QUOTES) ?>"></label><?php endforeach; ?><button class="btn" type="submit">Save split</button></form><?php endif; ?>
                       <form class="inline-form" method="post" data-accepted-ajax-form="1"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="action" value="set_archive_state" /><input type="hidden" name="doc_type" value="receipt" /><input type="hidden" name="doc_id" value="<?= htmlspecialchars((string) ($row['id'] ?? ''), ENT_QUOTES) ?>" /><input type="hidden" name="archive_state" value="<?= $isArchivedRecord($row) ? 'unarchive' : 'archive' ?>" /><input type="hidden" name="return_tab" value="accepted_customers" /><input type="hidden" name="return_view" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" /><button class="btn <?= $isArchivedRecord($row) ? 'secondary' : 'warn' ?>" type="submit"><?= $isArchivedRecord($row) ? 'Unarchive' : 'Archive' ?></button></form>
                     <?php endif; ?>
                   </td>
