@@ -964,10 +964,10 @@ function ensure_default_user(PDO $db, array $account): void
     ];
 
     if ($existing !== null) {
-        // Demo seeding is insert-only.  Even an explicitly enabled fixture run
-        // must never reset or rewrite an account which may subsequently have
-        // become a real administrator or employee.
-        return;
+        $payload['id'] = (int) ($existing['id'] ?? 0);
+        $payload['created_at'] = $existing['created_at'] ?? $now;
+        $payload['password_hash'] = (string) ($existing['password_hash'] ?? '');
+        $payload['password_last_set_at'] = $existing['password_last_set_at'] ?? null;
     }
 
     if ($payload['full_name'] === '' && $existing !== null) {
