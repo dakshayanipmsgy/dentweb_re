@@ -5485,14 +5485,21 @@ document.querySelectorAll('form[data-inventory-form="1"]').forEach(function (for
         message(fresh, notice || 'Updated.', ok !== false);
       });
   }
+  // Preserve the clicked button for browsers that do not expose SubmitEvent.submitter.
+  document.addEventListener('click', function(ev){
+    var btn = ev.target.closest && ev.target.closest('[data-accepted-customer-workbench] form[data-accepted-ajax-form] button[type="submit"], [data-accepted-customer-workbench] form[data-accepted-ajax-form] button:not([type]), [data-accepted-customer-workbench] form[data-accepted-ajax-form] input[type="submit"]');
+    if (!btn || !btn.form || btn.form.matches('[data-document-action]')) return;
+    btn.form.__acceptedSubmitter = btn;
+  }, true);
   document.addEventListener('submit', function(ev){
     var form = ev.target.closest && ev.target.closest('[data-accepted-customer-workbench] form[data-accepted-ajax-form]');
     if (!form || form.matches('[data-document-action]')) return;
     ev.preventDefault();
     var root = currentWorkbench(); if (!root) return;
-    var btn = ev.submitter || form.querySelector('button[type="submit"],button:not([type])');
+    var btn = ev.submitter || form.__acceptedSubmitter || form.querySelector('button[type="submit"],button:not([type]),input[type="submit"]');
+    form.__acceptedSubmitter = null;
     var data = addJsonFlag(new FormData(form));
-    if (ev.submitter && ev.submitter.name) data.set(ev.submitter.name, ev.submitter.value || ev.submitter.textContent || '');
+    if (btn && btn.name) data.set(btn.name, btn.value || btn.textContent || '');
     var oldText = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = 'Working…'; }
     message(root, 'Working…', true);
