@@ -1,6 +1,7 @@
 {
   "name": "dakshayani/dentweb-re",
   "description": "PHP-first Dakshayani portal",
+  "license": "proprietary",
   "type": "project",
   "require": {
     "php": ">=8.2",
