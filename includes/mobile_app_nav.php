@@ -13,7 +13,7 @@ if ($role === 'admin') {
 } elseif ($role === 'customer') {
     $links = [['Dashboard','customer-dashboard.php'],['Documents','customer-dashboard.php#documents'],['Financials','customer-dashboard.php#financials'],['Complaints','complaint.php'],['Profile','customer-dashboard.php#profile']];
 } elseif ($role === 'employee') {
-    $links = [['Home','employee-dashboard.php'],['My Work','employee-tasks.php'],['Notifications','notifications.php'],['More / App','employee-app.php']];
+    $links = [['Dashboard','employee-dashboard.php'],['Tasks','employee-tasks.php'],['Documents','employee-documents.php'],['Quotations','employee-quotations.php'],['Leads','leads-dashboard.php'],['Complaints','complaints-overview.php']];
 }
 
 $existing = [];
@@ -24,7 +24,7 @@ foreach ($links as $link) {
     }
 }
 if ($existing) {
-    if ($role === 'admin') {
+    if (in_array($role, ['admin', 'employee'], true)) {
         $existing[] = ['Notifications', 'notifications.php'];
     }
     $existing[] = ['Logout', 'logout.php'];

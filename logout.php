@@ -10,6 +10,6 @@ if ($scriptDir === '/' || $scriptDir === '.') {
 }
 $basePath = rtrim($scriptDir, '/');
 $prefix = $basePath === '' ? '' : $basePath;
-$loginUrl = ($prefix === '' ? '' : $prefix) . '/login.php?logged_out=1';
+$loginUrl = ($prefix === '' ? '' : $prefix) . '/login.php';
 header('Location: ' . $loginUrl);
 exit;

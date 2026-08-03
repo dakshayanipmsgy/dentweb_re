@@ -1,9 +1,0 @@
-{
-  "name": "dakshayani/dentweb-re",
-  "description": "PHP-first Dakshayani portal",
-  "type": "project",
-  "require": {
-    "php": ">=8.2",
-    "minishlink/web-push": "9.0.*"
-  }
-}

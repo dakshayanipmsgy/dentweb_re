@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">Dakshayani Work maskable icon</title><desc id="desc">Padded white briefcase and check mark inside the maskable safe zone on teal.</desc>
-  <rect width="512" height="512" fill="#0f766e"/>
-  <rect x="144" y="202" width="224" height="164" rx="30" fill="#ffffff"/>
-  <path d="M212 202v-20c0-20 16-36 36-36h16c20 0 36 16 36 36v20h-32v-17c0-5-4-9-9-9h-6c-5 0-9 4-9 9v17z" fill="#ffffff"/>
-  <path d="m194 286 34 34 88-92" fill="none" stroke="#0f766e" stroke-width="27" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
