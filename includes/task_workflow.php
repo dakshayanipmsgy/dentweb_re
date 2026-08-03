@@ -18,10 +18,10 @@ final class TaskWorkflowService{
   'reopen'=>['admin',['completed'],'in_progress','employee','reopened'],
   'cancel'=>['admin',['assigned','acknowledged','in_progress','blocked','submitted','correction_required'],'cancelled','none','cancelled']];
  private array $createdFiles=[]; private array $pendingEventIds=[];
- public function __construct(private PDO $db,private array $actor,private ?string $storageDir=null,private $clock=null){canonical_work_initialize_schema($db);$this->storageDir??=dirname(__DIR__).'/storage/task-attachments';}
+ public function __construct(private PDO $db,private array $actor,private ?string $storageDir=null){canonical_work_initialize_schema($db);$this->storageDir??=dirname(__DIR__).'/storage/task-attachments';}
  private function actorId():int{$id=filter_var($this->actor['id']??null,FILTER_VALIDATE_INT);if(!$id||$id<1)throw new TaskWorkflowException('Authenticated actor is required.');return $id;}
  private function role():string{$r=(string)($this->actor['role_name']??'');if(!in_array($r,['admin','employee'],true))throw new TaskWorkflowException('Task access is not permitted.');return $r;}
- private function now():string{$value=$this->clock!==null?($this->clock)():new DateTimeImmutable('now',new DateTimeZone('Asia/Kolkata'));if(is_string($value))$value=new DateTimeImmutable($value,new DateTimeZone('Asia/Kolkata'));if(!$value instanceof DateTimeInterface)throw new TaskWorkflowException('Invalid workflow clock.');return DateTimeImmutable::createFromInterface($value)->setTimezone(new DateTimeZone('Asia/Kolkata'))->format('Y-m-d H:i:s');}
+ private function now():string{return (new DateTimeImmutable('now',new DateTimeZone('Asia/Kolkata')))->format('Y-m-d H:i:s');}
  private function task(int $id):array{$s=$this->db->prepare('SELECT * FROM portal_tasks WHERE id=?');$s->execute([$id]);$t=$s->fetch(PDO::FETCH_ASSOC);if(!$t)throw new TaskWorkflowException('Task not found.');return $t;}
  private function authorize(array $t):void{if($this->role()==='employee'&&(int)$t['assignee_id']!==$this->actorId())throw new TaskWorkflowException('You may access only your assigned work.');}
  private function version(int $v):void{if($v<1)throw new TaskWorkflowException('Task version is required; reload before saving.');}
