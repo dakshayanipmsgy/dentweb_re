@@ -77,20 +77,6 @@ final class EmployeeFsStore
         return null; */
     }
 
-    /** Authenticate internally without returning or logging a password hash. */
-    public function authenticate(string $loginId, string $password): ?array
-    {
-        require_once __DIR__ . '/bootstrap.php';
-        $db = get_db();
-        $stmt = $db->prepare("SELECT u.id,u.password_hash,u.status FROM users u JOIN roles r ON r.id=u.role_id AND r.name='employee' WHERE lower(u.username)=lower(:v) OR lower(u.email)=lower(:v)");
-        $stmt->execute([':v' => trim($loginId)]);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        if (count($rows) !== 1 || ($rows[0]['status'] ?? '') !== 'active' || !password_verify($password, (string) ($rows[0]['password_hash'] ?? ''))) {
-            return null;
-        }
-        return (new CanonicalEmployeeRepository($db))->byId((string) $rows[0]['id']);
-    }
-
     /**
      * @return array{success:bool, errors:array<int, string>, employee:array<string, mixed>|null}
      */
@@ -99,17 +85,13 @@ final class EmployeeFsStore
         require_once __DIR__ . '/bootstrap.php';
         $db=get_db(); $login=trim((string)($input['login_id']??'')); $name=trim((string)($input['name']??''));
         if($login===''||$name==='') return ['success'=>false,'errors'=>['Employee name and login ID are required.'],'employee'=>null];
-        $hash=(string)($input['password_hash']??'');
-        if($hash===''||password_get_info($hash)['algo']===null)return ['success'=>false,'errors'=>['A valid password is required for a new employee.'],'employee'=>null];
         try {
             $role=(int)$db->query("SELECT id FROM roles WHERE name='employee'")->fetchColumn();
             $email=filter_var($login,FILTER_VALIDATE_EMAIL)?$login:'employee+'.substr(hash('sha256',strtolower($login)),0,16).'@local.invalid';
-            $db->beginTransaction();
-            $stmt=$db->prepare('INSERT INTO users(full_name,email,username,password_hash,role_id,status,permissions_note,created_at,updated_at) VALUES(:n,:e,:u,:p,:r,:s,\'\',datetime(\'now\'),datetime(\'now\'))');
-            $stmt->execute([':n'=>$name,':e'=>$email,':u'=>$login,':p'=>$hash,':r'=>$role,':s'=>(string)($input['status']??'active')]);
-            $id=(int)$db->lastInsertId();$p=$db->prepare('INSERT INTO employee_profiles(user_id,phone,designation,created_at,updated_at) VALUES(:id,:p,:d,datetime(\'now\'),datetime(\'now\'))');$p->execute([':id'=>$id,':p'=>trim((string)($input['phone']??'')),':d'=>trim((string)($input['designation']??''))]);$db->commit();
-            return ['success'=>true,'errors'=>[],'employee'=>(new CanonicalEmployeeRepository($db))->byId((string)$id)];
-        } catch(Throwable $e) { if(isset($db)&&$db->inTransaction())$db->rollBack(); return ['success'=>false,'errors'=>['Login ID already exists or employee could not be saved.'],'employee'=>null]; }
+            $stmt=$db->prepare('INSERT INTO users(full_name,email,username,password_hash,role_id,status,permissions_note,created_at,updated_at) VALUES(:n,:e,:u,:p,:r,:s,:d,datetime(\'now\'),datetime(\'now\'))');
+            $stmt->execute([':n'=>$name,':e'=>$email,':u'=>$login,':p'=>(string)($input['password_hash']??''),':r'=>$role,':s'=>(string)($input['status']??'active'),':d'=>(string)($input['designation']??'')]);
+            return ['success'=>true,'errors'=>[],'employee'=>(new CanonicalEmployeeRepository($db))->byId((string)$db->lastInsertId())];
+        } catch(Throwable $e) { return ['success'=>false,'errors'=>['Login ID already exists or employee could not be saved.'],'employee'=>null]; }
         /* legacy implementation retained for rollback reference
         $payload = $this->normaliseInput($input);
         $errors = $this->validate($payload, null);
@@ -143,11 +125,10 @@ final class EmployeeFsStore
         $login=trim((string)($input['login_id']??$existing['login_id'])); $name=trim((string)($input['name']??$existing['name']));
         try {
             $email=filter_var($login,FILTER_VALIDATE_EMAIL)?$login:'employee+'.substr(hash('sha256',strtolower($login)),0,16).'@local.invalid';
-            $db->beginTransaction();$params=[':n'=>$name,':e'=>$email,':u'=>$login,':s'=>(string)($input['status']??$existing['status']),':id'=>(int)$existing['id']];
-            $sql='UPDATE users SET full_name=:n,email=:e,username=:u,status=:s,updated_at=datetime(\'now\')';if(isset($input['password_hash'])){$sql.=',password_hash=:p';$params[':p']=(string)$input['password_hash'];}$sql.=' WHERE id=:id';$db->prepare($sql)->execute($params);
-            $p=$db->prepare('INSERT INTO employee_profiles(user_id,phone,designation,created_at,updated_at) VALUES(:id,:p,:d,datetime(\'now\'),datetime(\'now\')) ON CONFLICT(user_id) DO UPDATE SET phone=excluded.phone,designation=excluded.designation,updated_at=datetime(\'now\')');$p->execute([':id'=>(int)$existing['id'],':p'=>trim((string)($input['phone']??$existing['phone'])),':d'=>trim((string)($input['designation']??$existing['designation']))]);$db->commit();
+            $sql='UPDATE users SET full_name=:n,email=:e,username=:u,status=:s,permissions_note=:d,password_hash=:p,updated_at=datetime(\'now\') WHERE id=:id';
+            $stmt=$db->prepare($sql);$stmt->execute([':n'=>$name,':e'=>$email,':u'=>$login,':s'=>(string)($input['status']??$existing['status']),':d'=>(string)($input['designation']??$existing['designation']),':p'=>(string)($input['password_hash']??$existing['password_hash']),':id'=>(int)$existing['id']]);
             return ['success'=>true,'errors'=>[],'employee'=>(new CanonicalEmployeeRepository($db))->byId((string)$existing['id'])];
-        } catch(Throwable $e){if(isset($db)&&$db->inTransaction())$db->rollBack();return ['success'=>false,'errors'=>['Login ID already exists or employee could not be updated.'],'employee'=>null];}
+        } catch(Throwable $e){return ['success'=>false,'errors'=>['Login ID already exists or employee could not be updated.'],'employee'=>null];}
         /* legacy implementation retained for rollback reference
         $existing = $this->findById($id);
         if ($existing === null) {
