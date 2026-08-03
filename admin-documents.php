@@ -1215,11 +1215,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $receipt['payment_request_id'] = $linkedPaymentRequestId;
         $receipt['status'] = ($action === 'finalize_receipt') ? 'final' : 'draft';
         if ($action === 'finalize_receipt') {
-            $activeInvoices = array_values(array_filter(documents_all_invoices(), static fn(array $inv): bool => (string)($inv['linked_quote_id'] ?? $inv['quotation_id'] ?? '') === (string)($quote['id'] ?? '') && !documents_is_archived($inv) && !documents_invoice_is_cancelled($inv)));
+            $projectInvoices = documents_invoices_for_quote((string)($quote['id'] ?? ''), true);
+            $activeInvoices = documents_active_invoices_for_quote((string)($quote['id'] ?? ''));
             if (!is_array($receipt['allocations'] ?? null) && count($activeInvoices) === 1) {
                 $receipt['allocations'] = [['invoice_id' => (string)$activeInvoices[0]['id'], 'amount_rs' => round($amount, 2)]];
             }
-            $normAlloc = documents_receipt_allocations_normalize($receipt, $activeInvoices);
+            // Validate explicit allocations against the complete project history. An
+            // allocation can legitimately still reference a cancelled/superseded
+            // invoice, while automatic allocation remains limited to active invoices.
+            $normAlloc = documents_receipt_allocations_normalize($receipt, $projectInvoices);
             if (empty($normAlloc['ok'])) { $redirectDocuments($tab, 'error', 'Invalid receipt allocation: ' . implode(', ', (array)$normAlloc['errors']), ['view' => $view, 'action' => 'edit_receipt', 'receipt_id' => $receiptId]); }
             $receipt['allocations'] = $normAlloc['allocations'];
         }
@@ -4189,7 +4193,7 @@ if ($activeTab === 'accepted_customers' && $packAction === 'print_payment_reques
             <?php $isReceiptFinal = strtolower(trim((string) ($editingReceipt['status'] ?? 'draft'))) === 'final'; ?>
             <div class="card" style="padding:12px;margin-bottom:12px;">
               <h4 style="margin:0 0 8px 0;">Edit Receipt: <?= htmlspecialchars((string) ($editingReceipt['receipt_number'] ?? $editingReceipt['id'] ?? ''), ENT_QUOTES) ?></h4>
-              <form method="post" data-accepted-ajax-form="1">
+              <form method="post" data-receipt-editor="1">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string) ($_SESSION['csrf_token'] ?? ''), ENT_QUOTES) ?>" />
                 <input type="hidden" name="quotation_id" value="<?= htmlspecialchars($packQuoteId, ENT_QUOTES) ?>" />
                 <input type="hidden" name="receipt_id" value="<?= htmlspecialchars((string) ($editingReceipt['id'] ?? ''), ENT_QUOTES) ?>" />
