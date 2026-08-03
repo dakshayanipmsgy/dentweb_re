@@ -1,7 +1,5 @@
 <?php
 declare(strict_types=1);
-// Authenticated dashboard/workspace rendering is the cron safety-net opportunity.
-task_notification_authenticated_fallback(get_db(), current_user());
 $notificationPoll=task_notification_config()['poll_seconds'];$notificationCsrf=csrf_token();
 ?><a class="notification-bell" href="notifications.php" data-notification-bell aria-label="Notifications, no unread notifications"><span aria-hidden="true">🔔</span><span class="notification-badge" data-notification-count hidden>0</span><span class="sr-only">Notifications</span></a>
 <style>.notification-bell{position:relative;display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;border-radius:999px;text-decoration:none;background:#fff;color:#172033;border:1px solid #cbd5e1}.notification-badge{position:absolute;top:-5px;right:-7px;min-width:20px;padding:2px 5px;border-radius:99px;background:#b42318;color:#fff;border:2px solid #fff;font:700 11px/16px system-ui;text-align:center}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:420px){.notification-bell{flex:0 0 44px;margin:4px}}</style>

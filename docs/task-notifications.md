@@ -39,7 +39,7 @@ Deep links must be relative `admin-tasks.php` or `employee-tasks.php` routes app
 {"ok":true,"data":{"notifications":[{"id":42,"title":"Task submitted","message":"Ravi submitted “Rooftop survey” for review.","tone":"warning","notification_type":"submitted","link":"admin-tasks.php?view=active&task=8#task-8","source_task_id":8,"created_at":"2026-08-01 14:30:00","status":"unread"}],"page":1,"view":"unread","has_more":false,"unread_count":1}}
 ```
 
-The shared 44px bell is present on admin/employee dashboards, workspaces, and mobile navigation. Its server-side include also offers the authenticated cron safety net on each ordinary dashboard or task-workspace render, so an employee does not have to open `notifications.php`. Canonical user ID, active status, and role are rechecked from the database; request parameters never select a worker or recipient. It hides zero, shows 1–99 or 99+, maintains a textual accessible label, polls every 45 seconds by default, stops scheduling while hidden, prevents overlapping requests, times out after eight seconds, refreshes on visibility/action events, and silently tolerates transient failures. Count polling never scans tasks and returns only the authenticated user’s stored unread count.
+The shared 44px bell is present on admin/employee dashboards, workspaces, and mobile navigation. It hides zero, shows 1–99 or 99+, maintains a textual accessible label, polls every 45 seconds by default, stops scheduling while hidden, prevents overlapping requests, times out after eight seconds, refreshes on visibility/action events, and silently tolerates transient failures.
 
 ## Reminders and configuration
 
@@ -51,9 +51,7 @@ Preferred cron (the server timezone may differ; application calculations are alw
 */5 * * * * cd /var/www/dentweb_re && /usr/bin/php bin/generate-task-notifications.php >> /var/log/dent-task-notifications.log 2>&1
 ```
 
-Example non-sensitive report: `task-notifications: scanned=28 created=4 deduplicated=9 ineligible=15`. Exit codes are 0 success, 1 failure, and 2 non-CLI invocation. Authenticated dashboard/task-workspace shell renders provide a safety-net only. They attempt one indexed global lease write (default five minutes); losing requests do no projection or reminder work. The winner separately processes at most 20 pending event projections and scans at most 20 eligible tasks. The lease is committed before work starts, so simultaneous requests elect one worker; after a failed worker it expires naturally rather than producing a hot retry loop. Failures return nothing to the page and log only a fixed, non-sensitive message. Cron remains the preferred, predictable deployment mechanism.
-
-Sanitized fallback outcomes are simply “lease won; bounded cycle attempted” or “lease held; page continued”; they contain no user ID, reminder count, event payload, database text, or path. The API remains independent, for example `{"ok":true,"data":{"unread_count":3}}`, and a held lease cannot change which user’s count is returned.
+Example non-sensitive report: `task-notifications: scanned=28 created=4 deduplicated=9 ineligible=15`. Exit codes are 0 success, 1 failure, and 2 non-CLI invocation. Authenticated requests provide a safety-net only: a global lease throttles work (default five minutes), the request budget is 20 tasks, failures are logged and never block rendering. Cron remains preferred.
 
 Environment defaults: unacknowledged 24h, blocked 24h, due-today hour 07:00, employee/admin overdue cadence 24h, projection batch 100, poll 45s, fallback 300s, retention 365 days. Values are bounded server-side; deployment does not edit PHP.
 
@@ -93,8 +91,3 @@ Event wall times are interpreted explicitly as Asia/Kolkata and converted to `Y-
 Corrective migration `92401` adds nullable `portal_tasks.assigned_at` and `task_notification_meta(meta_key, meta_value)`, plus the existing additive notification schema when absent. Deploy by backing up `storage/app.sqlite`, releasing the PHP files, and running `php bin/generate-task-notifications.php` once. Review the assignment backfill counts and a sanitized report such as `task-notifications: scanned=28 created=4 deduplicated=9 ineligible=15`; no payloads are logged. Roll back PHP first. The additive column/table are safe to retain; restore the database backup for a full schema rollback. Do not remove notification records/status rows independently.
 
 No push subscription, VAPID, service-worker push/click handler, Badging API, employee manifest, install page, or PWA shell work is included; issue #914 can consume these stable in-app records later.
-
-
-### Browser acceptance without Node.js
-
-The executable `php tests/task_notification_browser_acceptance_test.php` checks the polling state machine, badge thresholds, failure-safe link, mutation hooks, accessible announcements, and mobile overflow guard. For a manual browser pass: sign in as an employee, leave the dashboard visible for two poll intervals while confirming requests never overlap; background the tab and confirm requests stop; foreground it and confirm one immediate request; exercise read, unread, dismiss, and mark-all; emulate a 375px viewport; and temporarily return a 500 from the count route to confirm dashboard navigation remains usable. This acceptance uses no push or #914 feature.
