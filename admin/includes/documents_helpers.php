@@ -3965,7 +3965,25 @@ function documents_receipt_allocations_normalize(array $receipt, array $invoices
         if (count($eligible) === 1) { $raw[]=['invoice_id'=>(string)$eligible[0]['id'], 'amount_rs'=>documents_receipt_amount_total($receipt), 'migrated_from'=>'quotation']; }
     }
     $sum=0;
-    foreach($raw as $a){ if(!is_array($a)) continue; $iid=(string)($a['invoice_id']??''); $paise=documents_invoice_money_to_paise((float)($a['amount_rs']??$a['amount']??0)); if($iid===''||!isset($byId[$iid])){$errors[]='invalid_invoice_id'; continue;} if($paise<0){$errors[]='negative_allocation'; continue;} $key=$iid.':'.$paise; if(isset($seen[$key])) continue; $seen[$key]=true; $inv=$byId[$iid]; $rc=(string)($receipt['customer_mobile']??''); $ic=(string)($inv['customer_mobile']??$inv['customer_snapshot']['mobile']??''); if($rc!==''&&$ic!==''&&normalize_customer_mobile($rc)!==normalize_customer_mobile($ic) && empty($a['authorized_override'])){$errors[]='cross_customer_allocation'; continue;} $sum+=$paise; $allocs[]=['invoice_id'=>$iid,'amount_rs'=>documents_invoice_paise_to_money($paise)]; }
+    foreach($raw as $a){
+        if(!is_array($a)) continue;
+        $iid=(string)($a['invoice_id']??'');
+        $paise=documents_invoice_money_to_paise((float)($a['amount_rs']??$a['amount']??0));
+        if($iid===''||!isset($byId[$iid])){$errors[]='invalid_invoice_id'; continue;}
+        if($paise<0){$errors[]='negative_allocation'; continue;}
+        $key=$iid.':'.$paise;
+        if(isset($seen[$key])) continue;
+        $seen[$key]=true;
+        $inv=$byId[$iid];
+        $rc=(string)($receipt['customer_mobile']??'');
+        $ic=(string)($inv['customer_mobile']??$inv['customer_snapshot']['mobile']??'');
+        $receiptQuoteId=(string)($receipt['quotation_id']??$receipt['quote_id']??'');
+        $invoiceQuoteId=(string)($inv['linked_quote_id']??$inv['quotation_id']??'');
+        $sameProject=$receiptQuoteId!==''&&$invoiceQuoteId!==''&&$receiptQuoteId===$invoiceQuoteId;
+        if(!$sameProject&&$rc!==''&&$ic!==''&&normalize_customer_mobile($rc)!==normalize_customer_mobile($ic)&&empty($a['authorized_override'])){$errors[]='cross_customer_allocation'; continue;}
+        $sum+=$paise;
+        $allocs[]=['invoice_id'=>$iid,'amount_rs'=>documents_invoice_paise_to_money($paise)];
+    }
     if($sum>$receiptTotal){ $errors[]='allocation_exceeds_receipt'; return ['ok'=>false,'allocations'=>[],'errors'=>array_values(array_unique($errors))]; }
     return ['ok'=>$errors===[], 'allocations'=>$allocs, 'errors'=>array_values(array_unique($errors))];
 }
