@@ -42,7 +42,7 @@ try {
             $payload = read_json();
             $taskId = (int) ($payload['id'] ?? 0);
             $status = (string) ($payload['status'] ?? '');
-            $task = portal_update_task_status($db, $taskId, $status, $actorId, isset($payload['version']) ? (int) $payload['version'] : null);
+            $task = portal_update_task_status($db, $taskId, $status, $actorId);
             respond_success(['task' => $task]);
             break;
         case 'mark-notification-read':
