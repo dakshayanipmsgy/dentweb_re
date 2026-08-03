@@ -4,8 +4,8 @@ require_once __DIR__.'/../includes/auth.php';
 require_once __DIR__.'/../includes/task_workflow.php';
 send_private_workspace_headers();header('Content-Type: application/json; charset=utf-8');header('X-Content-Type-Options: nosniff');
 try {
-    start_session();if(empty($_SESSION['user'])){http_response_code(401);throw new RuntimeException('Authentication required.');}$user=current_user();$uid=(int)($user['id']??0);$role=(string)($user['role_name']??'');
-    if($uid<1||!in_array($role,['admin','employee'],true)){http_response_code(403);throw new RuntimeException('Notification access is unavailable.');}if(!isset($_SERVER['HTTP_X_CSRF_TOKEN'])||!hash_equals((string)($_SESSION['csrf_token']??''),(string)$_SERVER['HTTP_X_CSRF_TOKEN'])){http_response_code(419);throw new RuntimeException('Invalid CSRF token.');}
+    start_session();if(empty($_SESSION['user'])){http_response_code(401);throw new RuntimeException('Authentication required.');}if(!isset($_SERVER['HTTP_X_CSRF_TOKEN'])||!hash_equals((string)($_SESSION['csrf_token']??''),(string)$_SERVER['HTTP_X_CSRF_TOKEN'])){http_response_code(419);throw new RuntimeException('Invalid CSRF token.');}$user=current_user();$uid=(int)($user['id']??0);$role=(string)($user['role_name']??'');
+    if($uid<1||!in_array($role,['admin','employee'],true)){http_response_code(403);throw new RuntimeException('Notification access is unavailable.');}
     $db=get_db();$action=(string)($_GET['action']??'list');
     if($_SERVER['REQUEST_METHOD']==='GET'){
         if($action==='count')$data=['unread_count'=>task_notification_unread_count($db,$uid)];
