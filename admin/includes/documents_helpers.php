@@ -2907,7 +2907,14 @@ function documents_project_create_or_link_customer(array $quote, ?CustomerFsStor
         return ['ok' => false, 'created' => false, 'customer' => $resolved['customer'], 'error' => $resolved['error']];
     }
 
-    $result = $store->addCustomer(documents_project_customer_user_payload($quote));
+    $defaultPasswordHash = password_hash('abcd1234', PASSWORD_DEFAULT);
+    if (!is_string($defaultPasswordHash) || $defaultPasswordHash === '') {
+        return ['ok' => false, 'created' => false, 'customer' => null, 'error' => 'Customer login password could not be created.'];
+    }
+
+    $payload = documents_project_customer_user_payload($quote);
+    $payload['password_hash'] = $defaultPasswordHash;
+    $result = $store->addCustomer($payload);
     if (!empty($result['success']) && is_array($result['customer'] ?? null)) {
         return ['ok' => true, 'created' => true, 'customer' => $result['customer'], 'error' => ''];
     }
