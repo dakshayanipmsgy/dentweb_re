@@ -1,44 +1,62 @@
-# Canonical employee and task storage
+# Canonical employee identity and task storage (#911)
 
-SQLite is the sole authoritative store for employees and tasks. `EmployeeFsStore` and the task helper names are compatibility facades only; they never write the legacy JSON files.
+## Current-path audit and decision
 
-## Schema version 91701
+Before this change, employee credentials were written by `EmployeeFsStore` to
+`storage/employee-users/employees.json`, while the main login/API stack used a separate
+file-user index and SQLite also contained `users`/`roles`. Employee sessions therefore
+carried non-relational string IDs. Tasks were independently read and rewritten as a whole
+array by both `includes/task_storage.php` and `includes/tasks_helpers.php`, while admin and
+employee APIs used the incompatible `portal_tasks` table. The PHP task pages and both
+dashboards queried JSON; API bootstrap/counts queried SQLite. This allowed divergent
+credentials, assignments, status values, counts, and lost concurrent writes.
 
-`schema_migrations` records applied versions. Employee identity remains in `users`; employee-only phone and designation fields live in `employee_profiles`. `employee_legacy_ids` records the legacy ID, a non-sensitive source fingerprint, and migration version. It never contains a password hash.
+SQLite `users.id` is now the canonical internal employee ID and `portal_tasks` is the only
+active task store. `EmployeeFsStore`, `load_tasks()`, and `save_tasks()` remain temporary
+shape-compatible facades so existing pages and unrelated employee/customer features keep
+their visible behavior. They no longer write employee/task JSON. The older
+`includes/task_storage.php` is retained only for rollback archaeology and has no active
+callers.
 
-`portal_tasks` retains the existing `todo`/`done` values presented as `Open`/`Completed`, and adds expected outcome, category, linked entity, urgent priority support, attention owner, proof requirement, due time/timezone, submitted/approved/cancelled/archived/last-activity timestamps, task version, and recurrence lineage. `task_messages`, immutable `task_events`, `task_attachments` (metadata only), and `task_occurrences` are the normalized #912-ready foundation. This migration intentionally adds no #912 workflow or UI.
+## Schema
 
-Every update mutation must send the positive `version` last read. Missing and stale versions fail instead of falling back to the current database value.
+`employee_legacy_ids(source, legacy_id, user_id)` durably maps exact source identifiers to
+`users.id`; names are never matching keys. `task_legacy_ids` provides an idempotency key and
+non-sensitive source fingerprint. Existing `portal_tasks` gains recurrence, archive,
+completion-log, and integer `version` fields. Foreign keys prevent orphan assignees;
+assignee/status/due and active/status/due indexes serve task pages and dashboards. Writes
+are transactional. Updates compare `version`, rejecting stale browser/API writes.
 
-## Reconciliation rules
+## Safe deployment
 
-Mapped legacy IDs are authoritative only when their source fingerprint is unchanged. A changed mapped source is a conflict for manual review. Unmapped records may match exactly one username/email belonging to an employee. Multiple cross-column matches and every admin, customer, installer, or other non-employee match are conflicts. Migration never changes an existing role or status and never reactivates an account. New imports preserve login ID, name, phone, designation, status, and an existing valid hash. Records without a valid hash are conflicts; hashes are never printed in reports.
+1. Put the site in a brief task-write maintenance window and deploy the code.
+2. Run `php bin/migrate-canonical-work.php --dry-run`; resolve every reported conflict.
+3. Run `php bin/migrate-canonical-work.php`. It first copies every existing source and the
+   database into `storage/backups/<UTC timestamp>/`, then commits all imports atomically.
+4. Preserve the generated `storage/migration-reports/canonical-work-*.json`, smoke-test each
+   employee login, task page, dashboard, and API, then end the maintenance window.
 
-## Deployment and backup
+Reports contain only legacy IDs and conflict reasons: never password hashes, notes,
+attachments, or secrets. Counts are `imported`, `updated`, `skipped`, `conflicted`, and
+`failed`. Re-running is safe: mapping keys skip identical imports and report changed source
+records rather than overwriting canonical data. Existing portal tasks are registered in
+place, never deleted. Exact login ID/email is the only reconciliation key; ambiguous and
+unmapped records are reported for manual resolution.
 
-1. Put employee/task mutations into a maintenance window.
-2. Run `php bin/migrate-canonical-work.php --dry-run` and resolve reported conflicts.
-3. Run `php bin/migrate-canonical-work.php`.
-4. Run application smoke tests, then retain the timestamped backup and sanitized report.
+Example (sanitized) dry run:
 
-The command uses SQLite `VACUUM INTO`, validates the backup with `PRAGMA integrity_check`, copies it to an isolated temporary location, opens it, and repeats `integrity_check` as an executable restoration rehearsal. WAL/SHM consistency is handled by SQLite itself rather than copying those files. This implementation **requires a maintenance window for application writes**; it does not claim tested hot-backup support.
-
-To create/validate only a backup:
-
-```sh
-php bin/migrate-canonical-work.php --backup-only --db=/absolute/path/app.sqlite
+```json
+{"mode":"dry-run","database":"app.sqlite","counts":{"imported":4,"updated":1,"skipped":8,"conflicted":1,"failed":0},"conflicts":[{"type":"task","legacy_id":"task-17","reason":"unmapped assignee legacy ID"}],"backups":[]}
 ```
 
-## Rollback / exact restoration
+## Backup and rollback
 
-Stop all application writers, preserve the failed database plus its `-wal` and `-shm` files for investigation, then restore the validated backup as a new file:
+Do not delete any source JSON. To roll back, stop writes, archive the failed database and
+report, copy the timestamped `app.sqlite` backup over `storage/app.sqlite`, restore the two
+JSON backups if they were modified outside this migration, deploy the preceding release,
+and smoke-test authentication. SQLite sidecar files (`-wal`/`-shm`) must be removed only
+while all PHP processes are stopped. The migration itself never modifies source JSON.
 
-```sh
-cp storage/backups/YYYYmmdd_HHMMSS_random/app.sqlite storage/app.sqlite.restore
-php -r '$d=new PDO("sqlite:storage/app.sqlite.restore"); echo $d->query("PRAGMA integrity_check")->fetchColumn(),PHP_EOL;'
-mv storage/app.sqlite storage/app.sqlite.failed
-mv storage/app.sqlite.restore storage/app.sqlite
-rm -f storage/app.sqlite-wal storage/app.sqlite-shm
-```
-
-Restart the application only after the check prints `ok`. Legacy JSON remains read-only migration input and is not a rollback write target.
+Known demo credentials are no longer seeded unless `PORTAL_SEED_DEMO_USERS=1` is explicitly
+set in a disposable development environment. Production provisioning must create unique
+credentials through the existing secured administration/recovery process.

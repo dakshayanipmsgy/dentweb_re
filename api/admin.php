@@ -74,11 +74,7 @@ try {
             break;
         case 'save-task':
             require_method('POST');
-            $payload = read_json();
-            if ((int) ($payload['id'] ?? 0) > 0 && (!isset($payload['version']) || (int) $payload['version'] < 1)) {
-                throw new RuntimeException('Task version is required; reload before saving.');
-            }
-            respond_success(['task' => portal_save_task($db, $payload, $actorId), 'tasks' => portal_list_tasks($db)]);
+            respond_success(['task' => portal_save_task($db, read_json(), $actorId), 'tasks' => portal_list_tasks($db)]);
             break;
         case 'update-task-status':
             require_method('POST');
