@@ -12,3 +12,11 @@ Apply takes the same exclusive lock as normal receipt writes, re-reads beneath t
 ## Rollback
 
 Put receipt entry into maintenance mode, retain the failed post-change store for audit, and copy the backup path printed by the command over the canonical receipt store. Do not edit, merge, delete, or recreate individual receipts. Re-run the dry-run and have an administrator review ambiguous splits before restoring receipt entry.
+
+## Administrator web repair
+
+Administrators can open **Review payment allocation** from a stale/unallocated warning. The GET review is read-only and uses the same canonical plan as the CLI. A repair button appears only for a sole active same-project invoice with enough capacity and no cross-project or over-allocation condition. Confirmation is POST-only, CSRF-protected, and bound to the preview state hash.
+
+Confirmation locks both receipt and invoice writers, re-reads both stores, and recalculates the plan. It validates a timestamped receipt-store backup before an atomic write. On post-write or audit failure it atomically restores that backup. Immutable outcome records are stored as individual files under `data/documents/logs/payment-allocation-repairs/`; they contain identifiers and allocation metadata, but no customer identity, bank, mode, reference, or receipt financial fields. Recovery requires stopping financial writers, validating the recorded backup hash/size, and atomically replacing `payment_receipts.json` with the recovery file.
+
+Multiple active invoices, cross-project links, over-allocation, no active invoice, and insufficient invoice capacity remain manual administrator-allocation cases. The workflow never creates or deletes a receipt, changes receipt financial facts or ownership, or changes/finalizes the invoice document status.

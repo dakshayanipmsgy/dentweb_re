@@ -4042,6 +4042,85 @@ function documents_receipt_allocation_health(array $receipt, ?array $invoices = 
     return ['health'=>$health,'receipt_paise'=>$total,'valid_paise'=>$valid,'unallocated_paise'=>$unallocated,'stale_paise'=>$stale,'missing_paise'=>$missing,'cross_project_paise'=>$cross,'overallocated_paise'=>$over,'recoverable_paise'=>$unallocated+$stale+$missing,'allocations'=>$details,'active_invoice_state'=>$resolver['state'],'requires_admin_split'=>$resolver['state']==='multiple' && ($unallocated+$stale+$missing)>0];
 }
 
+function documents_allocation_repair_audit_dir(): string
+{
+    return documents_logs_dir() . '/payment-allocation-repairs';
+}
+
+function documents_allocation_repair_invoice_lock_path(): string
+{
+    return documents_invoices_dir() . '/.invoice-store.lock';
+}
+
+/**
+ * Build the single canonical, paise-safe repair plan used by both HTTP and CLI.
+ * This function is pure: callers must supply snapshots and it never writes.
+ */
+function documents_payment_allocation_repair_plan(string $quoteId, ?array $receiptRows = null, ?array $invoices = null): array
+{
+    $quoteId=safe_text($quoteId); $receiptRows=$receiptRows??documents_read_sales_store(documents_sales_receipts_store_path()); $invoices=$invoices??documents_all_invoices();
+    $resolved=documents_resolve_active_invoices($quoteId,$invoices); $affected=[]; $categories=[]; $blocked=[]; $validTarget=0; $repairTotal=0;
+    foreach(documents_receipt_ledger($quoteId,$receiptRows) as $receipt){
+        $health=documents_receipt_allocation_health($receipt,$invoices); $rid=documents_receipt_identity($receipt);
+        foreach($health['allocations'] as $allocation) if($allocation['health']==='valid_current' && $resolved['state']==='single' && (string)$allocation['invoice_id']===(string)($resolved['invoice']['id']??'')) $validTarget+=(int)$allocation['amount_paise'];
+        if((int)$health['recoverable_paise']<=0 && (int)$health['cross_project_paise']<=0 && (int)$health['overallocated_paise']<=0) continue;
+        $categories[$health['health']]=($categories[$health['health']]??0)+1;
+        if((int)$health['cross_project_paise']>0)$blocked['cross_project']='A receipt is linked to an invoice owned by another project.';
+        if((int)$health['overallocated_paise']>0)$blocked['over_allocation']='A receipt is allocated above its finalized amount.';
+        if((int)$health['recoverable_paise']>0){$repairTotal+=(int)$health['recoverable_paise'];$affected[]=['id'=>$rid,'health'=>$health,'before'=>is_array($receipt['allocations']??null)?$receipt['allocations']:[]];}
+    }
+    if($resolved['state']==='multiple' && $repairTotal>0)$blocked['multiple_invoices']='More than one legitimate active invoice exists; an automatic split would be a guess.';
+    if($resolved['state']==='none' && $repairTotal>0)$blocked['no_invoice']='No legitimate current active invoice exists.';
+    $target=$resolved['state']==='single'?$resolved['invoice']:null; $invoiceTotal=$target?documents_invoice_money_to_paise(documents_invoice_final_total($target)):0;
+    if($target && $validTarget+$repairTotal>$invoiceTotal)$blocked['insufficient_capacity']='The current invoice has insufficient remaining capacity for every recoverable amount.';
+    if($repairTotal===0)$blocked['nothing_to_repair']='No finalized qualifying receipt requires allocation repair.';
+    ksort($categories); ksort($blocked); usort($affected,static fn($a,$b)=>strcmp((string)$a['id'],(string)$b['id']));
+    $canRepair=$blocked===[] && $target!==null; $after=$canRepair?$validTarget+$repairTotal:$validTarget;
+    $state=['quote_id'=>$quoteId,'target_invoice_id'=>(string)($target['id']??''),'invoice_status'=>(string)($target['status']??''),'invoice_total_paise'=>$invoiceTotal,'recognized_paise'=>$validTarget,'repair_paise'=>$repairTotal,'affected'=>array_map(static fn($r)=>['id'=>$r['id'],'health'=>$r['health'],'before'=>$r['before']],$affected),'blocked'=>array_keys($blocked)];
+    $hash=hash('sha256',(string)json_encode($state,JSON_UNESCAPED_SLASHES|JSON_PRESERVE_ZERO_FRACTION));
+    return ['ok'=>true,'quote_id'=>$quoteId,'can_repair'=>$canRepair,'state_hash'=>$hash,'active_invoice_state'=>$resolved['state'],'target_invoice'=>$target,'affected'=>$affected,'affected_count'=>count($affected),'repair_paise'=>$repairTotal,'categories'=>$categories,'blocked'=>$blocked,'invoice_total_paise'=>$invoiceTotal,'recognized_before_paise'=>$validTarget,'recognized_after_paise'=>$after,'balance_after_paise'=>max(0,$invoiceTotal-$after),'payment_status_after'=>$invoiceTotal<=0?'not_applicable':($after===$invoiceTotal?'paid':($after===0?'unpaid':($after<$invoiceTotal?'partially_paid':'overpaid'))),'document_status_unchanged'=>(string)($target['status']??'')];
+}
+
+function documents_payment_allocation_audit(array $entry): ?string
+{
+    documents_ensure_dir(documents_allocation_repair_audit_dir());
+    $entry=array_merge(['timestamp'=>gmdate('c')],$entry); $id=gmdate('Ymd\THis\Z').'-'.bin2hex(random_bytes(8)); $path=documents_allocation_repair_audit_dir().'/'.$id.'.json';
+    $saved=json_save($path,$entry); return !empty($saved['ok'])&&is_file($path)&&filesize($path)>0?$path:null;
+}
+
+function documents_restore_payment_allocation_backup(string $backup, string $destination): bool
+{
+    $tmp=$destination.'.restore.'.bin2hex(random_bytes(6));
+    if(!@copy($backup,$tmp)||!is_file($tmp)||!hash_equals(hash_file('sha256',$backup),hash_file('sha256',$tmp))||!@rename($tmp,$destination)){@unlink($tmp);return false;}
+    return true;
+}
+
+/** Lock, re-read, stale-check, back up, atomically replace, verify and audit. */
+function documents_apply_payment_allocation_repair(string $quoteId, string $expectedHash, array $actor): array
+{
+    $receiptPath=documents_sales_receipts_store_path(); $locks=[]; $result=['ok'=>false,'error'=>'Repair could not be completed.'];
+    foreach([$receiptPath.'.lock',documents_allocation_repair_invoice_lock_path()] as $lockPath){$h=@fopen($lockPath,'c+');if(!is_resource($h)||!flock($h,LOCK_EX)){foreach(array_reverse($locks) as $held){flock($held,LOCK_UN);fclose($held);}return ['ok'=>false,'error'=>'Financial stores are busy; no changes were made.'];}$locks[]=$h;}
+    try {
+        $rows=documents_read_sales_store($receiptPath); $invoices=documents_all_invoices(); $plan=documents_payment_allocation_repair_plan($quoteId,$rows,$invoices);
+        if(!hash_equals((string)$plan['state_hash'],$expectedHash)){$result=['ok'=>false,'error'=>'Financial data changed after preview. Reload and review again.'];}
+        elseif(empty($plan['can_repair'])){$result=['ok'=>false,'error'=>'Automatic repair is no longer safe: '.implode(' ',array_values($plan['blocked']))];}
+        else {
+            $byIdentity=[];foreach($rows as $i=>$row)if(is_array($row))$byIdentity[documents_receipt_identity($row)]=$i; $targetId=(string)$plan['target_invoice']['id']; $now=gmdate('c'); $previous=[];$resulting=[];
+            $missing=false;foreach($plan['affected'] as $item){$rid=(string)$item['id'];if(!isset($byIdentity[$rid])){$missing=true;break;}$i=$byIdentity[$rid];$health=$item['health'];$keep=0;foreach($health['allocations'] as $a)if($a['health']==='valid_current'&&(string)$a['invoice_id']===$targetId)$keep+=(int)$a['amount_paise'];$previous[$rid]=$item['before'];$rows[$i]['allocations']=[['invoice_id'=>$targetId,'amount_rs'=>documents_invoice_paise_to_money($keep+(int)$health['recoverable_paise'])]];$resulting[$rid]=$rows[$i]['allocations'];$rows[$i]['allocation_migration_audit'][]=['at'=>$now,'reason'=>'admin_confirmed_single_active_invoice_repair','previous_allocations'=>$item['before'],'target_invoice_id'=>$targetId,'migrated_amount_paise'=>(int)$health['recoverable_paise']];$rows[$i]['allocation_basis']='single_active_invoice';$rows[$i]['allocation_updated_at']=$now;}
+            if($missing){$result=['ok'=>false,'error'=>'A receipt disappeared after validation.'];}
+            else {
+            $stamp=gmdate('Ymd\THis\Z').'-'.bin2hex(random_bytes(4));$backup=$receiptPath.'.backup.'.$stamp;
+            if(!is_file($receiptPath)||!@copy($receiptPath,$backup)||!is_file($backup)||filesize($backup)!==filesize($receiptPath)||!hash_equals(hash_file('sha256',$receiptPath),hash_file('sha256',$backup))){@unlink($backup);$result=['ok'=>false,'error'=>'Validated backup could not be created; no changes were made.'];}
+            else {$saved=json_save($receiptPath,$rows);if(empty($saved['ok'])){$result=['ok'=>false,'error'=>'Atomic receipt-store write failed; the original store remains available at the recovery reference.','backup'=>$backup];}else{$verify=documents_payment_allocation_repair_plan($quoteId,documents_read_sales_store($receiptPath),documents_all_invoices());if(($verify['affected_count']??1)!==0){$restored=documents_restore_payment_allocation_backup($backup,$receiptPath);$result=['ok'=>false,'error'=>$restored?'Post-write validation failed and the receipt store was restored from backup.':'Post-write validation failed; stop writers and restore the recovery reference before continuing.','backup'=>$backup];}else{$result=['ok'=>true,'message'=>'Payment allocation repaired safely.','backup'=>$backup,'plan'=>$plan];}}}
+            $audit=documents_payment_allocation_audit(['administrator_id'=>(string)($actor['id']??$actor['username']??'admin'),'project_id'=>$quoteId,'target_invoice_id'=>$targetId,'affected_receipt_ids'=>array_keys($previous),'allocation_health_reasons'=>array_keys($plan['categories']),'previous_allocations'=>$previous,'resulting_allocations'=>$resulting,'recovery_reference'=>(string)($result['backup']??''),'outcome'=>!empty($result['ok'])?'success':'failure','error'=>!empty($result['ok'])?'':(string)($result['error']??'')]);$result['audit']=$audit;
+            if($audit===null && !empty($result['ok'])){$restored=documents_restore_payment_allocation_backup($backup,$receiptPath);$result=['ok'=>false,'error'=>$restored?'Audit history could not be written; the receipt store was restored from backup.':'Audit history and automatic recovery failed; stop writers and restore the recovery reference.','backup'=>$backup];}
+            }
+        }
+        if(empty($result['ok'])&&!isset($result['audit']))$result['audit']=documents_payment_allocation_audit(['administrator_id'=>(string)($actor['id']??$actor['username']??'admin'),'project_id'=>$quoteId,'target_invoice_id'=>(string)($plan['target_invoice']['id']??''),'affected_receipt_ids'=>array_column($plan['affected'],'id'),'allocation_health_reasons'=>array_keys($plan['categories']),'previous_allocations'=>[],'resulting_allocations'=>[],'recovery_reference'=>(string)($result['backup']??''),'outcome'=>'failure','error'=>(string)$result['error']]);
+        return $result;
+    } finally {foreach(array_reverse($locks) as $h){flock($h,LOCK_UN);fclose($h);}}
+}
+
 function documents_receipt_allocation_for_invoice(array $receipt, string $invoiceId, array $invoices = null): float
 {
     if (!documents_receipt_is_finalized_active($receipt)) return 0.0;
@@ -4328,12 +4407,10 @@ function documents_get_invoice(string $id): ?array
     ]);
     if ($resolvedInvoiceNo !== '' && safe_text((string) ($doc['invoice_no'] ?? '')) === '') {
         $doc['invoice_no'] = $resolvedInvoiceNo;
-        json_save($path, $doc);
     }
     $doc['customer_snapshot'] = array_merge(documents_customer_snapshot_defaults(), is_array($doc['customer_snapshot'] ?? null) ? $doc['customer_snapshot'] : []);
     $normalized = documents_invoice_normalize_commercial_snapshot($doc);
     if ($normalized !== $doc) {
-        json_save($path, $normalized);
         $doc = $normalized;
     }
     return $doc;
@@ -4345,9 +4422,12 @@ function documents_save_invoice(array $doc): array
     if ($id === '') {
         return ['ok' => false, 'error' => 'Missing invoice ID'];
     }
+    $lock=@fopen(documents_allocation_repair_invoice_lock_path(),'c+');
+    if(!is_resource($lock)||!flock($lock,LOCK_EX)){if(is_resource($lock))fclose($lock);return ['ok'=>false,'error'=>'Invoice store is busy.'];}
     $doc = documents_invoice_normalize_date(documents_invoice_normalize_commercial_snapshot($doc));
     $doc['status'] = documents_invoice_normalize_status((string) ($doc['status'] ?? 'draft'));
     $saved = json_save(documents_invoices_dir() . '/' . $id . '.json', $doc);
+    flock($lock,LOCK_UN);fclose($lock);
     if (!empty($saved['ok'])) {
         $quoteId = (string)($doc['linked_quote_id'] ?? $doc['quotation_id'] ?? '');
         if ($quoteId !== '') { documents_reconcile_receipts_for_quote($quoteId); }
