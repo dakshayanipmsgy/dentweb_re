@@ -20,3 +20,9 @@ Administrators can open **Review payment allocation** from a stale/unallocated w
 Confirmation locks both receipt and invoice writers, re-reads both stores, and recalculates the plan. It validates a timestamped receipt-store backup before an atomic write. On post-write or audit failure it atomically restores that backup. Immutable outcome records are stored as individual files under `data/documents/logs/payment-allocation-repairs/`; they contain identifiers and allocation metadata, but no customer identity, bank, mode, reference, or receipt financial fields. Recovery requires stopping financial writers, validating the recorded backup hash/size, and atomically replacing `payment_receipts.json` with the recovery file.
 
 Multiple active invoices, cross-project links, over-allocation, no active invoice, and insufficient invoice capacity remain manual administrator-allocation cases. The workflow never creates or deletes a receipt, changes receipt financial facts or ownership, or changes/finalizes the invoice document status.
+
+## Manual multi-invoice allocation
+
+An administrator may explicitly split a finalized receipt between active invoices in the same project. Amounts accept at most two decimal places, cannot exceed the receipt, and are checked against each invoice's remaining capacity while the receipt and invoice stores are exclusively locked. Any remainder stays visible as unallocated project credit; the workflow does not guess how to distribute it.
+
+Every successful manual split first creates a hash-validated recovery copy and then appends a separate immutable audit record under `data/documents/logs/manual-receipt-allocations/`. If audit persistence fails, the receipt store is restored automatically. Receipt amount, status, date, payment mode, reference, and project ownership are never changed by allocation.
