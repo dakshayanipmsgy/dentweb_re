@@ -4136,16 +4136,48 @@ function documents_invoice_allocated_paise(string $invoiceId, string $exceptRece
     return $sum;
 }
 
-/** Validate and persist an administrator's explicit split. Empty balances remain project credit. */
+function documents_manual_allocation_audit_dir(): string
+{
+    return documents_logs_dir() . '/manual-receipt-allocations';
+}
+
+/**
+ * Validate and persist an administrator's explicit split.
+ *
+ * The receipt and invoice snapshots are read while holding the same locks used
+ * by automatic repair.  This prevents two administrators from consuming the
+ * same invoice capacity. Empty balances deliberately remain project credit.
+ */
 function documents_allocate_receipt(string $receiptId, array $requested, array $actor = []): array
 {
-    $receipt=documents_get_sales_document('receipt',$receiptId); if(!$receipt||!documents_receipt_is_finalized_active($receipt))return ['ok'=>false,'error'=>'Finalized active receipt not found.'];
-    $invoices=documents_all_invoices(); $byId=[]; foreach($invoices as $invoice)$byId[(string)($invoice['id']??'')]=$invoice;
-    $alloc=[]; $sum=0; foreach($requested as $iid=>$amount){$paise=documents_invoice_money_to_paise((float)$amount); if($paise<=0)continue; if(!isset($byId[$iid])||!documents_invoice_is_active_for_quote($byId[$iid]))return ['ok'=>false,'error'=>'Unknown or inactive invoice.']; $capacity=documents_invoice_money_to_paise(documents_invoice_final_total($byId[$iid]))-documents_invoice_allocated_paise((string)$iid,documents_receipt_identity($receipt)); if($paise>$capacity)return ['ok'=>false,'error'=>'Allocation exceeds the invoice outstanding amount.']; $sum+=$paise; $alloc[]=['invoice_id'=>(string)$iid,'amount_rs'=>documents_invoice_paise_to_money($paise)];}
-    if($sum>documents_invoice_money_to_paise(documents_receipt_amount_total($receipt)))return ['ok'=>false,'error'=>'Allocation exceeds the receipt amount.'];
-    $candidate=$receipt; $candidate['allocations']=$alloc; $norm=documents_receipt_allocations_normalize($candidate,$invoices); if(empty($norm['ok']))return ['ok'=>false,'error'=>implode(', ',(array)$norm['errors'])];
-    $receipt['allocations']=$norm['allocations']; $receipt['allocation_updated_at']=date('c'); $receipt['allocation_updated_by']=['id'=>(string)($actor['id']??''),'name'=>(string)($actor['name']??'Admin')];
-    $saved=documents_save_sales_document('receipt',$receipt); return !empty($saved['ok'])?['ok'=>true,'receipt'=>$receipt,'unallocated'=>documents_invoice_paise_to_money(documents_invoice_money_to_paise(documents_receipt_amount_total($receipt))-$sum)]:$saved;
+    $receiptId=safe_text($receiptId); if($receiptId==='')return ['ok'=>false,'error'=>'Receipt reference is required.'];
+    $receiptPath=documents_sales_receipts_store_path();$locks=[];
+    foreach([$receiptPath.'.lock',documents_allocation_repair_invoice_lock_path()] as $lockPath){$h=@fopen($lockPath,'c+');if(!is_resource($h)||!flock($h,LOCK_EX)){foreach(array_reverse($locks) as $held){flock($held,LOCK_UN);fclose($held);}return ['ok'=>false,'error'=>'Financial stores are busy; no changes were made.'];}$locks[]=$h;}
+    try {
+        $rows=documents_read_sales_store($receiptPath);$index=null;$receipt=null;
+        foreach($rows as $i=>$row)if(is_array($row)&&documents_receipt_identity($row)===$receiptId){$index=$i;$receipt=$row;break;}
+        if($index===null||!is_array($receipt)||!documents_receipt_is_finalized_active($receipt))return ['ok'=>false,'error'=>'Finalized active receipt not found.'];
+        $invoices=documents_all_invoices();$byId=[];foreach($invoices as $invoice)$byId[(string)($invoice['id']??'')]=$invoice;
+        $qid=documents_receipt_quote_id($receipt);$alloc=[];$sum=0;
+        foreach($requested as $iid=>$amount){
+            $iid=safe_text($iid);$raw=trim((string)$amount);
+            if($raw===''||$raw==='0'||$raw==='0.00')continue;
+            if(!preg_match('/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/',$raw))return ['ok'=>false,'error'=>'Allocation amounts must be non-negative values with no more than two decimal places.'];
+            $paise=documents_invoice_money_to_paise((float)$raw);if($paise===0)continue;
+            if(!isset($byId[$iid])||!documents_invoice_is_active_for_quote($byId[$iid])||(string)($byId[$iid]['linked_quote_id']??$byId[$iid]['quotation_id']??'')!==$qid)return ['ok'=>false,'error'=>'Allocation target must be an active invoice for this project.'];
+            $already=0;foreach(documents_receipt_ledger('', $rows) as $other){if(documents_receipt_identity($other)===$receiptId)continue;foreach((array)($other['allocations']??[]) as $a)if(is_array($a)&&(string)($a['invoice_id']??'')===$iid)$already+=max(0,documents_invoice_money_to_paise((float)($a['amount_rs']??$a['amount']??0)));}
+            $capacity=documents_invoice_money_to_paise(documents_invoice_final_total($byId[$iid]))-$already;if($paise>$capacity)return ['ok'=>false,'error'=>'Allocation exceeds the invoice outstanding amount.'];
+            $sum+=$paise;$alloc[]=['invoice_id'=>$iid,'amount_rs'=>documents_invoice_paise_to_money($paise)];
+        }
+        $receiptTotal=documents_invoice_money_to_paise(documents_receipt_amount_total($receipt));if($sum>$receiptTotal)return ['ok'=>false,'error'=>'Allocation exceeds the receipt amount.'];
+        $candidate=$receipt;$candidate['allocations']=$alloc;$norm=documents_receipt_allocations_normalize($candidate,$invoices);if(empty($norm['ok']))return ['ok'=>false,'error'=>implode(', ',(array)$norm['errors'])];
+        $before=is_array($receipt['allocations']??null)?$receipt['allocations']:[];$now=gmdate('c');$receipt['allocations']=$norm['allocations'];$receipt['allocation_updated_at']=$now;$receipt['allocation_updated_by']=['id'=>(string)($actor['id']??$actor['username']??''),'name'=>(string)($actor['name']??'Admin')];$rows[$index]=$receipt;
+        $backupDir=documents_manual_allocation_audit_dir().'/backups';documents_ensure_dir($backupDir);$backup=$backupDir.'/sales-receipts.'.gmdate('Ymd\THis\Z').'-'.bin2hex(random_bytes(4)).'.json';if(!is_file($receiptPath)||!@copy($receiptPath,$backup)||!hash_equals(hash_file('sha256',$receiptPath),hash_file('sha256',$backup))){@unlink($backup);return ['ok'=>false,'error'=>'Validated backup could not be created; no changes were made.'];}
+        $saved=json_save($receiptPath,$rows);if(empty($saved['ok']))return ['ok'=>false,'error'=>'Atomic receipt-store write failed; use the recovery reference.','backup'=>$backup];
+        documents_ensure_dir(documents_manual_allocation_audit_dir());$audit=documents_manual_allocation_audit_dir().'/'.gmdate('Ymd\THis\Z').'-'.bin2hex(random_bytes(8)).'.json';$auditSaved=json_save($audit,['timestamp'=>$now,'administrator_id'=>(string)($actor['id']??$actor['username']??'admin'),'project_id'=>$qid,'receipt_id'=>$receiptId,'previous_allocations'=>$before,'resulting_allocations'=>$norm['allocations'],'unallocated_paise'=>$receiptTotal-$sum,'recovery_reference'=>$backup]);
+        if(empty($auditSaved['ok'])){$restored=documents_restore_payment_allocation_backup($backup,$receiptPath);return ['ok'=>false,'error'=>$restored?'Audit history could not be written; the receipt store was restored from backup.':'Audit and recovery failed; stop financial writers and restore the recovery reference.','backup'=>$backup];}
+        return ['ok'=>true,'receipt'=>$receipt,'unallocated'=>documents_invoice_paise_to_money($receiptTotal-$sum),'backup'=>$backup,'audit'=>$audit];
+    } finally {foreach(array_reverse($locks) as $h){flock($h,LOCK_UN);fclose($h);}}
 }
 
 /** Persist only unambiguous allocations; never finalizes an invoice or guesses a split. */
