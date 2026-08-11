@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+$commercialLifecycleScript = basename((string) ($_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? ''));
+if ($commercialLifecycleScript === 'admin-invoices.php') {
+    require_once __DIR__ . '/standalone_invoice_quote_parity.php';
+}
+
 if (!function_exists('commercial_lifecycle_stages')) {
     /**
      * @return array<string, array{label:string, href:string}>
