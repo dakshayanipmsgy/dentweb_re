@@ -39,6 +39,23 @@ if (!function_exists('render_commercial_lifecycle')) {
         }
         $html .= '</nav>';
 
+        $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? ''));
+        if ($script === 'admin-invoices.php' && $activeStage === 'invoice') {
+            // The standalone Items Master UI hides irrelevant selects with disabled state.
+            // Re-enable them immediately before submit so every [] array keeps the same row index.
+            $html .= <<<'HTML'
+<script>
+document.addEventListener('submit', function (event) {
+    var form = event.target;
+    if (!(form instanceof HTMLFormElement) || !form.querySelector('.si-builder-table')) return;
+    form.querySelectorAll('.si-builder-table select:disabled').forEach(function (select) {
+        select.disabled = false;
+    });
+}, true);
+</script>
+HTML;
+        }
+
         return $html;
     }
 }
