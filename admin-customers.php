@@ -11,6 +11,7 @@ require_once __DIR__ . '/includes/employee_portal.php';
 require_once __DIR__ . '/includes/audit_log.php';
 require_once __DIR__ . '/includes/handover.php';
 require_once __DIR__ . '/includes/customer_operations.php';
+require_once __DIR__ . '/admin/includes/documents_helpers.php';
 
 employee_portal_session();
 $isEmployeePortal = !empty($_SESSION['employee_logged_in']);
@@ -75,7 +76,21 @@ if ($activeTab === 'customers') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_valid_csrf();
         $action = (string) ($_POST['customer_action'] ?? '');
-        if ($action === 'save_customer_sync_ajax') {
+        if ($action === 'create_direct_invoice') {
+            $mobile = normalize_customer_mobile((string) ($_POST['mobile'] ?? ''));
+            $customer = $mobile !== '' ? $customerStore->findByMobile($mobile) : null;
+            if (!is_array($customer) || !empty($customer['archived'])) {
+                $customerErrors[] = 'An active Customer User is required to create an invoice.';
+            } else {
+                $created = documents_create_standalone_invoice(['segment' => 'RES', 'customer' => $customer]);
+                if (empty($created['ok'])) {
+                    $customerErrors[] = (string) ($created['error'] ?? 'Unable to create invoice.');
+                } else {
+                    header('Location: admin-invoices.php?' . http_build_query(['id' => (string) $created['invoice_id'], 'status' => 'success', 'message' => 'Invoice draft created for ' . (string) ($customer['name'] ?? $mobile) . '.']));
+                    exit;
+                }
+            }
+        } elseif ($action === 'save_customer_sync_ajax') {
             header('Content-Type: application/json; charset=utf-8');
             $preview=$_SESSION['customer_csv_mobile_sync_preview']??null;
             $previewId=(string)($_POST['preview_id']??''); $token=(string)($_POST['row_token']??'');
@@ -1987,6 +2002,7 @@ function admin_users_build_welcome_subject(array $customer): string
                 $complaintValue = strtolower(trim((string) ($customer['complaints_raised'] ?? 'no')));
                 $hasComplaint = in_array($complaintValue, ['yes', 'y', '1'], true);
                 $complaintClass = $hasComplaint ? 'cell-yes' : 'cell-no';
+                $currentCustomerInvoices = documents_current_standalone_invoices_for_customer($customer);
               ?>
               <tr
                 data-customer-row="1"
@@ -2012,6 +2028,9 @@ function admin_users_build_welcome_subject(array $customer): string
                 <td><span class="users-status <?= $hasComplaint ? 'users-status--warn' : 'users-status--ok' ?>"><?= $hasComplaint ? 'Raised' : 'None' ?></span></td>
                 <td class="users-actions text-right">
                   <a href="admin-customers.php?customer_view=<?= admin_users_safe($customerView) ?>&amp;view=<?= urlencode((string) ($customer['mobile'] ?? '')) ?>">View / Edit</a>
+                  <?php if (empty($customer['archived']) && $currentCustomerInvoices === []): ?>
+                  <button class="btn btn-link js-single-customer-action" type="submit" data-action="create_direct_invoice" name="mobile" value="<?= admin_users_safe((string) ($customer['mobile'] ?? '')) ?>">Create Invoice</button>
+                  <?php endif; ?>
                   <?php if (!empty($customer['archived'])): ?>
                   <button class="btn btn-link js-single-customer-action" type="submit" data-action="restore_customer" name="mobile" value="<?= admin_users_safe((string) ($customer['mobile'] ?? '')) ?>">Restore</button>
                   <?php else: ?>

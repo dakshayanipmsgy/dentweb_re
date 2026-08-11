@@ -20,6 +20,9 @@ $id = safe_text((string) ($_GET['id'] ?? ''));
 $invoice = $id !== '' ? documents_get_invoice($id) : null;
 $company = documents_get_company_profile_for_quotes();
 if ($customerView && is_array($invoice)) {
+    if(documents_invoice_is_standalone($invoice)){
+        if(!documents_standalone_invoice_owned_by_customer($invoice,$customer)||!documents_customer_visible_standalone_invoice($invoice)){http_response_code(403);exit('Access denied.');}
+    } else {
     $customerMobile = normalize_customer_mobile((string) ($customer['mobile'] ?? ''));
     $docMobile = normalize_customer_mobile((string) ($invoice['customer_mobile'] ?? $invoice['customer_snapshot']['mobile'] ?? ''));
     if ($docMobile === '') {
@@ -32,6 +35,7 @@ if ($customerView && is_array($invoice)) {
     $invoiceQuoteId = (string)($invoice['linked_quote_id'] ?? $invoice['quotation_id'] ?? '');
     $visibleIds = array_map(static fn(array $row): string => (string)($row['id'] ?? ''), documents_customer_visible_invoices_for_quote($invoiceQuoteId));
     if (!in_array((string)($invoice['id'] ?? ''), $visibleIds, true)) { http_response_code(404); exit('Invoice unavailable.'); }
+    }
 }
 if ($customerView && !is_array($invoice)) { http_response_code(404); exit('Invoice unavailable.'); }
 
@@ -69,7 +73,12 @@ $customerFields = is_array($quoteSnapshot['customer_site_fields'] ?? null) ? $qu
 if ($customerFields === [] && is_array($quote)) {
     $customerFields = documents_quote_invoice_customer_fields($quote);
 }
-$specialRequests = trim((string) ($quoteSnapshot['special_requests_text'] ?? ($quote['special_requests_text'] ?? $quote['special_requests_inclusive'] ?? '')));
+if ($customerFields === [] && $invoice !== null && documents_invoice_is_standalone($invoice)) {
+    foreach ([['Name','name'],['Mobile','mobile'],['Address','address'],['City','city'],['District','district'],['State','state'],['PIN','pin_code'],['Consumer / account number','jbvnl_account_number'],['Meter number','meter_number'],['Application ID','application_id']] as [$label,$key]) {
+        $value=trim((string)($snapshot[$key]??''));if($value!=='')$customerFields[]=['label'=>$label,'value'=>$value];
+    }
+}
+$specialRequests = trim((string) ($invoice['special_requests_text'] ?? $quoteSnapshot['special_requests_text'] ?? ($quote['special_requests_text'] ?? $quote['special_requests_inclusive'] ?? '')));
 $pricingRows = [];
 $addPricingRow = static function (string $label, $value, bool $negative = false, string $note = '') use (&$pricingRows): void {
     if ($value === null || (is_string($value) && trim($value) === '')) { return; }
@@ -153,7 +162,7 @@ $displaySolarKwp = $hasSolarSizeBreakup ? $totalSolarKwp : $solarSizeValue($invo
 
     <section class="meta-grid">
       <div class="info-card"><h2>Invoice details</h2><div class="detail-row"><span>Invoice date</span><strong><?= $esc($invoiceDate ?: '—') ?></strong></div><div class="detail-row"><span>Invoice ID</span><strong><?= $esc($invoice['id']) ?></strong></div><div class="detail-row"><span>Document status</span><strong><?= $esc(documents_invoice_status_label((string)($invoice['status'] ?? 'draft'))) ?></strong></div><div class="detail-row"><span>Revision</span><strong><?= (int)($invoice['revision_no'] ?? 0) ?></strong></div><div class="detail-row"><span>Finalized at</span><strong><?= $esc($invoice['finalized_at'] ?? '—') ?></strong></div><div class="detail-row"><span>Total Solar Size</span><strong><?= $displaySolarKwp > 0 ? $esc(number_format($displaySolarKwp, 2, '.', '')) . ' kWp' : '—' ?></strong></div></div>
-      <div class="info-card"><h2>Linked quotation</h2><div class="detail-row"><span>Quotation no.</span><strong><?= $esc($quote['quote_no'] ?? $invoice['quotation_no'] ?? '—') ?></strong></div><div class="detail-row"><span>Quotation ID</span><strong><?= $esc($invoice['linked_quote_id'] ?? $invoice['quotation_id'] ?? '—') ?></strong></div><div class="detail-row"><span>Pricing mode</span><strong><?= $esc($invoice['pricing_mode'] ?? '—') ?></strong></div></div>
+      <?php if(documents_invoice_is_standalone($invoice)): ?><div class="info-card"><h2>Standalone invoice</h2><div class="detail-row"><span>Quotation / reference no.</span><strong><?= $esc($invoice['manual_reference']['quotation_no']??'—') ?></strong></div><div class="detail-row"><span>Reference date</span><strong><?= $esc($invoice['manual_reference']['quotation_date']??'—') ?></strong></div><div class="detail-row"><span>External reference</span><strong><?= $esc($invoice['manual_reference']['external_reference']??'—') ?></strong></div></div><?php else: ?><div class="info-card"><h2>Linked quotation</h2><div class="detail-row"><span>Quotation no.</span><strong><?= $esc($quote['quote_no'] ?? $invoice['quotation_no'] ?? '—') ?></strong></div><div class="detail-row"><span>Quotation ID</span><strong><?= $esc($invoice['linked_quote_id'] ?? $invoice['quotation_id'] ?? '—') ?></strong></div><div class="detail-row"><span>Pricing mode</span><strong><?= $esc($invoice['pricing_mode'] ?? '—') ?></strong></div></div><?php endif; ?>
     </section>
 
 
