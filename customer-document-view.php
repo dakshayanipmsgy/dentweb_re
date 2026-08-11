@@ -45,6 +45,11 @@ function customer_document_quote_tax_summary(array $quote): array
 
 function customer_document_assert_owner(array $document, string $customerMobile): void
 {
+    if (documents_invoice_is_standalone($document)) {
+        $store=new CustomerFsStore();$owner=$store->findByMobile($customerMobile);
+        if(!is_array($owner)||!documents_standalone_invoice_owned_by_customer($document,$owner)){http_response_code(403);exit('Access denied.');}
+        return;
+    }
     $quoteId = customer_document_quote_id($document);
     $quote = $quoteId !== '' ? documents_get_quote($quoteId) : null;
     $docMobile = is_array($quote) ? customer_document_quote_mobile($quote) : customer_document_quote_mobile($document);
@@ -218,7 +223,7 @@ if ($type === 'accepted_quotation') {
     if (is_array($document)) {
         customer_document_assert_owner($document, $customerMobile);
         $invoiceQuoteId = customer_document_quote_id($document);
-        $visibleIds = array_map(static fn(array $invoice): string => (string)($invoice['id'] ?? ''), documents_customer_visible_invoices_for_quote($invoiceQuoteId));
+        $visibleIds = documents_invoice_is_standalone($document) ? (documents_customer_visible_standalone_invoice($document)?[(string)$document['id']]:[]) : array_map(static fn(array $invoice): string => (string)($invoice['id'] ?? ''), documents_customer_visible_invoices_for_quote($invoiceQuoteId));
         if (!in_array((string)($document['id'] ?? ''), $visibleIds, true)) {
             http_response_code(404);
             exit('Invoice unavailable.');
