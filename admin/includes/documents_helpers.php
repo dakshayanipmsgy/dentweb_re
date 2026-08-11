@@ -4932,10 +4932,40 @@ function documents_standalone_apply_items(array $invoice,array $rows): array
 {
     $items=[];$taxItems=[];$basic=0;$gst=0;$gross=0;
     foreach($rows as $row){if(!is_array($row))continue;$name=safe_text((string)($row['name']??''));$qty=max(0,(float)($row['quantity']??0));$unitPrice=max(0,documents_invoice_money_to_paise((float)($row['unit_price_incl_gst']??0)));if($name===''||$qty<=0)continue;
-        $line=(int)round($unitPrice*$qty);$rate=max(0,(float)($row['gst_rate']??0));$taxable=(int)round($line/(1+$rate/100));$lineGst=$line-$taxable;$item=['name'=>$name,'description'=>safe_multiline_text((string)($row['description']??'')),'hsn'=>safe_text((string)($row['hsn']??'')),'quantity'=>$qty,'qty'=>$qty,'unit'=>safe_text((string)($row['unit']??'')),'unit_price_incl_gst'=>documents_invoice_paise_to_money($unitPrice),'gross_incl_gst'=>documents_invoice_paise_to_money($line),'slabs'=>[['share_pct'=>100,'rate_pct'=>$rate]]];$items[]=$item;$taxItems[]=array_merge($item,['taxable_value'=>documents_invoice_paise_to_money($taxable),'gst_amount'=>documents_invoice_paise_to_money($lineGst)]);$basic+=$taxable;$gst+=$lineGst;$gross+=$line;}
+        $line=(int)round($unitPrice*$qty);$rate=max(0,(float)($row['gst_rate']??0));$slabs=is_array($row['slabs']??null)?$row['slabs']:[['share_pct'=>100,'rate_pct'=>$rate]];$taxable=0;$allocated=0;foreach(array_values($slabs) as $si=>$slab){$part=$si===count($slabs)-1?$line-$allocated:(int)round($line*max(0,(float)($slab['share_pct']??0))/100);$allocated+=$part;$taxable+=(int)round($part/(1+max(0,(float)($slab['rate_pct']??0))/100));}$lineGst=$line-$taxable;$item=['name'=>$name,'description'=>safe_multiline_text((string)($row['description']??'')),'hsn'=>safe_text((string)($row['hsn']??'')),'quantity'=>$qty,'qty'=>$qty,'unit'=>safe_text((string)($row['unit']??'')),'unit_price_incl_gst'=>documents_invoice_paise_to_money($unitPrice),'gross_incl_gst'=>documents_invoice_paise_to_money($line),'slabs'=>$slabs];$items[]=$item;$taxItems[]=array_merge($item,['taxable_value'=>documents_invoice_paise_to_money($taxable),'gst_amount'=>documents_invoice_paise_to_money($lineGst)]);$basic+=$taxable;$gst+=$lineGst;$gross+=$line;}
     if($items===[])return ['ok'=>false,'error'=>'Add at least one valid invoice item.','invoice'=>$invoice];
     $invoice['commercial_items']=$items;$invoice['tax_breakdown']=['basic_total'=>documents_invoice_paise_to_money($basic),'gst_total'=>documents_invoice_paise_to_money($gst),'gross_incl_gst'=>documents_invoice_paise_to_money($gross),'items'=>$taxItems];$invoice['calc']=['gross_payable'=>documents_invoice_paise_to_money($gross),'grand_total'=>documents_invoice_paise_to_money($gross),'tax_breakdown'=>$invoice['tax_breakdown']];$invoice['input_total_gst_inclusive']=documents_invoice_paise_to_money($gross);$invoice['pricing']['final_invoice_total_incl_gst']=documents_invoice_paise_to_money($gross);
     return ['ok'=>true,'invoice'=>$invoice,'error'=>''];
+}
+
+/**
+ * Resolve standalone invoice lines from the same active Items Master records used by quotations.
+ * Prices remain invoice-specific, while identity, HSN, unit, description, variant and tax data are
+ * server-side snapshots: a browser cannot forge master metadata.
+ */
+function documents_standalone_apply_master_items(array $invoice, array $rows, string $taxProfileId = ''): array
+{
+    $kits=[]; foreach(documents_inventory_kits(false) as $v)$kits[(string)($v['id']??'')]=$v;
+    $components=[]; foreach(documents_inventory_components(false) as $v)$components[(string)($v['id']??'')]=$v;
+    $variants=[]; foreach(documents_inventory_component_variants(false) as $v)$variants[(string)($v['id']??'')]=$v;
+    $fallback=safe_text((string)(load_quote_defaults()['defaults']['quotation_tax_profile_id']??''));
+    $structured=[];$manual=[];
+    foreach($rows as $row){
+        if(!is_array($row))continue;$type=($row['type']??'component')==='kit'?'kit':'component';$qty=max(0,(float)($row['quantity']??0));
+        if($qty<=0)continue;$master=null;$variant=null;$id=safe_text((string)($row[$type.'_id']??''));
+        if($type==='kit'){$master=$kits[$id]??null;}else{$master=$components[$id]??null;$vid=safe_text((string)($row['variant_id']??''));if($vid!==''){$variant=$variants[$vid]??null;if(!is_array($variant)||(string)($variant['component_id']??'')!==$id)return ['ok'=>false,'error'=>'Invoice contains an invalid or archived Items Master variant.','invoice'=>$invoice];}}
+        if(!is_array($master))return ['ok'=>false,'error'=>'Invoice contains an invalid or archived Items Master selection.','invoice'=>$invoice];
+        $profileId=safe_text((string)($variant['tax_profile_id_override']??''));if($profileId==='')$profileId=safe_text((string)($master['tax_profile_id']??''));if($profileId==='')$profileId=$taxProfileId;if($profileId==='')$profileId=$fallback;
+        $profile=$profileId!==''?documents_inventory_get_tax_profile($profileId):null;if(!is_array($profile))$profile=documents_flat5_tax_profile();
+        $name=safe_text((string)($master['name']??($type==='kit'?'Kit':'Component')));if(is_array($variant)&&safe_text((string)($variant['display_name']??''))!=='')$name.=' ('.safe_text((string)$variant['display_name']).')';
+        $description=safe_text((string)($master['description']??$master['notes']??''));$custom=safe_multiline_text((string)($row['custom_description']??''));if($custom!=='')$description=$custom;
+        $hsn=safe_text((string)($variant['hsn_override']??''));if($hsn==='')$hsn=safe_text((string)($master['hsn']??''));$unit=safe_text((string)($variant['default_unit_override']??''));if($unit==='')$unit=safe_text((string)($master['default_unit']??($type==='kit'?'set':'pcs')));
+        $structured[]=array_merge(documents_quote_structured_item_defaults(),['type'=>$type,'kit_id'=>$type==='kit'?$id:'','component_id'=>$type==='component'?$id:'','variant_id'=>(string)($variant['id']??''),'variant_snapshot'=>is_array($variant)?$variant:[],'name_snapshot'=>$name,'description_snapshot'=>$description,'master_description_snapshot'=>safe_text((string)($master['description']??$master['notes']??'')),'custom_description'=>$custom,'description_mode'=>$custom!==''?'manual':'auto','hsn_snapshot'=>$hsn,'qty'=>$qty,'unit'=>$unit,'meta'=>['tax_profile_id'=>$profileId]]);
+        $manual[]=['name'=>$name,'description'=>$description,'hsn'=>$hsn,'quantity'=>$qty,'unit'=>$unit,'unit_price_incl_gst'=>$row['unit_price_incl_gst']??0,'slabs'=>(array)($profile['slabs']??[])];
+    }
+    $result=documents_standalone_apply_items($invoice,$manual);if(empty($result['ok']))return $result;
+    $result['invoice']['quote_items']=documents_normalize_quote_structured_items($structured);$result['invoice']['tax_profile_id']=$taxProfileId;$result['invoice']['items_master_snapshot_at']=date('c');
+    return $result;
 }
 
 function documents_generate_quote_number(string $segment): array
