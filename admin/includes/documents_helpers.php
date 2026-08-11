@@ -3586,8 +3586,40 @@ function documents_invoice_quotation_reference_total(array $invoice): float
 
 function documents_invoice_has_quotation_reference(array $invoice): bool
 {
-    if (($invoice['commercial_ref']['type'] ?? '') === 'legacy_project' && empty($invoice['quotation_reference_known'])) return false;
+    if (in_array((string)($invoice['commercial_ref']['type'] ?? ''), ['legacy_project','standalone_invoice'], true) && empty($invoice['quotation_reference_known'])) return false;
     return true;
+}
+
+function documents_invoice_is_standalone(array $invoice): bool
+{
+    return (string)($invoice['commercial_ref']['type'] ?? '') === 'standalone_invoice';
+}
+
+/** Stable owner match: prefer the saved customer identity, then normalized mobile for compatibility. */
+function documents_standalone_invoice_owned_by_customer(array $invoice, array $customer): bool
+{
+    if (!documents_invoice_is_standalone($invoice)) return false;
+    $ref=(array)($invoice['customer_ref']??[]);
+    $customerId=(string)($customer['id']??''); $serial=(string)($customer['serial_number']??'');
+    if ((string)($ref['id']??'')!=='' && $customerId!=='') return hash_equals((string)$ref['id'],$customerId);
+    if ((string)($invoice['customer_serial_number']??'')!=='' && $serial!=='') return hash_equals((string)$invoice['customer_serial_number'],$serial);
+    $a=normalize_customer_mobile((string)($ref['mobile']??$invoice['customer_mobile']??$invoice['customer_snapshot']['mobile']??''));
+    $b=normalize_customer_mobile((string)($customer['mobile']??''));
+    return $a!=='' && $b!=='' && hash_equals($a,$b);
+}
+
+function documents_customer_visible_standalone_invoice(array $invoice): bool
+{
+    return documents_invoice_is_standalone($invoice) && !documents_is_archived($invoice)
+        && !documents_invoice_is_cancelled($invoice) && empty($invoice['superseded_by_invoice_id'])
+        && empty($invoice['replaced_by_invoice_id']);
+}
+
+function documents_standalone_invoices_for_customer(array $customer): array
+{
+    $rows=array_values(array_filter(documents_all_invoices(), static fn(array $i):bool => documents_customer_visible_standalone_invoice($i) && documents_standalone_invoice_owned_by_customer($i,$customer)));
+    usort($rows,static fn(array $a,array $b):int=>strcmp((string)($b['invoice_date']??$b['created_at']??''),(string)($a['invoice_date']??$a['created_at']??'')));
+    return $rows;
 }
 
 function documents_invoice_final_total(array $invoice, bool $allowQuotationFallback = true): float
@@ -4175,6 +4207,7 @@ function documents_reconcile_receipts_for_quote(string $quoteId): array
 
 function documents_invoice_payment_summary(array $invoice): array
 {
+    if (documents_invoice_is_standalone($invoice)) return documents_standalone_invoice_payment_summary($invoice);
     $invoice=documents_invoice_normalize_commercial_snapshot($invoice); $iid=(string)($invoice['id']??''); $invoices=documents_all_invoices(); if($iid!=='' && !isset(array_column($invoices,null,'id')[$iid])) $invoices[]=$invoice;
     $totalPaise=documents_invoice_money_to_paise(documents_invoice_final_total($invoice)); $received=0; $receipts=[]; $unallocated=[]; $last=''; $seen=[]; $qid=(string)($invoice['linked_quote_id']??$invoice['quotation_id']??'');
     foreach(documents_receipt_ledger() as $r){ $rid=documents_receipt_identity($r); if(isset($seen[$rid])) continue; $seen[$rid]=true; $health=documents_receipt_allocation_health($r,$invoices); $amt=0; foreach($health['allocations'] as $a){ if(in_array($a['health'],['valid_current','stale_inactive_invoice'],true) && (string)$a['invoice_id']===$iid) $amt += (int)$a['amount_paise']; }
@@ -4183,6 +4216,31 @@ function documents_invoice_payment_summary(array $invoice): array
     usort($receipts, static fn($a,$b)=>strcmp(($a['date']??'').($a['id']??''),($b['date']??'').($b['id']??''))); usort($unallocated, static fn($a,$b)=>strcmp(($a['date']??'').($a['id']??''),($b['date']??'').($b['id']??'')));
     $diff=$totalPaise-$received; $tol=1; $status=$totalPaise<=0?'not_applicable':($received===0?'unpaid':(abs($diff)<=$tol?'paid':($diff>0?'partially_paid':'overpaid')));
     return ['invoice_id'=>$iid,'invoice_total'=>documents_invoice_paise_to_money($totalPaise),'total_received'=>documents_invoice_paise_to_money($received),'outstanding'=>documents_invoice_paise_to_money(max(0,$diff)),'overpayment'=>documents_invoice_paise_to_money(max(0,-$diff)),'payment_status'=>$status,'receipt_count'=>count($receipts),'receipts'=>$receipts,'unallocated_receipts'=>$unallocated,'allocation_attention_count'=>count($unallocated),'last_payment_at'=>$last];
+}
+
+/** Standalone receipts live in the canonical receipt store, but use a real commercial reference instead of a fake quote. */
+function documents_standalone_invoice_payment_summary(array $invoice): array
+{
+    $iid=(string)($invoice['id']??''); $total=documents_invoice_money_to_paise(documents_invoice_final_total($invoice)); $received=0;$receipts=[];$last='';
+    foreach(documents_list_sales_documents('receipt') as $r){
+        if(!documents_receipt_is_finalized_active($r)||(string)($r['commercial_ref']['type']??'')!=='standalone_invoice'||(string)($r['commercial_ref']['id']??'')!==$iid)continue;
+        foreach((array)($r['allocations']??[]) as $a){if((string)($a['invoice_id']??'')!==$iid)continue;$p=max(0,documents_invoice_money_to_paise((float)($a['amount_rs']??0)));$received+=$p;$date=(string)($r['date_received']??$r['created_at']??'');if(substr($date,0,10)>$last)$last=substr($date,0,10);$receipts[]=['id'=>(string)($r['id']??''),'receipt_number'=>(string)($r['receipt_number']??$r['id']??''),'date'=>$date,'amount_rs'=>documents_invoice_paise_to_money($p)];}
+    }
+    $diff=$total-$received;$status=$total<=0?'not_applicable':($received===0?'unpaid':(abs($diff)<=1?'paid':($diff>0?'partially_paid':'overpaid')));
+    return ['invoice_id'=>$iid,'invoice_total'=>documents_invoice_paise_to_money($total),'total_received'=>documents_invoice_paise_to_money($received),'outstanding'=>documents_invoice_paise_to_money(max(0,$diff)),'overpayment'=>documents_invoice_paise_to_money(max(0,-$diff)),'payment_status'=>$status,'receipt_count'=>count($receipts),'receipts'=>$receipts,'unallocated_receipts'=>[],'allocation_attention_count'=>0,'last_payment_at'=>$last];
+}
+
+function documents_add_standalone_invoice_payment(array $invoice, array $input, array $actor=[]): array
+{
+    if(!documents_invoice_is_standalone($invoice))return ['ok'=>false,'error'=>'Payment entry is only available for standalone invoices.'];
+    $parsed=documents_invoice_parse_money($input['amount']??0);if(empty($parsed['ok'])||(float)$parsed['value']<=0)return ['ok'=>false,'error'=>'Enter a payment amount greater than zero.'];
+    $date=(string)($input['date_received']??'');$valid=documents_invoice_date_validate($date,false);if(empty($valid['ok']))return ['ok'=>false,'error'=>(string)$valid['error']];
+    $iid=(string)$invoice['id'];$receipt=documents_sales_document_defaults('receipt');$receipt['id']=documents_generate_simple_document_id('RCT');$receipt['receipt_id']=$receipt['id'];
+    $receipt['receipt_number']=safe_text((string)($input['receipt_number']??''))?:$receipt['id'];$receipt['status']='finalized';$receipt['date_received']=$valid['date'];$receipt['amount_rs']=(float)$parsed['value'];
+    $receipt['mode']=safe_text((string)($input['mode']??''));$receipt['transaction_reference']=safe_text((string)($input['transaction_reference']??''));$receipt['notes']=safe_multiline_text((string)($input['note']??''));
+    $receipt['commercial_ref']=['type'=>'standalone_invoice','id'=>$iid];$receipt['invoice_id']=$iid;$receipt['allocations']=[['invoice_id'=>$iid,'amount_rs'=>(float)$parsed['value']]];
+    $receipt['quotation_id']='';$receipt['customer_mobile']=(string)($invoice['customer_mobile']??'');$receipt['customer_name']=(string)($invoice['customer_snapshot']['name']??'');$receipt['created_by']=$actor;$receipt['created_at']=date('c');
+    $saved=documents_save_sales_document('receipt',$receipt);return empty($saved['ok'])?['ok'=>false,'error'=>'Unable to save payment receipt.']:['ok'=>true,'receipt'=>$receipt];
 }
 
 
@@ -4843,6 +4901,41 @@ function documents_create_invoice_from_legacy_project(array $project, array $opt
     $saved=documents_save_invoice($doc); if(empty($saved['ok'])) return ['ok'=>false,'error'=>'Failed to create invoice draft.'];
     $ids=array_values(array_unique(array_merge((array)($project['invoice_ids']??[]),[$doc['id']])));$project['invoice_ids']=$ids;$project['updated_at']=date('c');legacy_billing_save_project($project);
     return ['ok'=>true,'invoice_id'=>$doc['id'],'error'=>''];
+}
+
+/** Create a third, genuine invoice source without creating a quote or legacy project. */
+function documents_create_standalone_invoice(array $options = []): array
+{
+    $number=documents_generate_invoice_public_number(safe_text((string)($options['segment']??'RES'))?:'RES');
+    if(empty($number['ok']))return ['ok'=>false,'error'=>(string)($number['error']??'Unable to generate invoice number.')];
+    $doc=documents_invoice_defaults();$doc['id']='inv_'.date('YmdHis').'_'.bin2hex(random_bytes(3));$doc['invoice_no']=(string)$number['invoice_no'];
+    $doc['invoice_date']=date('Y-m-d');$doc['invoice_date_source']='explicit';$doc['commercial_ref']=['type'=>'standalone_invoice','id'=>$doc['id']];
+    $doc['linked_quote_id']='';$doc['quotation_id']='';$doc['quotation_no']='';$doc['quotation_reference_known']=false;$doc['manual_reference']=['quotation_no'=>'','quotation_date'=>'','external_reference'=>'','quotation_amount'=>null];
+    $doc['pricing']=['quotation_total_incl_gst'=>null,'final_invoice_total_incl_gst'=>0.0,'adjustment_type'=>'none','adjustment_amount_incl_gst'=>0.0,'adjustment_percent'=>0.0,'adjustment_reason'=>'','currency'=>'INR'];
+    $doc['created_at']=$doc['updated_at']=date('c');$saved=documents_save_invoice($doc);
+    return empty($saved['ok'])?['ok'=>false,'error'=>'Failed to create standalone invoice draft.']:['ok'=>true,'invoice_id'=>$doc['id'],'invoice'=>$doc,'error'=>''];
+}
+
+function documents_standalone_match_customer(array $invoice, string $mobile, ?CustomerFsStore $store=null, bool $prefill=false): array
+{
+    $mobile=normalize_customer_mobile($mobile);$invoice['customer_mobile']=$mobile;$invoice['customer_snapshot']=array_merge(documents_customer_snapshot_defaults(),(array)($invoice['customer_snapshot']??[]),['mobile'=>$mobile]);
+    $customer=$mobile!==''?($store??new CustomerFsStore())->findByMobile($mobile):null;
+    $invoice['customer_ref']=[];$invoice['customer_serial_number']='';
+    if(is_array($customer)){$invoice['customer_ref']=['type'=>'customer_user','id'=>(string)($customer['id']??''),'key'=>(string)($customer['mobile_key']??$mobile),'mobile'=>$mobile];$invoice['customer_serial_number']=(string)($customer['serial_number']??'');
+        if($prefill){foreach(['name','address','city','district','state','pin_code','meter_number','meter_serial_number','jbvnl_account_number','application_id'] as $k){if(trim((string)($invoice['customer_snapshot'][$k]??''))===''&&trim((string)($customer[$k]??''))!=='')$invoice['customer_snapshot'][$k]=(string)$customer[$k];}}
+    }
+    return ['invoice'=>$invoice,'customer'=>$customer,'linked'=>is_array($customer)];
+}
+
+/** Build paise-reconciled manual items. Each row supplies a gross inclusive value and GST rate. */
+function documents_standalone_apply_items(array $invoice,array $rows): array
+{
+    $items=[];$taxItems=[];$basic=0;$gst=0;$gross=0;
+    foreach($rows as $row){if(!is_array($row))continue;$name=safe_text((string)($row['name']??''));$qty=max(0,(float)($row['quantity']??0));$unitPrice=max(0,documents_invoice_money_to_paise((float)($row['unit_price_incl_gst']??0)));if($name===''||$qty<=0)continue;
+        $line=(int)round($unitPrice*$qty);$rate=max(0,(float)($row['gst_rate']??0));$taxable=(int)round($line/(1+$rate/100));$lineGst=$line-$taxable;$item=['name'=>$name,'description'=>safe_multiline_text((string)($row['description']??'')),'hsn'=>safe_text((string)($row['hsn']??'')),'quantity'=>$qty,'qty'=>$qty,'unit'=>safe_text((string)($row['unit']??'')),'unit_price_incl_gst'=>documents_invoice_paise_to_money($unitPrice),'gross_incl_gst'=>documents_invoice_paise_to_money($line),'slabs'=>[['share_pct'=>100,'rate_pct'=>$rate]]];$items[]=$item;$taxItems[]=array_merge($item,['taxable_value'=>documents_invoice_paise_to_money($taxable),'gst_amount'=>documents_invoice_paise_to_money($lineGst)]);$basic+=$taxable;$gst+=$lineGst;$gross+=$line;}
+    if($items===[])return ['ok'=>false,'error'=>'Add at least one valid invoice item.','invoice'=>$invoice];
+    $invoice['commercial_items']=$items;$invoice['tax_breakdown']=['basic_total'=>documents_invoice_paise_to_money($basic),'gst_total'=>documents_invoice_paise_to_money($gst),'gross_incl_gst'=>documents_invoice_paise_to_money($gross),'items'=>$taxItems];$invoice['calc']=['gross_payable'=>documents_invoice_paise_to_money($gross),'grand_total'=>documents_invoice_paise_to_money($gross),'tax_breakdown'=>$invoice['tax_breakdown']];$invoice['input_total_gst_inclusive']=documents_invoice_paise_to_money($gross);$invoice['pricing']['final_invoice_total_incl_gst']=documents_invoice_paise_to_money($gross);
+    return ['ok'=>true,'invoice'=>$invoice,'error'=>''];
 }
 
 function documents_generate_quote_number(string $segment): array

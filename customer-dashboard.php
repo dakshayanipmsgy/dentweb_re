@@ -128,6 +128,7 @@ $customerQuote = $customerProjects[0]['quote'] ?? null;
 $customerPaymentSummary = $customerProjects[0]['payment_summary'] ?? ['quotation_amount' => 0, 'total_received' => 0, 'outstanding' => 0, 'requests' => [], 'active_request_count' => 0, 'last_request' => null];
 $customerPaymentRequests = $customerProjects[0]['payment_requests'] ?? [];
 $customerFinalReceipts = $customerProjects[0]['receipts'] ?? [];
+$standaloneInvoices = documents_standalone_invoices_for_customer($customer);
 function customer_dashboard_doc_url(string $type, array $doc): string
 {
     return 'customer-document-view.php?type=' . urlencode($type) . '&id=' . urlencode((string) ($doc['id'] ?? ''));
@@ -487,6 +488,8 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
           <?php if ($customerProjects === []): ?>
             <section class="project-card"><h2 class="section-title">Projects</h2><div class="empty-note">No accepted quotation is linked to your portal yet. Once your quotation is accepted, your project documents will appear here automatically.</div></section>
           <?php endif; ?>
+
+          <?php if($standaloneInvoices!==[]): ?><section class="project-card legacy-section"><h2 class="section-title">Standalone Invoices</h2><p class="dashboard-subtitle">Invoices issued directly to your customer login. These do not include quotation, agreement, dispatch, or challan documents.</p><div class="portal-table-wrap"><table class="finance-table"><thead><tr><th>Invoice</th><th>Date</th><th>Total</th><th>Payment status</th><th>Received</th><th>Outstanding</th><th>Action</th></tr></thead><tbody><?php foreach($standaloneInvoices as $standaloneInvoice):$standalonePay=documents_invoice_payment_summary($standaloneInvoice);?><tr><td><?=customer_portal_safe((string)($standaloneInvoice['invoice_no']??$standaloneInvoice['id']))?></td><td><?=customer_portal_safe(documents_invoice_authoritative_date($standaloneInvoice))?></td><td><?=customer_portal_safe($customerInr((float)$standalonePay['invoice_total']))?></td><td><?=customer_portal_safe(documents_invoice_payment_status_label((string)$standalonePay['payment_status']))?></td><td><?=customer_portal_safe($customerInr((float)$standalonePay['total_received']))?></td><td><?=customer_portal_safe($customerInr((float)$standalonePay['outstanding']))?></td><td><a class="doc-action" href="customer-document-view.php?<?=customer_portal_safe(http_build_query(['type'=>'invoice','id'=>(string)$standaloneInvoice['id']]))?>">View Invoice</a></td></tr><?php endforeach;?></tbody></table></div></section><?php endif; ?>
 
           <?php foreach ($customerProjects as $project): $quote = $project['quote']; $quoteNo = (string) ($quote['quote_no'] ?? $quote['id'] ?? 'Quotation'); ?>
             <article class="project-card">
