@@ -11,6 +11,7 @@ require_once __DIR__ . '/includes/employee_portal.php';
 require_once __DIR__ . '/includes/audit_log.php';
 require_once __DIR__ . '/includes/handover.php';
 require_once __DIR__ . '/includes/customer_operations.php';
+require_once __DIR__ . '/admin/includes/documents_helpers.php';
 
 employee_portal_session();
 $isEmployeePortal = !empty($_SESSION['employee_logged_in']);
@@ -75,7 +76,15 @@ if ($activeTab === 'customers') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_valid_csrf();
         $action = (string) ($_POST['customer_action'] ?? '');
-        if ($action === 'save_customer_sync_ajax') {
+        if ($action === 'enable_legacy_billing') {
+            $mobile=(string)($_POST['mobile']??''); $customer=$customerStore->findByMobile($mobile);
+            if (!is_array($customer)) $customerErrors[]='Customer not found.';
+            else {
+                $quotesForLegacyCheck=documents_list_quotes();
+                $result=legacy_billing_enable($customer,audit_current_actor(),static fn(array $row):bool=>legacy_billing_customer_has_modern_project($row,$quotesForLegacyCheck));
+                if(empty($result['ok']))$customerErrors[]=(string)$result['error'];else{$customerSuccess=!empty($result['deduplicated'])?'Billing already uses the existing legacy project.':'Legacy billing project enabled.';$editingCustomer=$customer;}
+            }
+        } elseif ($action === 'save_customer_sync_ajax') {
             header('Content-Type: application/json; charset=utf-8');
             $preview=$_SESSION['customer_csv_mobile_sync_preview']??null;
             $previewId=(string)($_POST['preview_id']??''); $token=(string)($_POST['row_token']??'');
@@ -434,6 +443,12 @@ if ($activeTab === 'customers') {
         ? $customerStore->listArchivedCustomers()
         : $customerStore->listActiveCustomers();
     $allCustomers = $customerStore->listCustomers();
+    $quotesForLegacyBilling = documents_list_quotes();
+    $legacyProjectsByCustomerKey = [];
+    foreach (legacy_billing_list_projects() as $legacyProjectRow) {
+        $legacyKey = (string) ($legacyProjectRow['customer_ref']['key'] ?? '');
+        if ($legacyKey !== '') $legacyProjectsByCustomerKey[$legacyKey] = $legacyProjectRow;
+    }
     $viewMobile = (string) ($_GET['view'] ?? '');
     if ($viewMobile !== '') {
         $editingCustomer = $customerStore->findByMobile($viewMobile);
@@ -1477,6 +1492,9 @@ function admin_users_build_welcome_subject(array $customer): string
         </details>
 
         <?php if ($editingCustomer !== null): ?>
+        <?php $legacyProject=legacy_billing_project_for_customer($editingCustomer); if(legacy_billing_customer_is_eligible($editingCustomer)): ?>
+        <div class="users-card" id="legacy-billing"><div class="users-card__header"><div><h3>Legacy / Direct-Customer Billing</h3><p class="admin-muted"><?= $legacyProject ? 'Billing is enabled as Legacy Project '.admin_users_safe($legacyProject['id']).'.' : 'No quotation will be created. Use this only for an older, directly-created customer installation.' ?></p></div><div><?php if($legacyProject):?><a class="btn btn-primary" href="admin-documents.php?tab=completed_customers&amp;legacy_view=<?=urlencode((string)$legacyProject['id'])?>">Open Billing</a><?php elseif(legacy_billing_customer_has_modern_project($editingCustomer,$quotesForLegacyBilling)):?><span class="users-status users-status--muted">Uses quotation billing</span><?php else:?><form method="post"><?=csrf_field()?><input type="hidden" name="customer_action" value="enable_legacy_billing"><input type="hidden" name="mobile" value="<?=admin_users_safe((string)$editingCustomer['mobile'])?>"><button class="btn btn-primary" type="submit">Enable Legacy Billing</button></form><?php endif;?></div></div></div>
+        <?php endif; ?>
         <div class="users-card" aria-labelledby="edit-customer-heading">
           <div class="users-card__header">
             <div>
@@ -1933,13 +1951,14 @@ function admin_users_build_welcome_subject(array $customer): string
                 <th scope="col">Archive</th>
                 <th scope="col">Welcome Sent</th>
                 <th scope="col">Complaint flag</th>
+                <th scope="col">Billing</th>
                 <th scope="col" class="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               <?php if ($customers === []): ?>
               <tr>
-                <td colspan="11" class="text-center admin-muted">
+                <td colspan="12" class="text-center admin-muted">
                   <?= $customerView === 'archived' ? 'No archived customers found.' : 'No active customers found.' ?>
                 </td>
               </tr>
@@ -1987,6 +2006,8 @@ function admin_users_build_welcome_subject(array $customer): string
                 $complaintValue = strtolower(trim((string) ($customer['complaints_raised'] ?? 'no')));
                 $hasComplaint = in_array($complaintValue, ['yes', 'y', '1'], true);
                 $complaintClass = $hasComplaint ? 'cell-yes' : 'cell-no';
+                $rowLegacyProject = $legacyProjectsByCustomerKey[legacy_billing_customer_key($customer)] ?? null;
+                $rowLegacyEligible = legacy_billing_customer_is_eligible($customer) && !legacy_billing_customer_has_modern_project($customer, $quotesForLegacyBilling);
               ?>
               <tr
                 data-customer-row="1"
@@ -2010,6 +2031,7 @@ function admin_users_build_welcome_subject(array $customer): string
                 </td>
                 <td><span class="users-status <?= $welcomeSent ? 'users-status--ok' : 'users-status--muted' ?>"><?= admin_users_safe(admin_users_display_welcome_status($customer['welcome_sent_via'] ?? '')) ?></span></td>
                 <td><span class="users-status <?= $hasComplaint ? 'users-status--warn' : 'users-status--ok' ?>"><?= $hasComplaint ? 'Raised' : 'None' ?></span></td>
+                <td><?php if($rowLegacyProject):?><span class="users-status users-status--ok">Legacy Project</span><br><a href="admin-documents.php?tab=completed_customers&amp;legacy_view=<?=urlencode((string)$rowLegacyProject['id'])?>">Open Billing</a><?php elseif($rowLegacyEligible):?><span class="users-status users-status--warn">Not enabled</span><br><a href="admin-customers.php?customer_view=<?=admin_users_safe($customerView)?>&amp;view=<?=urlencode((string)($customer['mobile']??''))?>#legacy-billing">Enable Legacy Billing</a><?php else:?><span class="users-status users-status--muted">Quotation billing</span><?php endif;?></td>
                 <td class="users-actions text-right">
                   <a href="admin-customers.php?customer_view=<?= admin_users_safe($customerView) ?>&amp;view=<?= urlencode((string) ($customer['mobile'] ?? '')) ?>">View / Edit</a>
                   <?php if (!empty($customer['archived'])): ?>
