@@ -7,12 +7,6 @@ require_once __DIR__ . '/includes/commercial_lifecycle.php';
 require_admin();
 documents_ensure_structure();
 
-$invoiceCustomers=(new CustomerFsStore())->listActiveCustomers();
-$invoiceKits=documents_inventory_kits(false);$invoiceComponents=documents_inventory_components(false);$invoiceVariants=documents_inventory_component_variants(false);$invoiceTaxProfiles=documents_inventory_tax_profiles(false);
-$invoiceVariantsByComponent=[];foreach($invoiceVariants as $variant){$invoiceVariantsByComponent[(string)($variant['component_id']??'')][]=$variant;}
-$invoiceQuoteDefaults=load_quote_defaults();
-
-
 function invoice_archive_actor(): array
 {
     $user = current_user();
@@ -222,6 +216,25 @@ $selectedAdjustmentReason = $doc !== null ? (string) ($doc['pricing']['adjustmen
 $selectedInvoiceDate = $doc !== null ? documents_invoice_authoritative_date($doc) : date('Y-m-d');
 $selectedPaymentSummary = $doc !== null ? documents_invoice_payment_summary($doc) : null;
 $isDraft = $doc !== null && documents_invoice_is_draft($doc);
+$isStandaloneWorkspace = $doc !== null && documents_invoice_is_standalone($doc);
+$invoiceCustomers = [];
+$invoiceKits = [];
+$invoiceComponents = [];
+$invoiceTaxProfiles = [];
+$invoiceVariantsByComponent = [];
+$invoiceQuoteDefaults = [];
+if ($isStandaloneWorkspace) {
+    // These stores can be large and CustomerFsStore initializes its filesystem. Do not touch
+    // either while merely listing existing quotation/legacy invoices.
+    $invoiceCustomers = (new CustomerFsStore())->listActiveCustomers();
+    $invoiceKits = documents_inventory_kits(false);
+    $invoiceComponents = documents_inventory_components(false);
+    $invoiceTaxProfiles = documents_inventory_tax_profiles(false);
+    foreach (documents_inventory_component_variants(false) as $variant) {
+        $invoiceVariantsByComponent[(string) ($variant['component_id'] ?? '')][] = $variant;
+    }
+    $invoiceQuoteDefaults = load_quote_defaults();
+}
 ?>
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Invoices</title><link rel="stylesheet" href="assets/css/admin-unified.css"><?php require_once __DIR__ . '/includes/pwa_head.php'; ?></head><body class="admin-shell commercial-admin"><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?><main class="commercial-shell">
 <header class="card commercial-header"><div><p class="admin-kicker">Commercial workspace</p><h1>Invoices</h1><p>Create, review, and maintain quotation, legacy-project, and standalone invoices through one lifecycle.</p></div><nav class="commercial-header__actions"><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES) ?>"><input type="hidden" name="action" value="create_standalone_invoice"><button class="btn commercial-header__primary" type="submit">Create Invoice</button></form><a class="btn secondary" href="admin-dashboard.php">Dashboard</a><a class="btn secondary" href="admin-documents.php">Document Center</a><a class="btn secondary" href="admin-documents.php?tab=accepted_customers">Accepted Customers</a></nav></header>
