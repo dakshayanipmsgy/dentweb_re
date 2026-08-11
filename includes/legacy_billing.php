@@ -19,19 +19,6 @@ function legacy_billing_customer_is_eligible(array $customer): bool
     return legacy_billing_customer_key($customer) !== '' && trim((string) ($customer['created_from_quote_id'] ?? '')) === '';
 }
 
-function legacy_billing_customer_has_modern_project(array $customer, array $quotes): bool
-{
-    $mobile = legacy_billing_customer_key($customer);
-    if ($mobile === '') return false;
-    foreach ($quotes as $quote) {
-        if (!is_array($quote)) continue;
-        $quoteMobile = preg_replace('/\D+/', '', (string) ($quote['customer_mobile'] ?? '')) ?? '';
-        if ($quoteMobile !== $mobile || empty($quote['is_current_version'])) continue;
-        if (documents_quote_normalize_status((string) ($quote['status'] ?? 'draft')) === 'accepted') return true;
-    }
-    return false;
-}
-
 function legacy_billing_list_projects(): array
 {
     $rows = [];
