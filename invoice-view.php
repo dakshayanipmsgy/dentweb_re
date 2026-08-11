@@ -96,11 +96,15 @@ $addPricingRow('Final invoice total incl GST', $grandTotal);
 $addPricingRow('Basic value', $invoiceTaxSummary['taxable']);
 $addPricingRow('Total GST', $invoiceTaxSummary['gst']);
 $addPricingRow('Amount payable', $grandTotal);
-$hsnFallbacks = array_values(array_filter(array_map(static fn($row): string => trim((string) ($row['hsn'] ?? $row['hsn_snapshot'] ?? '')), $items)));
+$masterItemSnapshots = $invoice !== null && is_array($invoice['quote_items'] ?? null) ? array_values($invoice['quote_items']) : [];
+$itemHsn = static function (array $item, int $index) use ($first, $masterItemSnapshots): string {
+    $master = is_array($masterItemSnapshots[$index] ?? null) ? $masterItemSnapshots[$index] : [];
+    return $first([$item['hsn']??'', $item['hsn_snapshot']??'', $item['master_snapshot']['hsn']??'', $master['hsn']??'', $master['hsn_snapshot']??'', $master['master_snapshot']['hsn']??'']);
+};
 $taxItems = is_array($taxBreakdown['items'] ?? null) ? array_values(array_filter((array) $taxBreakdown['items'], static fn($row): bool => is_array($row))) : [];
 foreach ($taxItems as $idx => &$taxItem) {
-    if (trim((string) ($taxItem['hsn'] ?? '')) === '' && isset($hsnFallbacks[$idx])) {
-        $taxItem['hsn'] = $hsnFallbacks[$idx];
+    if (trim((string) ($taxItem['hsn'] ?? $taxItem['hsn_snapshot'] ?? '')) === '') {
+        $sourceItem=is_array($items[$idx]??null)?$items[$idx]:[];$taxItem['hsn'] = $itemHsn($sourceItem,$idx);
     }
 }
 unset($taxItem);
@@ -124,8 +128,9 @@ $solarSizeValue = static function ($raw): float {
     $value = (float) $text;
     return is_finite($value) && $value > 0 ? $value : 0.0;
 };
-$dcrSolarKwp = $solarSizeValue($quoteSnapshot['main_solar_kwp'] ?? ($quote['main_solar_kwp'] ?? ''));
-$nonDcrSolarKwp = $solarSizeValue($quoteSnapshot['complimentary_non_dcr_kwp'] ?? ($quote['complimentary_non_dcr_kwp'] ?? ''));
+$rateChartSnapshot = $invoice !== null && is_array($invoice['rate_chart_snapshot'] ?? null) ? $invoice['rate_chart_snapshot'] : [];
+$dcrSolarKwp = $solarSizeValue($invoice['main_solar_kwp'] ?? ($rateChartSnapshot['dcr_size_kwp'] ?? ($quoteSnapshot['main_solar_kwp'] ?? ($quote['main_solar_kwp'] ?? ''))));
+$nonDcrSolarKwp = $solarSizeValue($invoice['complimentary_non_dcr_kwp'] ?? ($rateChartSnapshot['non_dcr_size_kwp'] ?? ($quoteSnapshot['complimentary_non_dcr_kwp'] ?? ($quote['complimentary_non_dcr_kwp'] ?? ''))));
 $hasSolarSizeBreakup = $dcrSolarKwp > 0 || $nonDcrSolarKwp > 0;
 $totalSolarKwp = $dcrSolarKwp + $nonDcrSolarKwp;
 $displaySolarKwp = $hasSolarSizeBreakup ? $totalSolarKwp : $solarSizeValue($invoice['capacity_kwp'] ?? ($quoteSnapshot['capacity_kwp'] ?? ($quote['capacity_kwp'] ?? 0)));
@@ -176,7 +181,7 @@ $displaySolarKwp = $hasSolarSizeBreakup ? $totalSolarKwp : $solarSizeValue($invo
     <?php endif; ?>
 
     <section class="table-panel"><div class="table-title"><h2>Item Summary</h2><span class="section-label">Scope</span></div><table class="invoice-table"><thead><tr><th>Sr No</th><th>Item and Description</th><th>HSN</th><th class="num">Quantity</th><th>Unit</th></tr></thead><tbody>
-      <?php foreach ($items as $index => $item): if (!is_array($item)) { continue; } $desc=$first([$item['description']??'', $item['description_snapshot']??'', $item['master_description_snapshot']??'']); $name=$first([$item['name']??'', $item['name_snapshot']??'', $item['item_name']??'', $item['title']??'Solar supply / service']); $qty=(float)($item['qty']??$item['quantity']??1); $unit=$first([$item['unit']??'']); $hsn=$first([$item['hsn']??'', $item['hsn_snapshot']??'']); ?>
+      <?php foreach ($items as $index => $item): if (!is_array($item)) { continue; } $desc=$first([$item['description']??'', $item['description_snapshot']??'', $item['master_description_snapshot']??'']); $name=$first([$item['name']??'', $item['name_snapshot']??'', $item['item_name']??'', $item['title']??'Solar supply / service']); $qty=(float)($item['qty']??$item['quantity']??1); $unit=$first([$item['unit']??'']); $hsn=$itemHsn($item,$index); ?>
         <tr><td><?= $index + 1 ?></td><td><strong><?= $esc($name) ?></strong><?php if ($desc !== ''): ?><div class="notes"><?= $esc($desc) ?></div><?php endif; ?><?php if (trim((string)($item['custom_description']??'')) !== ''): ?><div class="notes"><em><?= $esc($item['custom_description']) ?></em></div><?php endif; ?></td><td><?= $esc($hsn) ?></td><td class="num"><?= $esc($qty) ?></td><td><?= $esc($unit) ?></td></tr>
       <?php endforeach; if ($items === []): ?><tr><td colspan="5">No line items were stored on this invoice. The amount summary below is still available from the accepted quotation.</td></tr><?php endif; ?>
     </tbody></table></section>

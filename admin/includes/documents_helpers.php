@@ -4236,8 +4236,23 @@ function documents_standalone_invoice_payment_summary(array $invoice): array
         if(!documents_receipt_is_finalized_active($r)||(string)($r['commercial_ref']['type']??'')!=='standalone_invoice'||(string)($r['commercial_ref']['id']??'')!==$iid)continue;
         foreach((array)($r['allocations']??[]) as $a){if((string)($a['invoice_id']??'')!==$iid)continue;$p=max(0,documents_invoice_money_to_paise((float)($a['amount_rs']??0)));$received+=$p;$date=(string)($r['date_received']??$r['created_at']??'');if(substr($date,0,10)>$last)$last=substr($date,0,10);$receipts[]=['id'=>(string)($r['id']??''),'receipt_number'=>(string)($r['receipt_number']??$r['id']??''),'date'=>$date,'amount_rs'=>documents_invoice_paise_to_money($p)];}
     }
+    // A direct invoice may be marked paid/unpaid without manufacturing a receipt.  Real
+    // receipts always win: the override is consulted only while the canonical ledger is empty.
+    if ($receipts === [] && $total > 0 && (string)($invoice['manual_payment_status'] ?? '') === 'paid') {
+        $received = $total;
+    }
     $diff=$total-$received;$status=$total<=0?'not_applicable':($received===0?'unpaid':(abs($diff)<=1?'paid':($diff>0?'partially_paid':'overpaid')));
     return ['invoice_id'=>$iid,'invoice_total'=>documents_invoice_paise_to_money($total),'total_received'=>documents_invoice_paise_to_money($received),'outstanding'=>documents_invoice_paise_to_money(max(0,$diff)),'overpayment'=>documents_invoice_paise_to_money(max(0,-$diff)),'payment_status'=>$status,'receipt_count'=>count($receipts),'receipts'=>$receipts,'unallocated_receipts'=>[],'allocation_attention_count'=>0,'last_payment_at'=>$last];
+}
+
+function documents_standalone_set_manual_payment_status(array $invoice, string $status): array
+{
+    if (!documents_invoice_is_standalone($invoice)) return ['ok'=>false,'error'=>'Manual payment status is only available for standalone invoices.'];
+    if (!in_array($status, ['paid','unpaid'], true)) return ['ok'=>false,'error'=>'Choose Paid or Unpaid.'];
+    $summary=documents_standalone_invoice_payment_summary($invoice);
+    if ((int)$summary['receipt_count'] > 0) return ['ok'=>false,'error'=>'Canonical receipts exist, so receipt reconciliation remains authoritative.'];
+    $invoice['manual_payment_status']=$status;$invoice['manual_payment_status_updated_at']=date('c');$invoice['updated_at']=date('c');
+    return ['ok'=>true,'invoice'=>$invoice,'error'=>''];
 }
 
 function documents_add_standalone_invoice_payment(array $invoice, array $input, array $actor=[]): array
