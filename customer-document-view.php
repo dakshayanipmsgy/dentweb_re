@@ -45,11 +45,6 @@ function customer_document_quote_tax_summary(array $quote): array
 
 function customer_document_assert_owner(array $document, string $customerMobile): void
 {
-    if (documents_invoice_is_standalone($document)) {
-        $store=new CustomerFsStore();$owner=$store->findByMobile($customerMobile);
-        if(!is_array($owner)||!documents_standalone_invoice_owned_by_customer($document,$owner)){http_response_code(403);exit('Access denied.');}
-        return;
-    }
     if (($document['commercial_ref']['type']??'')==='legacy_project') {
         $project=legacy_billing_get_project((string)($document['commercial_ref']['id']??''));
         $owner=is_array($project)?normalize_customer_mobile((string)($project['customer_ref']['mobile']??$project['customer_snapshot']['mobile']??'')):'';
@@ -230,7 +225,7 @@ if ($type === 'accepted_quotation') {
         customer_document_assert_owner($document, $customerMobile);
         $invoiceQuoteId = customer_document_quote_id($document);
         $legacyId=(string)($document['commercial_ref']['id']??'');
-        $visibleIds = documents_invoice_is_standalone($document) ? (documents_customer_visible_standalone_invoice($document)?[(string)$document['id']]:[]) : array_map(static fn(array $invoice): string => (string)($invoice['id'] ?? ''), $legacyId!==''?legacy_billing_invoices($legacyId,true):documents_customer_visible_invoices_for_quote($invoiceQuoteId));
+        $visibleIds = array_map(static fn(array $invoice): string => (string)($invoice['id'] ?? ''), $legacyId!==''?legacy_billing_invoices($legacyId,true):documents_customer_visible_invoices_for_quote($invoiceQuoteId));
         if (!in_array((string)($document['id'] ?? ''), $visibleIds, true)) {
             http_response_code(404);
             exit('Invoice unavailable.');
