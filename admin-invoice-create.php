@@ -66,7 +66,6 @@ $quoteDefaults = function_exists('load_quote_defaults') ? load_quote_defaults() 
 if (!is_array($quoteDefaults)) $quoteDefaults = documents_quote_defaults_settings();
 $snapshot = array_merge(documents_customer_snapshot_defaults(), is_array($invoice['customer_snapshot'] ?? null) ? $invoice['customer_snapshot'] : []);
 $source = is_array($invoice['standalone_quote_snapshot'] ?? null) ? $invoice['standalone_quote_snapshot'] : [];
-$builder = is_array($invoice['standalone_builder_input'] ?? null) ? $invoice['standalone_builder_input'] : [];
 $quoteItems = is_array($source['quote_items'] ?? null) ? $source['quote_items'] : [];
 $finance = is_array($source['finance_inputs'] ?? null) ? $source['finance_inputs'] : [];
 $scenarioPrices = is_array($source['scenario_prices'] ?? null) ? $source['scenario_prices'] : [];
@@ -103,7 +102,7 @@ $jsonFlags = JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX
 <link rel="stylesheet" href="assets/css/admin-unified.css">
 <?php require_once __DIR__ . '/includes/pwa_head.php'; ?>
 <style>
-.builder-shell{max-width:1500px;margin:0 auto;padding:18px}.builder-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.builder-grid .full{grid-column:1/-1}.section-card{background:#fff;border:1px solid #dbe4ef;border-radius:16px;padding:18px;margin:14px 0}.section-card h2{margin:0 0 5px}.hint{color:#64748b;font-size:13px}.customer-search{position:relative}.customer-results{position:absolute;z-index:30;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 18px 40px rgba(15,23,42,.15);max-height:300px;overflow:auto;display:none}.customer-option{padding:10px 12px;border-bottom:1px solid #eef2f7;cursor:pointer}.customer-option:hover{background:#eff6ff}.customer-option strong{display:block}.items-table select,.items-table input,.items-table textarea{min-width:110px}.items-table textarea{min-height:58px}.inline-actions{display:flex;gap:8px;flex-wrap:wrap}.total-chip{font-size:20px;font-weight:800}.linked-ok{color:#166534}.linked-no{color:#9a3412}.sticky-builder-actions{position:sticky;bottom:0;z-index:20;background:rgba(255,255,255,.96);border:1px solid #dbe4ef;border-radius:14px;padding:12px;display:flex;gap:10px;justify-content:flex-end;box-shadow:0 -8px 26px rgba(15,23,42,.08)}@media(max-width:850px){.builder-grid{grid-template-columns:1fr}.builder-grid .full{grid-column:auto}.items-table{display:block;overflow:auto}}
+.builder-shell{max-width:1500px;margin:0 auto;padding:18px}.builder-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.builder-grid .full{grid-column:1/-1}.section-card{background:#fff;border:1px solid #dbe4ef;border-radius:16px;padding:18px;margin:14px 0}.section-card h2{margin:0 0 5px}.hint{color:#64748b;font-size:13px}.customer-search{position:relative}.customer-results{position:absolute;z-index:30;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 18px 40px rgba(15,23,42,.15);max-height:300px;overflow:auto;display:none}.customer-option{padding:10px 12px;border-bottom:1px solid #eef2f7;cursor:pointer}.customer-option:hover{background:#eff6ff}.customer-option strong{display:block}.items-table select,.items-table input,.items-table textarea{min-width:110px}.items-table textarea{min-height:58px}.inline-actions{display:flex;gap:8px;flex-wrap:wrap}.linked-ok{color:#166534}.linked-no{color:#9a3412}.sticky-builder-actions{position:sticky;bottom:0;z-index:20;background:rgba(255,255,255,.96);border:1px solid #dbe4ef;border-radius:14px;padding:12px;display:flex;gap:10px;justify-content:flex-end;box-shadow:0 -8px 26px rgba(15,23,42,.08)}.inactive-choice{opacity:.55}@media(max-width:850px){.builder-grid{grid-template-columns:1fr}.builder-grid .full{grid-column:auto}.items-table{display:block;overflow:auto}}
 </style>
 </head>
 <body class="admin-shell commercial-admin">
@@ -120,10 +119,10 @@ $jsonFlags = JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX
 <div><label>Quotation / reference number (optional)</label><input name="manual_quotation_no" value="<?=$esc($manualRef['quotation_no']??'')?>"></div>
 <div><label>Reference date</label><input type="date" name="manual_quotation_date" value="<?=$esc($manualRef['quotation_date']??'')?>"></div>
 <div><label>External reference</label><input name="external_reference" value="<?=$esc($manualRef['external_reference']??'')?>"></div>
-<div><label>Reference amount (informational)</label><input type="number" min="0" step="0.01" name="manual_quotation_amount" value="<?=$esc($manualRef['quotation_amount']??'')?>"></div>
+<div><label>Reference amount (informational only)</label><input type="number" min="0" step="0.01" name="manual_quotation_amount" value="<?=$esc($manualRef['quotation_amount']??'')?>"></div>
 </div></section>
 
-<section class="section-card"><h2>Customer</h2><p class="hint">Type either customer name or mobile. Select from the matching Customer Users to fill every available field automatically.</p>
+<section class="section-card"><h2>Customer & site details</h2><p class="hint">Type either customer name or mobile. Select a Customer User from the dropdown and every available field below is filled automatically.</p>
 <div class="customer-search"><label>Find Customer User by name or mobile</label><input id="customer-search" autocomplete="off" placeholder="Start typing name or mobile"><div id="customer-results" class="customer-results"></div></div>
 <p id="customer-link-state" class="hint <?=!empty($invoice['customer_ref'])?'linked-ok':'linked-no'?>"><?=!empty($invoice['customer_ref'])?'Linked to Customer User':'Not linked to Customer User — manual invoice is still allowed.'?></p>
 <div class="builder-grid">
@@ -140,14 +139,14 @@ $jsonFlags = JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX
 <div><label>Division</label><input id="division_name" name="division_name" value="<?=$esc($snapshot['division_name']??'')?>"></div><div><label>Sub Division</label><input id="sub_division_name" name="sub_division_name" value="<?=$esc($snapshot['sub_division_name']??'')?>"></div>
 </div></section>
 
-<section class="section-card"><h2>System configuration</h2><p class="hint">Uses the same DCR + complimentary Non-DCR model as quotation creation.</p><div class="builder-grid">
+<section class="section-card"><h2>System configuration</h2><p class="hint">Same DCR + complimentary Non-DCR concept as quotation creation. Total capacity is always their sum.</p><div class="builder-grid">
 <div><label>System type</label><select id="system_type" name="system_type"><option value="ongrid" <?=$systemType==='ongrid'?'selected':''?>>On-grid</option><option value="hybrid" <?=$systemType==='hybrid'?'selected':''?>>Hybrid</option></select></div>
 <div><label>Pricing mode</label><select name="pricing_mode"><option value="solar_split_70_30" <?=($invoice['pricing_mode']??'')==='solar_split_70_30'?'selected':''?>>Solar split 70/30</option><option value="flat_5" <?=($invoice['pricing_mode']??'')==='flat_5'?'selected':''?>>Flat 5%</option></select></div>
 <div><label>Main Solar Size / DCR (kWp)</label><input id="main_solar_kwp" type="number" min="0.001" step="0.001" name="main_solar_kwp" required value="<?=$esc($mainSolar)?>"></div>
 <div><label>Complimentary Non-DCR (kWp)</label><input id="complimentary_non_dcr_kwp" type="number" min="0" step="0.001" name="complimentary_non_dcr_kwp" value="<?=$esc($nonDcr)?>"></div>
 <div><label>Total System Capacity (kWp)</label><input id="capacity_kwp_display" readonly value="<?=$esc($totalCapacity)?>"></div>
 <div><label>Place of supply state</label><input name="place_of_supply_state" value="<?=$esc($source['place_of_supply_state']??$snapshot['state']??'Jharkhand')?>"></div>
-<div><label>Tax profile</label><select name="tax_profile_id"><option value="">Default / infer from kit</option><?php foreach((array)$catalog['tax_profiles'] as $profile): $pid=(string)($profile['id']??''); ?><option value="<?=$esc($pid)?>" <?=($source['tax_profile_id']??'')===$pid?'selected':''?>><?=$esc($profile['name']??$pid)?></option><?php endforeach; ?></select></div>
+<div><label>Tax profile</label><select name="tax_profile_id"><option value="">Default / infer from selected kit</option><?php foreach((array)$catalog['tax_profiles'] as $profile): $pid=(string)($profile['id']??''); ?><option value="<?=$esc($pid)?>" <?=($source['tax_profile_id']??'')===$pid?'selected':''?>><?=$esc($profile['name']??$pid)?></option><?php endforeach; ?></select></div>
 <div><label><input type="checkbox" name="show_tax_breakup" value="1" <?=!empty($source['show_tax_breakup'])?'checked':''?>> Show tax breakup</label></div>
 <div class="full"><label>Project summary line</label><input name="project_summary_line" value="<?=$esc($source['project_summary_line']??'')?>"></div>
 <div><label>Rate-chart / model number</label><select id="selected_model_number" name="selected_model_number"><option value="">None / manual</option></select></div>
@@ -156,11 +155,11 @@ $jsonFlags = JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX
 <div><label>Hybrid battery count</label><input type="number" min="0" step="1" name="hybrid_battery_count" value="<?=$esc($rateSnapshot['hybrid_battery_count']??'0')?>"></div>
 </div></section>
 
-<section class="section-card"><h2>Items Master</h2><p class="hint">Items are not free-text products. Kits, components and variants are loaded from the same active Items Master used by quotations. Custom description remains available exactly as a description override.</p>
+<section class="section-card"><h2>Items Master</h2><p class="hint">Exactly like quotations: choose active kits/components/variants from Items Master. Name, HSN, master description and default unit are sourced from the master record; only quantity/unit and description override are editable.</p>
 <div class="responsive-table items-table"><table><thead><tr><th>Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Description mode</th><th>Description</th><th></th></tr></thead><tbody id="item-rows"></tbody></table></div>
 <div class="inline-actions"><button type="button" class="btn secondary" id="add-item-row">Add item</button></div></section>
 
-<section class="section-card"><h2>Pricing & finance details</h2><p class="hint">Same core price/scenario concepts as quotation creation. The selected primary scenario becomes the invoice commercial value; the invoice remains a standalone invoice.</p><div class="builder-grid">
+<section class="section-card"><h2>Pricing & finance</h2><p class="hint">Uses the quotation pricing/tax concepts. The selected primary scenario becomes the invoice commercial value; no quotation record is created.</p><div class="builder-grid">
 <div><label>Primary finance scenario</label><select name="primary_finance_scenario"><option value="self_funded" <?=$primaryScenario==='self_funded'?'selected':''?>>Self funded</option><option value="loan_upto_2_lacs" <?=str_contains($primaryScenario,'upto_2')?'selected':''?>>Loan up to ₹2 lacs</option><option value="loan_above_2_lacs" <?=str_contains($primaryScenario,'above_2')?'selected':''?>>Loan above ₹2 lacs</option></select></div>
 <div><label>Self funded price</label><input type="number" min="0" step="0.01" name="scenario_price_self_funded" value="<?=$esc($scenarioPrices['self_funded']['price']??$invoice['input_total_gst_inclusive']??'')?>"></div>
 <div><label>Loan up to ₹2 lacs price</label><input type="number" min="0" step="0.01" name="scenario_price_loan_upto_2_lacs" value="<?=$esc($scenarioPrices['loan_upto_2_lacs']['price']??$scenarioPrices['self_funded']['price']??'')?>"></div>
@@ -175,7 +174,7 @@ $jsonFlags = JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX
 <div class="full"><label>Internal notes</label><textarea name="internal_notes" rows="3"><?=$esc($invoice['internal_notes']??'')?></textarea></div>
 </div></section>
 
-<div class="sticky-builder-actions"><a class="btn secondary" href="admin-invoices.php?id=<?=urlencode((string)$invoice['id'])?>">Cancel / invoice workspace</a><button class="btn" type="submit" name="action" value="save_builder">Save Draft</button><button class="btn commercial-header__primary" type="submit" name="action" value="save_finalize">Save & Finalize / Issue</button></div>
+<div class="sticky-builder-actions"><a class="btn secondary" href="admin-invoices.php?id=<?=urlencode((string)$invoice['id'])?>">Invoice workspace</a><button class="btn" type="submit" name="action" value="save_builder">Save Draft</button><button class="btn commercial-header__primary" type="submit" name="action" value="save_finalize">Save & Finalize / Issue</button></div>
 </form>
 </main>
 <script>
@@ -186,6 +185,7 @@ const variants = <?=json_encode($catalog['variants'],$jsonFlags)?:'[]'?>;
 const initialItems = <?=json_encode($quoteItems,$jsonFlags)?:'[]'?>;
 const rateRows = <?=json_encode($rateRows,$jsonFlags)?:'[]'?>;
 const selectedModel = <?=json_encode((string)($rateSnapshot['model_number']??''),$jsonFlags)?>;
+let itemRowCounter = 0;
 const escHtml = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 
 const search = document.getElementById('customer-search');
@@ -199,7 +199,7 @@ function fillCustomer(c){
 function showCustomerMatches(q){
   q=String(q||'').trim().toLowerCase(); if(q.length<1){results.style.display='none';return;}
   const digits=q.replace(/\D/g,'');
-  const matches=customers.filter(c=>(c.name||'').toLowerCase().includes(q)||(digits&&String(c.mobile||'').replace(/\D/g,'').includes(digits))).slice(0,10);
+  const matches=customers.filter(c=>(c.name||'').toLowerCase().includes(q)||(digits&&String(c.mobile||'').replace(/\D/g,'').includes(digits))).slice(0,12);
   results.innerHTML=matches.map((c,i)=>`<div class="customer-option" data-i="${i}"><strong>${escHtml(c.name||'Unnamed customer')}</strong><span>${escHtml(c.mobile||'')} · ${escHtml(c.city||c.district||'')}</span></div>`).join('') || '<div class="customer-option">No matching Customer User</div>';
   results.style.display='block';
   [...results.querySelectorAll('[data-i]')].forEach((el)=>el.onclick=()=>fillCustomer(matches[Number(el.dataset.i)]));
@@ -211,14 +211,19 @@ document.getElementById('main_solar_kwp').addEventListener('input',totalCapacity
 
 function optionList(rows,valueKey,labelFn,selected=''){return '<option value="">Select</option>'+rows.map(r=>`<option value="${escHtml(r[valueKey]||'')}" ${(r[valueKey]||'')===selected?'selected':''}>${escHtml(labelFn(r))}</option>`).join('');}
 function addItemRow(item={}){
+  const idx=itemRowCounter++;
   const tbody=document.getElementById('item-rows'); const tr=document.createElement('tr');
   const type=item.type==='kit'?'kit':'component'; const kitId=item.kit_id||''; const componentId=item.component_id||''; const variantId=item.variant_id||''; const qty=item.qty||1; const unit=item.unit||''; const mode=item.description_mode==='manual'?'manual':'auto'; const desc=item.custom_description||item.auto_description||item.description_snapshot||'';
-  tr.innerHTML=`<td><select name="quote_item_type[]" class="item-type"><option value="component" ${type==='component'?'selected':''}>Component</option><option value="kit" ${type==='kit'?'selected':''}>Kit</option></select></td><td><select name="quote_item_kit_id[]" class="item-kit">${optionList(kits,'id',r=>r.name||r.id,kitId)}</select></td><td><select name="quote_item_component_id[]" class="item-component">${optionList(components,'id',r=>r.name||r.id,componentId)}</select></td><td><select name="quote_item_variant_id[]" class="item-variant"></select></td><td><input type="number" min="0.001" step="0.001" name="quote_item_qty[]" value="${escHtml(qty)}"></td><td><input name="quote_item_unit[]" class="item-unit" value="${escHtml(unit)}"></td><td><select name="quote_item_description_mode[]" class="desc-mode"><option value="auto" ${mode==='auto'?'selected':''}>Auto</option><option value="manual" ${mode==='manual'?'selected':''}>Manual</option></select><input type="hidden" name="quote_item_auto_description[]" class="auto-desc" value="${escHtml(item.auto_description||'')}"></td><td><textarea name="quote_item_custom_description[]" class="custom-desc">${escHtml(desc)}</textarea></td><td><button type="button" class="btn warn remove-item">Remove</button></td>`;
+  tr.innerHTML=`<td><select name="quote_item_type[${idx}]" class="item-type"><option value="component" ${type==='component'?'selected':''}>Component</option><option value="kit" ${type==='kit'?'selected':''}>Kit</option></select></td><td><select name="quote_item_kit_id[${idx}]" class="item-kit">${optionList(kits,'id',r=>r.name||r.id,kitId)}</select></td><td><select name="quote_item_component_id[${idx}]" class="item-component">${optionList(components,'id',r=>r.name||r.id,componentId)}</select></td><td><select name="quote_item_variant_id[${idx}]" class="item-variant"></select></td><td><input type="number" min="0.001" step="0.001" name="quote_item_qty[${idx}]" value="${escHtml(qty)}"></td><td><input name="quote_item_unit[${idx}]" class="item-unit" value="${escHtml(unit)}"></td><td><select name="quote_item_description_mode[${idx}]" class="desc-mode"><option value="auto" ${mode==='auto'?'selected':''}>Auto</option><option value="manual" ${mode==='manual'?'selected':''}>Manual</option></select><input type="hidden" name="quote_item_auto_description[${idx}]" class="auto-desc" value="${escHtml(item.auto_description||'')}"></td><td><textarea name="quote_item_custom_description[${idx}]" class="custom-desc">${escHtml(desc)}</textarea></td><td><button type="button" class="btn warn remove-item">Remove</button></td>`;
   tbody.appendChild(tr);
   const typeEl=tr.querySelector('.item-type'),kitEl=tr.querySelector('.item-kit'),compEl=tr.querySelector('.item-component'),variantEl=tr.querySelector('.item-variant'),unitEl=tr.querySelector('.item-unit'),descEl=tr.querySelector('.custom-desc'),autoEl=tr.querySelector('.auto-desc');
-  function rebuildVariants(){const list=variants.filter(v=>String(v.component_id||'')===String(compEl.value||''));variantEl.innerHTML=optionList(list,'id',r=>r.display_name||r.model_no||r.id,variantId);}
-  function syncMaster(){if(typeEl.value==='kit'){const r=kits.find(x=>String(x.id)===String(kitEl.value));compEl.disabled=true;variantEl.disabled=true;kitEl.disabled=false;if(r){if(!unitEl.value)unitEl.value='set';autoEl.value=r.description||'';if(tr.querySelector('.desc-mode').value==='auto')descEl.value=r.description||'';}}else{const r=components.find(x=>String(x.id)===String(compEl.value));compEl.disabled=false;variantEl.disabled=false;kitEl.disabled=true;rebuildVariants();if(r){if(!unitEl.value)unitEl.value=r.default_unit||'pcs';autoEl.value=r.description||r.notes||'';if(tr.querySelector('.desc-mode').value==='auto')descEl.value=r.description||r.notes||'';}}}
-  typeEl.onchange=syncMaster;kitEl.onchange=syncMaster;compEl.onchange=syncMaster;tr.querySelector('.desc-mode').onchange=e=>{if(e.target.value==='auto')descEl.value=autoEl.value||'';};tr.querySelector('.remove-item').onclick=()=>tr.remove();rebuildVariants();syncMaster();
+  function rebuildVariants(selected=variantId){const list=variants.filter(v=>String(v.component_id||'')===String(compEl.value||''));variantEl.innerHTML=optionList(list,'id',r=>r.display_name||r.model_no||r.id,selected);}
+  function syncMaster(){
+    const isKit=typeEl.value==='kit';kitEl.classList.toggle('inactive-choice',!isKit);compEl.classList.toggle('inactive-choice',isKit);variantEl.classList.toggle('inactive-choice',isKit);
+    if(isKit){compEl.value='';variantEl.innerHTML='<option value="">Not applicable</option>';const r=kits.find(x=>String(x.id)===String(kitEl.value));if(r){if(!unitEl.value)unitEl.value='set';autoEl.value=r.description||'';if(tr.querySelector('.desc-mode').value==='auto')descEl.value=r.description||'';}}
+    else{kitEl.value='';const r=components.find(x=>String(x.id)===String(compEl.value));rebuildVariants();if(r){if(!unitEl.value)unitEl.value=r.default_unit||'pcs';autoEl.value=r.description||r.notes||'';if(tr.querySelector('.desc-mode').value==='auto')descEl.value=r.description||r.notes||'';}}
+  }
+  typeEl.onchange=syncMaster;kitEl.onchange=syncMaster;compEl.onchange=()=>{rebuildVariants('');syncMaster();};tr.querySelector('.desc-mode').onchange=e=>{if(e.target.value==='auto')descEl.value=autoEl.value||'';};tr.querySelector('.remove-item').onclick=()=>tr.remove();rebuildVariants();syncMaster();
 }
 (initialItems.length?initialItems:[{}]).forEach(addItemRow);document.getElementById('add-item-row').onclick=()=>addItemRow({});
 
