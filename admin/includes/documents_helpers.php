@@ -4954,7 +4954,9 @@ function documents_standalone_apply_master_items(array $invoice, array $rows, st
     $kits=[]; foreach(documents_inventory_kits(false) as $v)$kits[(string)($v['id']??'')]=$v;
     $components=[]; foreach(documents_inventory_components(false) as $v)$components[(string)($v['id']??'')]=$v;
     $variants=[]; foreach(documents_inventory_component_variants(false) as $v)$variants[(string)($v['id']??'')]=$v;
-    $fallback=safe_text((string)(load_quote_defaults()['defaults']['quotation_tax_profile_id']??''));
+    $quoteDefaults=load_quote_defaults();
+    $fallback=safe_text((string)($quoteDefaults['defaults']['quotation_tax_profile_id']??''));
+    $defaultHsn=safe_text((string)($quoteDefaults['defaults']['hsn_solar']??'8541'))?:'8541';
     $structured=[];$manual=[];
     foreach($rows as $row){
         if(!is_array($row))continue;$type=($row['type']??'component')==='kit'?'kit':'component';$qty=max(0,(float)($row['quantity']??0));
@@ -4965,8 +4967,11 @@ function documents_standalone_apply_master_items(array $invoice, array $rows, st
         $profile=$profileId!==''?documents_inventory_get_tax_profile($profileId):null;if(!is_array($profile))$profile=documents_flat5_tax_profile();
         $name=safe_text((string)($master['name']??($type==='kit'?'Kit':'Component')));if(is_array($variant)&&safe_text((string)($variant['display_name']??''))!=='')$name.=' ('.safe_text((string)$variant['display_name']).')';
         $description=safe_text((string)($master['description']??$master['notes']??''));$custom=safe_multiline_text((string)($row['custom_description']??''));if($custom!=='')$description=$custom;
-        $hsn=safe_text((string)($variant['hsn_override']??''));if($hsn==='')$hsn=safe_text((string)($master['hsn']??''));$unit=safe_text((string)($variant['default_unit_override']??''));if($unit==='')$unit=safe_text((string)($master['default_unit']??($type==='kit'?'set':'pcs')));
-        $structured[]=array_merge(documents_quote_structured_item_defaults(),['type'=>$type,'kit_id'=>$type==='kit'?$id:'','component_id'=>$type==='component'?$id:'','variant_id'=>(string)($variant['id']??''),'variant_snapshot'=>is_array($variant)?$variant:[],'name_snapshot'=>$name,'description_snapshot'=>$description,'master_description_snapshot'=>safe_text((string)($master['description']??$master['notes']??'')),'custom_description'=>$custom,'description_mode'=>$custom!==''?'manual':'auto','hsn_snapshot'=>$hsn,'qty'=>$qty,'unit'=>$unit,'meta'=>['tax_profile_id'=>$profileId]]);
+        // The posted value is an invoice-only override. It is deliberately copied into the
+        // commercial and structured snapshots, never back into an Items Master record.
+        $masterHsn=safe_text((string)($variant['hsn_override']??''));if($masterHsn==='')$masterHsn=safe_text((string)($master['hsn']??''));if($masterHsn==='')$masterHsn=$defaultHsn;
+        $manualHsn=safe_text((string)($row['hsn']??''));$hsn=$manualHsn!==''?$manualHsn:$masterHsn;$unit=safe_text((string)($variant['default_unit_override']??''));if($unit==='')$unit=safe_text((string)($master['default_unit']??($type==='kit'?'set':'pcs')));
+        $structured[]=array_merge(documents_quote_structured_item_defaults(),['type'=>$type,'kit_id'=>$type==='kit'?$id:'','component_id'=>$type==='component'?$id:'','variant_id'=>(string)($variant['id']??''),'variant_snapshot'=>is_array($variant)?$variant:[],'name_snapshot'=>$name,'description_snapshot'=>$description,'master_description_snapshot'=>safe_text((string)($master['description']??$master['notes']??'')),'custom_description'=>$custom,'description_mode'=>$custom!==''?'manual':'auto','hsn'=>$hsn,'hsn_snapshot'=>$hsn,'hsn_source'=>$manualHsn!==''?'invoice_manual':'items_master_default','qty'=>$qty,'unit'=>$unit,'meta'=>['tax_profile_id'=>$profileId]]);
         $manual[]=['name'=>$name,'description'=>$description,'hsn'=>$hsn,'quantity'=>$qty,'unit'=>$unit,'unit_price_incl_gst'=>$row['unit_price_incl_gst']??0,'slabs'=>(array)($profile['slabs']??[])];
     }
     $result=documents_standalone_apply_items($invoice,$manual);if(empty($result['ok']))return $result;
