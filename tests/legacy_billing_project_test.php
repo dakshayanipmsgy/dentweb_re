@@ -9,6 +9,8 @@ try {
   $modern=$direct;$modern['created_from_quote_id']='quote-1';
   legacy956(legacy_billing_customer_is_eligible($direct),'direct customer eligible');
   legacy956(!legacy_billing_customer_is_eligible($modern),'quotation-created customer ineligible');
+  legacy956(legacy_billing_customer_has_modern_project($direct,[['customer_mobile'=>'9876543210','status'=>'accepted','is_current_version'=>true]]),'current accepted quotation is detected');
+  legacy956(!legacy_billing_customer_has_modern_project($direct,[['customer_mobile'=>'9876543210','status'=>'draft','is_current_version'=>true]]),'draft quotation does not block legacy billing');
   $first=legacy_billing_enable($direct,['id'=>'1','name'=>'Admin']); legacy956($first['ok']&&!$first['deduplicated'],'project created');
   $second=legacy_billing_enable($direct); legacy956($second['ok']&&$second['deduplicated'],'enable is idempotent');
   legacy956(count(legacy_billing_list_projects())===1,'exactly one project');
@@ -29,5 +31,7 @@ try {
   require_once __DIR__.'/../includes/project_workspace.php';
   $state=project_workspace_params(['completed_q'=>'LEG-','completed_per_page'=>25],'completed');
   legacy956(count(project_workspace_filter($rows,$state,'completed'))===1,'mixed completed filtering works');
+  $customerPage=file_get_contents(__DIR__.'/../admin-customers.php');
+  legacy956(str_contains($customerPage,'Enable Legacy Billing')&&str_contains($customerPage,'Open Billing')&&str_contains($customerPage,'id="legacy-billing"'),'customer list and detail expose discoverable billing actions');
   echo "legacy_billing_project_test passed ($n assertions)\n";
 } finally { $it=is_dir($root)?new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root,FilesystemIterator::SKIP_DOTS),RecursiveIteratorIterator::CHILD_FIRST):null;if($it)foreach($it as $f){$f->isDir()?rmdir($f->getPathname()):unlink($f->getPathname());}if(is_dir($root))rmdir($root); }
