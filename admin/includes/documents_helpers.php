@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../includes/customer_admin.php';
 require_once __DIR__ . '/../../includes/leads.php';
-require_once __DIR__ . '/../../includes/legacy_billing.php';
 
 function documents_php_error_log_path(): string
 {
@@ -3584,12 +3583,6 @@ function documents_invoice_quotation_reference_total(array $invoice): float
     return documents_invoice_final_total($invoice, false);
 }
 
-function documents_invoice_has_quotation_reference(array $invoice): bool
-{
-    if (($invoice['commercial_ref']['type'] ?? '') === 'legacy_project' && empty($invoice['quotation_reference_known'])) return false;
-    return true;
-}
-
 function documents_invoice_final_total(array $invoice, bool $allowQuotationFallback = true): float
 {
     $sources = [
@@ -3691,10 +3684,9 @@ function documents_invoice_recalculate_pricing(array $invoice, float $requestedF
     $final = documents_invoice_paise_to_money($finalPaise);
     $quote = documents_invoice_quotation_reference_total($invoice);
     $quotePaise = documents_invoice_money_to_paise($quote);
-    $hasReference=documents_invoice_has_quotation_reference($invoice);
-    $diffPaise = $hasReference ? $finalPaise - $quotePaise : 0;
-    $type = !$hasReference || abs($diffPaise) <= 1 ? DOCUMENTS_INVOICE_ADJUSTMENT_NONE : ($diffPaise < 0 ? DOCUMENTS_INVOICE_ADJUSTMENT_DISCOUNT : DOCUMENTS_INVOICE_ADJUSTMENT_SURCHARGE);
-    $adjustPaise = !$hasReference || abs($diffPaise) <= 1 ? 0 : abs($diffPaise);
+    $diffPaise = $finalPaise - $quotePaise;
+    $type = abs($diffPaise) <= 1 ? DOCUMENTS_INVOICE_ADJUSTMENT_NONE : ($diffPaise < 0 ? DOCUMENTS_INVOICE_ADJUSTMENT_DISCOUNT : DOCUMENTS_INVOICE_ADJUSTMENT_SURCHARGE);
+    $adjustPaise = abs($diffPaise) <= 1 ? 0 : abs($diffPaise);
 
     $sourceItems = documents_invoice_source_tax_items($invoice);
     $weights = [];
@@ -3727,7 +3719,7 @@ function documents_invoice_recalculate_pricing(array $invoice, float $requestedF
         ]);
     }
     $taxBreakdown = ['basic_total' => documents_invoice_paise_to_money($basicPaise), 'gst_total' => documents_invoice_paise_to_money($gstPaise), 'gross_incl_gst' => $final, 'items' => $items, 'rounding_rule' => 'Amounts are allocated in paise proportionally by original gross line value; any remainder is applied to the largest line with stable index tie-break.'];
-    $invoice['pricing'] = ['quotation_total_incl_gst' => $hasReference ? $quote : null, 'final_invoice_total_incl_gst' => $final, 'adjustment_type' => $type, 'adjustment_amount_incl_gst' => documents_invoice_paise_to_money($adjustPaise), 'adjustment_percent' => $quotePaise > 0 && $hasReference ? round(($adjustPaise / $quotePaise) * 100, 4) : 0.0, 'adjustment_reason' => safe_multiline_text($adjustmentReason), 'currency' => 'INR'];
+    $invoice['pricing'] = ['quotation_total_incl_gst' => $quote, 'final_invoice_total_incl_gst' => $final, 'adjustment_type' => $type, 'adjustment_amount_incl_gst' => documents_invoice_paise_to_money($adjustPaise), 'adjustment_percent' => $quotePaise > 0 ? round(($adjustPaise / $quotePaise) * 100, 4) : 0.0, 'adjustment_reason' => safe_multiline_text($adjustmentReason), 'currency' => 'INR'];
     $invoice['input_total_gst_inclusive'] = $final;
     $invoice['calc'] = array_merge(is_array($invoice['calc'] ?? null) ? $invoice['calc'] : [], ['gross_payable' => $final, 'grand_total' => $final, 'final_price_incl_gst' => $final, 'tax_breakdown' => $taxBreakdown]);
     $invoice['tax_breakdown'] = $taxBreakdown;
@@ -4819,30 +4811,6 @@ function documents_create_invoice_from_quote(array $quote, array $options = []):
     $saved = documents_save_invoice($doc); if (!$saved['ok']) { documents_log('file save failed for invoice quote ' . $quoteId); return ['ok'=>false,'error'=>'Failed to create invoice draft.']; }
     if ($replacementFor !== '') { $old=documents_get_invoice($replacementFor); if($old){ $old['replaced_by_invoice_id']=(string)$doc['id']; $old=documents_invoice_append_audit_event($old,'invoice_replacement_linked',(array)($options['actor']??[]),'Replacement invoice created'); documents_save_invoice($old); } }
     return ['ok'=>true,'invoice_id'=>(string)$doc['id'],'error'=>'','summary'=>$summary];
-}
-
-/** Create a real invoice linked to a direct-customer project, never a fabricated quote. */
-function documents_create_invoice_from_legacy_project(array $project, array $options = []): array
-{
-    $projectId=(string)($project['id']??'');
-    if (($project['source_type']??'')!=='legacy_direct_customer' || legacy_billing_get_project($projectId)===null) return ['ok'=>false,'error'=>'Legacy project not found.'];
-    $token=safe_text((string)($options['idempotency_key']??''));
-    foreach (legacy_billing_invoices($projectId) as $existing) {
-        if ($token!=='' && hash_equals((string)($existing['creation_token']??''),$token)) return ['ok'=>true,'invoice_id'=>(string)$existing['id'],'deduplicated'=>true,'error'=>''];
-    }
-    $number=documents_generate_invoice_public_number(safe_text((string)($options['segment']??'RES'))?:'RES');
-    if(empty($number['ok'])) return ['ok'=>false,'error'=>(string)($number['error']??'Unable to generate invoice number.')];
-    $snap=array_merge(documents_customer_snapshot_defaults(),(array)($project['customer_snapshot']??[]));
-    $doc=documents_invoice_defaults(); $doc['id']='inv_'.date('YmdHis').'_'.bin2hex(random_bytes(3));
-    $doc['invoice_no']=(string)$number['invoice_no']; $doc['invoice_date']=date('Y-m-d'); $doc['invoice_date_source']='explicit';
-    $doc['project_source']='legacy'; $doc['linked_project_id']=$projectId; $doc['commercial_ref']=['type'=>'legacy_project','id'=>$projectId];
-    $doc['customer_ref']=$project['customer_ref']??[]; $doc['customer_snapshot']=$snap; $doc['customer_mobile']=normalize_customer_mobile((string)($snap['mobile']??''));
-    $doc['capacity_kwp']=(string)($project['capacity_kwp']??''); $doc['commercial_items']=[['name'=>'Legacy installation billing','hsn'=>'','gross_incl_gst'=>0,'slabs'=>[['share_pct'=>100,'rate_pct'=>18]]]];
-    $doc['quotation_reference_known']=false; $doc['pricing']=['quotation_total_incl_gst'=>null,'final_invoice_total_incl_gst'=>0.0,'adjustment_type'=>'none','adjustment_amount_incl_gst'=>0.0,'adjustment_percent'=>0.0,'adjustment_reason'=>'','currency'=>'INR'];
-    $doc['creation_token']=$token; $doc['created_at']=date('c');$doc['updated_at']=$doc['created_at'];
-    $saved=documents_save_invoice($doc); if(empty($saved['ok'])) return ['ok'=>false,'error'=>'Failed to create invoice draft.'];
-    $ids=array_values(array_unique(array_merge((array)($project['invoice_ids']??[]),[$doc['id']])));$project['invoice_ids']=$ids;$project['updated_at']=date('c');legacy_billing_save_project($project);
-    return ['ok'=>true,'invoice_id'=>$doc['id'],'error'=>''];
 }
 
 function documents_generate_quote_number(string $segment): array

@@ -21,9 +21,7 @@ $invoice = $id !== '' ? documents_get_invoice($id) : null;
 $company = documents_get_company_profile_for_quotes();
 if ($customerView && is_array($invoice)) {
     $customerMobile = normalize_customer_mobile((string) ($customer['mobile'] ?? ''));
-    $legacyProjectId=(string)($invoice['commercial_ref']['id']??'');
-    $legacyProject=$legacyProjectId!==''?legacy_billing_get_project($legacyProjectId):null;
-    $docMobile=is_array($legacyProject)?normalize_customer_mobile((string)($legacyProject['customer_ref']['mobile']??$legacyProject['customer_snapshot']['mobile']??'')):normalize_customer_mobile((string) ($invoice['customer_mobile'] ?? $invoice['customer_snapshot']['mobile'] ?? ''));
+    $docMobile = normalize_customer_mobile((string) ($invoice['customer_mobile'] ?? $invoice['customer_snapshot']['mobile'] ?? ''));
     if ($docMobile === '') {
         $ownQuote = documents_get_quote((string) ($invoice['linked_quote_id'] ?? $invoice['quotation_id'] ?? ''));
         if (is_array($ownQuote)) {
@@ -32,8 +30,7 @@ if ($customerView && is_array($invoice)) {
     }
     if ($customerMobile === '' || $docMobile !== $customerMobile) { http_response_code(403); exit('Access denied.'); }
     $invoiceQuoteId = (string)($invoice['linked_quote_id'] ?? $invoice['quotation_id'] ?? '');
-    $legacyId=(string)($invoice['commercial_ref']['id']??'');
-    $visibleIds = array_map(static fn(array $row): string => (string)($row['id'] ?? ''), $legacyId!==''?legacy_billing_invoices($legacyId,true):documents_customer_visible_invoices_for_quote($invoiceQuoteId));
+    $visibleIds = array_map(static fn(array $row): string => (string)($row['id'] ?? ''), documents_customer_visible_invoices_for_quote($invoiceQuoteId));
     if (!in_array((string)($invoice['id'] ?? ''), $visibleIds, true)) { http_response_code(404); exit('Invoice unavailable.'); }
 }
 if ($customerView && !is_array($invoice)) { http_response_code(404); exit('Invoice unavailable.'); }
@@ -80,7 +77,7 @@ $addPricingRow = static function (string $label, $value, bool $negative = false,
     if (abs($amount) < 0.005) { return; }
     $pricingRows[] = ['label' => $label, 'amount' => $negative ? -abs($amount) : $amount, 'note' => $note];
 };
-if ($invoice === null || documents_invoice_has_quotation_reference($invoice)) $addPricingRow('Quotation reference total incl GST', $quotationReferenceTotal);
+$addPricingRow('Quotation reference total incl GST', $quotationReferenceTotal);
 if ($adjustmentType === DOCUMENTS_INVOICE_ADJUSTMENT_DISCOUNT) {
     $addPricingRow('Final discount' . ($adjustmentPercent > 0 ? ' (' . number_format($adjustmentPercent, 2) . '%)' : ''), $adjustmentAmount, true, $adjustmentReason);
 } elseif ($adjustmentType === DOCUMENTS_INVOICE_ADJUSTMENT_SURCHARGE) {
