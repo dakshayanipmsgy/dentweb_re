@@ -72,7 +72,7 @@ foreach ([
 standalone_parity_assert(str_contains($parity, "'main_solar_kwp'"), 'standalone invoice stores Main Solar / DCR capacity');
 standalone_parity_assert(str_contains($parity, "'complimentary_non_dcr_kwp'"), 'standalone invoice stores complimentary Non-DCR capacity');
 standalone_parity_assert(str_contains($parity, "['rate_chart']"), 'standalone invoice reads the quotation rate chart');
-standalone_parity_assert(str_contains($parity, "modelVariant(row) === 'DN' ? Math.min(3, total) : total") || str_contains($parity, "variant(r)==='DN'?Math.min(3,t):t"), 'DN model selection uses the same 3 kWp DCR split concept as quotation creation');
+standalone_parity_assert(str_contains($parity, "variant(r)==='DN'?Math.min(3,t):t"), 'DN model selection uses the same 3 kWp DCR split concept as quotation creation');
 standalone_parity_assert(str_contains($parity, 'Ongrid Solar Power Generation System'), 'on-grid model can select the same quotation kit');
 standalone_parity_assert(str_contains($parity, 'Hybrid Solar Power Generation System TBased'), 'hybrid TB model can select the same quotation kit');
 standalone_parity_assert(str_contains($parity, 'Hybrid Solar Power Generation System TLess'), 'hybrid TL model can select the same quotation kit');
@@ -87,8 +87,8 @@ standalone_parity_assert(str_contains($parity, 'documents_standalone_match_custo
 // A quotation-like renderer snapshot is allowed, but real quotation identity must never be fabricated.
 standalone_parity_assert(str_contains($parity, "'source_type' => 'standalone_invoice_quote_parity'"), 'standalone invoice snapshot is explicitly source-labelled');
 standalone_parity_assert(str_contains($parity, "'quote_id' => ''"), 'standalone renderer snapshot has no real quotation id');
-standalone_parity_assert(str_contains($helpers, "\$doc['linked_quote_id']=''; \$doc['quotation_id']='';"), 'standalone constructor keeps real quotation linkage empty');
-standalone_parity_assert(str_contains($helpers, "if ((\$invoice['commercial_ref']['type'] ?? '') === 'standalone_invoice') return false;"), 'standalone invoice is never treated as having a real quotation pricing reference');
+standalone_parity_assert(str_contains($helpers, "\$doc['linked_quote_id']='';\$doc['quotation_id']='';"), 'standalone constructor keeps real quotation linkage empty');
+standalone_parity_assert(str_contains($helpers, "['legacy_project','standalone_invoice']") && str_contains($helpers, 'quotation_reference_known'), 'standalone invoice is never treated as having a real quotation pricing reference');
 
 // Existing customer-facing source-aware support must remain present rather than being replaced.
 standalone_parity_assert(str_contains($dashboard, 'standalone'), 'customer dashboard retains standalone invoice visibility support');
