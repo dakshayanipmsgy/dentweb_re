@@ -11,7 +11,6 @@ require_once __DIR__ . '/includes/employee_portal.php';
 require_once __DIR__ . '/includes/audit_log.php';
 require_once __DIR__ . '/includes/handover.php';
 require_once __DIR__ . '/includes/customer_operations.php';
-require_once __DIR__ . '/admin/includes/documents_helpers.php';
 
 employee_portal_session();
 $isEmployeePortal = !empty($_SESSION['employee_logged_in']);
@@ -76,18 +75,7 @@ if ($activeTab === 'customers') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_valid_csrf();
         $action = (string) ($_POST['customer_action'] ?? '');
-        if ($action === 'enable_legacy_billing') {
-            $mobile=(string)($_POST['mobile']??''); $customer=$customerStore->findByMobile($mobile);
-            if (!is_array($customer)) $customerErrors[]='Customer not found.';
-            else {
-                $normalized=normalize_customer_mobile((string)($customer['mobile']??''));
-                $result=legacy_billing_enable($customer,audit_current_actor(),static function(array $row) use($normalized):bool {
-                    foreach(documents_list_quotes() as $quote) if(documents_quote_normalize_status((string)($quote['status']??''))==='accepted'&&!empty($quote['is_current_version'])&&normalize_customer_mobile((string)($quote['customer_mobile']??''))===$normalized)return true;
-                    return false;
-                });
-                if(empty($result['ok']))$customerErrors[]=(string)$result['error'];else{$customerSuccess=!empty($result['deduplicated'])?'Billing already uses the existing legacy project.':'Legacy billing project enabled.';$editingCustomer=$customer;}
-            }
-        } elseif ($action === 'save_customer_sync_ajax') {
+        if ($action === 'save_customer_sync_ajax') {
             header('Content-Type: application/json; charset=utf-8');
             $preview=$_SESSION['customer_csv_mobile_sync_preview']??null;
             $previewId=(string)($_POST['preview_id']??''); $token=(string)($_POST['row_token']??'');
@@ -1489,9 +1477,6 @@ function admin_users_build_welcome_subject(array $customer): string
         </details>
 
         <?php if ($editingCustomer !== null): ?>
-        <?php $legacyProject=legacy_billing_project_for_customer($editingCustomer); if(legacy_billing_customer_is_eligible($editingCustomer)): ?>
-        <div class="users-card"><div class="users-card__header"><div><h3>Billing</h3><p class="admin-muted"><?= $legacyProject ? 'Billing: Legacy Project '.admin_users_safe($legacyProject['id']) : 'This directly-created customer can be explicitly enabled for legacy billing.' ?></p></div><div><?php if($legacyProject):?><a class="btn btn-primary" href="admin-documents.php?tab=completed_customers&amp;legacy_view=<?=urlencode((string)$legacyProject['id'])?>">Open Billing</a><?php else:?><form method="post"><?=csrf_field()?><input type="hidden" name="customer_action" value="enable_legacy_billing"><input type="hidden" name="mobile" value="<?=admin_users_safe((string)$editingCustomer['mobile'])?>"><button class="btn btn-primary" type="submit">Enable Legacy Billing</button></form><?php endif;?></div></div></div>
-        <?php endif; ?>
         <div class="users-card" aria-labelledby="edit-customer-heading">
           <div class="users-card__header">
             <div>
