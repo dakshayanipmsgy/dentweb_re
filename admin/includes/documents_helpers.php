@@ -5776,6 +5776,7 @@ function documents_create_quote_revision(array $source, string $reason, string $
     $now = date('c');
     $newId = 'qtn_' . date('YmdHis') . '_' . bin2hex(random_bytes(3));
     $draft = documents_quote_reset_clone_state($source, $newId);
+    unset($draft['signature']);
     $draft['id'] = $newId;
     $draft['quote_no'] = (string) $number['quote_no'];
     $draft['quote_series_id'] = (string) ($source['quote_series_id'] ?? $sourceId);
