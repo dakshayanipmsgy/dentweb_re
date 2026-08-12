@@ -5,6 +5,8 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/ai_gemini.php';
 require_once __DIR__ . '/includes/smart_marketing.php';
+require_once __DIR__ . '/admin/includes/documents_helpers.php';
+require_once __DIR__ . '/includes/document_signature.php';
 
 require_admin();
 
@@ -75,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Site Settings | Dakshayani Enterprises</title>
+  <title>Document Signature &amp; Site Settings | Dakshayani Enterprises</title>
   <link rel="icon" href="images/favicon.ico" />
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -94,8 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <header class="admin-records__header">
       <div>
-        <h1>Site Settings</h1>
-        <p class="admin-muted">Manage festival themes, hero content, and site-wide announcements.</p>
+        <h1>Document Signature &amp; Site Settings</h1>
+        <p class="admin-muted">Set the universal document signature and manage site-wide content.</p>
       </div>
       <div class="admin-records__meta">
         <a class="admin-link" href="admin-dashboard.php"><i class="fa-solid fa-gauge-high"></i> Back to overview</a>
@@ -110,7 +112,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
       </header>
 
-      <section class="admin-section__body">
+      <section class="admin-section__body" id="universal-document-signature">
+        <h3>Universal document signature</h3>
+        <p class="admin-muted">This signature is used for quotations, Dispatch Advices, Challans, and invoices that do not have an individual signature. An individual document signature always takes priority.</p>
+        <?= document_signature_admin_controls(['id' => 'global', 'signature' => document_signature_universal_reference()], 'universal', 'admin-site-settings.php', true) ?>
+        <hr class="admin-divider" />
         <form method="post" class="admin-form admin-form--stacked">
           <input type="hidden" name="action" value="save_site_settings" />
           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />
