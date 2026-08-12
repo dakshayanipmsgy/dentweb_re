@@ -10,6 +10,7 @@ require_once __DIR__ . '/includes/employee_portal.php';
 require_once __DIR__ . '/includes/employee_admin.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 require_once __DIR__ . '/includes/material_document_renderer.php';
+require_once __DIR__ . '/includes/document_signature.php';
 
 
 function challan_print_first_value(array $challan, array $keys): string
@@ -230,5 +231,5 @@ html,body{margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:12px;co
 <div class="section-title">Extra items not present in quotation</div>
 <table><thead><tr><th>Sr.</th><th>Components</th><th>HSN</th><th>Quantity / Pieces</th><th>length</th></tr></thead><tbody><?php $renderRows($extraLines); ?></tbody></table>
 
-<div class="footer"><div class="sign"><div><strong>Prepared by</strong><br><br><br>_________________________</div><div><strong>Received by</strong><br><br><br>_________________________</div></div></div>
+<?= document_signature_render($challan, 'Authorised Signatory') ?><div class="footer"><div class="sign"><div><strong>Prepared by</strong><br><br><br>_________________________</div><div><strong>Received by</strong><br><br><br>_________________________</div></div></div>
 </div></body></html>
