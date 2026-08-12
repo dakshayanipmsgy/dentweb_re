@@ -581,6 +581,7 @@ $cardConfigs[] = [
           <div class="dashboard-action-group">
             <h3>Settings &amp; content</h3>
             <div class="dashboard-action-links">
+              <a href="<?= htmlspecialchars($pathFor('admin-site-settings.php#universal-document-signature'), ENT_QUOTES) ?>">Universal Document Signature</a>
               <a href="<?= htmlspecialchars($pathFor('admin/website-settings/'), ENT_QUOTES) ?>">Website Content &amp; Theme</a>
               <a href="<?= htmlspecialchars($solarFinanceSettingsUrl, ENT_QUOTES) ?>">Solar &amp; Finance Settings</a>
               <a href="<?= htmlspecialchars($pathFor('admin-pwa-diagnostics.php'), ENT_QUOTES) ?>">PWA Diagnostics</a>
