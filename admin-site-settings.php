@@ -5,6 +5,8 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/ai_gemini.php';
 require_once __DIR__ . '/includes/smart_marketing.php';
+require_once __DIR__ . '/admin/includes/documents_helpers.php';
+require_once __DIR__ . '/includes/document_signature.php';
 
 require_admin();
 
@@ -111,6 +113,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </header>
 
       <section class="admin-section__body">
+        <h3>Universal document signature</h3>
+        <p class="admin-muted">This signature is used for quotations, Dispatch Advices, Challans, and invoices that do not have an individual signature. An individual document signature always takes priority.</p>
+        <?= document_signature_admin_controls(['id' => 'global', 'signature' => document_signature_universal_reference()], 'universal', 'admin-site-settings.php', true) ?>
+        <hr class="admin-divider" />
         <form method="post" class="admin-form admin-form--stacked">
           <input type="hidden" name="action" value="save_site_settings" />
           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>" />

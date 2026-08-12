@@ -16,21 +16,23 @@ file_put_contents($directory . '/signature.png', $png);
 $doc = ['id' => $id, 'signature' => ['path'=>$relative, 'mime'=>'image/png', 'size'=>strlen($png), 'sha256'=>hash('sha256', $png)]];
 
 $rendered = document_signature_render($doc);
-$assert(str_contains($rendered, 'data:image/png;base64,'), 'a stored validated reference renders as an embedded image for HTML/print/PDF');
+$assert(str_contains($rendered, 'document-signature-image.php?'), 'a stored validated reference renders through the memory-safe image endpoint');
 $assert(str_contains($rendered, 'Authorized Signatory'), 'signature renderer includes the signatory label');
 $assert(document_signature_render(['id'=>$id]) === '', 'documents without signatures preserve the old rendering');
-$assert(document_signature_data_uri(['signature'=>['path'=>'../outside.png','mime'=>'image/png','sha256'=>'x']]) === '', 'path traversal references are rejected');
-$assert(document_signature_data_uri(['signature'=>['path'=>$relative,'mime'=>'image/svg+xml','sha256'=>hash('sha256',$png)]]) === '', 'unapproved MIME references are rejected');
+$assert(document_signature_file(['signature'=>['path'=>'../outside.png','mime'=>'image/png','sha256'=>'x']]) === [], 'path traversal references are rejected');
+$assert(document_signature_file(['signature'=>['path'=>$relative,'mime'=>'image/svg+xml','sha256'=>hash('sha256',$png)]]) === [], 'unapproved MIME references are rejected');
 
 ob_start();
 render_material_document($doc, [], [], ['footer'=>'Authorised Signatory']);
 $material = ob_get_clean();
-$assert(str_contains($material, 'data:image/png;base64,'), 'shared Dispatch Advice/Challan material renderer includes signatures');
+$assert(str_contains($material, 'document-signature-image.php?'), 'shared Dispatch Advice/Challan material renderer includes signatures');
 
 foreach (['admin-quotations.php','admin-dispatch-advices.php','admin-invoices.php','challan-view.php'] as $file) {
     $source = file_get_contents(dirname(__DIR__) . '/' . $file);
     $assert(str_contains($source, 'document_signature_admin_controls'), $file . ' exposes shared admin controls');
 }
+$assert(str_contains(file_get_contents(dirname(__DIR__) . '/admin-site-settings.php'), "'universal'"), 'site settings exposes the universal signature control');
+$assert(str_contains(file_get_contents(dirname(__DIR__) . '/document-signature-image.php'), 'readfile($file)'), 'signature images are streamed rather than expanded into memory-heavy data URIs');
 $assert(str_contains(file_get_contents(dirname(__DIR__) . '/includes/quotation_view_renderer.php'), 'document_signature_render($quote)'), 'quotation admin/public/print renderer includes signatures');
 $assert(str_contains(file_get_contents(dirname(__DIR__) . '/invoice-view.php'), 'document_signature_render($invoice)'), 'invoice view/print renderer includes signatures');
 $challanPrint = file_get_contents(dirname(__DIR__) . '/challan-print.php');

@@ -9,7 +9,21 @@ function document_signature_root(): string
 
 function document_signature_types(): array
 {
-    return ['quotation', 'dispatch_advice', 'challan', 'invoice'];
+    return ['quotation', 'dispatch_advice', 'challan', 'invoice', 'universal'];
+}
+
+function document_signature_settings_path(): string
+{
+    return dirname(__DIR__) . '/data/settings/document-signature.json';
+}
+
+function document_signature_universal_reference(): array
+{
+    $path = document_signature_settings_path();
+    if (!is_file($path)) return [];
+    $contents = file_get_contents($path);
+    $settings = is_string($contents) ? json_decode($contents, true) : [];
+    return is_array($settings['signature'] ?? null) ? $settings['signature'] : [];
 }
 
 function document_signature_reference(array $document): array
@@ -65,23 +79,38 @@ function document_signature_delete(array $reference): void
     if ($root !== false && $file !== false && str_starts_with($file, $root . DIRECTORY_SEPARATOR) && is_file($file)) @unlink($file);
 }
 
-function document_signature_data_uri(array $document): string
+function document_signature_effective_reference(array $document): array
 {
     $reference = document_signature_reference($document);
+    return $reference !== [] ? $reference : document_signature_universal_reference();
+}
+
+function document_signature_file(array $document): array
+{
+    $reference = document_signature_effective_reference($document);
     $path = (string)($reference['path'] ?? '');
     $mime = (string)($reference['mime'] ?? '');
-    if ($path === '' || str_contains($path, '..') || !in_array($mime, ['image/png', 'image/jpeg'], true)) return '';
+    if ($path === '' || str_contains($path, '..') || !in_array($mime, ['image/png', 'image/jpeg'], true)) return [];
     $root = realpath(document_signature_root());
     $file = realpath(document_signature_root() . '/' . ltrim($path, '/'));
-    if ($root === false || $file === false || !str_starts_with($file, $root . DIRECTORY_SEPARATOR) || !is_file($file)) return '';
-    $bytes = @file_get_contents($file);
-    if ($bytes === false || strlen($bytes) > 5 * 1024 * 1024 || hash('sha256', $bytes) !== (string)($reference['sha256'] ?? '')) return '';
-    return 'data:' . $mime . ';base64,' . base64_encode($bytes);
+    if ($root === false || $file === false || !str_starts_with($file, $root . DIRECTORY_SEPARATOR) || !is_file($file)) return [];
+    if (filesize($file) > 5 * 1024 * 1024 || hash_file('sha256', $file) !== (string)($reference['sha256'] ?? '')) return [];
+    return ['path' => $file, 'mime' => $mime, 'reference' => $reference];
+}
+
+function document_signature_image_url(array $document): string
+{
+    $file = document_signature_file($document);
+    if ($file === []) return '';
+    $reference = $file['reference'];
+    return 'document-signature-image.php?' . http_build_query(['path' => $reference['path'], 'hash' => $reference['sha256']]);
 }
 
 function document_signature_render(array $document, string $label = 'Authorized Signatory'): string
 {
-    $src = document_signature_data_uri($document);
+    // Use a streamed image response instead of a multi-megabyte data URI. Large
+    // data URIs exhausted memory on otherwise valid invoice/quotation views.
+    $src = document_signature_image_url($document);
     if ($src === '') return '';
     return '<div class="document-signature" style="text-align:right;break-inside:avoid;page-break-inside:avoid"><img src="' . htmlspecialchars($src, ENT_QUOTES, 'UTF-8') . '" alt="Signature" style="display:inline-block;max-width:220px;max-height:100px;object-fit:contain"><div style="font-weight:700">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</div></div>';
 }
@@ -90,15 +119,18 @@ function document_signature_admin_controls(array $document, string $type, string
 {
     $id = (string)($document['id'] ?? '');
     if ($id === '') return '<p class="muted-helper">Save this document before adding a signature.</p>';
-    $preview = document_signature_render($document);
+    $ownReference = document_signature_reference($document);
+    $hasOwnSignature = $ownReference !== [];
+    $preview = $hasOwnSignature || $type === 'universal' ? document_signature_render($document) : '';
+    $universalPreview = !$hasOwnSignature && $type !== 'universal' ? document_signature_render([]) : '';
     $csrf = function_exists('csrf_token') ? csrf_token() : (string)($_SESSION['csrf_token'] ?? '');
     $disabled = $editable ? '' : ' disabled';
     return '<section class="form-section-card document-signature-controls"><h3>Authorized Signatory signature</h3>'
-        . ($preview !== '' ? $preview : '<p class="muted-helper">No signature uploaded. The document will render as before.</p>')
+        . ($preview !== '' ? $preview : ($universalPreview !== '' ? $universalPreview . '<p class="muted-helper">Using the universal signature. Upload here to override it only for this document.</p>' : '<p class="muted-helper">No signature uploaded. The document will render as before.</p>'))
         . '<form method="post" enctype="multipart/form-data" action="document-signature-admin.php">'
         . '<input type="hidden" name="csrf_token" value="' . htmlspecialchars($csrf, ENT_QUOTES) . '"><input type="hidden" name="document_type" value="' . htmlspecialchars($type, ENT_QUOTES) . '"><input type="hidden" name="document_id" value="' . htmlspecialchars($id, ENT_QUOTES) . '"><input type="hidden" name="return_url" value="' . htmlspecialchars($returnUrl, ENT_QUOTES) . '">'
         . '<label>PNG/JPG image (maximum 5 MB)<input type="file" name="signature_image" accept="image/png,image/jpeg,.png,.jpg,.jpeg"' . $disabled . '></label> '
-        . '<button class="btn" name="signature_action" value="upload"' . $disabled . '>' . ($preview !== '' ? 'Replace signature' : 'Upload signature') . '</button> '
-        . ($preview !== '' ? '<button class="btn secondary" name="signature_action" value="remove"' . $disabled . ' onclick="return confirm(\'Remove this signature?\')">Remove signature</button>' : '')
+        . '<button class="btn" name="signature_action" value="upload"' . $disabled . '>' . ($hasOwnSignature ? 'Replace signature' : ($universalPreview !== '' ? 'Override for this document' : 'Upload signature')) . '</button> '
+        . ($hasOwnSignature ? '<button class="btn secondary" name="signature_action" value="remove"' . $disabled . ' onclick="return confirm(\'Remove this signature?\')">Remove signature</button>' : '')
         . (!$editable ? '<p class="muted-helper">Create or open an editable draft/revision to change this signature.</p>' : '') . '</form></section>';
 }

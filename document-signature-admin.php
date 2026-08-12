@@ -17,9 +17,11 @@ if (!verify_csrf_token($_POST['csrf_token'] ?? null)) $go('Security validation f
 
 $loaders = ['quotation'=>'documents_get_quote','dispatch_advice'=>'documents_get_dispatch_advice','challan'=>'documents_get_challan','invoice'=>'documents_get_invoice'];
 $savers = ['quotation'=>'documents_save_quote','dispatch_advice'=>'documents_save_dispatch_advice','challan'=>'documents_save_challan','invoice'=>'documents_save_invoice'];
-$document = isset($loaders[$type]) ? $loaders[$type]($id) : null;
+$isUniversal = $type === 'universal' && $id === 'global';
+$document = $isUniversal ? ['id' => 'global', 'signature' => document_signature_universal_reference()] : (isset($loaders[$type]) ? $loaders[$type]($id) : null);
 if (!is_array($document)) $go('Document not found.', 'error');
 $editable = match ($type) {
+    'universal' => true,
     'quotation' => !documents_quote_is_locked($document) && documents_quote_normalize_status((string)($document['status'] ?? 'draft')) === 'draft',
     'dispatch_advice' => (string)($document['status'] ?? '') === 'draft',
     'challan' => strtolower((string)($document['status'] ?? 'draft')) === 'draft' || strtolower((string)($document['workflow_status'] ?? '')) === 'created',
@@ -31,7 +33,7 @@ if (!$editable) $go('Create or open an editable draft/revision to change this si
 $old = document_signature_reference($document);
 if ((string)($_POST['signature_action'] ?? '') === 'remove') {
     unset($document['signature']);
-    $saved = $savers[$type]($document);
+    $saved = $isUniversal ? json_save(document_signature_settings_path(), ['signature' => [], 'updated_at' => date('c')]) : $savers[$type]($document);
     if (empty($saved['ok'])) $go('Unable to save the document.', 'error');
     document_signature_delete($old);
     $go('Signature removed.', 'success');
@@ -40,7 +42,7 @@ $stored = document_signature_store((array)($_FILES['signature_image'] ?? []), $t
 if (empty($stored['ok'])) $go((string)($stored['error'] ?? 'Upload failed.'), 'error');
 $document['signature'] = $stored['reference'];
 $document['updated_at'] = date('c');
-$saved = $savers[$type]($document);
+$saved = $isUniversal ? json_save(document_signature_settings_path(), ['signature' => $document['signature'], 'updated_at' => date('c')]) : $savers[$type]($document);
 if (empty($saved['ok'])) { document_signature_delete($stored['reference']); $go('Unable to save the signature reference.', 'error'); }
 document_signature_delete($old);
 $go($old === [] ? 'Signature uploaded.' : 'Signature replaced.', 'success');
