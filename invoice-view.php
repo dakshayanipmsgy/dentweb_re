@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/customer_portal.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
+require_once __DIR__ . '/includes/document_signature.php';
 
 $customerView = (string) ($_GET['customer_view'] ?? '') === '1';
 $customer = null;
@@ -197,7 +198,7 @@ $displaySolarKwp = $hasSolarSizeBreakup ? $totalSolarKwp : $solarSizeValue($invo
     </tbody></table></section>
 
     <section class="summary-grid"><div class="info-card"><h2>Notes</h2><p class="notes"><?= $esc($invoice['notes'] ?? $invoice['internal_notes'] ?? 'Thank you for your business.') ?></p></div></section>
-    <div class="print-signature"><div class="signature-box">Authorized Signatory</div></div>
+    <div class="print-signature"><div class="signature-box"><?= $invoice !== null ? document_signature_render($invoice) : '' ?>Authorized Signatory</div></div>
     </div>
   </section>
   <?php endif; ?>
