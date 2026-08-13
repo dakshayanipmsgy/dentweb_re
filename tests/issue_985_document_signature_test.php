@@ -31,9 +31,10 @@ foreach (['admin-quotations.php','admin-dispatch-advices.php','admin-invoices.ph
     $source = file_get_contents(dirname(__DIR__) . '/' . $file);
     $assert(str_contains($source, 'document_signature_admin_controls'), $file . ' exposes shared admin controls');
 }
-$assert(str_contains(file_get_contents(dirname(__DIR__) . '/admin-site-settings.php'), "'universal'"), 'site settings exposes the universal signature control');
+$signatureSettingsSource = file_get_contents(dirname(__DIR__) . '/admin-document-signature-settings.php');
+$assert(str_contains($signatureSettingsSource, "'universal'") && str_contains($signatureSettingsSource, 'Universal Document Signature'), 'a dedicated universal signature settings page exposes the control');
 $dashboardSource = file_get_contents(dirname(__DIR__) . '/admin-dashboard.php');
-$assert(str_contains($dashboardSource, 'Universal Document Signature') && str_contains($dashboardSource, 'admin-site-settings.php#universal-document-signature'), 'admin dashboard links directly to universal signature settings');
+$assert(str_contains($dashboardSource, 'Universal Document Signature') && str_contains($dashboardSource, 'admin-document-signature-settings.php'), 'admin dashboard links directly to universal signature settings');
 $assert(str_contains(document_signature_admin_controls($doc, 'invoice', 'admin-invoices.php', true), 'Set or change the universal signature'), 'each per-document editor links to universal signature settings');
 $assert(str_contains(file_get_contents(dirname(__DIR__) . '/document-signature-image.php'), 'readfile($file)'), 'signature images are streamed rather than expanded into memory-heavy data URIs');
 $assert(str_contains(file_get_contents(dirname(__DIR__) . '/includes/quotation_view_renderer.php'), 'document_signature_render($quote)'), 'quotation admin/public/print renderer includes signatures');

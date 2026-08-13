@@ -133,6 +133,6 @@ function document_signature_admin_controls(array $document, string $type, string
         . '<button class="btn" name="signature_action" value="upload"' . $disabled . '>' . ($hasOwnSignature ? 'Replace signature' : ($universalPreview !== '' ? 'Override for this document' : 'Upload signature')) . '</button> '
         . ($hasOwnSignature ? '<button class="btn secondary" name="signature_action" value="remove"' . $disabled . ' onclick="return confirm(\'Remove this signature?\')">Remove signature</button>' : '')
         . (!$editable ? '<p class="muted-helper">Create or open an editable draft/revision to change this signature.</p>' : '') . '</form>'
-        . ($type !== 'universal' ? '<p class="muted-helper"><a href="admin-site-settings.php#universal-document-signature">Set or change the universal signature</a> used by documents without an individual override.</p>' : '')
+        . ($type !== 'universal' ? '<p class="muted-helper"><a href="admin-document-signature-settings.php">Set or change the universal signature</a> used by documents without an individual override.</p>' : '')
         . '</section>';
 }
