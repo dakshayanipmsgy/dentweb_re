@@ -59,6 +59,7 @@ if ($quoteSnapshot === [] && is_array($quote)) {
 }
 $snapshot = $invoice !== null ? array_merge(documents_customer_snapshot_defaults(), is_array($invoice['customer_snapshot'] ?? null) ? $invoice['customer_snapshot'] : []) : documents_customer_snapshot_defaults();
 $items = $invoice !== null && is_array($invoice['commercial_items'] ?? null) && $invoice['commercial_items'] !== [] ? $invoice['commercial_items'] : (is_array($quoteSnapshot['item_summary'] ?? null) ? $quoteSnapshot['item_summary'] : []);
+$componentDetails = $invoice !== null && is_array($invoice['component_details'] ?? null) ? array_values(array_filter($invoice['component_details'], static fn($row): bool => is_array($row) && trim(implode('', array_map('strval', $row))) !== '')) : [];
 $calc = $invoice !== null && is_array($invoice['calc'] ?? null) ? $invoice['calc'] : [];
 $taxBreakdown = $invoice !== null && is_array($invoice['tax_breakdown'] ?? null) && $invoice['tax_breakdown'] !== [] ? $invoice['tax_breakdown'] : (is_array($calc['tax_breakdown'] ?? null) ? $calc['tax_breakdown'] : []);
 $grandTotal = $invoice !== null ? documents_invoice_final_total($invoice) : 0.0;
@@ -186,6 +187,8 @@ $displaySolarKwp = $hasSolarSizeBreakup ? $totalSolarKwp : $solarSizeValue($invo
         <tr><td><?= $index + 1 ?></td><td><strong><?= $esc($name) ?></strong><?php if ($desc !== ''): ?><div class="notes"><?= $esc($desc) ?></div><?php endif; ?><?php if (trim((string)($item['custom_description']??'')) !== ''): ?><div class="notes"><em><?= $esc($item['custom_description']) ?></em></div><?php endif; ?></td><td><?= $esc($hsn) ?></td><td class="num"><?= $esc($qty) ?></td><td><?= $esc($unit) ?></td></tr>
       <?php endforeach; if ($items === []): ?><tr><td colspan="5">No line items were stored on this invoice. The amount summary below is still available from the accepted quotation.</td></tr><?php endif; ?>
     </tbody></table></section>
+
+    <?php if ($componentDetails !== []): ?><section class="table-panel"><div class="table-title"><h2>Component Details</h2><span class="section-label">Equipment</span></div><table class="invoice-table"><thead><tr><th>Component</th><th>Brand</th><th>Model</th><th>Serial No.</th></tr></thead><tbody><?php foreach($componentDetails as $componentRow): ?><tr><td><?= $esc($componentRow['component_name']??'') ?></td><td><?= $esc($componentRow['brand']??'') ?></td><td><?= $esc($componentRow['model']??'') ?></td><td><?= $esc($componentRow['serial_no']??'') ?></td></tr><?php endforeach; ?></tbody></table></section><?php endif; ?>
 
     <?php if ($specialRequests !== ''): ?><section class="info-card" style="margin-top:22px"><h2>Special Requests From Consumer</h2><p class="notes"><?= $esc($specialRequests) ?></p></section><?php endif; ?>
 
