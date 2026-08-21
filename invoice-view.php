@@ -188,7 +188,7 @@ $displaySolarKwp = $hasSolarSizeBreakup ? $totalSolarKwp : $solarSizeValue($invo
       <?php endforeach; if ($items === []): ?><tr><td colspan="5">No line items were stored on this invoice. The amount summary below is still available from the accepted quotation.</td></tr><?php endif; ?>
     </tbody></table></section>
 
-    <?php if ($componentDetails !== []): ?><section class="table-panel"><div class="table-title"><h2>Component Details</h2><span class="section-label">Equipment</span></div><table class="invoice-table"><thead><tr><th>Component</th><th>Brand</th><th>Model</th><th>Serial No.</th></tr></thead><tbody><?php foreach($componentDetails as $componentRow): ?><tr><td><?= $esc($componentRow['component_name']??'') ?></td><td><?= $esc($componentRow['brand']??'') ?></td><td><?= $esc($componentRow['model']??'') ?></td><td><?= $esc($componentRow['serial_no']??'') ?></td></tr><?php endforeach; ?></tbody></table></section><?php endif; ?>
+    <?php if ($componentDetails !== []): ?><section class="table-panel"><div class="table-title"><h2>Component Details</h2></div><table class="invoice-table"><thead><tr><th>Component</th><th>Brand</th><th>Model</th><th>Serial No.</th></tr></thead><tbody><?php foreach($componentDetails as $componentRow): ?><tr><td><?= $esc($componentRow['component_name']??'') ?></td><td><?= $esc($componentRow['brand']??'') ?></td><td><?= $esc($componentRow['model']??'') ?></td><td><?= $esc($componentRow['serial_no']??'') ?></td></tr><?php endforeach; ?></tbody></table></section><?php endif; ?>
 
     <?php if ($specialRequests !== ''): ?><section class="info-card" style="margin-top:22px"><h2>Special Requests From Consumer</h2><p class="notes"><?= $esc($specialRequests) ?></p></section><?php endif; ?>
 
