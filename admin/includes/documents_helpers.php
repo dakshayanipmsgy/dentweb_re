@@ -528,8 +528,14 @@ function documents_quote_normalize_important_points_settings(array $raw): array
 
 function documents_quote_resolve_important_points(array $quote, array $quoteDefaults): array
 {
+    $accepted = is_array($quote['customer_acceptance']['accepted_important_points'] ?? null)
+        ? $quote['customer_acceptance']['accepted_important_points']
+        : [];
+    if ($accepted !== []) { return documents_quote_normalize_important_points_settings($accepted); }
     $snapshot = is_array($quote['important_points_snapshot'] ?? null) ? $quote['important_points_snapshot'] : [];
-    if ($snapshot !== []) { return documents_quote_normalize_important_points_settings($snapshot); }
+    $isAccepted = documents_quote_normalize_status((string)($quote['status'] ?? 'draft')) === 'accepted'
+        || trim((string)($quote['accepted_at'] ?? '')) !== '';
+    if ($isAccepted && $snapshot !== []) { return documents_quote_normalize_important_points_settings($snapshot); }
     return documents_quote_normalize_important_points_settings(is_array($quoteDefaults['important_points'] ?? null) ? $quoteDefaults['important_points'] : []);
 }
 
@@ -557,6 +563,16 @@ function documents_quote_ensure_important_points_snapshot(array $quote, ?array $
     $existing = is_array($quote['important_points_snapshot'] ?? null) ? $quote['important_points_snapshot'] : [];
     if ($existing !== []) { $quote['important_points_snapshot'] = documents_quote_normalize_important_points_settings($existing); return $quote; }
     $quote['important_points_snapshot'] = documents_quote_normalize_important_points_settings(is_array(($quoteDefaults ?? documents_get_quote_defaults_settings())['important_points'] ?? null) ? ($quoteDefaults ?? documents_get_quote_defaults_settings())['important_points'] : []);
+    return $quote;
+}
+
+/** Capture the live configuration at acceptance, replacing any pre-acceptance legacy snapshot. */
+function documents_quote_capture_important_points_snapshot(array $quote, ?array $quoteDefaults = null): array
+{
+    $defaults = $quoteDefaults ?? documents_get_quote_defaults_settings();
+    $quote['important_points_snapshot'] = documents_quote_normalize_important_points_settings(
+        is_array($defaults['important_points'] ?? null) ? $defaults['important_points'] : []
+    );
     return $quote;
 }
 
@@ -3466,14 +3482,13 @@ function documents_quote_apply_admin_status_transition(array $quote, string $tar
             $quote['approved_edit']['reapproved_by_id'] = $actorId;
             $quote['approved_edit']['reapproved_by_name'] = $actorName;
         }
-        $quote = documents_quote_ensure_important_points_snapshot($quote);
     } elseif ($targetStatus === 'accepted') {
         if (!in_array($currentStatus, ['approved', 'accepted', 'update_requested'], true)) {
             return ['ok' => false, 'error' => 'Only approved quotations can be accepted.', 'quote' => $quote];
         }
         $acceptedAt = safe_text((string) ($quote['accepted_at'] ?? '')) ?: $now;
         $quote['status'] = 'accepted';
-        $quote = documents_quote_ensure_important_points_snapshot($quote);
+        $quote = documents_quote_capture_important_points_snapshot($quote);
         $quote = documents_quote_append_customer_visible_history($quote, 'accepted', 'Quotation accepted and locked for processing.', ['actor_name' => $actorName]);
         $quote['accepted_at'] = $acceptedAt;
         $quote['accepted_by'] = ['type' => $actorType, 'id' => $actorId, 'name' => $actorName];

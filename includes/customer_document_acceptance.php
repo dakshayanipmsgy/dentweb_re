@@ -6,7 +6,7 @@ const CUSTOMER_ACCEPTANCE_TERMS_VERSION = '2026-06-15';
 
 function customer_acceptance_document_hash(string $type, array $document): string
 {
-    $omit = ['customer_acceptance', 'customer_acceptance_request', 'public_token', 'public_share_token', 'share_audit', 'updated_at'];
+    $omit = ['customer_acceptance', 'customer_acceptance_request', 'important_points_snapshot', 'public_token', 'public_share_token', 'share_audit', 'updated_at'];
     foreach ($omit as $key) unset($document[$key]);
     return hash('sha256', json_encode(['type'=>$type, 'document'=>$document], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE));
 }
@@ -24,7 +24,6 @@ function customer_acceptance_public_token(array $document): string
 }
 function customer_acceptance_issue_token(array &$document, string $type, int $ttlDays = 30): string
 {
-    if ($type === 'quotation' && function_exists('documents_quote_ensure_important_points_snapshot')) { $document = documents_quote_ensure_important_points_snapshot($document); }
     $token = bin2hex(random_bytes(32));
     $previous = (array)($document['customer_acceptance_request'] ?? []);
     $events = (array)($previous['events'] ?? []);
@@ -79,7 +78,7 @@ function customer_acceptance_record(array &$document,string $type,array $input,a
     $portal=!empty($context['portal_customer_id']) && (string)$context['portal_customer_id']===(string)($document['customer_id']??$document['customer_snapshot']['id']??'');
     if(!$portal && !hash_equals(substr($mobile,0,6),preg_replace('/\D+/','',(string)($input['mobile_first6']??''))??'')) throw new RuntimeException('The confirmation details do not match our record.');
     if(empty($input['confirmed'])) throw new RuntimeException('The confirmation statement must be accepted.');
-    if ($type === 'quotation' && function_exists('documents_quote_ensure_important_points_snapshot')) { $document = documents_quote_ensure_important_points_snapshot($document); }
+    if ($type === 'quotation' && function_exists('documents_quote_capture_important_points_snapshot')) { $document = documents_quote_capture_important_points_snapshot($document); }
     $document['customer_mobile']=$mobile; $now=date('c'); $ref=customer_acceptance_reference($type); $remarks=trim((string)($input['remarks']??''));
     $document['customer_acceptance']=['status'=>'whatsapp_pending','acceptance_ref'=>$ref,'document_type'=>$type,'document_id'=>(string)($document['id']??''),'document_no'=>(string)($document['quote_no']??$document['dispatch_advice_no']??$document['challan_no']??$document['dc_number']??''),'document_version'=>(int)($document['version_no']??$document['revision_no']??1),'document_hash'=>customer_acceptance_document_hash($type,$document),'customer_id'=>(string)($document['customer_id']??$document['customer_snapshot']['id']??''),'customer_name_snapshot'=>$name,'customer_mobile_snapshot'=>customer_acceptance_mask_mobile($mobile),'identity_method'=>$portal?'customer_portal':'secure_link','portal_user_id'=>(string)($context['portal_customer_id']??''),'confirmed_name'=>$name,'confirmed_mobile_last4'=>substr($mobile,-4),'confirmed_at'=>$now,'ip_hash'=>hash_hmac('sha256',(string)($context['ip']??''),(string)($context['salt']??'acceptance')),'user_agent_hash'=>hash('sha256',(string)($context['user_agent']??'')),'token_id_hash'=>(string)($document['customer_acceptance_request']['token_hash']??''),'public_token_hash'=>hash('sha256',(string)($document['public_share_token']??$document['public_token']??'')),'confirmation_text_snapshot'=>customer_acceptance_confirmation_text($type,$document),'terms_version'=>CUSTOMER_ACCEPTANCE_TERMS_VERSION,'customer_remarks'=>$remarks,'review_required'=>$type==='challan'&&$remarks!=='','whatsapp_target'=>CUSTOMER_ACCEPTANCE_WHATSAPP_TARGET,'whatsapp_message_snapshot'=>'','whatsapp_opened_at'=>'','whatsapp_verified_at'=>'','whatsapp_verified_by'=>[],'events'=>[['event'=>'customer_confirmed','at'=>$now,'method'=>$portal?'customer_portal':'secure_link']]];
     if ($type === 'quotation' && function_exists('documents_quote_resolve_important_points')) {
