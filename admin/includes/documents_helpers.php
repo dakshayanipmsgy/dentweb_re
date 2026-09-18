@@ -5433,6 +5433,31 @@ function documents_quote_panel_orientation_from_layout(string $rowLayout): strin
     return $rowLayout === 'landscape_rows' ? 'landscape' : 'portrait';
 }
 
+/**
+ * Retain retired editor fields when an older quotation is saved in the visual
+ * designer. They remain available for history/snapshot compatibility, but the
+ * submitted grid and objects remain authoritative and these values are not
+ * restored into the editing or customer-facing UI.
+ */
+function documents_quote_preserve_panel_orientation_legacy_fields(array $submitted, array $stored): array
+{
+    foreach (['shade_note', 'customer_note', 'obstructions', 'custom_panels', 'uploaded_diagram_path'] as $key) {
+        if (array_key_exists($key, $stored)) {
+            $submitted[$key] = $stored[$key];
+        }
+    }
+
+    if (array_key_exists('groups', $stored) || array_key_exists('layout_groups', $stored)) {
+        $legacyGroups = is_array($stored['groups'] ?? null)
+            ? $stored['groups']
+            : (is_array($stored['layout_groups'] ?? null) ? $stored['layout_groups'] : []);
+        $submitted['groups'] = $legacyGroups;
+        $submitted['layout_groups'] = $legacyGroups;
+    }
+
+    return $submitted;
+}
+
 function documents_quote_normalize_panel_orientation(array $raw): array
 {
     $defaults = documents_quote_panel_orientation_defaults();
@@ -5511,6 +5536,7 @@ function documents_quote_normalize_panel_orientation(array $raw): array
     $o['objects'] = $objects;
     if ($objects !== []) $o['layout_mode'] = 'grid_editor';
 
+    $hasLegacyGroups = array_key_exists('groups', $raw) || array_key_exists('layout_groups', $raw);
     $sourceGroups = (array)($raw['groups'] ?? $raw['layout_groups'] ?? []);
     $groups = [];
     foreach ($sourceGroups as $group) {
@@ -5543,7 +5569,7 @@ function documents_quote_normalize_panel_orientation(array $raw): array
             'row_layout' => $rowLayout, 'remarks' => $remarks,
         ];
     }
-    if ($groups === []) $groups = $defaults['groups'];
+    if ($groups === [] && !$hasLegacyGroups) $groups = $defaults['groups'];
     $o['groups'] = array_slice($groups, 0, 24);
     $o['layout_groups'] = $o['groups'];
     $obs = [];
@@ -5570,7 +5596,7 @@ function documents_quote_render_panel_orientation_diagram(array $orientation): s
 {
     $o = documents_quote_normalize_panel_orientation($orientation);
     $esc = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
-    if (($o['layout_mode'] ?? '') === 'grid_editor' && !empty($o['objects'])) {
+    if (($o['layout_mode'] ?? '') === 'grid_editor') {
         $grid = is_array($o['grid'] ?? null) ? $o['grid'] : ['columns'=>24,'rows'=>16];
         $cols = max(8, min(100, (int)($grid['columns'] ?? 36))); $rows = max(8, min(100, (int)($grid['rows'] ?? 24)));
         $minX = $cols; $minY = $rows; $maxX = 0; $maxY = 0;

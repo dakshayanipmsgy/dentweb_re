@@ -823,6 +823,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $rawOrientation['objects'] = is_array($decodedOrientation['objects'] ?? null) ? $decodedOrientation['objects'] : [];
                 }
             }
+            if ($existing !== null && is_array($existing['panel_orientation'] ?? null)) {
+                $rawOrientation = documents_quote_preserve_panel_orientation_legacy_fields(
+                    $rawOrientation,
+                    (array) $existing['panel_orientation']
+                );
+                if (safe_text((string) ($_POST['panel_orientation_layout_touched'] ?? '')) !== '1') {
+                    foreach (['layout_mode', 'grid', 'objects'] as $layoutKey) {
+                        if (array_key_exists($layoutKey, $existing['panel_orientation'])) {
+                            $rawOrientation[$layoutKey] = $existing['panel_orientation'][$layoutKey];
+                        }
+                    }
+                }
+            }
             $quote['panel_orientation'] = documents_quote_normalize_panel_orientation($rawOrientation);
         }
 
@@ -2104,6 +2117,7 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
     <span class="panel-layout-designer-badge">Quotation layout</span>
   </div>
 
+  <input type="hidden" name="panel_orientation_layout_touched" id="panelOrientationLayoutTouched" value="0">
   <input type="hidden" name="panel_orientation_json" id="panelOrientationJson" value="<?= htmlspecialchars(json_encode(['grid'=>$orientation['grid'] ?? ['columns'=>36,'rows'=>24,'cell_unit'=>'grid','editor_cell_px'=>18,'major_line_every'=>5,'customer_grid_visible'=>false], 'objects'=>$orientation['objects'] ?? []], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
   <div class="panel-layout-designer" data-panel-layout-designer data-initial-layout="<?= htmlspecialchars(json_encode(['grid'=>$orientation['grid'] ?? ['columns'=>36,'rows'=>24,'cell_unit'=>'grid','editor_cell_px'=>18,'major_line_every'=>5,'customer_grid_visible'=>false], 'objects'=>$orientation['objects'] ?? []], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
     <div class="panel-layout-toolbar">

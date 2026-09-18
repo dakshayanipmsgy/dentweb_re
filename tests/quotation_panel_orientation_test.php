@@ -24,3 +24,14 @@ ok($q['customer_acceptance']['accepted_panel_orientation_hash']===$hash,'snapsho
 $q2=documents_quote_defaults();
 ok(!documents_quote_panel_orientation_is_enabled($q2),'old/default quotations disabled');
 ok(strpos(customer_acceptance_confirmation_text('quotation',$q2),'orientation/layout')===false,'disabled wording omits orientation');
+
+$legacy=['shade_note'=>'Historic shade note','customer_note'=>'Historic customer note','layout_groups'=>[['label'=>'Old roof','panel_count'=>3]],'obstructions'=>[['label'=>'Old tank','x'=>60,'y'=>10,'width'=>10,'height'=>10]]];
+$submitted=['enabled'=>true,'layout_mode'=>'grid_editor','groups'=>[],'obstructions'=>[],'shade_note'=>'','customer_note'=>'','grid'=>['columns'=>36,'rows'=>24],'objects'=>[]];
+$preserved=documents_quote_preserve_panel_orientation_legacy_fields($submitted,$legacy);
+$modern=documents_quote_normalize_panel_orientation($preserved);
+ok($modern['shade_note']==='Historic shade note' && $modern['customer_note']==='Historic customer note','retired notes survive editing for historical compatibility');
+ok(count($modern['groups'])===1 && count($modern['obstructions'])===1,'retired groups and obstructions survive editing for historical compatibility');
+ok($modern['layout_mode']==='grid_editor','empty visual designer remains authoritative over preserved legacy layout');
+$modernHtml=documents_quote_render_panel_orientation_diagram($modern);
+ok(strpos($modernHtml,'Solar panel grid layout diagram')!==false,'empty visual layout still renders its customer-facing canvas');
+ok(strpos($modernHtml,'Old roof')===false && strpos($modernHtml,'Historic shade note')===false && strpos($modernHtml,'Historic customer note')===false,'authoritative visual layout does not expose retired legacy details');
