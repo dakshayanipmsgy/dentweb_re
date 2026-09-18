@@ -16,10 +16,15 @@ $css = file_get_contents(__DIR__ . '/../assets/css/quote-panel-layout-designer.c
 
 assert_ui(is_string($admin) && str_contains($admin, 'Solar Panel Layout Designer'), 'visual panel layout designer remains available');
 assert_ui(str_contains($admin, 'data-add-layout-item="obstruction"'), 'designer retains visual keep-out tool');
+assert_ui(str_contains($admin, 'name="panel_orientation_layout_touched"'), 'designer tracks intentional layout edits so untouched legacy layouts remain stable');
 assert_ui(!str_contains($admin, '<h4>Editable layout groups</h4>'), 'legacy editable layout groups are removed from admin UI');
 assert_ui(!str_contains($admin, '<h4>Obstructions / keep-out areas</h4>'), 'legacy obstruction table is removed from admin UI');
 assert_ui(!str_contains($admin, '<label>Shade / obstruction / site note</label>'), 'legacy shade/site note field is removed from admin UI');
 assert_ui(!str_contains($admin, '<label>Customer-facing orientation note</label>'), 'legacy customer orientation note field is removed from admin UI');
+assert_ui(!str_contains($admin, 'name="panel_orientation_group_'), 'legacy group POST controls are absent rather than hidden');
+assert_ui(!str_contains($admin, 'name="panel_orientation_obstruction_'), 'legacy obstruction POST controls are absent rather than hidden');
+assert_ui(!str_contains($admin, 'name="panel_orientation_shade_note"'), 'legacy shade note POST control is absent rather than hidden');
+assert_ui(!str_contains($admin, 'name="panel_orientation_customer_note"'), 'legacy customer note POST control is absent rather than hidden');
 
 assert_ui(is_string($renderer) && str_contains($renderer, 'panel-orientation-diagram-shell'), 'customer quotation keeps a dedicated modern diagram shell');
 assert_ui(!str_contains($renderer, 'orientation-group-table'), 'customer quotation no longer renders legacy layout group table');
