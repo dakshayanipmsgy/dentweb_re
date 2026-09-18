@@ -2,11 +2,49 @@
   const defaults={grid:{columns:36,rows:24,cell_unit:'grid',editor_cell_px:18,major_line_every:5,customer_grid_visible:false},objects:[]};
   const limits={min:8,max:100,minCell:14,maxCell:28};
   const panelProfiles={portrait:{w:2,h:4,aspect:0.52},landscape:{w:4,h:2,aspect:1.92}};
-  document.querySelectorAll('[data-panel-layout-designer]').forEach(init);
+  const startupError='Layout designer could not start. Refresh the page or contact support.';
+
+  // Layout values contain JSON-compatible data only. Native structuredClone is
+  // preferred, but older Safari versions do not provide it and an individual
+  // value can still cause it to throw.
+  function cloneLayout(value){
+    if(typeof window.structuredClone==='function'){
+      try{return window.structuredClone(value);}catch(e){/* Fall through. */}
+    }
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function showStartupError(root,error){
+    root.dataset.layoutReady='0';
+    root.dataset.layoutError='1';
+    root.classList.add('has-layout-error');
+    const status=root.querySelector('[data-layout-status]');
+    if(status){status.textContent=startupError;status.classList.add('error');}
+    if(window.console&&typeof window.console.error==='function') window.console.error('[Panel Layout Designer] Initialization failed',error);
+  }
+
+  function initialize(root){
+    // Mark before doing any work so a second script execution cannot attach a
+    // second set of handlers, even if the first initialization fails.
+    if(root.dataset.layoutInitialized==='1')return;
+    root.dataset.layoutInitialized='1';
+    root.dataset.layoutReady='0';
+    try{init(root);root.dataset.layoutReady='1';delete root.dataset.layoutError;}
+    catch(error){showStartupError(root,error);}
+  }
+
+  function bootstrap(){
+    document.querySelectorAll('[data-panel-layout-designer]').forEach(initialize);
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bootstrap,{once:true});
+  else bootstrap();
+
   function init(root){
-    const input=document.getElementById('panelOrientationJson'); const touchedInput=document.getElementById('panelOrientationLayoutTouched'); const grid=root.querySelector('[data-layout-grid]'); const status=root.querySelector('[data-layout-status]'); const textInput=root.querySelector('[data-layout-text]');
+    const form=root.closest('form'); const input=(form&&form.querySelector('#panelOrientationJson'))||document.getElementById('panelOrientationJson'); const touchedInput=(form&&form.querySelector('#panelOrientationLayoutTouched'))||document.getElementById('panelOrientationLayoutTouched'); const grid=root.querySelector('[data-layout-grid]'); const status=root.querySelector('[data-layout-status]'); const textInput=root.querySelector('[data-layout-text]');
     const colInput=root.querySelector('[data-layout-columns]'); const rowInput=root.querySelector('[data-layout-rows]'); const zoomLabel=root.querySelector('[data-layout-zoom-label]'); const scroller=root.querySelector('[data-layout-scroll]');
-    let layout=safeParse(root.dataset.initialLayout||input?.value)||structuredClone(defaults); layout.grid=Object.assign(structuredClone(defaults.grid),layout.grid||{}); layout.objects=Array.isArray(layout.objects)?layout.objects:[]; layout.objects.forEach(normalizePanel); let selected=null, drag=null;
+    if(!input||!touchedInput||!grid||!status)throw new Error('Required designer element is missing');
+    let layout=safeParse(root.dataset.initialLayout||input.value)||cloneLayout(defaults); layout.grid=Object.assign(cloneLayout(defaults.grid),layout.grid||{}); layout.objects=Array.isArray(layout.objects)?layout.objects:[]; layout.objects.forEach(normalizePanel); let selected=null, drag=null;
     function clamp(n,min,max,fb){n=parseInt(n,10);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fb} function cols(){return clamp(layout.grid.columns,limits.min,limits.max,defaults.grid.columns)} function rows(){return clamp(layout.grid.rows,limits.min,limits.max,defaults.grid.rows)} function cellPx(){return clamp(layout.grid.editor_cell_px,limits.minCell,limits.maxCell,defaults.grid.editor_cell_px)}
     function syncGrid(){layout.grid.columns=cols();layout.grid.rows=rows();layout.grid.cell_unit='grid';layout.grid.editor_cell_px=cellPx();layout.grid.major_line_every=5;layout.grid.customer_grid_visible=!!layout.grid.customer_grid_visible;if(colInput)colInput.value=layout.grid.columns;if(rowInput)rowInput.value=layout.grid.rows;if(zoomLabel)zoomLabel.textContent=Math.round(layout.grid.editor_cell_px/defaults.grid.editor_cell_px*100)+'%';}
     function cell(){return {w:cellPx(),h:cellPx()};}
@@ -14,27 +52,31 @@
     function panelProfile(orientation){return panelProfiles[orientation==='landscape'?'landscape':'portrait'];}
     function normalizePanel(o){if(!o||o.type!=='panel')return; const profile=panelProfile(o.orientation||(+o.w>+o.h?'landscape':'portrait')); o.orientation=profile===panelProfiles.landscape?'landscape':'portrait'; o.w=profile.w; o.h=profile.h; o.visual_aspect_ratio=profile.aspect;}
     function overlaps(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;}
-    function blockers(o){return ['panel','text','obstruction'].includes(o.type)}
+    function blockers(o){return ['panel','text','obstruction'].indexOf(o.type)!==-1}
     function invalidReason(o){const b=box(o); if(b.x<0||b.y<0||b.x+b.w>cols()||b.y+b.h>rows()) return `${labelFor(o)} is outside the grid.`; if(blockers(o)){const hit=layout.objects.find(other=>other!==o&&blockers(other)&&overlaps(b,box(other))); if(hit) return `${labelFor(o)} overlaps ${labelFor(hit)}.`;} return '';}
     function validateAll(){for(const o of layout.objects){const msg=invalidReason(o); if(msg)return msg;} return '';}
     function valid(o){return invalidReason(o)==='';}
     function labelFor(o){return o.type==='panel'?'Panel '+(o.label||''):o.type==='text'?'Text label':o.type==='obstruction'?'Keep-out area':'North arrow'}
     function touch(){if(touchedInput)touchedInput.value='1';} function setStatus(msg,err){status.textContent=msg;status.classList.toggle('error',!!err);root.classList.toggle('has-layout-error',!!err);} function save(){ syncGrid(); if(input) input.value=JSON.stringify(layout); }
-        function render(){syncGrid(); grid.innerHTML=''; Object.assign(grid.style,{width:(cols()*cellPx())+'px',height:(rows()*cellPx())+'px',backgroundSize:`${cellPx()}px ${cellPx()}px,${cellPx()}px ${cellPx()}px,${cellPx()*5}px ${cellPx()*5}px,${cellPx()*5}px ${cellPx()*5}px`}); const c=cell(); layout.objects.forEach(o=>{normalizePanel(o); const el=document.createElement('div'); el.className=`layout-object ${o.type}${o===selected?' selected':''}`; const footprintW=o.w*c.w, footprintH=o.h*c.h; Object.assign(el.style,{left:(o.x*c.w)+'px',top:(o.y*c.h)+'px',width:footprintW+'px',height:footprintH+'px'}); if(o.type==='panel'){const module=document.createElement('span'); module.className='layout-object-module'; const aspect=panelProfile(o.orientation).aspect; const availW=Math.max(24,footprintW-10), availH=Math.max(24,footprintH-10); let moduleW=availW, moduleH=moduleW/aspect; if(moduleH>availH){moduleH=availH; moduleW=moduleH*aspect;} Object.assign(module.style,{width:moduleW+'px',height:moduleH+'px'}); module.textContent=o.label||''; el.appendChild(module);} else {el.textContent=o.type==='arrow'?'↑':(o.type==='text'?(o.text||'Text'):(o.label||''));} el.addEventListener('pointerdown',e=>{select(o); drag={o,startX:e.clientX,startY:e.clientY,origX:o.x,origY:o.y}; el.setPointerCapture(e.pointerId); e.preventDefault();}); grid.appendChild(el);}); const msg=validateAll(); setStatus(msg||'Ready',!!msg); save(); }
+        function render(){syncGrid(); grid.innerHTML=''; Object.assign(grid.style,{width:(cols()*cellPx())+'px',height:(rows()*cellPx())+'px',backgroundSize:`${cellPx()}px ${cellPx()}px,${cellPx()}px ${cellPx()}px,${cellPx()*5}px ${cellPx()*5}px,${cellPx()*5}px ${cellPx()*5}px`}); const c=cell(); layout.objects.forEach(o=>{normalizePanel(o); const el=document.createElement('div'); el.className=`layout-object ${o.type}${o===selected?' selected':''}`; const footprintW=o.w*c.w, footprintH=o.h*c.h; Object.assign(el.style,{left:(o.x*c.w)+'px',top:(o.y*c.h)+'px',width:footprintW+'px',height:footprintH+'px'}); if(o.type==='panel'){const module=document.createElement('span'); module.className='layout-object-module'; const aspect=panelProfile(o.orientation).aspect; const availW=Math.max(24,footprintW-10), availH=Math.max(24,footprintH-10); let moduleW=availW, moduleH=moduleW/aspect; if(moduleH>availH){moduleH=availH; moduleW=moduleH*aspect;} Object.assign(module.style,{width:moduleW+'px',height:moduleH+'px'}); module.textContent=o.label||''; el.appendChild(module);} else {el.textContent=o.type==='arrow'?'↑':(o.type==='text'?(o.text||'Text'):(o.label||''));} el.addEventListener('pointerdown',e=>{select(o); drag={o,startX:e.clientX,startY:e.clientY,origX:o.x,origY:o.y,pointerId:e.pointerId,el:el}; if(typeof el.setPointerCapture==='function'){try{el.setPointerCapture(e.pointerId);}catch(error){if(window.console&&typeof window.console.warn==='function')window.console.warn('[Panel Layout Designer] Pointer capture unavailable',error);}} e.preventDefault();}); grid.appendChild(el);}); const msg=validateAll(); setStatus(msg||'Ready',!!msg); save(); }
     function select(o){selected=o; if(textInput) textInput.value=o?(o.type==='text'?(o.text||''):(o.label||'')):''; render();}
     function add(kind){const n=layout.objects.filter(o=>o.type==='panel').length+1; let o={id:kind+'_'+Date.now(),type:'panel',x:0,y:0,w:panelProfiles.portrait.w,h:panelProfiles.portrait.h,orientation:'portrait',visual_aspect_ratio:panelProfiles.portrait.aspect,label:String(n)}; if(kind==='panel-landscape') Object.assign(o,{w:panelProfiles.landscape.w,h:panelProfiles.landscape.h,orientation:'landscape',visual_aspect_ratio:panelProfiles.landscape.aspect}); if(kind==='text') o={id:'text_'+Date.now(),type:'text',x:6,y:0,w:6,h:2,text:'Main roof'}; if(kind==='obstruction') o={id:'obstruction_'+Date.now(),type:'obstruction',x:12,y:0,w:4,h:3,label:'Keep-out'}; if(kind==='arrow') o={id:'arrow_'+Date.now(),type:'arrow',x:Math.max(0,cols()-2),y:0,w:1,h:2,label:'North'}; for(let y=0;y<rows();y++)for(let x=0;x<cols();x++){o.x=x;o.y=y;if(valid(o)){layout.objects.push(o);select(o);setStatus('Placed on grid',false);return;}} setStatus('Space already occupied or outside the grid',true);}
     function resizeGrid(newCols,newRows){const old={columns:cols(),rows:rows()}; layout.grid.columns=clamp(newCols,limits.min,limits.max,old.columns); layout.grid.rows=clamp(newRows,limits.min,limits.max,old.rows); const msg=validateAll(); if(msg){layout.grid.columns=old.columns;layout.grid.rows=old.rows;setStatus('Some panels or labels are outside the smaller grid. Move them inside or increase the grid size before saving.',true);} render();}
-    root.addEventListener('pointermove',e=>{if(!drag)return; touch(); const c=cell(); const nx=Math.round(drag.origX+(e.clientX-drag.startX)/c.w), ny=Math.round(drag.origY+(e.clientY-drag.startY)/c.h); const old={x:drag.o.x,y:drag.o.y}; drag.o.x=Math.max(0,Math.min(cols()-drag.o.w,nx)); drag.o.y=Math.max(0,Math.min(rows()-drag.o.h,ny)); if(!valid(drag.o)){Object.assign(drag.o,old);setStatus(invalidReason(drag.o)||'Space already occupied',true);} render();});
-    root.addEventListener('pointerup',()=>{drag=null;}); root.querySelectorAll('[data-add-layout-item]').forEach(b=>b.addEventListener('click',()=>{touch();add(b.dataset.addLayoutItem)})));
-    colInput?.addEventListener('change',()=>{touch();resizeGrid(colInput.value,rows())}); rowInput?.addEventListener('change',()=>{touch();resizeGrid(cols(),rowInput.value)});
-    root.querySelector('[data-layout-zoom-in]')?.addEventListener('click',()=>{layout.grid.editor_cell_px=cellPx()+2;render();}); root.querySelector('[data-layout-zoom-out]')?.addEventListener('click',()=>{layout.grid.editor_cell_px=cellPx()-2;render();}); root.querySelector('[data-layout-fit]')?.addEventListener('click',()=>{const w=(scroller?.clientWidth||720)-24;layout.grid.editor_cell_px=clamp(Math.floor(w/cols()),limits.minCell,limits.maxCell,18);render();});
-    root.querySelector('[data-layout-clear]')?.addEventListener('click',()=>{touch();layout.objects=[];selected=null;render();}); root.querySelector('[data-layout-reset]')?.addEventListener('click',()=>{touch();layout=structuredClone(defaults);selected=null;render();});
-    root.querySelector('[data-layout-delete]')?.addEventListener('click',()=>{if(!selected)return; touch(); layout.objects=layout.objects.filter(o=>o!==selected); selected=null; render();});
-    root.querySelector('[data-layout-rotate]')?.addEventListener('click',()=>{if(!selected||selected.type!=='panel')return; touch(); const old={w:selected.w,h:selected.h,orientation:selected.orientation,visual_aspect_ratio:selected.visual_aspect_ratio}; selected.orientation=selected.orientation==='landscape'?'portrait':'landscape'; normalizePanel(selected); if(!valid(selected)){Object.assign(selected,old); setStatus('Rotating would overlap another item or leave the grid.',true);} render();});
-    root.querySelector('[data-layout-duplicate]')?.addEventListener('click',()=>{if(!selected)return; touch(); const copy=JSON.parse(JSON.stringify(selected)); copy.id=copy.type+'_'+Date.now(); copy.x++; copy.y++; if(valid(copy)){layout.objects.push(copy);select(copy);} else setStatus('Duplicate would overlap another item or leave the grid.',true);});
+    function movePointer(e){if(!drag||e.pointerId!==drag.pointerId)return; touch(); const c=cell(); const nx=Math.round(drag.origX+(e.clientX-drag.startX)/c.w), ny=Math.round(drag.origY+(e.clientY-drag.startY)/c.h); const old={x:drag.o.x,y:drag.o.y}; drag.o.x=Math.max(0,Math.min(cols()-drag.o.w,nx)); drag.o.y=Math.max(0,Math.min(rows()-drag.o.h,ny)); if(!valid(drag.o)){Object.assign(drag.o,old);setStatus(invalidReason(drag.o)||'Space already occupied',true);} render();}
+    function endPointer(e){if(!drag||e.pointerId!==drag.pointerId)return;if(drag.el&&typeof drag.el.releasePointerCapture==='function'){try{if(!drag.el.hasPointerCapture||drag.el.hasPointerCapture(drag.pointerId))drag.el.releasePointerCapture(drag.pointerId);}catch(error){/* Losing capture is harmless. */}}drag=null;}
+    // Document listeners keep a drag usable when Safari declines pointer capture
+    // or rendering replaces the original object element during the gesture.
+    document.addEventListener('pointermove',movePointer); document.addEventListener('pointerup',endPointer); document.addEventListener('pointercancel',endPointer); root.querySelectorAll('[data-add-layout-item]').forEach(b=>b.addEventListener('click',()=>{touch();add(b.dataset.addLayoutItem)}));
+    if(colInput)colInput.addEventListener('change',()=>{touch();resizeGrid(colInput.value,rows())}); if(rowInput)rowInput.addEventListener('change',()=>{touch();resizeGrid(cols(),rowInput.value)});
+    const zoomIn=root.querySelector('[data-layout-zoom-in]'),zoomOut=root.querySelector('[data-layout-zoom-out]'),fit=root.querySelector('[data-layout-fit]'); if(zoomIn)zoomIn.addEventListener('click',()=>{layout.grid.editor_cell_px=cellPx()+2;render();}); if(zoomOut)zoomOut.addEventListener('click',()=>{layout.grid.editor_cell_px=cellPx()-2;render();}); if(fit)fit.addEventListener('click',()=>{const w=((scroller&&scroller.clientWidth)||720)-24;layout.grid.editor_cell_px=clamp(Math.floor(w/cols()),limits.minCell,limits.maxCell,18);render();});
+    const clear=root.querySelector('[data-layout-clear]'),reset=root.querySelector('[data-layout-reset]'); if(clear)clear.addEventListener('click',()=>{touch();layout.objects=[];selected=null;render();}); if(reset)reset.addEventListener('click',()=>{touch();layout=cloneLayout(defaults);selected=null;render();});
+    const remove=root.querySelector('[data-layout-delete]'),rotate=root.querySelector('[data-layout-rotate]'),duplicate=root.querySelector('[data-layout-duplicate]');
+    if(remove)remove.addEventListener('click',()=>{if(!selected)return; touch(); layout.objects=layout.objects.filter(o=>o!==selected); selected=null; render();});
+    if(rotate)rotate.addEventListener('click',()=>{if(!selected||selected.type!=='panel')return; touch(); const old={w:selected.w,h:selected.h,orientation:selected.orientation,visual_aspect_ratio:selected.visual_aspect_ratio}; selected.orientation=selected.orientation==='landscape'?'portrait':'landscape'; normalizePanel(selected); if(!valid(selected)){Object.assign(selected,old); setStatus('Rotating would overlap another item or leave the grid.',true);} render();});
+    if(duplicate)duplicate.addEventListener('click',()=>{if(!selected)return; touch(); const copy=cloneLayout(selected); copy.id=copy.type+'_'+Date.now(); copy.x++; copy.y++; if(valid(copy)){layout.objects.push(copy);select(copy);} else setStatus('Duplicate would overlap another item or leave the grid.',true);});
     root.querySelectorAll('[data-layout-move]').forEach(b=>b.addEventListener('click',()=>{if(!selected)return; touch(); const old={x:selected.x,y:selected.y}; if(b.dataset.layoutMove==='up')selected.y--; if(b.dataset.layoutMove==='down')selected.y++; if(b.dataset.layoutMove==='left')selected.x--; if(b.dataset.layoutMove==='right')selected.x++; if(!valid(selected)){Object.assign(selected,old);setStatus(invalidReason(selected)||'Space already occupied',true);} render();}));
-    textInput?.addEventListener('input',()=>{if(!selected)return; touch(); if(selected.type==='text')selected.text=textInput.value; else selected.label=textInput.value; render();});
-    root.closest('form')?.addEventListener('submit',e=>{const msg=validateAll(); if(msg){e.preventDefault();setStatus(msg,true);}});
+    if(textInput)textInput.addEventListener('input',()=>{if(!selected)return; touch(); if(selected.type==='text')selected.text=textInput.value; else selected.label=textInput.value; render();});
+    if(form)form.addEventListener('submit',e=>{const msg=validateAll(); if(msg){e.preventDefault();setStatus(msg,true);}});
     render();
   }
   function safeParse(s){try{return JSON.parse(s||'{}')}catch(e){return null}}

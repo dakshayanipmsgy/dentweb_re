@@ -2147,7 +2147,7 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
         <input data-layout-text placeholder="Label / text for selected item">
         <div class="panel-layout-nudges"><button type="button" data-layout-move="up" aria-label="Move up">↑</button><button type="button" data-layout-move="left" aria-label="Move left">←</button><button type="button" data-layout-move="right" aria-label="Move right">→</button><button type="button" data-layout-move="down" aria-label="Move down">↓</button></div>
         <div class="panel-layout-selected-actions"><button type="button" data-layout-rotate>Rotate</button><button type="button" data-layout-duplicate>Duplicate</button><button type="button" class="danger" data-layout-delete>Delete</button></div>
-        <div class="panel-layout-status" data-layout-status>Ready</div>
+        <div class="panel-layout-status" data-layout-status>Starting layout designer…</div>
       </aside>
     </div>
 
@@ -3017,4 +3017,4 @@ window.quoteFormAutofillConfig = {
   update();
 })();
 
-</script><?php if ($tab === 'bulk'): ?><script src="assets/vendor/browser-export/paged.polyfill.min.js"></script><script src="assets/vendor/browser-export/html2canvas.min.js"></script><script src="assets/vendor/browser-export/jspdf.umd.min.js"></script><script src="assets/vendor/browser-export/fflate.min.js"></script><script src="assets/js/quotation-browser-export.js"></script><?php endif; ?><?php if ($tab === 'editor'): ?><script src="assets/js/quotation-save-new-tab.js"></script><script src="assets/js/quote-panel-layout-designer.js"></script><script src="assets/js/quote-form-autofill.js"></script><?php endif; ?></main></body></html>
+</script><?php if ($tab === 'bulk'): ?><script src="assets/vendor/browser-export/paged.polyfill.min.js"></script><script src="assets/vendor/browser-export/html2canvas.min.js"></script><script src="assets/vendor/browser-export/jspdf.umd.min.js"></script><script src="assets/vendor/browser-export/fflate.min.js"></script><script src="assets/js/quotation-browser-export.js"></script><?php endif; ?><?php if ($tab === 'editor'): ?><script src="assets/js/quotation-save-new-tab.js"></script><script src="assets/js/quote-panel-layout-designer.js?v=<?= rawurlencode((string) (filemtime(__DIR__ . '/assets/js/quote-panel-layout-designer.js') ?: '1')) ?>"></script><script src="assets/js/quote-form-autofill.js"></script><?php endif; ?></main></body></html>
