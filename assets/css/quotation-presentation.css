@@ -102,7 +102,7 @@ th, td { padding: 13px 14px; }
 .proof-card { background: var(--teal-950); border: 0; }
 .proof-point { border-radius: 6px; }
 .registration-chip { border-radius: 4px; }
-.annexure-shell { background: #f4f9fb; }
+.annexure-shell { background: #fff; }
 .annexure-stack { gap: 16px; }
 .annexure-card { border-radius: 8px; padding: 22px; }
 .annexure-title { font-size: 1.05rem; align-items: center; }
@@ -135,7 +135,7 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px soli
 .sf-glance-group:nth-child(2n) { background: #f0f7ec; }
 .sf-glance-group:nth-child(2n) { border-top-color: #a6ce7c; }
 .annexure-card { background: #fff; border-left: 3px solid #9bc9d8; }
-.annexure-card:nth-child(2n) { background: #f1f7ed; }
+.annexure-card:nth-child(2n) { background: #fff; }
 .annexure-card:nth-child(2n) { border-left-color: #a9cb83; }
 .annexure-card:nth-child(2n) .annexure-title span { background: #507d32; }
 .next-steps { border-color: #d1e1bf; background: #f6faef; }
@@ -206,7 +206,7 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px soli
   .acceptance-card p { margin: 0; }
   .quotation-items-table th, .quotation-items-table td { padding: 2mm 1.5mm; }
 
-  html { font-size: 11px; }
+  html { font-size: 12px; }
   body { font-size: 9.5pt; line-height: 1.45; background: #fff; }
   .wrap { padding: 0; max-width: none; }
   /* Keep compact visual units together; let long sections flow into the next sheet. */
@@ -271,7 +271,7 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px soli
   .sf-glance-group { break-inside: avoid; }
   .sf-glance-item { padding: 1.4mm 0; font-size: 7.5pt; line-height: 1.35; }
   .chart-responsive-card { min-height: 0; }
-  .quotation-chart-svg { min-height: 72mm; max-height: 88mm; }
+  .quotation-chart-svg { width: 100%; height: auto; min-height: 0; max-height: none; }
   .annexure-shell, .friendly-note { break-inside: auto; page-break-inside: auto; }
   .proposal-benefits { break-inside: avoid; }
   .annexure-stack { display: block; }
@@ -292,4 +292,82 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px soli
   .footer-brand-row { margin-bottom: 2mm; padding-bottom: 2mm; }
   .footer-logo img { max-height: 7mm; }
   .screen-only, .hide-print { display: none !important; }
+}
+
+/* Presentation refinements shared by public links and generated quotation HTML.
+   Keep all financial values, section ordering and interactive behavior in PHP. */
+body { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+.hero-metric { border-top: 3px solid #bddbe5; }
+.hero-metric.highlight { border-top-color: #8bb96a; }
+.hero-metric.net { border-top-color: #8bb96a; }
+.sf-finance-table thead th { line-height: 1.5; letter-spacing: .015em; }
+.sf-finance-table td { text-align: right; }
+.sf-finance-table tbody th { font-weight: 600; }
+.sf-finance-table tbody tr:nth-last-child(-n+3) { background: #edf6f2; }
+.sf-glance-label { min-width: 0; overflow-wrap: break-word; }
+.sf-glance-value { overflow-wrap: break-word; }
+.annexure-title { line-height: 1.4; }
+.annexure-card li { line-height: 1.6; }
+.payment-note, .payment-warning, .footer-details { overflow-wrap: anywhere; }
+
+@media screen and (max-width: 600px) {
+  .header-meta, .hero-metric, .sf-glance-group, .sf-metric { min-width: 0; }
+  .sf-glance-grid, .sf-kpis { grid-template-columns: 1fr; }
+  .sf-glance-value { max-width: 46%; }
+  .hero-metric strong { font-size: 1.15rem; }
+  .hero-metric.net strong { font-size: 1.25rem; }
+  .chart-responsive-card { padding: 16px 8px; }
+  .quotation-chart-svg { min-height: 0; }
+  .upi-option { grid-template-columns: 90px minmax(0, 1fr); }
+  .upi-option img { width: 90px; height: 90px; }
+}
+
+/* Print dimensions must depend on the sheet, never the phone viewport.
+   Both modern fragmentation properties and legacy WebKit aliases are intentional. */
+@media print {
+  html, body { width: auto; min-width: 0; }
+  .wrap { width: 100%; min-width: 0; }
+  .header, .hero-card, .proof-card { overflow: visible; }
+  .card, .annexure-card {
+    box-decoration-break: slice;
+    -webkit-box-decoration-break: slice;
+  }
+  .header-logo img { max-width: 21mm; max-height: 18mm; }
+  .credential-line { font-size: 7pt; }
+  .hero-metric { border-top-width: .6mm; }
+  .hero-metric .label { font-size: 8pt; }
+  .table-wrap, .sf-finance-table-wrap {
+    width: 100%; max-width: 100%; min-width: 0;
+    margin-left: 0; margin-right: 0;
+    overflow: visible; border-radius: 0;
+  }
+  .sf-finance-table { width: 100%; min-width: 0; table-layout: fixed; font-size: 8pt; }
+  .sf-finance-table th, .sf-finance-table td {
+    padding: 2mm 1.5mm; white-space: normal;
+    overflow-wrap: break-word; word-break: normal;
+  }
+  .sf-finance-table thead th { font-size: 7.5pt; text-transform: none; }
+  .sf-finance-table th:first-child { width: 20%; position: static; }
+  .quotation-items-table { width: 100%; min-width: 0; }
+  .friendly-note p, .important-points-list li, .annexure-card li,
+  .sf-metric, .payment-note, .payment-warning {
+    break-inside: avoid; page-break-inside: avoid;
+  }
+  .friendly-note p:last-child, .annexure-card p:last-child { margin-bottom: 0; }
+  .annexure-card { border-radius: 0; }
+  .annexure-card p { orphans: 3; widows: 3; }
+  .chart-grid { display: block; }
+  .chart-responsive-card { padding: 3mm; }
+  .quotation-chart-svg {
+    display: block !important; width: 100%; height: auto;
+    min-height: 0; max-height: none;
+  }
+  .bank-card { break-inside: auto; page-break-inside: auto; }
+  .bank-grid, .upi-payment-grid, .payment-warning {
+    break-inside: avoid; page-break-inside: avoid;
+  }
+  .upi-option { grid-template-columns: 28mm minmax(0, 1fr); }
+  .upi-option img { width: 28mm; height: 28mm; object-fit: contain; }
+  .upi-option h3 { font-size: 10pt; }
+  .upi-option p { font-size: 8pt; }
 }
