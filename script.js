@@ -293,7 +293,7 @@ const INLINE_PARTIALS = {
   </div>
 </div>
 
-<a href="/solar-and-finance.php" class="floating-solar-finance" aria-label="Open Solar and Finance page"><i class="fa-solid fa-chart-line"></i><span>Solar &amp; Finance</span></a>
+<!-- Solar & Finance is available in the homepage content without obscuring the hero. -->
   `.trim(),
 };
 

@@ -48,21 +48,21 @@ function website_settings_default(): array
         'hero' => [
             'kicker' => 'Trusted EPC partner in Jharkhand',
             'title' => 'Go Solar with Dakshayani Enterprises',
-            'subtitle' => 'Rooftop solar systems with subsidy, EMI support, and full CMC.',
-            'primary_image' => '/images/hero/hero.png',
-            'primary_caption' => 'Dakshayani engineers on site for a rooftop commissioning.',
+            'subtitle' => 'Rooftop solar for homes and businesses in Ranchi, with site surveys, installation, net-metering support and maintenance.',
+            'primary_image' => '/images/marketing/solar-solutions-illustration.png',
+            'primary_caption' => 'Solar energy illustration. Ask us to see completed local installations.',
             'primary_button_text' => 'Book Free Site Visit',
-            'primary_button_link' => '/contact',
+            'primary_button_link' => '/contact.php',
             'secondary_button_text' => 'Check Subsidy Eligibility',
-            'secondary_button_link' => '/pm-surya-ghar',
-            'announcement_badge' => 'PM Surya Ghar – Up to 300 units free*',
-            'announcement_text' => 'Limited window for subsidy applications. Get your documents verified today.',
+            'secondary_button_link' => '/contact.php',
+            'announcement_badge' => 'PM Surya Ghar application support',
+            'announcement_text' => 'Subsidy depends on system capacity, eligibility and approval. Ask for a clear written assessment.',
         ],
         'sections' => [
             'what_our_customers_say_title' => 'What Our Customers Say',
             'what_our_customers_say_subtitle' => 'Homeowners and institutions across Jharkhand trust Dakshayani for hassle-free solar installations.',
             'seasonal_offer_title' => 'Seasonal Solar Offers',
-            'seasonal_offer_text' => 'Festive offers on 3 kW to 10 kW rooftop systems. Extra warranty and free service visits on select packages.',
+            'seasonal_offer_text' => 'Explore current rooftop solar options. Capacity, components, installation scope and warranty terms are confirmed in your written quotation.',
             'cta_strip_title' => 'Ready to lock in 25 years of solar savings?',
             'cta_strip_text' => 'Share your latest electricity bill and we will deliver a personalised payback report within 24 hours.',
             'cta_strip_cta_text' => 'Email Your Bill',
@@ -125,6 +125,29 @@ function website_settings_normalize(array $data): array
 {
     $defaults = website_settings_default();
     $normalized = array_replace_recursive($defaults, $data);
+
+    // Upgrade only known legacy copy; preserve customised content and runtime data.
+    $legacyCopy = [
+        'hero' => [
+            'primary_image' => '/images/hero/hero.png',
+            'subtitle' => 'Rooftop solar systems with subsidy, EMI support, and full CMC.',
+            'primary_caption' => 'Dakshayani engineers on site for a rooftop commissioning.',
+            'announcement_badge' => 'PM Surya Ghar – Up to 300 units free*',
+            'announcement_text' => 'Limited window for subsidy applications. Get your documents verified today.',
+            'primary_button_link' => '/contact',
+            'secondary_button_link' => '/pm-surya-ghar',
+        ],
+        'sections' => [
+            'seasonal_offer_text' => 'Festive offers on 3 kW to 10 kW rooftop systems. Extra warranty and free service visits on select packages.',
+        ],
+    ];
+    foreach ($legacyCopy as $section => $fields) {
+        foreach ($fields as $field => $oldValue) {
+            if (($normalized[$section][$field] ?? null) === $oldValue) {
+                $normalized[$section][$field] = $defaults[$section][$field];
+            }
+        }
+    }
 
     $normalized['theme']['primary_color'] = website_settings_normalize_hex($normalized['theme']['primary_color'] ?? '', $defaults['theme']['primary_color']);
     $normalized['theme']['secondary_color'] = website_settings_normalize_hex($normalized['theme']['secondary_color'] ?? '', $defaults['theme']['secondary_color']);

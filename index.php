@@ -127,45 +127,51 @@ $embeddedContentJson = htmlspecialchars(json_encode($embeddedContent, JSON_UNESC
 
 $heroTitle = $hero['title'] ?? '';
 $heroSubtitle = $hero['subtitle'] ?? '';
+$publicText = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 
 $schemaGraph = [
     [
-        '@type' => 'Article',
-        'headline' => $heroTitle,
-        'description' => $heroSubtitle,
-        'author' => [
-            '@type' => 'Organization',
-            'name' => 'Dakshayani Enterprises',
+        '@type' => 'LocalBusiness',
+        '@id' => 'https://dakshayani.co.in/#business',
+        'name' => 'Dakshayani Enterprises',
+        'url' => 'https://dakshayani.co.in/',
+        'description' => 'Residential rooftop solar, commercial solar EPC, net-metering support and solar maintenance in Ranchi and nearby areas.',
+        'telephone' => '+91-70702-78178',
+        'logo' => 'https://dakshayani.co.in/images/logo/New%20dakshayani%20logo%20centered%20small.png',
+        'address' => [
+            '@type' => 'PostalAddress',
+            'streetAddress' => 'Maa Tara, Kilburn Colony, Hinoo',
+            'addressLocality' => 'Ranchi',
+            'addressRegion' => 'Jharkhand',
+            'postalCode' => '834002',
+            'addressCountry' => 'IN',
         ],
-        'publisher' => [
-            '@type' => 'Organization',
-            'name' => 'Dakshayani Enterprises',
-            'logo' => [
-                '@type' => 'ImageObject',
-                'url' => 'https://dakshayani.co.in/images/logo/New%20dakshayani%20logo%20centered%20small.png',
-            ],
-        ],
-        'image' => 'https://dakshayani.co.in/images/og/dakshayani-hero.jpg',
-        'datePublished' => '2024-11-01',
-        'mainEntityOfPage' => 'https://dakshayani.co.in/',
+        'areaServed' => 'Ranchi and nearby areas, Jharkhand',
+        'openingHoursSpecification' => [[
+            '@type' => 'OpeningHoursSpecification',
+            'dayOfWeek' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+            'opens' => '09:00',
+            'closes' => '21:00',
+        ]],
+        'sameAs' => ['https://www.facebook.com/d.entranchi/', 'https://www.instagram.com/d.entranchi/'],
     ],
     [
         '@type' => 'FAQPage',
         'mainEntity' => [
             [
                 '@type' => 'Question',
-                'name' => 'How quickly can Dakshayani file PM Surya Ghar subsidies?',
+                'name' => 'How does the PM Surya Ghar subsidy process work with Dakshayani?',
                 'acceptedAnswer' => [
                     '@type' => 'Answer',
-                    'text' => 'Our team supports document verification and filing with the relevant PM Surya Ghar/JREDA and DISCOM processes.',
+                    'text' => 'We help eligible residential customers with PM Surya Ghar registration, documentation and DISCOM coordination. Subsidy depends on system capacity, scheme requirements, inspection and approval; it is not guaranteed.',
                 ],
             ],
             [
                 '@type' => 'Question',
-                'name' => 'Do you offer real-time solar generation monitoring?',
+                'name' => 'What is the typical timeline for net-metering approvals in Jharkhand?',
                 'acceptedAnswer' => [
                     '@type' => 'Answer',
-                    'text' => 'Yes. Customers receive dashboards with Solar API and inverter integrations, plus WhatsApp alerts for uptime.',
+                    'text' => 'Timelines depend on your connection, sanctioned load, DISCOM feasibility, inspection and meter availability. We assist with documents and coordination; approval dates are set by the DISCOM.',
                 ],
             ],
         ],
@@ -183,25 +189,27 @@ $schemaContext = [
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dakshayani Enterprises | Solar EPC &amp; Subsidies in Jharkhand</title>
-  <meta name="description" content="Ranchi’s trusted solar EPC provider. Get ₹78,000 PM Surya Ghar subsidies, rooftop solar, and zero bills. Contact us today!" />
+  <meta name="description" content="Rooftop solar installation in Ranchi, commercial EPC, net-metering support and maintenance. Ask Dakshayani Enterprises about eligible PM Surya Ghar support." />
   <meta name="keywords" content="Solar EPC Jharkhand, PM Surya Ghar subsidy, rooftop solar Ranchi, hybrid solar systems, Solar in Chhattisgarh, Solar in Odisha, Solar in UP" />
   <meta name="robots" content="index,follow" />
   <meta name="theme-color" content="#0f172a" />
   <link rel="canonical" href="https://dakshayani.co.in/" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Dakshayani Enterprises | Solar EPC &amp; Subsidies in Jharkhand" />
-  <meta property="og:description" content="Turnkey solar EPC, PM Surya Ghar subsidy support, and smart monitoring dashboards for homes, MSMEs, and farmers across Jharkhand." />
+  <meta property="og:description" content="Rooftop solar for homes and businesses in Ranchi. Site surveys, commercial EPC, net-metering support and maintenance, with clear written quotations." />
   <meta property="og:url" content="https://dakshayani.co.in/" />
-  <meta property="og:image" content="https://dakshayani.co.in/images/og/dakshayani-hero.jpg" />
+  <meta property="og:image" content="https://dakshayani.co.in/images/marketing/solar-solutions-illustration.png" />
+  <meta property="og:image:alt" content="Dakshayani Enterprises rooftop and commercial solar solutions illustration" />
   <meta property="og:locale" content="en_IN" />
   <meta property="og:site_name" content="Dakshayani Enterprises" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Dakshayani Enterprises | Rooftop Solar EPC" />
-  <meta name="twitter:description" content="Trusted EPC partner delivering PM Surya Ghar subsidies, hybrid-ready systems, and real-time monitoring dashboards." />
-  <meta name="twitter:image" content="https://dakshayani.co.in/images/og/dakshayani-hero.jpg" />
+  <meta name="twitter:description" content="Rooftop solar, commercial EPC and maintenance in Ranchi. PM Surya Ghar application support for eligible residential systems." />
+  <meta name="twitter:image" content="https://dakshayani.co.in/images/marketing/solar-solutions-illustration.png" />
+  <meta name="twitter:image:alt" content="Dakshayani Enterprises rooftop and commercial solar solutions illustration" />
 
   <link rel="icon" href="images/favicon.ico" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__ . '/style.css') ?>" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@700&amp;family=Poppins:wght@400;700;800;900&amp;display=swap" rel="stylesheet">
@@ -273,24 +281,24 @@ $schemaContext = [
   <?php endif; ?>
 
   <main>
-    <section id="hero" class="hero section" data-hero-section hidden>
+    <section id="hero" class="hero hero--solar section" data-hero-section>
       <div class="container hero-grid">
         <div class="hero-content">
-          <div class="hero-announcement" data-hero-announcement hidden>
-            <span class="badge" data-hero-announcement-badge></span>
-            <p data-hero-announcement-text></p>
+          <div class="hero-announcement" data-hero-announcement<?= empty($hero['announcement_badge']) && empty($hero['announcement_text']) ? ' hidden' : '' ?>>
+            <span class="badge" data-hero-announcement-badge><?= $publicText($hero['announcement_badge'] ?? '') ?></span>
+            <p data-hero-announcement-text><?= $publicText($hero['announcement_text'] ?? '') ?></p>
           </div>
-          <h1 class="hero-title" data-hero-title></h1>
-          <p class="hero-sub" data-hero-subtitle></p>
+          <h1 class="hero-title" data-hero-title><?= $publicText($heroTitle) ?></h1>
+          <p class="hero-sub" data-hero-subtitle><?= $publicText($heroSubtitle) ?></p>
 
           <div class="hero-actions">
-            <a href="#" class="btn btn-primary" data-hero-primary>
+            <a href="<?= $publicText($hero['primary_button_link'] ?? '/contact.php') ?>" class="btn btn-primary" data-hero-primary<?= empty($hero['primary_button_text']) ? ' hidden' : '' ?>>
               <i class="fa-solid fa-calendar-check"></i>
-              <span data-hero-primary-text></span>
+              <span data-hero-primary-text><?= $publicText($hero['primary_button_text'] ?? '') ?></span>
             </a>
-            <a href="#" class="btn btn-secondary" data-hero-secondary hidden>
+            <a href="<?= $publicText($hero['secondary_button_link'] ?? '/contact.php') ?>" class="btn btn-secondary" data-hero-secondary<?= empty($hero['secondary_button_text']) ? ' hidden' : '' ?>>
               <i class="fa-solid fa-handshake-angle"></i>
-              <span data-hero-secondary-text></span>
+              <span data-hero-secondary-text><?= $publicText($hero['secondary_button_text'] ?? '') ?></span>
             </a>
           </div>
 
@@ -300,8 +308,8 @@ $schemaContext = [
               <span class="assurance-label">Homes &amp; MSMEs energised</span>
             </div>
             <div class="assurance-item">
-              <span class="assurance-value">₹78k</span>
-              <span class="assurance-label">PM Surya Ghar subsidy managed</span>
+              <span class="assurance-value">Eligibility first</span>
+              <span class="assurance-label">PM Surya Ghar application support</span>
             </div>
             <div class="assurance-item">
               <span class="assurance-value">Dedicated</span>
@@ -312,8 +320,8 @@ $schemaContext = [
 
         <div class="hero-media">
           <figure class="hero-media-main" data-hero-main>
-            <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="" loading="lazy" data-hero-main-image />
-            <figcaption data-hero-main-caption></figcaption>
+            <img src="<?= $publicText($hero['primary_image'] ?? '') ?>" alt="<?= $publicText($hero['primary_caption'] ?? '') ?>" fetchpriority="high" data-hero-main-image />
+            <figcaption data-hero-main-caption><?= $publicText($hero['primary_caption'] ?? '') ?></figcaption>
           </figure>
           <div class="hero-mini-gallery" data-hero-gallery></div>
         </div>
@@ -446,7 +454,7 @@ $schemaContext = [
 
               <?php foreach ($loopImages as $imageName): ?>
                 <div class="slide">
-                  <img src="<?= htmlspecialchars($installWebPath . rawurlencode($imageName)) ?>" alt="Solar Installation" loading="lazy" />
+                  <img src="<?= htmlspecialchars($installWebPath . rawurlencode($imageName)) ?>" alt="Rooftop solar installation from the Dakshayani project gallery" loading="lazy" />
                 </div>
               <?php endforeach; ?>
             </div>
@@ -556,7 +564,7 @@ $schemaContext = [
           <ul class="impact-list">
             <li><i class="fa-solid fa-check"></i>Expanding service to Chhattisgarh, Odisha &amp; UP</li>
             <li><i class="fa-solid fa-check"></i>Dedicated subsidy desk tracking every milestone</li>
-            <li><i class="fa-solid fa-check"></i>Preventive maintenance and 24-hour support helpline</li>
+            <li><i class="fa-solid fa-check"></i>Preventive maintenance and support, 9am–9pm daily</li>
           </ul>
         </div>
         <div class="impact-stats">
@@ -624,9 +632,9 @@ $schemaContext = [
           <details open>
             <summary>How does the PM Surya Ghar subsidy process work with Dakshayani?</summary>
             <div class="faq-body">
-              <p>Our subsidy cell helps raise your application on the PM Surya Ghar portal after signing. We coordinate site photographs, DISCOM feasibility, and documentation uploads. Once inspection is complete, the subsidy is credited directly to your bank account while we reconcile the balance with transparent invoices.</p>
+              <p>We help eligible residential customers with PM Surya Ghar registration, documentation and DISCOM coordination. Subsidy depends on system capacity, scheme requirements, inspection and approval; it is not guaranteed.</p>
               <ul>
-                <li>Dedicated case manager for every household or MSME</li>
+                <li>Application guidance for eligible residential customers</li>
                 <li>Weekly status updates via WhatsApp and email</li>
                 <li>Support with Aadhaar e-sign, net-metering forms, and bank coordination</li>
               </ul>
@@ -635,7 +643,7 @@ $schemaContext = [
           <details>
             <summary>What is the typical timeline for net-metering approvals in Jharkhand?</summary>
             <div class="faq-body">
-              <p>Approval timelines vary by connection type, load sanction, and DISCOM review. Our engineering desk submits drawings, follows up with the DISCOM office, and schedules meter installation so you can start exporting power without delays.</p>
+              <p>Timelines depend on your connection, sanctioned load, DISCOM feasibility, inspection and meter availability. We assist with documents and coordination; approval dates are set by the DISCOM.</p>
               <ul>
                 <li>Pre-filled DISCOM forms and load details submitted by our team</li>
                 <li>Joint inspection with DISCOM engineers for faster closure</li>
@@ -650,7 +658,7 @@ $schemaContext = [
     <section id="contact-form" class="section contact-section">
       <div class="head container">
         <h2>Your Hassle-Free Solar Future Starts Here</h2>
-        <p>Talk to Vishesh Vardhan’s team about your PM Surya Ghar subsidy slot.</p>
+        <p>Talk to Vishesh Vardhan’s team about system sizing, site surveys and PM Surya Ghar eligibility. Call or WhatsApp 9am–9pm daily.</p>
       </div>
 
       <div class="container grid cols-2">
@@ -816,7 +824,7 @@ $schemaContext = [
     });
   </script>
 
-  <script src="script.js" defer></script>
+  <script src="script.js?v=<?= filemtime(__DIR__ . '/script.js') ?>" defer></script>
   <script src="site-content.js" defer></script>
 </body>
 </html>
