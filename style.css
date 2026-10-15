@@ -673,7 +673,16 @@ p {
 
 @media (prefers-reduced-motion: reduce) {
   .subheader-marquee__inner {
-    animation-duration: calc(var(--marquee-duration, 18s) * 1.5);
+    animation: none;
+    transform: none;
+    width: 100%;
+  }
+  .subheader-marquee__track {
+    white-space: normal;
+    flex-wrap: wrap;
+  }
+  .subheader-marquee__track[aria-hidden="true"] {
+    display: none;
   }
 }
 
@@ -2687,6 +2696,12 @@ body.site-search-open {
     var(--hero-image-url);
   background-size: cover;
   background-position: center;
+}
+
+/* Keep lettering inside the promotional illustration out of the text backdrop. */
+body:not([data-festival-theme]) .hero--solar,
+body[data-festival-theme="default"] .hero--solar {
+  background-image: linear-gradient(125deg, #082f49, #0f4f61);
 }
 
 .home-dynamic-section {
