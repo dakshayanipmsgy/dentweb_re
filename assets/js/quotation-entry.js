@@ -38,7 +38,7 @@
     const status=document.createElement('p');status.setAttribute('role','status');lookup.append(status);
     lookup.addEventListener('submit',async e=>{
       e.preventDefault();const mobile=lookup.querySelector('[name=lookup_mobile]').value.trim();
-      const current=field('customer_mobile').value.trim();
+      const current=lookup.dataset.currentMobile ?? field('customer_mobile').value.trim();
       if(current&&current!==mobile&&dirty&&!window.confirm('Load a different customer? Your system and price entries will be retained.'))return;
       const button=lookup.querySelector('button');button.disabled=true;status.textContent='Finding customer…';
       try{
@@ -56,10 +56,11 @@
           if(current!==mobile||!field('sales_followup_date').value)field('sales_followup_date').value=row.next_followup_date||'';
           status.textContent='Customer details loaded. Review any missing fields.';
         }else{
-          if(current!==mobile){['customer_name','billing_address','site_address','consumer_account_no','meter_number','sales_assigned_to','sales_followup_date','sales_outcome'].forEach(n=>{if(field(n))field(n).value='';});}
+          if(current!==mobile&&(!('currentMobile' in lookup.dataset)||current!=='')){['customer_name','billing_address','site_address','consumer_account_no','meter_number','sales_assigned_to','sales_followup_date','sales_outcome'].forEach(n=>{if(field(n))field(n).value='';});}
           ['type','lead_id','lead_mobile'].forEach(k=>{if(field('source_'+k))field('source_'+k).value='';});
           status.textContent='No existing record found. Enter the customer name to continue.';
         }
+        if('currentMobile' in lookup.dataset)lookup.dataset.currentMobile=mobile;
         form.dispatchEvent(new Event('input',{bubbles:true}));field('customer_name').focus();
       }catch(error){status.textContent=error.message||'Lookup failed. All entered details are retained.';}
       finally{button.disabled=false;}

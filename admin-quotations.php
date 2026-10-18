@@ -2047,6 +2047,7 @@ if ($savedAnnualGenerationForEdit === '') {
 <link rel="stylesheet" href="assets/css/admin-unified.css">
 <link rel="stylesheet" href="assets/css/quote-panel-layout-designer.css">
 <link rel="stylesheet" href="assets/css/quotation-entry.css">
+<link rel="stylesheet" href="assets/css/quotation-entry-layout.css">
 <style>
 /* Quotation-only layout helpers. Shared commercial chrome comes from admin-unified.css. */
 .section-card{border:1px solid var(--admin-border);border-radius:14px;padding:0;background:#fff;margin-bottom:.85rem;overflow:hidden;box-shadow:var(--admin-shadow-soft)}
@@ -3085,4 +3086,4 @@ window.quoteFormAutofillConfig = {
   update();
 })();
 
-</script><?php if ($tab === 'bulk'): ?><script src="assets/vendor/browser-export/paged.polyfill.min.js"></script><script src="assets/vendor/browser-export/html2canvas.min.js"></script><script src="assets/vendor/browser-export/jspdf.umd.min.js"></script><script src="assets/vendor/browser-export/fflate.min.js"></script><script src="assets/js/quotation-browser-export.js"></script><?php endif; ?><?php if ($tab === 'editor'): ?><script src="assets/js/quotation-entry.js"></script><script src="assets/js/quotation-rich-text.js"></script><script src="assets/js/quotation-save-new-tab.js"></script><script src="assets/js/quote-panel-layout-designer.js?v=<?= rawurlencode((string) (filemtime(__DIR__ . '/assets/js/quote-panel-layout-designer.js') ?: '1')) ?>"></script><script src="assets/js/quote-form-autofill.js"></script><?php endif; ?></main></body></html>
+</script><?php if ($tab === 'bulk'): ?><script src="assets/vendor/browser-export/paged.polyfill.min.js"></script><script src="assets/vendor/browser-export/html2canvas.min.js"></script><script src="assets/vendor/browser-export/jspdf.umd.min.js"></script><script src="assets/vendor/browser-export/fflate.min.js"></script><script src="assets/js/quotation-browser-export.js"></script><?php endif; ?><?php if ($tab === 'editor'): ?><script src="assets/js/quotation-entry.js"></script><script src="assets/js/quotation-entry-layout.js"></script><script src="assets/js/quotation-rich-text.js"></script><script src="assets/js/quotation-save-new-tab.js"></script><script src="assets/js/quote-panel-layout-designer.js?v=<?= rawurlencode((string) (filemtime(__DIR__ . '/assets/js/quote-panel-layout-designer.js') ?: '1')) ?>"></script><script src="assets/js/quote-form-autofill.js"></script><?php endif; ?></main></body></html>
