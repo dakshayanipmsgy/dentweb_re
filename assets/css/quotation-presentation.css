@@ -19,6 +19,17 @@
   --radius: 12px;
   --shadow: 0 6px 26px rgba(7, 60, 89, .05);
 }
+
+/* Keep comparison labels readable after reducing the available funding paths. */
+.sf-finance-table-wrap { max-width:100%; overflow-x:auto; }
+.sf-finance-table { width:100%; min-width:640px; border-collapse:collapse; }
+.sf-finance-table thead th { white-space:normal; overflow-wrap:anywhere; min-width:140px; }
+.sf-finance-table th:first-child { position:static; min-width:175px; }
+.customer-response { display:flex; flex-wrap:wrap; gap:12px; }
+.buying-summary h2 { font-size:1.3rem; line-height:1.4; }
+#quotePaymentAmount { font:inherit; padding:12px; border:1px solid #617e8b; border-radius:6px; margin:8px 12px 8px 0; }
+#quotation-payment-page-qr img { width:160px; height:160px; }
+@media print { .sf-finance-table { min-width:0; } .sf-finance-table thead th { min-width:0; } .sf-finance-table th:first-child { min-width:0; } .customer-response { display:none; } }
 body { background: var(--page); line-height: 1.65; }
 .wrap { max-width: 1120px; padding: 32px 24px; }
 .card { padding: 28px; margin-bottom: 20px; }

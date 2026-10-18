@@ -26,7 +26,7 @@ $redirectWith = static function (string $type, string $msg, string $templateId =
 
 $sanitizeHtml = static function (string $value): string {
     $value = trim((string) $value);
-    return strip_tags($value, '<p><br><ul><ol><li><strong><em><b><i><u><table><thead><tbody><tr><td><th>');
+    return quotation_workflow_clean_html($value);
 };
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -159,7 +159,7 @@ $diagramOptions = array_values(array_filter($library, static fn($m): bool => is_
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Template Blocks & Media</title>
 <style>body{font-family:Arial,sans-serif;background:#f4f6fa;margin:0}.wrap{padding:16px}.card{background:#fff;border:1px solid #dbe1ea;border-radius:12px;padding:14px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.btn{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer}.btn.secondary{background:#fff;color:#1f2937;border:1px solid #cbd5e1}label{font-size:12px;font-weight:700;display:block;margin-bottom:4px}textarea,input,select{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;padding:8px}textarea{min-height:90px}.ok{background:#ecfdf5;padding:8px;border:1px solid #34d399}.err{background:#fef2f2;padding:8px;border:1px solid #f87171}.media-item{display:grid;grid-template-columns:110px 1fr;gap:10px;border:1px solid #dbe1ea;border-radius:8px;padding:8px;margin-bottom:8px}.thumb{max-width:100px;max-height:80px}</style>
-</head><body><main class="wrap">
+<link rel="stylesheet" href="assets/css/quotation-entry.css"></head><body><main class="wrap">
 <div class="card"><h1>Template Blocks & Media Library</h1><a class="btn secondary" href="admin-documents.php?tab=templates">Back to Documents</a></div>
 <?php if ($message !== ''): ?><div class="<?= $status === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($message, ENT_QUOTES) ?></div><?php endif; ?>
 <div class="card">
@@ -201,4 +201,4 @@ $diagramOptions = array_values(array_filter($library, static fn($m): bool => is_
 </div></div>
 <?php endforeach; ?>
 </div>
-</main></body></html>
+</main><script src="assets/js/quotation-rich-text.js"></script></body></html>

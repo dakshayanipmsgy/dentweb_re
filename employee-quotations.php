@@ -22,6 +22,7 @@ $templateBlocks = documents_sync_template_block_entries($templates);
 $company = array_merge(documents_company_profile_defaults(), json_load(documents_settings_dir() . '/company_profile.json', []));
 
 $redirectWith = static function (string $type, string $msg): void {
+    if ($type==='error' && strtolower((string)($_SERVER['HTTP_X_QUOTATION_SAVE']??''))==='1'){http_response_code(422);header('Content-Type: application/json');echo json_encode(['ok'=>false,'message'=>$msg]);exit;}
     header('Location: employee-quotations.php?' . http_build_query(['status' => $type, 'message' => $msg]));
     exit;
 };
@@ -208,6 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['special_requests_text'] = trim((string) ($_POST['special_requests_text'] ?? ''));
         $quote['special_requests_inclusive'] = $quote['special_requests_text'];
         $quote['special_requests_override_note'] = true;
+        $quote['workflow_version'] = 2;
         $quote['annexures_overrides'] = $annexure;
         $quote['cover_notes_html_snapshot'] = trim((string) ($annexure['cover_notes'] ?? ''));
         $quote['template_attachments'] = (($templateBlocks[$templateSetId]['attachments'] ?? null) && is_array($templateBlocks[$templateSetId]['attachments'])) ? $templateBlocks[$templateSetId]['attachments'] : documents_template_attachment_defaults();

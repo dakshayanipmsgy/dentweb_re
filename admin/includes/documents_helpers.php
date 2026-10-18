@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../includes/customer_admin.php';
 require_once __DIR__ . '/../../includes/leads.php';
+require_once __DIR__ . '/../../includes/quotation_workflow.php';
 
 function documents_php_error_log_path(): string
 {

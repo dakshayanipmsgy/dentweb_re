@@ -798,6 +798,7 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         'loan_above_2_lacs' => 'loan_above_2_lacs_subsidy_to_loan',
     ];
     $primaryScenario = $legacyPrimaryMap[$primaryScenario] ?? $primaryScenario;
+    if (quotation_workflow_enabled($quote)) $primaryScenario=quotation_workflow_primary($primaryScenario);
 
     $scenarioPrices = is_array($quote['scenario_prices'] ?? null) ? $quote['scenario_prices'] : [];
     $financeScenariosRaw = is_array($quote['finance_scenarios'] ?? null) ? $quote['finance_scenarios'] : [];
@@ -876,6 +877,7 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         if ($row === [] && str_contains($scenarioKey, 'loan_above_2_lacs')) {
             $row = $legacyAbove2;
         }
+        if (quotation_workflow_enabled($quote) && str_contains($scenarioKey,'subsidy_not_to_loan')) continue;
         $isSelfFunded = $scenarioKey === 'self_funded';
         $isSubsidyNotToLoan = str_contains($scenarioKey, 'subsidy_not_to_loan');
         $isAbove2 = str_contains($scenarioKey, 'loan_above_2_lacs');
@@ -904,10 +906,20 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
             $loanRatioPct = max(0, min(100, 100 - $marginRatioPct));
         }
         $financeMode = (string) ($row['finance_mode'] ?? 'ratio') === 'manual' ? 'manual' : 'ratio';
+        if (quotation_workflow_enabled($quote) && !$isSelfFunded) {
+            $standard = quotation_workflow_loan($price, $isAbove2);
+            $loanAmount=$standard['loan_amount_rs']; $marginMoney=$standard['margin_money_rs'];
+            $tenureYears=10; $tenureMonths=120;
+            $row['effective_loan_principal_rs']=max(0,$loanAmount-$scenarioSubsidy);
+            $row['emi_rs']=0;
+        }
         $scenarioResidual = $residualBill;
         $applicable = $isAbove2
             ? solar_finance_is_above_2_lacs_applicable($price)
             : (bool) ($row['applicable'] ?? true);
+        if (quotation_workflow_enabled($quote) && $isAbove2) {
+            $applicable = $loanAmount > 200000 && (bool) ($row['applicable'] ?? true);
+        }
         $effectivePrincipal = 0.0;
         $initialInvestment = max(0, $price - $scenarioSubsidy);
         $emi = 0.0;
