@@ -907,7 +907,10 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
         }
         $financeMode = (string) ($row['finance_mode'] ?? 'ratio') === 'manual' ? 'manual' : 'ratio';
         if (quotation_workflow_enabled($quote) && !$isSelfFunded) {
-            $standard = quotation_workflow_loan($price, $isAbove2);
+            $standard = !empty($row['finance_override'])
+                ? quotation_workflow_finance($price, $isAbove2, $financeMode,
+                    $toFloat($row['requested_loan_ratio_pct'] ?? $loanRatioPct), $loanAmount)
+                : quotation_workflow_loan($price, $isAbove2);
             $loanAmount=$standard['loan_amount_rs']; $marginMoney=$standard['margin_money_rs'];
             $tenureYears=10; $tenureMonths=120;
             $row['effective_loan_principal_rs']=max(0,$loanAmount-$scenarioSubsidy);
@@ -991,6 +994,8 @@ function solar_finance_normalize_for_quote_render(array $quote, array $calc, arr
             'net_investment_after_subsidy' => $isSelfFunded ? max(0, $price - $scenarioSubsidy) : max(0, $price - $scenarioSubsidy),
             'net_own_investment_after_subsidy' => $isSelfFunded ? max(0, $price - $scenarioSubsidy) : $initialInvestment,
             'finance_mode' => $financeMode,
+            'finance_override' => !empty($row['finance_override']),
+            'requested_loan_ratio_pct' => max(0, min(100, $toFloat($row['requested_loan_ratio_pct'] ?? $loanRatioPct))),
             'margin_ratio_pct' => $marginRatioPct,
             'loan_ratio_pct' => $loanRatioPct,
         ];

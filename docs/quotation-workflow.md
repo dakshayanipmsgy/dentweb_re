@@ -30,10 +30,19 @@ viewing historical records does not change their saved financial interpretation.
 The editor warns before upgrading a historical quotation. Existing approval,
 acceptance, locking, revision, import and subsequent-document routes remain.
 
-* Up to Rs. 2 lakh: loan = min(90% of scenario price, Rs. 2,00,000).
+* Up to Rs. 2 lakh defaults to min(90% of scenario price, Rs. 2,00,000).
 * Margin = scenario price minus the loan.
-* Above Rs. 2 lakh: retain the editor's 80% financing rule. It applies only when
+* Above Rs. 2 lakh defaults to 80% financing. It applies only when
   the resulting loan exceeds Rs. 2,00,000 and this comparison is enabled.
+* Both bands have editable Finance mode, Margin %, Loan %, Margin Rs. and Loan
+  Rs. fields. Editing a percentage selects Ratio mode; editing either rupee
+  amount selects Manual mode and recalculates its complement and both percentages.
+  Ratio mode retains the requested percentage across price changes and caps;
+  Manual mode retains the loan amount. Switching modes affects only that band.
+  The up-to-Rs.-2-lakh cap and loan-not-greater-than-price limits still apply.
+  Draft text is retained while typing; limits are finalized when leaving the
+  edited field. Merely focusing/tabbing through a field does not change the ratio.
+  Saved custom splits survive the admin's normalization and customer rendering.
 * Both loan bands use 10 years / 120 months. Submitted nonstandard tenures are
   rejected in the admin editor; derived values are recalculated on the server.
 * New customer comparisons exclude subsidy-self-kept scenarios. The payment
@@ -71,6 +80,11 @@ sanitization, template modes, payment URI and search filters. Existing quotation
 tests cover imports, status transitions, revisions, acceptance, cloning, list
 refresh and print graphics. The bulk export executable test uses a Unix shell
 fixture and cannot complete under native Windows.
+
+Run `node tests/quotation_linked_finance_test.cjs` for linked input/change/blur
+checks against the actual form script. It covers all four editable numeric
+fields and mode switches in both bands, capping, price changes, uninterrupted
+multi-digit typing, untouched focus/blur, bill preservation and saved initialization.
 
 Local browser checks used synthetic customer data to create, save, approve and
 share a quotation, verify capped financing, preserve manual bill inputs across

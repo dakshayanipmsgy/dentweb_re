@@ -22,6 +22,22 @@ function quotation_workflow_loan(float $price, bool $above = false): array
         'tenure_years' => 10, 'tenure_months' => 120];
 }
 
+/** Normalize a linked editable split; retain the requested ratio across cap/price changes. */
+function quotation_workflow_finance(float $price, bool $above, string $mode, float $requestedPct, float $requestedLoan): array
+{
+    $price = round(max(0, is_finite($price) ? $price : 0), 2);
+    $mode = $mode === 'manual' ? 'manual' : 'ratio';
+    $requestedPct = max(0, min(100, is_finite($requestedPct) ? $requestedPct : ($above ? 80 : 90)));
+    $loan = $mode === 'manual' ? (is_finite($requestedLoan) ? $requestedLoan : 0) : $price * $requestedPct / 100;
+    $loan = round(max(0, min($price, $above ? $price : 200000, $loan)), 2);
+    $margin = round($price - $loan, 2);
+    return ['finance_mode'=>$mode, 'finance_override'=>true, 'requested_loan_ratio_pct'=>$requestedPct,
+        'loan_amount_rs'=>$loan, 'margin_money_rs'=>$margin,
+        'loan_ratio_pct'=>$price > 0 ? $loan / $price * 100 : 0,
+        'margin_ratio_pct'=>$price > 0 ? $margin / $price * 100 : 0,
+        'tenure_years'=>10, 'tenure_months'=>120];
+}
+
 /** Integer paise arithmetic keeps the entered breakdown and payable total identical. */
 function quotation_workflow_breakdown(array $request, float $selfFundedPrice): ?array
 {
