@@ -2142,7 +2142,7 @@ $areaOptions = documents_quote_panel_orientation_allowed_area_types();
 $directionOptions = documents_quote_panel_orientation_allowed_directions();
 $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
 ?>
-<div style="grid-column:1/-1" class="form-section-card panel-layout-section">
+<div style="grid-column:1/-1" class="form-section-card panel-layout-section" data-builder-section="customer-layout">
   <div class="panel-layout-section-head">
     <div>
       <div class="panel-layout-eyebrow">Customer-facing layout</div>
@@ -2174,7 +2174,7 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
   <div class="panel-layout-designer" data-panel-layout-designer data-initial-layout="<?= htmlspecialchars(json_encode(['grid'=>$orientation['grid'] ?? ['columns'=>36,'rows'=>24,'cell_unit'=>'grid','editor_cell_px'=>18,'major_line_every'=>5,'customer_grid_visible'=>false], 'objects'=>$orientation['objects'] ?? []], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
     <div class="panel-layout-toolbar">
       <div><strong>Build the proposed roof layout</strong><div class="muted">Use Keep-out inside the designer for tanks, access zones or other areas where panels should not be placed.</div></div>
-      <div class="panel-layout-actions"><button type="button" class="btn secondary" data-layout-reset>Reset layout</button><button type="button" class="btn secondary" data-layout-clear>Clear all</button></div>
+      <div class="panel-layout-actions"><button type="button" class="btn secondary" data-layout-focus>Expand workspace</button><button type="button" class="btn secondary" data-layout-undo disabled>Undo</button><button type="button" class="btn secondary" data-layout-redo disabled>Redo</button><button type="button" class="btn secondary" data-layout-reset>Reset layout</button><button type="button" class="btn secondary" data-layout-clear>Clear all</button></div>
     </div>
 
     <div class="panel-layout-controls">
@@ -2184,6 +2184,16 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
       <div class="panel-layout-control-help">Resize the grid only when the roof needs more or less working space. Panel dimensions remain standardized.</div>
     </div>
 
+    <div class="panel-layout-array">
+      <strong>Quick panel array</strong>
+      <label>Rows<input type="number" min="1" max="20" value="2" data-array-rows></label>
+      <label>Panels per row<input type="number" min="1" max="20" value="4" data-array-columns></label>
+      <label>Orientation<select data-array-orientation><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+      <label>Gap (grid cells)<input type="number" min="0" max="5" value="1" data-array-gap></label>
+      <button type="button" class="btn secondary" data-layout-add-array>Add array</button>
+    </div>
+    <div class="panel-layout-view-tabs" role="group" aria-label="Layout view"><button type="button" data-layout-view="edit" aria-pressed="true">Design canvas</button><button type="button" data-layout-view="preview" aria-pressed="false">Customer preview</button><span data-layout-count aria-live="polite">0 panels</span></div>
+    <div class="panel-layout-preview" data-layout-preview hidden><div data-layout-preview-drawing></div><p>Concept placement · Not to scale. North, roof dimensions, setbacks and structure require site verification.</p></div>
     <div class="panel-layout-main">
       <div class="panel-layout-scroll" data-layout-scroll><div class="panel-layout-grid" data-layout-grid tabindex="0" aria-label="Solar panel layout grid"></div></div>
       <aside class="panel-layout-palette">
@@ -2196,14 +2206,14 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
 
         <div class="panel-layout-palette-divider"></div>
         <div class="panel-layout-selected-title">Selected item</div>
-        <input data-layout-text placeholder="Label / text for selected item">
+        <label>Selected item label<input data-layout-text placeholder="Select an item first"></label>
         <div class="panel-layout-nudges"><button type="button" data-layout-move="up" aria-label="Move up">↑</button><button type="button" data-layout-move="left" aria-label="Move left">←</button><button type="button" data-layout-move="right" aria-label="Move right">→</button><button type="button" data-layout-move="down" aria-label="Move down">↓</button></div>
         <div class="panel-layout-selected-actions"><button type="button" data-layout-rotate>Rotate</button><button type="button" data-layout-duplicate>Duplicate</button><button type="button" class="danger" data-layout-delete>Delete</button></div>
         <div class="panel-layout-status" data-layout-status>Starting layout designer…</div>
       </aside>
     </div>
 
-    <div class="panel-layout-designer-footer"><span>Tip:</span> Keep the drawing simple and readable—the customer quotation automatically crops the visual to the occupied roof area.</div>
+    <div class="panel-layout-designer-footer"><span>Tip:</span> Tab to an item and press Enter to select it. Use arrow keys to move it, Delete to remove it. Undo is available for layout edits. The grid is schematic, not a measured roof boundary.</div>
   </div>
 </div>
 <?php $editorImportantSettings = documents_quote_resolve_important_points($editing, $quoteDefaults); $editorImportantPreview = documents_quote_render_important_points($editorImportantSettings); ?><div class="full-span" style="grid-column:1/-1;padding:12px;border:1px solid #f3d47a;border-radius:12px;background:#fffdf4"><h3 style="margin-top:0">Important Points shown to customer</h3><p class="muted">Draft, approved, and shared quotations use the current global Important Points. The configuration is saved permanently when the quotation is accepted.</p><div class="quotation-preview"><?= $editorImportantPreview !== '' ? $editorImportantPreview : '<p class="muted">Important Points are disabled or no active points are configured.</p>' ?></div></div><div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
@@ -2422,6 +2432,7 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
         {id:'pricing-template',title:'Pricing, tax, and quotation template',help:'Choose the template and confirm quotation dates, price, GST, and pricing mode.',open:true},
         {id:'finance-savings',title:'Finance, subsidy, and savings assumptions',help:'Optional assumptions used in finance, subsidy, savings, and payback calculations.',open:false,advanced:true},
         {id:'items-scope',title:'Items / scope / structured quotation items',help:'Build the customer-facing scope using the existing structured item tools.',open:true},
+        {id:'customer-layout',title:'Customer-facing layout',help:'Design the proposed rooftop arrangement and preview what the customer will see.',open:false},
         {id:'notes-terms',title:'Notes, terms, annexures, customer-facing details',help:'Optional notes, terms, annexure text, and appearance overrides.',open:false,advanced:true}
       ];
       const sections=Object.fromEntries(sectionDefinitions.map((definition,index)=>{

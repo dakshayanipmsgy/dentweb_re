@@ -18,7 +18,7 @@ $raw = [
 
 $normalized = documents_quote_normalize_panel_orientation($raw);
 $html = documents_quote_render_panel_orientation_diagram($normalized);
-preg_match_all('/<rect x="[^"]+" y="[^"]+" width="([0-9.]+)" height="([0-9.]+)" rx="4" fill="#0f766e"/', $html, $panelRects, PREG_SET_ORDER);
+preg_match_all('/<rect x="[^"]+" y="[^"]+" width="([0-9.]+)" height="([0-9.]+)" rx="4" fill="#163f54"/', $html, $panelRects, PREG_SET_ORDER);
 $portraitRatio = isset($panelRects[0]) && (float)$panelRects[0][2] > 0 ? (float)$panelRects[0][1] / (float)$panelRects[0][2] : 0;
 $landscapeRatio = isset($panelRects[1]) && (float)$panelRects[1][2] > 0 ? (float)$panelRects[1][1] / (float)$panelRects[1][2] : 0;
 $defaults = documents_quote_normalize_panel_orientation(['enabled' => true]);
@@ -43,6 +43,9 @@ $assertions = [
     'public renderer uses clean cropped grid SVG without editor grid by default' => str_contains($html, 'Solar panel grid layout diagram') && str_contains($html, 'Main roof') && !str_contains($html, '<script>') && !str_contains($html, 'fill="url(#grid)"'),
     'public renderer uses canonical portrait module aspect ratio' => abs($portraitRatio - 0.52) < 0.01,
     'public renderer uses canonical landscape module aspect ratio' => abs($landscapeRatio - 1.92) < 0.01,
+    'drawing does not invent a north arrow when none was placed' => !str_contains($html, '>N</text>'),
+    'drawing uses printable SVG text instead of foreignObject' => str_contains($html, '<tspan') && !str_contains($html, '<foreignObject'),
+    'drawing has solar cell detail and identifies the schematic' => str_contains($html, 'id="solarCells"') && str_contains($html, 'schematic'),
 ];
 
 foreach ($assertions as $label => $passed) {

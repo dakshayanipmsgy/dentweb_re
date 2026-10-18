@@ -36,6 +36,7 @@
   title('finance-savings', '', 'Finance & savings', 'Edit linked loan splits, rates and generation assumptions.');
   title('items-scope', '', 'Scope & extra requirements', 'Review the selected kit, add items or record a special requirement.');
   title('notes-terms', '', 'Notes & annexures', 'Use the saved template, or customize individual sections.');
+  title('customer-layout', '4', 'Customer-facing layout', 'Build a visual rooftop proposal and check the customer preview.');
   const customerExtra = options(customer, 'Billing, meter & customer details');
   const oldCustomerExtra = customer.querySelector(':scope > .optional-fields');
   if (oldCustomerExtra) {
@@ -125,6 +126,7 @@
 
   const main = document.createElement('div'); main.className = 'entry-main-column';
   ['customer-details','system-details','pricing-template'].forEach(id => main.append(card(id)));
+  if (card('customer-layout')) main.append(card('customer-layout'));
   const optional = document.createElement('section'); optional.className = 'entry-options';
   const heading = document.createElement('h3'); heading.textContent = 'Optional details'; optional.append(heading);
   ['finance-savings','items-scope','notes-terms'].forEach(id => { card(id).open = false; optional.append(card(id)); });
@@ -140,7 +142,7 @@
   save.setAttribute('aria-label','Review and save quotation');
   save.style.gridColumn = ''; save.style.gridRow = '';
   const saveHeading = save.querySelector('.static-section-heading');
-  saveHeading.querySelector('.section-number').textContent = '4';
+  saveHeading.querySelector('.section-number').textContent = '5';
   saveHeading.querySelector('strong').textContent = 'Review & save';
   saveHeading.querySelector('small').textContent = 'Your details stay here if a field needs attention.';
   const total = document.createElement('div'); total.className = 'entry-live-total'; total.setAttribute('aria-live','polite');
@@ -159,7 +161,7 @@
   const progress = editor.querySelector('.quote-builder-progress');
   if (progress) {
     progress.replaceChildren();
-    [['customer-details','Customer'],['system-details','System'],['pricing-template','Price'],['save-actions','Review']].forEach(([id,label], index) => {
+    [['customer-details','Customer'],['system-details','System'],['pricing-template','Price'],['customer-layout','Layout'],['save-actions','Review']].forEach(([id,label], index) => {
       const button = document.createElement('button'); button.type = 'button'; button.dataset.target = 'quote-' + id;
       button.textContent = (index + 1) + '  ' + label; progress.append(button);
     });

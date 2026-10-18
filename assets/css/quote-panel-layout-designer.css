@@ -59,3 +59,29 @@
 @container(max-width:940px){.panel-layout-main{grid-template-columns:1fr}.panel-layout-palette{position:static;width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}.panel-layout-palette-title,.panel-layout-palette-divider,.panel-layout-selected-title,.panel-layout-palette input,.panel-layout-nudges,.panel-layout-selected-actions,.panel-layout-status{grid-column:1/-1}}
 @media(max-width:760px){.panel-layout-section-head,.panel-layout-designer-heading{display:grid}.panel-layout-toggle,.panel-layout-designer-badge{justify-self:start}.panel-layout-scroll{min-height:330px;max-height:60vh}.panel-layout-palette{grid-template-columns:1fr}.panel-layout-controls{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.panel-layout-meta-grid,.panel-layout-controls{grid-template-columns:1fr}.panel-layout-designer{padding:10px}.panel-layout-scroll{padding:10px}}
+/* Quotation design studio: compact tools, a generous canvas and a clean preview. */
+.panel-layout-section{box-shadow:none;background:#fff;padding:18px;border-radius:14px}
+.panel-layout-designer{background:#f2f6f4;border-color:#d5e2dc;box-shadow:none}
+.panel-layout-array{display:flex;align-items:end;flex-wrap:wrap;gap:10px;padding:14px;background:#fff;border:1px solid #d5e2dc;border-radius:12px;margin-bottom:12px}
+.panel-layout-array>strong{font-size:12px;align-self:center;margin-right:auto;color:#245850}
+.panel-layout-array label{margin:0!important;flex:1 1 95px;max-width:150px;font-size:11px}
+.panel-layout-array input,.panel-layout-array select{width:100%}
+.panel-layout-view-tabs{display:flex;align-items:center;gap:6px;margin:14px 0}
+.panel-layout-view-tabs button{padding:10px 14px;background:#fff;border:1px solid #c8d9d2;border-radius:8px;color:#315d54;cursor:pointer;font:inherit;font-size:12px}
+.panel-layout-view-tabs button[aria-pressed=true]{background:#18594f;color:#fff;border-color:#18594f}
+.panel-layout-view-tabs>span{margin-left:auto;font-size:11px;color:#526f66}
+.panel-layout-preview{border:1px solid #d2dfd8;background:#fff;border-radius:12px;padding:16px;color:#526f66}
+.panel-layout-preview svg{display:block;width:100%;max-height:600px}
+.panel-layout-preview p{font-size:12px;margin:10px 0 0}
+.panel-layout-designer [hidden]{display:none!important}
+.panel-layout-designer button:disabled{opacity:.45;cursor:default}
+.panel-layout-designer button:focus-visible,.layout-object:focus-visible{outline:3px solid #c18c43;outline-offset:3px}
+.panel-layout-scroll{background:#e4ece7;box-shadow:none;min-height:400px}
+.layout-object.panel{border-color:transparent;background:transparent}
+.layout-object-module{background:repeating-linear-gradient(90deg,transparent 0 23%,#91bec338 24% 25%),repeating-linear-gradient(0deg,transparent 0 13%,#91bec338 14% 15%),linear-gradient(135deg,#204d61,#102f42);border:1px solid #7aa3ae;border-radius:3px;color:#fff;box-shadow:0 3px 4px #102f4225;text-shadow:0 1px 3px #102f42}
+.layout-object.selected{outline-color:#b98137}
+.panel-layout-palette>label{grid-column:1/-1}
+#quotationEditor.layout-focus .entry-workspace{display:block}
+#quotationEditor.layout-focus .entry-review{position:static;max-height:none;margin-top:16px}
+#quotationEditor #quote-customer-layout>.section-grid{display:block}
+@media(max-width:600px){.panel-layout-array label{max-width:none;flex-basis:40%}.panel-layout-array>strong{flex-basis:100%}.panel-layout-view-tabs{flex-wrap:wrap}.panel-layout-view-tabs>span{flex-basis:100%;margin:6px 0 0}.panel-layout-palette{grid-template-columns:repeat(2,minmax(0,1fr))}.panel-layout-section{padding:10px}.panel-layout-actions{gap:6px}}
