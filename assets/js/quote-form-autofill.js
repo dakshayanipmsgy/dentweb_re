@@ -63,7 +63,7 @@
         return Number.isFinite(n) ? n : 0;
     };
     const LOAN_UPTO_2_LACS_CAP_RS = 200000;
-    const LOAN_ABOVE_2_LACS_THRESHOLD_RATIO = 0.8;
+    const LOAN_ABOVE_2_LACS_THRESHOLD_RATIO = 1;
     const LOAN_ABOVE_2_LACS_THRESHOLD_RS = 200000;
     const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
     const isExistingQuote = () => !!(quoteIdInput && String(quoteIdInput.value || '').trim() !== '');
@@ -236,7 +236,13 @@
         marginPct = clamp(marginPct, 0, 100);
         loanPct = clamp(100 - marginPct, 0, 100);
 
-        const computedLoan = price * (defaults.loanPct / 100);
+        let requested = Number(ctx.requestedPctInput?.value);
+        if (!ctx.requestedPctInput || ctx.requestedPctInput.value === '') requested = defaults.loanPct;
+        if (changedField === 'margin_pct' || changedField === 'loan_pct') requested = loanPct;
+        if (changedField === 'mode') requested = pctFor(parseNum(ctx.loanRsInput?.value), price);
+        requested = clamp(requested, 0, 100);
+        if(ctx.requestedPctInput)ctx.requestedPctInput.value=String(requested);
+        const computedLoan = price * requested / 100;
         const amounts = enforceLoanRules(computedLoan, price, defaults.capLoan);
         const finalMarginPct = clamp(pctFor(amounts.margin, price), 0, 100);
         const finalLoanPct = clamp(100 - finalMarginPct, 0, 100);
@@ -274,12 +280,11 @@
         setIfAllowed(ctx.loanPctInput, round2(finalLoanPct), { force: true });
     };
 
-    const applyScenarioFinanceDefaults = (ctx, changedField) => {
+    const calculateScenarioFinance = (ctx, changedField) => {
         const defaults = getScenarioDefaults(ctx.type);
-        const mode = 'ratio';
-        if(ctx.modeInput)ctx.modeInput.value='ratio';
+        const mode = String(ctx.modeInput?.value || 'ratio') === 'manual' ? 'manual' : 'ratio';
         if(ctx.tenureInput)setIfAllowed(ctx.tenureInput,10,{force:true,noDecimals:true});
-        const isManualAmountChange = false;
+        const isManualAmountChange = changedField === 'margin_rs' || changedField === 'loan_rs';
 
         if (!isExistingQuote()) {
             if (fieldEmpty(ctx.marginPctInput)) setIfAllowed(ctx.marginPctInput, defaults.marginPct, {});
@@ -289,7 +294,7 @@
         } else {
             if (fieldEmpty(ctx.interestInput)) setIfAllowed(ctx.interestInput, defaults.interest, {});
             if (fieldEmpty(ctx.tenureInput)) setIfAllowed(ctx.tenureInput, defaults.tenure, { noDecimals: true });
-            if (changedField === 'init') return;
+            // Reconcile the displayed split with the saved requested ratio on opening.
         }
 
         if (isManualAmountChange) {
@@ -298,6 +303,7 @@
             return;
         }
         if (changedField === 'margin_pct' || changedField === 'loan_pct') {
+            if(ctx.modeInput)ctx.modeInput.value='ratio';
             syncScenarioByPercent(ctx, changedField);
             return;
         }
@@ -306,6 +312,17 @@
             return;
         }
         syncScenarioByPercent(ctx, changedField);
+    };
+
+    const pendingFinanceEdits = new WeakSet();
+    const applyScenarioFinanceDefaults = (ctx, changedField, commit = false) => {
+        const edited = {margin_pct:ctx.marginPctInput,loan_pct:ctx.loanPctInput,
+            margin_rs:ctx.marginRsInput,loan_rs:ctx.loanRsInput}[changedField];
+        const draft = edited?.value;
+        calculateScenarioFinance(ctx, changedField);
+        // Let the user finish typing e.g. 100000; clamping the first "1" would
+        // otherwise replace it with the minimum margin and corrupt later keystrokes.
+        if (edited && !commit) { edited.value = draft; pendingFinanceEdits.add(edited); }
     };
 
     const up2ScenarioCtx = {
@@ -331,6 +348,13 @@
         modeInput: above2ModeInput
     };
 
+    [up2ScenarioCtx,above2ScenarioCtx].forEach(ctx=>{
+        const name=ctx.type==='up2'?'loan_upto_2_lacs':'loan_above_2_lacs';
+        let input=field(name+'_requested_loan_ratio_pct');
+        if(!input){input=document.createElement('input');input.type='hidden';input.name=name+'_requested_loan_ratio_pct';input.value='';quoteForm.appendChild(input);}
+        ctx.requestedPctInput=input;
+    });
+
     const applyAllScenarioFinanceDefaults = (changedField) => {
         syncSelectedPrimarySystemPrice();
         applyScenarioFinanceDefaults(up2ScenarioCtx, changedField);
@@ -346,10 +370,8 @@
             if (!isApplicable) above2ApplicableInput.checked = false;
         }
         const shouldDisableAbove2Inputs = !isApplicable || (above2ApplicableInput && !above2ApplicableInput.checked);
-        [
-            above2ModeInput, above2MarginPctInput, above2LoanPctInput, above2MarginRsInput, above2LoanRsInput,
-            above2InterestInput, above2TenureInput
-        ].filter(Boolean).forEach((el) => {
+        [above2ModeInput,above2MarginPctInput,above2LoanPctInput,above2MarginRsInput,above2LoanRsInput].filter(Boolean).forEach(el=>{el.disabled=false;});
+        [above2InterestInput, above2TenureInput].filter(Boolean).forEach((el) => {
             el.disabled = shouldDisableAbove2Inputs;
         });
         if (!isApplicable && primaryScenarioInput && String(primaryScenarioInput.value || '').includes('loan_above_2_lacs')) {
@@ -389,9 +411,15 @@
     bindRecalc(transportInput, () => applyAllScenarioFinanceDefaults('price'));
     bindRecalc(discountInput, () => applyAllScenarioFinanceDefaults('price'));
 
-    [up2ModeInput, above2ModeInput, up2InterestInput, above2InterestInput, up2TenureInput, above2TenureInput].forEach((el) => {
-        el?.addEventListener('change', () => applyAllScenarioFinanceDefaults('mode'));
-        el?.addEventListener('input', syncLegacyLoanFields);
+    [up2ScenarioCtx,above2ScenarioCtx].forEach(ctx=>{
+        ctx.modeInput?.addEventListener('change',()=>{applyScenarioFinanceDefaults(ctx,'mode');syncLegacyLoanFields();});
+        [ctx.interestInput,ctx.tenureInput].forEach(el=>el?.addEventListener('input',syncLegacyLoanFields));
+        [['margin_pct',ctx.marginPctInput],['loan_pct',ctx.loanPctInput],['margin_rs',ctx.marginRsInput],['loan_rs',ctx.loanRsInput]].forEach(([kind,input])=>{
+            input?.addEventListener('blur',()=>{
+                if(!pendingFinanceEdits.has(input))return;
+                pendingFinanceEdits.delete(input);applyScenarioFinanceDefaults(ctx,kind,true);syncLegacyLoanFields();
+            });
+        });
     });
     up2MarginPctInput?.addEventListener('input', () => { applyScenarioFinanceDefaults(up2ScenarioCtx, 'margin_pct'); syncLegacyLoanFields(); });
     up2LoanPctInput?.addEventListener('input', () => { applyScenarioFinanceDefaults(up2ScenarioCtx, 'loan_pct'); syncLegacyLoanFields(); });

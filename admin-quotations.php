@@ -1067,8 +1067,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $transportationRs = round(max(0, $transportationRs), 2);
         $subsidyExpectedRs = round(max(0, $subsidyExpectedRs), 2);
         $discountRs = round(max(0, $discountRs), 2);
-        $loanAboveApplicable = ($priceLoanAbove2 * 0.8) > 200000 && !empty($_POST['loan_above_2_lacs_applicable']);
-        if (str_starts_with($primaryScenario, 'loan_above_2_lacs') && !$loanAboveApplicable) $redirectWith('error', 'Select an applicable funding option. The above Rs. 2 lakh option requires an 80% loan greater than Rs. 2,00,000.');
+        $loanAboveApplicable = $priceLoanAbove2 > 200000 && !empty($_POST['loan_above_2_lacs_applicable']);
         $quote['scenario_prices'] = [
             'self_funded' => ['price' => $priceSelfFunded],
             'loan_upto_2_lacs_subsidy_to_loan' => ['price' => $priceLoanUp2],
@@ -1187,10 +1186,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $tenureYears = (float) $value($name . '_tenure_years', $saved['tenure_years'] ?? ($savedLoanInputs['tenure_years'] ?? 0));
             if (!is_finite($tenureYears)) $tenureYears = 0.0;
             $tenureYears = 10.0;
-            $standard = quotation_workflow_loan($price, !$isUpTo2);
-            $loanAmount = $standard['loan_amount_rs']; $marginMoney = $standard['margin_money_rs'];
-            $marginRatio = $standard['margin_ratio_pct']; $loanRatio = $standard['loan_ratio_pct'];
-            $mode = 'ratio';
+            $requestedRatio = (float)$value($name . '_requested_loan_ratio_pct', $loanRatio);
+            $linked = quotation_workflow_finance($price, !$isUpTo2, $mode, $requestedRatio, $loanAmount);
+            $loanAmount = $linked['loan_amount_rs']; $marginMoney = $linked['margin_money_rs'];
+            $marginRatio = $linked['margin_ratio_pct']; $loanRatio = $linked['loan_ratio_pct'];
             return [
                 'price' => $price,
                 'subsidy' => $subsidyExpectedRs,
@@ -1207,12 +1206,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'emi_rs' => 0,
                 'residual_bill_rs' => 0,
                 'finance_mode' => $mode,
+                'finance_override' => true,
+                'requested_loan_ratio_pct' => $linked['requested_loan_ratio_pct'],
                 'margin_ratio_pct' => $marginRatio,
                 'loan_ratio_pct' => $loanRatio,
             ];
         };
         $loanUp2Base = $buildLoanScenario('loan_upto_2_lacs', $priceLoanUp2, isset($_POST['loan_upto_2_lacs_applicable']));
         $loanAbove2Base = $buildLoanScenario('loan_above_2_lacs', $priceLoanAbove2, $loanAboveApplicable);
+        $loanAboveApplicable = $loanAboveApplicable && $loanAbove2Base['loan_amount_rs'] > 200000;
+        $loanAbove2Base['applicable'] = $loanAboveApplicable;
+        foreach (['loan_above_2_lacs','loan_above_2_lacs_subsidy_to_loan','loan_above_2_lacs_subsidy_not_to_loan'] as $key) $quote['scenario_prices'][$key]['applicable'] = $loanAboveApplicable;
+        if (str_starts_with($primaryScenario, 'loan_above_2_lacs') && !$loanAboveApplicable) $redirectWith('error', 'The above Rs. 2 lakh option needs an actual loan greater than Rs. 2,00,000. Adjust the split or select another funding option.');
         $deriveLoanScenario = static function (array $base, bool $subsidyToLoan, float $subsidyExpectedRs): array {
             $marginMoney = max(0, (float) ($base['margin_money_rs'] ?? 0));
             $loanAmount = max(0, (float) ($base['loan_amount_rs'] ?? 0));
@@ -2228,6 +2233,8 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
 <div><label>Discount (₹)</label><input type="number" step="0.01" min="0" name="discount_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['discount_rs'] ?? ($editing['discount_rs'] ?? '0')), ENT_QUOTES) ?>"></div>
 <div><label>Discount note</label><input name="discount_note" value="<?= htmlspecialchars((string)($editing['finance_inputs']['discount_note'] ?? ($editing['discount_note'] ?? '')), ENT_QUOTES) ?>" placeholder="Optional (e.g. Festival Offer)"></div>
 <div><label>Subsidy ₹</label><input type="number" min="0" step="0.01" name="subsidy_expected_rs" value="<?= htmlspecialchars((string)($editing['finance_inputs']['subsidy_expected_rs'] ?? ''), ENT_QUOTES) ?>"><div class="muted"><a href="#" id="resetSubsidyDefault">Reset to scheme default</a></div></div>
+<?php foreach (['loan_upto_2_lacs'=>$editingLoanUp2Scenario,'loan_above_2_lacs'=>$editingLoanAbove2Scenario] as $prefix=>$scenario): ?><input type="hidden" name="<?= $prefix ?>_requested_loan_ratio_pct" value="<?= htmlspecialchars(quotation_number_input_value($scenario['requested_loan_ratio_pct'] ?? (empty($scenario['finance_override']) ? ($prefix==='loan_upto_2_lacs'?90:80) : ($scenario['loan_ratio_pct']??80))),ENT_QUOTES) ?>"><?php endforeach; ?>
+<div style="grid-column:1/-1"><p>All finance split fields are linked and editable. Editing a percentage uses Ratio mode; editing a rupee amount uses Manual mode. Ratio mode keeps your chosen percentage when the price changes; Manual mode keeps the loan amount. The up-to-₹2-lakh loan remains capped at ₹2,00,000. Both tenures remain 10 years.</p></div>
 <input type="hidden" name="loan_enabled" value="0">
 <input type="hidden" name="loan_amount" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['loan_amount'] ?? ''), ENT_QUOTES) ?>">
 <input type="hidden" name="loan_interest_pct" value="<?= htmlspecialchars((string)($editing['finance_inputs']['loan']['interest_pct'] ?? ''), ENT_QUOTES) ?>">
@@ -2968,18 +2975,19 @@ window.quoteFormAutofillConfig = {
     fillScenarioPrices();
 
     const toggleAbove2Applicability = () => {
-        const estimatedLoan = parseNum(above2Price?.value) * 0.8;
+        const estimatedLoan = parseNum(above2Price?.value);
         const isApplicable = estimatedLoan > 200000;
         const above2Fields = [
             ...document.querySelectorAll('[name^="loan_above_2_lacs_"]'),
             above2Applicable
         ].filter(Boolean);
         above2Fields.forEach((el) => {
+            if (/_finance_mode$|_margin_ratio_pct$|_loan_ratio_pct$|_margin_money_rs$|_loan_amount_rs$|_requested_loan_ratio_pct$/.test(el.name)) { el.disabled=false; return; }
             if (el === above2Applicable) {
                 if (!isApplicable) {
                     el.checked = false;
                     el.disabled = true;
-                    el.closest('label')?.setAttribute('title', 'Loan above ₹2 lacs requires 80% finance > ₹2,00,000');
+                    el.closest('label')?.setAttribute('title', 'Loan above ₹2 lacs requires an actual loan greater than ₹2,00,000');
                 } else {
                     el.disabled = false;
                 }

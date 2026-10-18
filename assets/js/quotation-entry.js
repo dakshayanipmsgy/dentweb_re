@@ -12,10 +12,6 @@
     const type=field('system_type')?.parentElement;
     if(model)systemSection.prepend(model);if(type)systemSection.prepend(type);
   }
-  ['loan_upto_2_lacs','loan_above_2_lacs'].forEach(prefix=>{
-    const mode=field(prefix+'_finance_mode');if(mode){mode.value='ratio';mode.disabled=true;}
-    ['margin_ratio_pct','loan_ratio_pct','margin_money_rs','loan_amount_rs'].forEach(suffix=>{const input=field(prefix+'_'+suffix);if(input){input.readOnly=true;input.tabIndex=-1;}});
-  });
   form.addEventListener('input', () => { dirty = true; });
   form.addEventListener('quotation-saved', () => { dirty = false; });
   window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue=''; } });
