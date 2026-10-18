@@ -1,0 +1,13 @@
+.charge-row{display:grid;grid-template-columns:minmax(160px,2fr) minmax(100px,1fr) auto;gap:12px;align-items:end;margin:12px 0}
+.quotation-rich-editor{border:1px solid #b8c9d2;border-radius:8px;overflow:hidden;background:#fff}
+.rich-toolbar{display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:#edf4f8}
+.rich-toolbar button{font:inherit;padding:6px 10px;border:1px solid #aebdca;background:#fff;color:#12283f;border-radius:5px;cursor:pointer}
+.rich-content{min-height:120px;max-height:500px;overflow:auto;padding:12px;line-height:1.6}
+.rich-content[aria-readonly=true]{background:#f7fafc}.rich-preview{padding:12px;border-top:1px solid #cad7df}
+.optional-fields{grid-column:1/-1}.optional-fields>summary{cursor:pointer;padding:10px 0;font-weight:600}
+.list-toolbar>form{flex-wrap:wrap}.list-toolbar>form>div{min-width:140px;max-width:100%}
+.commercial-admin .more-actions[open]>.more-menu{position:static;right:auto;left:auto;bottom:auto;max-width:100%;box-sizing:border-box}
+#quote-price-breakdown output{display:block;font-weight:700;padding:10px 0}
+.rich-content:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px solid #167494;outline-offset:2px}
+[data-save-error]{background:#fff1f1;color:#8a2020;padding:12px}[data-save-result]{background:#e4f6ea;padding:12px}
+@media(max-width:600px){.charge-row{grid-template-columns:1fr}.form-quick-actions{position:static!important}.quote-builder-progress{overflow:auto;flex-wrap:nowrap}}

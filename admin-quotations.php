@@ -125,6 +125,10 @@ foreach ($inventoryVariants as $variant) {
 }
 
 $redirectWith = static function (string $type, string $msg): void {
+    if ($type === 'error' && strtolower((string) ($_SERVER['HTTP_X_QUOTATION_SAVE'] ?? '')) === '1') {
+        http_response_code(422); header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode(['ok'=>false,'message'=>$msg]); exit;
+    }
     $query = ['status' => $type, 'message' => $msg];
     if (safe_text((string) ($_GET['tab'] ?? '')) === 'bulk') {
         $query = [
@@ -138,6 +142,8 @@ $redirectWith = static function (string $type, string $msg): void {
 };
 $isQuotationSaveAjax = strtolower((string) ($_SERVER['HTTP_X_QUOTATION_SAVE'] ?? '')) === '1';
 $respondQuotationSaveSuccess = static function (string $quoteId) use ($isQuotationSaveAjax): void {
+    $saveRequest=(string)($_POST['quotation_save_request']??'');
+    if($saveRequest!==''){$_SESSION['quotation_save_requests'][$saveRequest]=$quoteId;$_SESSION['quotation_save_requests']=array_slice($_SESSION['quotation_save_requests'],-50,null,true);}
     $viewUrl = 'quotation-view.php?id=' . urlencode($quoteId) . '&ok=1';
     if ($isQuotationSaveAjax) {
         header('Content-Type: application/json; charset=UTF-8');
@@ -584,6 +590,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'save_quote') {
+        $saveRequest=safe_text((string)($_POST['quotation_save_request']??''));
+        if(empty($_POST['quote_id']) && $saveRequest!=='' && !empty($_SESSION['quotation_save_requests'][$saveRequest])) $respondQuotationSaveSuccess((string)$_SESSION['quotation_save_requests'][$saveRequest]);
+        foreach (['loan_upto_2_lacs_tenure_years','loan_above_2_lacs_tenure_years'] as $tenureField) {
+            if (isset($_POST[$tenureField]) && trim((string)$_POST[$tenureField]) !== '' && (!is_numeric($_POST[$tenureField]) || (float)$_POST[$tenureField] !== 10.0)) $redirectWith('error', 'Loan tenure must be 10 years (120 months).');
+        }
         $quoteId = safe_text($_POST['quote_id'] ?? '');
         $existing = $quoteId !== '' ? documents_get_quote($quoteId) : null;
         if ($existing !== null) {
@@ -788,6 +799,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quote['capacity_kwp'] = $capacity;
             $quote['system_capacity_kwp'] = max(0, (float) $capacity);
         }
+        $quote['workflow_version'] = 2;
+        $followupDate=(string)($_POST['sales_followup_date']??'');
+        $parsedFollowup=$followupDate!==''?DateTimeImmutable::createFromFormat('!Y-m-d',$followupDate):null;
+        if($followupDate!==''&&(!$parsedFollowup||$parsedFollowup->format('Y-m-d')!==$followupDate))$redirectWith('error','Enter a valid follow-up date.');
+        $quote['sales_followup'] = [
+            'assigned_to_name'=>safe_text($_POST['sales_assigned_to'] ?? ($existing['sales_followup']['assigned_to_name'] ?? '')),
+            'next_followup_date'=>safe_text($_POST['sales_followup_date'] ?? ($existing['sales_followup']['next_followup_date'] ?? '')),
+            'outcome'=>safe_text($_POST['sales_outcome'] ?? ($existing['sales_followup']['outcome'] ?? '')),
+        ];
         $quote['project_summary_line'] = safe_text($_POST['project_summary_line'] ?? '');
         $quote['quotation_date'] = safe_text($_POST['quotation_date'] ?? '');
         $quote['valid_until'] = safe_text($_POST['valid_until'] ?? '');
@@ -1024,12 +1044,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['discount_rs'] = $discountRs;
         $quote['discount_note'] = $discountNote;
 
-        $primaryScenario = safe_text((string) $requestValue('primary_finance_scenario', $quote['primary_finance_scenario'] ?? 'loan_upto_2_lacs_subsidy_to_loan'));
+        $primaryScenario = quotation_workflow_primary(safe_text((string) $requestValue('primary_finance_scenario', $quote['primary_finance_scenario'] ?? 'loan_upto_2_lacs_subsidy_to_loan')));
         if (!in_array($primaryScenario, ['self_funded', 'loan_upto_2_lacs_subsidy_to_loan', 'loan_upto_2_lacs_subsidy_not_to_loan', 'loan_above_2_lacs_subsidy_to_loan', 'loan_above_2_lacs_subsidy_not_to_loan', 'loan_upto_2_lacs', 'loan_above_2_lacs'], true)) {
             $primaryScenario = 'loan_upto_2_lacs_subsidy_to_loan';
         }
         $quote['primary_finance_scenario'] = $primaryScenario;
         $priceSelfFunded = max(0, (float) $requestValue('scenario_price_self_funded', $savedScenarioPrices['self_funded']['price'] ?? $quote['input_total_gst_inclusive'] ?? 0));
+        try {
+            $breakdown = quotation_workflow_breakdown($_POST, $priceSelfFunded);
+            if ($breakdown !== null) $quote['price_breakdown'] = $breakdown;
+        } catch (InvalidArgumentException $error) { $redirectWith('error', $error->getMessage()); }
         $priceLoanUp2 = max(0, (float) $requestValue('scenario_price_loan_upto_2_lacs', $savedScenarioPrices['loan_upto_2_lacs']['price'] ?? $quote['input_total_gst_inclusive'] ?? 0));
         $priceLoanAbove2 = max(0, (float) $requestValue('scenario_price_loan_above_2_lacs', $savedScenarioPrices['loan_above_2_lacs']['price'] ?? $quote['input_total_gst_inclusive'] ?? 0));
         foreach (['Self Funded Price' => $priceSelfFunded, 'Loan up to ₹2 lacs Price' => $priceLoanUp2, 'Loan above ₹2 lacs Price' => $priceLoanAbove2, 'Transportation' => $transportationRs, 'Subsidy' => $subsidyExpectedRs, 'Discount' => $discountRs] as $financeFieldLabel => $financeFieldValue) {
@@ -1043,7 +1067,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $transportationRs = round(max(0, $transportationRs), 2);
         $subsidyExpectedRs = round(max(0, $subsidyExpectedRs), 2);
         $discountRs = round(max(0, $discountRs), 2);
-        $loanAboveApplicable = ($priceLoanAbove2 * 0.9) > 200000;
+        $loanAboveApplicable = ($priceLoanAbove2 * 0.8) > 200000 && !empty($_POST['loan_above_2_lacs_applicable']);
+        if (str_starts_with($primaryScenario, 'loan_above_2_lacs') && !$loanAboveApplicable) $redirectWith('error', 'Select an applicable funding option. The above Rs. 2 lakh option requires an 80% loan greater than Rs. 2,00,000.');
         $quote['scenario_prices'] = [
             'self_funded' => ['price' => $priceSelfFunded],
             'loan_upto_2_lacs_subsidy_to_loan' => ['price' => $priceLoanUp2],
@@ -1116,7 +1141,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quote['special_requests_inclusive'] = $quote['special_requests_text'];
         $quote['special_requests_override_note'] = true;
         $quote['annexures_overrides'] = $annexure;
-        $quote['cover_notes_html_snapshot'] = trim((string) ($annexure['cover_notes'] ?? ''));
+        $quote = quotation_workflow_apply_annexures($quote, $_POST, documents_quote_annexure_from_template($templateBlocks, $templateSetId));
+        $quote['cover_notes_html_snapshot'] = trim((string) ($quote['annexures_overrides']['cover_notes'] ?? ''));
         $quote['template_attachments'] = (($templateBlocks[$templateSetId]['attachments'] ?? null) && is_array($templateBlocks[$templateSetId]['attachments'])) ? $templateBlocks[$templateSetId]['attachments'] : documents_template_attachment_defaults();
         $quote['finance_inputs']['monthly_bill_rs'] = safe_text((string) $requestValue('monthly_bill_rs', $savedFinanceInputs['monthly_bill_rs'] ?? ''));
         $quote['finance_inputs']['unit_rate_rs_per_kwh'] = safe_text((string) $requestValue('unit_rate_rs_per_kwh', $savedFinanceInputs['unit_rate_rs_per_kwh'] ?? ''));
@@ -1160,7 +1186,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $interestPct = round(max(0, min(100, $interestPct)), 2);
             $tenureYears = (float) $value($name . '_tenure_years', $saved['tenure_years'] ?? ($savedLoanInputs['tenure_years'] ?? 0));
             if (!is_finite($tenureYears)) $tenureYears = 0.0;
-            $tenureYears = round(max(0, $tenureYears), 2);
+            $tenureYears = 10.0;
+            $standard = quotation_workflow_loan($price, !$isUpTo2);
+            $loanAmount = $standard['loan_amount_rs']; $marginMoney = $standard['margin_money_rs'];
+            $marginRatio = $standard['margin_ratio_pct']; $loanRatio = $standard['loan_ratio_pct'];
+            $mode = 'ratio';
             return [
                 'price' => $price,
                 'subsidy' => $subsidyExpectedRs,
@@ -1801,8 +1831,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 documents_normalize_quotes_store();
 $allQuotes = documents_list_quotes();
+$quotationRevisionFamilies=[];foreach($allQuotes as $familyQuote){$series=(string)($familyQuote['quote_series_id']??$familyQuote['revision_root_id']??$familyQuote['parent_quote_id']??$familyQuote['id']??'');$quotationRevisionFamilies[$series][]=$familyQuote;}
 $statusFilter = safe_text($_GET['status_filter'] ?? '');
 $bulkSearch = safe_text($_GET['search'] ?? '');
+$listOwner = safe_text($_GET['owner'] ?? '');
+$listDue = safe_text($_GET['followup'] ?? '');
 $tab = safe_text($_GET['tab'] ?? 'editor');
 if (!in_array($tab, ['quotations','editor','bulk_create','archived','bulk','similar_names','settings'], true)) { $tab = 'editor'; }
 if ($tab === 'similar_names' && (string)(current_user()['role_name']??'') !== 'admin') { http_response_code(403); exit('Administrator access is required.'); }
@@ -1835,6 +1868,7 @@ if ($tab === 'bulk') {
     }));
 }
 if (in_array($tab, ['quotations', 'archived'], true)) {
+    $allQuotes = quotation_workflow_filter_quotes($allQuotes, $bulkSearch, $listOwner, $listDue);
     usort($allQuotes, static function (array $a, array $b): int {
         $ad = (string) ($a['updated_at'] ?? $a['created_at'] ?? '');
         $bd = (string) ($b['updated_at'] ?? $b['created_at'] ?? '');
@@ -1956,6 +1990,13 @@ $editingQuoteItems = documents_normalize_quote_structured_items(is_array($editin
 $message = safe_text($_GET['message'] ?? '');
 $lookupMobile = safe_text($_GET['lookup_mobile'] ?? '');
 $lookupResult = $lookupMobile !== '' ? documents_lookup_party_by_mobile($lookupMobile) : null;
+if (isset($_GET['lookup_json'])) {
+    header('Content-Type: application/json; charset=UTF-8'); header('Cache-Control: no-store');
+    if (is_array($lookupResult['record'] ?? null)) {
+        $lookupResult['record'] = array_intersect_key($lookupResult['record'], array_flip(['name','city','district','state','pin','area_pincode','address','area_or_locality','site_address','consumer_account_no','meter_number','assigned_to_name','next_followup_date']));
+    }
+    echo json_encode(['ok'=>true,'result'=>$lookupResult]); exit;
+}
 $lookup = is_array($lookupResult['record'] ?? null) ? $lookupResult['record'] : null;
 $lookupType = (string) ($lookupResult['type'] ?? '');
 $lookupNote = (string) ($lookupResult['note'] ?? '');
@@ -1975,6 +2016,8 @@ if ($lookup !== null) {
     }
 }
 
+$editing['primary_finance_scenario']=quotation_workflow_primary((string)($editing['primary_finance_scenario']??'self_funded'));
+if(empty($editing['sales_followup']))$editing['sales_followup']=quotation_workflow_followup($editing);
 $editingFinanceInputs = is_array($editing['finance_inputs'] ?? null) ? $editing['finance_inputs'] : [];
 $editingSavingsInputs = is_array($editing['customer_savings_inputs'] ?? null) ? $editing['customer_savings_inputs'] : [];
 $editingFinanceScenarios = is_array($editing['finance_scenarios'] ?? null) ? $editing['finance_scenarios'] : [];
@@ -1998,6 +2041,7 @@ if ($savedAnnualGenerationForEdit === '') {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Quotations</title>
 <link rel="stylesheet" href="assets/css/admin-unified.css">
 <link rel="stylesheet" href="assets/css/quote-panel-layout-designer.css">
+<link rel="stylesheet" href="assets/css/quotation-entry.css">
 <style>
 /* Quotation-only layout helpers. Shared commercial chrome comes from admin-unified.css. */
 .section-card{border:1px solid var(--admin-border);border-radius:14px;padding:0;background:#fff;margin-bottom:.85rem;overflow:hidden;box-shadow:var(--admin-shadow-soft)}
@@ -2038,7 +2082,8 @@ if ($savedAnnualGenerationForEdit === '') {
     <?php endif; ?>
 <?php endif; ?>
 </form>
-<form method="post" data-quotation-save-form="admin">
+<form method="post" data-quotation-save-form="admin"><input type="hidden" name="quotation_save_request" value="<?= bin2hex(random_bytes(16)) ?>">
+<?php if (!empty($editing['id']) && !quotation_workflow_enabled($editing)): ?><p role="note">Saving this quotation applies the current loan rules: 10-year tenure, the capped up-to-₹2-lakh loan, and subsidy credited to the loan. Review the funding figures before saving. Accepted quotations require a revision.</p><?php endif; ?>
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES) ?>">
 <input type="hidden" name="action" value="save_quote"><input type="hidden" name="quote_id" value="<?= htmlspecialchars((string) $editing['id'], ENT_QUOTES) ?>">
 <input type="hidden" name="source_type" value="<?= htmlspecialchars((string) ($editing['source']['type'] ?? ($lookupResult['source']['type'] ?? '')), ENT_QUOTES) ?>">
@@ -2083,7 +2128,8 @@ if ($savedAnnualGenerationForEdit === '') {
 <div><label>Circle</label><input name="circle_name" value="<?= htmlspecialchars((string)(($editing['circle_name'] !== '') ? $editing['circle_name'] : ($quoteSnapshot['circle_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Division</label><input name="division_name" value="<?= htmlspecialchars((string)(($editing['division_name'] !== '') ? $editing['division_name'] : ($quoteSnapshot['division_name'] ?? '')), ENT_QUOTES) ?>"></div>
 <div><label>Sub Division</label><input name="sub_division_name" value="<?= htmlspecialchars((string)(($editing['sub_division_name'] !== '') ? $editing['sub_division_name'] : ($quoteSnapshot['sub_division_name'] ?? '')), ENT_QUOTES) ?>"></div>
-<div style="grid-column:1/-1"><label>Project Summary</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
+<div data-builder-section="customer-details" style="grid-column:1/-1"><details><summary>Sales follow-up (internal, optional)</summary><div class="section-grid"><label>Assigned salesperson<input name="sales_assigned_to" value="<?= htmlspecialchars((string)($editing['sales_followup']['assigned_to_name']??''),ENT_QUOTES) ?>"></label><label>Next follow-up<input type="date" name="sales_followup_date" value="<?= htmlspecialchars((string)($editing['sales_followup']['next_followup_date']??''),ENT_QUOTES) ?>"></label><label>Outcome<select name="sales_outcome"><?php foreach ([''=>'Not recorded','contacted'=>'Contacted','followup'=>'Follow-up needed','won'=>'Won','lost'=>'Lost'] as $k=>$v): ?><option value="<?= $k ?>" <?= ($editing['sales_followup']['outcome']??'')===$k?'selected':'' ?>><?= $v ?></option><?php endforeach; ?></select></label></div></details></div>
+<div style="grid-column:1/-1"><label>Project summary shown to customer</label><input name="project_summary_line" value="<?= htmlspecialchars((string)$editing['project_summary_line'], ENT_QUOTES) ?>"></div>
 <?php
 $orientation = documents_quote_normalize_panel_orientation(is_array($editing['panel_orientation'] ?? null) ? $editing['panel_orientation'] : ['enabled' => $editing['id'] === '']);
 $areaOptions = documents_quote_panel_orientation_allowed_area_types();
@@ -2157,7 +2203,13 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
 <?php $editorImportantSettings = documents_quote_resolve_important_points($editing, $quoteDefaults); $editorImportantPreview = documents_quote_render_important_points($editorImportantSettings); ?><div class="full-span" style="grid-column:1/-1;padding:12px;border:1px solid #f3d47a;border-radius:12px;background:#fffdf4"><h3 style="margin-top:0">Important Points shown to customer</h3><p class="muted">Draft, approved, and shared quotations use the current global Important Points. The configuration is saved permanently when the quotation is accepted.</p><div class="quotation-preview"><?= $editorImportantPreview !== '' ? $editorImportantPreview : '<p class="muted">Important Points are disabled or no active points are configured.</p>' ?></div></div><div style="grid-column:1/-1"><label>Special Requests From Consumer (Inclusive in the rate)</label><textarea name="special_requests_text"><?= htmlspecialchars((string)($editing['special_requests_text'] ?: $editing['special_requests_inclusive']), ENT_QUOTES) ?></textarea><div class="muted">In case of conflict between annexures and special requests, special requests will be prioritized.</div></div>
 <div style="grid-column:1/-1"><h3>Items Table</h3><div class="muted">Item summary is auto-generated from the structured item builder below. Free-text item entry is disabled.</div></div><div style="grid-column:1/-1"><h3>Item Builder (Structured)</h3><div class="muted">Add kits/components from Items Master. Name/description snapshots are captured automatically.</div><table id="structuredItemsTable"><thead><tr><th>Kit / Component Type</th><th>Kit</th><th>Component</th><th>Variant</th><th>Qty</th><th>Unit</th><th>Quotation-specific description / note</th><th></th></tr></thead><tbody><?php foreach ($editingQuoteItems as $sItem): ?><tr><td><select name="quote_item_type[]" class="quote-item-type" required><option value="kit" <?= (string)($sItem['type'] ?? '')==='kit'?'selected':'' ?>>Kit</option><option value="component" <?= (string)($sItem['type'] ?? '')==='component'?'selected':'' ?>>Component</option></select></td><td><select name="quote_item_kit_id[]" class="quote-item-kit"><option value="">-- select kit --</option><?php foreach ($inventoryKits as $kit): ?><option value="<?= htmlspecialchars((string)($kit['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['kit_id'] ?? '')===(string)($kit['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($kit['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_component_id[]" class="quote-item-component"><option value="">-- select component --</option><?php foreach ($inventoryComponents as $cmp): ?><option value="<?= htmlspecialchars((string)($cmp['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['component_id'] ?? '')===(string)($cmp['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($cmp['name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><select name="quote_item_variant_id[]" class="quote-item-variant"><option value="">-- none --</option><?php $cmpId=(string)($sItem['component_id'] ?? ''); foreach (($variantsByComponent[$cmpId] ?? []) as $variant): ?><option value="<?= htmlspecialchars((string)($variant['id'] ?? ''), ENT_QUOTES) ?>" <?= (string)($sItem['variant_id'] ?? '')===(string)($variant['id'] ?? '')?'selected':'' ?>><?= htmlspecialchars((string)($variant['display_name'] ?? ''), ENT_QUOTES) ?></option><?php endforeach; ?></select></td><td><input type="number" step="0.01" min="0" name="quote_item_qty[]" value="<?= htmlspecialchars((string)($sItem['qty'] ?? 0), ENT_QUOTES) ?>"></td><td><input name="quote_item_unit[]" value="<?= htmlspecialchars((string)($sItem['unit'] ?? ''), ENT_QUOTES) ?>"></td><td><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars((string)($sItem['name_snapshot'] ?? ''), ENT_QUOTES) ?></div><?php $masterPreview = (string)($sItem['master_description_snapshot'] ?? ($sItem['description_snapshot'] ?? '')); if (trim($masterPreview) !== ''): ?><div class="muted" style="font-size:11px;margin-bottom:4px"><?= htmlspecialchars($masterPreview, ENT_QUOTES) ?></div><?php endif; ?><div class="muted" style="font-size:11px;margin-bottom:4px">Automatic configuration</div><textarea name="quote_item_auto_description[]" rows="2" readonly><?= htmlspecialchars((string)($sItem['auto_description'] ?? ''), ENT_QUOTES) ?></textarea><div class="muted" style="font-size:11px;margin:4px 0">Quotation-specific note / manual override</div><input type="hidden" name="quote_item_description_mode[]" value="<?= htmlspecialchars((string)($sItem['description_mode'] ?? ((string)($sItem['custom_description'] ?? '') !== '' ? 'manual' : 'auto')), ENT_QUOTES) ?>"><textarea name="quote_item_custom_description[]" rows="2" placeholder="Optional quotation-specific note"><?= htmlspecialchars((string)($sItem['custom_description'] ?? ''), ENT_QUOTES) ?></textarea><button type="button" class="btn secondary reset-auto-description">Reset to automatic configuration</button></td><td><button type="button" class="btn secondary rm-structured-item">Remove</button></td></tr><?php endforeach; ?></tbody></table><button type="button" class="btn secondary" id="addStructuredItemBtn">Add Structured Item</button></div><div style="grid-column:1/-1"><h3>Customer Savings Inputs</h3><div class="muted">These are the common inputs used to calculate savings, residual bill, monthly outflow, cumulative expense, and payback.</div></div>
 <div style="grid-column:1/-1"><h3>Section 6 — Scenario Prices</h3><div class="muted">Scenario pricing only (self funded, loan up to ₹2 lacs, loan above ₹2 lacs, hybrid configuration, and primary finance scenario).</div></div>
-<div><label>Primary Finance Scenario</label><select name="primary_finance_scenario"><option value="self_funded" <?= (($editing['primary_finance_scenario'] ?? '')==='self_funded')?'selected':'' ?>>Self Funded</option><option value="loan_upto_2_lacs_subsidy_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_upto_2_lacs_subsidy_to_loan')?'selected':'' ?>>Loan up to ₹2 lacs (subsidy to loan)</option><option value="loan_upto_2_lacs_subsidy_not_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_upto_2_lacs_subsidy_not_to_loan')?'selected':'' ?>>Loan up to ₹2 lacs (subsidy self kept)</option><option value="loan_above_2_lacs_subsidy_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_above_2_lacs_subsidy_to_loan')?'selected':'' ?>>Loan above ₹2 lacs (subsidy to loan)</option><option value="loan_above_2_lacs_subsidy_not_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_above_2_lacs_subsidy_not_to_loan')?'selected':'' ?>>Loan above ₹2 lacs (subsidy self kept)</option></select></div>
+<div><label>Primary Finance Scenario</label><select name="primary_finance_scenario"><option value="self_funded" <?= (($editing['primary_finance_scenario'] ?? '')==='self_funded')?'selected':'' ?>>Self Funded</option><option value="loan_upto_2_lacs_subsidy_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_upto_2_lacs_subsidy_to_loan')?'selected':'' ?>>Loan up to ₹2 lacs (subsidy to loan)</option><option value="loan_above_2_lacs_subsidy_to_loan" <?= (($editing['primary_finance_scenario'] ?? '')==='loan_above_2_lacs_subsidy_to_loan')?'selected':'' ?>>Loan above ₹2 lacs (subsidy to loan)</option></select></div>
+<div id="quote-price-breakdown" style="grid-column:1/-1" data-builder-section="pricing-template">
+ <h3>System price and included additional charges</h3><p class="muted">Amounts include GST. Add charges here once; the total updates automatically. Existing financing price differences are preserved.</p>
+ <label for="breakdownBase">Solar system price ₹</label><input id="breakdownBase" type="number" min="0" step="0.01" name="breakdown_base_price" value="<?= htmlspecialchars((string)($editing['price_breakdown']['base_system_price'] ?? $editing['scenario_prices']['self_funded']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0),ENT_QUOTES) ?>">
+ <div id="breakdownRows"><?php foreach ((array)($editing['price_breakdown']['additions']??[]) as $charge): ?><div class="charge-row"><label>Charge name<input name="breakdown_label[]" maxlength="150" value="<?= htmlspecialchars((string)$charge['label'],ENT_QUOTES) ?>"></label><label>Amount ₹<input name="breakdown_amount[]" type="number" min="0" step="0.01" value="<?= htmlspecialchars((string)$charge['amount'],ENT_QUOTES) ?>"></label><button type="button" data-remove-charge>Remove charge</button></div><?php endforeach; ?></div>
+ <button type="button" id="addBreakdownCharge">Add charge</button><output id="breakdownTotal" aria-live="polite"></output>
+</div>
 <div><label>Self Funded Price ₹</label><input type="number" min="0" step="0.01" name="scenario_price_self_funded" value="<?= htmlspecialchars(quotation_number_input_value($editing['scenario_prices']['self_funded']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
 <div><label>Loan up to ₹2 lacs Price ₹</label><input type="number" min="0" step="0.01" name="scenario_price_loan_upto_2_lacs" value="<?= htmlspecialchars(quotation_number_input_value($editing['scenario_prices']['loan_upto_2_lacs']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
 <div><label>Loan above ₹2 lacs Price ₹</label><input type="number" min="0" step="0.01" name="scenario_price_loan_above_2_lacs" value="<?= htmlspecialchars(quotation_number_input_value($editing['scenario_prices']['loan_above_2_lacs']['price'] ?? $editing['input_total_gst_inclusive'] ?? 0), ENT_QUOTES) ?>"></div>
@@ -2188,7 +2240,7 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
 <div><label>Margin ₹</label><input type="number" min="0" step="0.01" name="loan_upto_2_lacs_margin_money_rs" value="<?= htmlspecialchars(quotation_number_input_value($editingLoanUp2Scenario['margin_money_rs'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Loan ₹</label><input type="number" min="0" step="0.01" name="loan_upto_2_lacs_loan_amount_rs" value="<?= htmlspecialchars(quotation_number_input_value($editingLoanUp2Scenario['loan_amount_rs'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Interest %</label><input type="number" min="0" max="100" step="0.01" name="loan_upto_2_lacs_interest_pct" value="<?= htmlspecialchars(quotation_number_input_value($editingLoanUp2Scenario['interest_pct'] ?? 5.75), ENT_QUOTES) ?>"></div>
-<div><label>Tenure years</label><input type="number" min="0" step="0.01" name="loan_upto_2_lacs_tenure_years" value="<?= htmlspecialchars(quotation_number_input_value($editingLoanUp2Scenario['tenure_years'] ?? ($editing['finance_inputs']['loan']['tenure_years'] ?? '')), ENT_QUOTES) ?>"></div>
+<div><label>Tenure years</label><input type="number" min="10" max="10" step="1" readonly name="loan_upto_2_lacs_tenure_years" value="10"></div>
 <div style="grid-column:1/-1"><h3>Loan above ₹2 lacs</h3></div>
 <div><label>Finance mode</label><select name="loan_above_2_lacs_finance_mode"><option value="ratio" <?= (($editingLoanAbove2Scenario['finance_mode'] ?? 'ratio')==='ratio')?'selected':'' ?>>Ratio</option><option value="manual" <?= (($editingLoanAbove2Scenario['finance_mode'] ?? '')==='manual')?'selected':'' ?>>Manual</option></select></div>
 <div><label>Margin %</label><input type="number" min="0" max="100" step="0.01" name="loan_above_2_lacs_margin_ratio_pct" value="<?= htmlspecialchars(quotation_number_input_value($editingLoanAbove2Scenario['margin_ratio_pct'] ?? 20), ENT_QUOTES) ?>"></div>
@@ -2196,7 +2248,7 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
 <div><label>Margin ₹</label><input type="number" min="0" step="0.01" name="loan_above_2_lacs_margin_money_rs" value="<?= htmlspecialchars(quotation_number_input_value($editingLoanAbove2Scenario['margin_money_rs'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Loan ₹</label><input type="number" min="0" step="0.01" name="loan_above_2_lacs_loan_amount_rs" value="<?= htmlspecialchars(quotation_number_input_value($editingLoanAbove2Scenario['loan_amount_rs'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Interest %</label><input type="number" min="0" max="100" step="0.01" name="loan_above_2_lacs_interest_pct" value="<?= htmlspecialchars(quotation_number_input_value($editingLoanAbove2Scenario['interest_pct'] ?? 8.15), ENT_QUOTES) ?>"></div>
-<div><label>Tenure years</label><input type="number" min="0" step="0.01" name="loan_above_2_lacs_tenure_years" value="<?= htmlspecialchars(quotation_number_input_value($editingLoanAbove2Scenario['tenure_years'] ?? ''), ENT_QUOTES) ?>"></div>
+<div><label>Tenure years</label><input type="number" min="10" max="10" step="1" readonly name="loan_above_2_lacs_tenure_years" value="10"></div>
 <div style="grid-column:1/-1"><h3>Typography & Watermark Overrides</h3></div>
 <div><label>Base font px</label><input type="number" step="1" name="style_base_font_px" value="<?= htmlspecialchars((string)($editing['style_overrides']['typography']['base_font_px'] ?? ''), ENT_QUOTES) ?>"></div>
 <div><label>Heading scale</label><input type="number" step="0.1" name="style_heading_scale" value="<?= htmlspecialchars((string)($editing['style_overrides']['typography']['heading_scale'] ?? ''), ENT_QUOTES) ?>"></div>
@@ -2206,7 +2258,7 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
 <div><label>Watermark opacity</label><input type="number" step="0.01" min="0" max="1" name="watermark_opacity" value="<?= htmlspecialchars((string)($editing['style_overrides']['watermark']['opacity'] ?? ''), ENT_QUOTES) ?>"></div>
 <div style="grid-column:1/-1"><h3>Annexure Overrides</h3><div class="muted">Annexures are based on template snapshot; edit below.</div></div>
 <?php foreach (['cover_notes'=>'Cover Notes','system_inclusions'=>'System Inclusions','payment_terms'=>'Payment Terms','warranty'=>'Warranty','system_type_explainer'=>'System Type Explainer','transportation'=>'Transportation','terms_conditions'=>'Terms & Conditions','pm_subsidy_info'=>'PM Subsidy Info','completion_milestones'=>'Completion Milestones','next_steps'=>'Next Steps'] as $key=>$label): ?>
-<div style="grid-column:1/-1"><label><?= $label ?></label><textarea name="ann_<?= $key ?>"><?= htmlspecialchars((string)($editing['annexures_overrides'][$key] ?? ''), ENT_QUOTES) ?></textarea></div>
+<div style="grid-column:1/-1"><label><?= $label ?></label><select aria-label="<?= htmlspecialchars($label,ENT_QUOTES) ?> source" name="ann_mode[<?= $key ?>]" data-ann-mode="<?= $key ?>"><?php foreach (['inherit'=>'Use saved template','custom'=>'Customize this quotation','hide'=>'Hide this section'] as $mode=>$title): ?><option value="<?= $mode ?>" <?= (($editing['annexure_modes'][$key]??($editing['id']!==''?'custom':'inherit'))===$mode)?'selected':'' ?>><?= $title ?></option><?php endforeach; ?></select><textarea data-rich-text data-template="<?= htmlspecialchars((string)(documents_quote_annexure_from_template($templateBlocks,(string)$editing['template_set_id'])[$key]??''),ENT_QUOTES) ?>" name="ann_<?= $key ?>"><?= htmlspecialchars((string)($editing['annexures_overrides'][$key] ?? ''), ENT_QUOTES) ?></textarea></div>
 <?php endforeach; ?>
 </div><br><button class="btn" type="submit">Save Quotation</button>
 </form><?php if ((string)($editing['id'] ?? '') !== '') echo document_signature_admin_controls($editing, 'quotation', 'admin-quotations.php?tab=editor&edit=' . urlencode((string)$editing['id']), !documents_quote_is_locked($editing) && documents_quote_normalize_status((string)($editing['status'] ?? 'draft')) === 'draft'); ?></div>
@@ -2303,7 +2355,7 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
     url.searchParams.set('partial','quotation_list');
     const filterForm=document.querySelector('#quotationList form[method="get"]');
     const filterData=filterForm?new FormData(filterForm):null;
-    ['tab','status_filter'].forEach((key)=>{
+    ['tab','status_filter'].concat(['search','owner','followup']).forEach((key)=>{
       const value=String(filterData?.get(key)||'').trim();
       if(value)url.searchParams.set(key,value);
     });
@@ -2374,15 +2426,18 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
         return [definition.id,{...definition,card,inner:card.querySelector('.section-grid')}];
       }));
       const controls=[...grid.children];
+      const optionalNames=['consumer_account_no','meter_number','meter_serial_number','circle_name','division_name','sub_division_name','application_id','application_submitted_date','sanction_load_kwp','installed_pv_module_capacity_kwp','hybrid_inverter_kva','hybrid_phase','hybrid_battery_count','loan_upto_2_lacs_finance_mode','loan_upto_2_lacs_margin_ratio_pct','loan_upto_2_lacs_loan_ratio_pct','loan_upto_2_lacs_margin_money_rs','loan_upto_2_lacs_loan_amount_rs','loan_above_2_lacs_finance_mode','loan_above_2_lacs_margin_ratio_pct','loan_above_2_lacs_loan_ratio_pct','loan_above_2_lacs_margin_money_rs','loan_above_2_lacs_loan_amount_rs'];
+      const optionalGroups={};
       const fieldNames=(node)=>[...node.querySelectorAll('input[name],select[name],textarea[name]')].map((field)=>field.name.replace(/\[\]$/,''));
       const headingText=(node)=>node.querySelector(':scope > h3')?.textContent?.trim()||'';
       const textLabel=(node)=>node.querySelector(':scope > label')?.textContent?.trim()||'';
       const customerNames=['party_type','customer_mobile','customer_name','consumer_account_no','meter_number','meter_serial_number','district','city','state','pin','billing_address','site_address','circle_name','division_name','sub_division_name'];
       const systemNames=['system_type','selected_model_number','main_solar_kwp','complimentary_non_dcr_kwp','capacity_kwp','application_id','application_submitted_date','sanction_load_kwp','installed_pv_module_capacity_kwp','project_summary_line','special_requests_text','hybrid_inverter_kva','hybrid_phase','hybrid_battery_count'];
-      const pricingNames=['template_set_id','quotation_date','valid_until','pricing_mode','tax_profile_id','show_tax_breakup','place_of_supply_state','scenario_price_self_funded','scenario_price_loan_upto_2_lacs','scenario_price_loan_above_2_lacs','transportation_cost','discount_rs','discount_note'];
-      const financeNames=['primary_finance_scenario','system_total_incl_gst_rs','monthly_bill_rs','unit_rate_rs_per_kwh','annual_generation_per_kw','transportation_rs','subsidy_expected_rs'];
+      const pricingNames=['primary_finance_scenario','template_set_id','quotation_date','valid_until','pricing_mode','tax_profile_id','show_tax_breakup','place_of_supply_state','scenario_price_self_funded','scenario_price_loan_upto_2_lacs','scenario_price_loan_above_2_lacs','transportation_cost','discount_rs','discount_note'];
+      const financeNames=['system_total_incl_gst_rs','monthly_bill_rs','unit_rate_rs_per_kwh','annual_generation_per_kw','transportation_rs','subsidy_expected_rs'];
       const destinationFor=(node)=>{
         const names=fieldNames(node); const heading=headingText(node);
+        if(node.dataset.builderSection && sections[node.dataset.builderSection])return sections[node.dataset.builderSection];
         if(node.id==='splitCapacityFields'||node.id==='legacyCapacityField'||names.some((name)=>systemNames.includes(name)))return sections['system-details'];
         if(heading.includes('Items Table')||heading.includes('Item Builder')||names.some((name)=>name.startsWith('quote_item_')))return sections['items-scope'];
         if(names.some((name)=>financeNames.includes(name))||names.some((name)=>name.startsWith('loan_'))||heading.includes('Funding Scenario Financial Inputs')||heading.includes('Loan up to')||heading.includes('Loan above')||heading.includes('Customer Savings Inputs'))return sections['finance-savings'];
@@ -2391,11 +2446,15 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
         return sections['notes-terms'];
       };
       controls.forEach((node)=>{
-        if(node.matches('input[type="hidden"]'))return;
+        if(node.matches('input[type="hidden"]')){quoteForm.appendChild(node);return;}
         if(headingText(node).includes('Section 6 — Scenario Prices')||headingText(node).includes('Section 7 — Funding Scenario Financial Inputs'))return;
         const target=destinationFor(node);
         if(node.querySelector('table')||node.querySelector('textarea')||headingText(node)||['Billing Address','Site Address','Project Summary','Special Requests From Consumer (Inclusive in the rate)'].includes(textLabel(node)))node.classList.add('full-span');
-        target.inner.appendChild(node);
+        const nodeFields=fieldNames(node);
+        if(nodeFields.some(name=>optionalNames.includes(name))){
+          if(!optionalGroups[target.id]){const more=document.createElement('details');more.className='optional-fields';more.innerHTML='<summary>Additional details (optional)</summary><div class="section-grid"></div>';optionalGroups[target.id]=more;target.inner.appendChild(more);}
+          optionalGroups[target.id].querySelector('div').appendChild(node);
+        }else target.inner.appendChild(node);
       });
       Object.values(sections).forEach((section)=>{
         const required=[...section.inner.children].filter((node)=>node.querySelector('[required]'));
@@ -2420,7 +2479,7 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
       progress.setAttribute('aria-label','Quotation builder sections');
       progress.innerHTML='<button type="button" data-target="quote-find-customer"><b>1</b> Find party</button>'+sectionDefinitions.map((section,index)=>'<button type="button" data-target="quote-'+section.id+'"><b>'+(index+2)+'</b> '+section.title.replace(' / scope / structured quotation items',' / scope').replace(', annexures, customer-facing details',' & terms')+'</button>').join('')+'<button type="button" data-target="quote-save-actions"><b>8</b> Save</button>';
       lookupSection.after(progress);
-      progress.addEventListener('click',(event)=>{const button=event.target.closest('[data-target]');const target=button&&document.getElementById(button.dataset.target);if(!target)return;if(target.tagName==='DETAILS')target.open=true;target.scrollIntoView({behavior:'smooth',block:'start'});});
+      progress.addEventListener('click',(event)=>{const button=event.target.closest('[data-target]');const target=button&&document.getElementById(button.dataset.target);if(!target)return;if(target.tagName==='DETAILS')target.open=true;target.scrollIntoView({behavior:'smooth',block:'start'});const input=target.querySelector('input:not([type=hidden]):not([readonly]):not([disabled]),select:not([disabled]),textarea:not([disabled])');input?.focus({preventScroll:true});});
 
       const quickActions=document.createElement('div');
       quickActions.className='form-quick-actions';
@@ -2439,7 +2498,7 @@ $layoutOptions = documents_quote_panel_orientation_allowed_layouts();
       const escapeHtml=(value)=>String(value).replace(/[&<>\"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[char]));
       const valueOf=(name)=>{const field=quoteForm.querySelector('[name="'+name+'"]');if(!field)return '—';if(field instanceof HTMLSelectElement)return field.selectedOptions[0]?.textContent?.trim()||'—';return String(field.value||'').trim()||'—';};
       const updateReview=()=>{const capacity=(Number(quoteForm.querySelector('[name="main_solar_kwp"]')?.value||0)+Number(quoteForm.querySelector('[name="complimentary_non_dcr_kwp"]')?.value||0))||Number(quoteForm.querySelector('[name="capacity_kwp"]')?.value||0);const count=quoteForm.querySelectorAll('#structuredItemsTable tbody tr').length;document.getElementById('quoteReviewSummary').innerHTML='<div><span>Customer / lead</span><strong>'+escapeHtml(valueOf('customer_name'))+'</strong><small>'+escapeHtml(valueOf('customer_mobile'))+'</small></div><div><span>System</span><strong>'+escapeHtml(valueOf('system_type'))+'</strong><small>'+escapeHtml(Math.round(capacity*100)/100)+' kWp total capacity</small></div><div><span>Template & pricing</span><strong>'+escapeHtml(valueOf('template_set_id'))+'</strong><small>'+escapeHtml(valueOf('pricing_mode'))+'</small></div><div><span>Structured scope</span><strong>'+count+' item'+(count===1?'':'s')+'</strong><small>Ready for review</small></div>';};
-      const revealInvalid=(field)=>{const details=field.closest('details');if(details)details.open=true;field.scrollIntoView({behavior:'smooth',block:'center'});field.focus({preventScroll:true});};
+      const revealInvalid=(field)=>{let details=field.closest('details');while(details){details.open=true;details=details.parentElement?.closest('details');}field.scrollIntoView({behavior:'smooth',block:'center'});field.focus({preventScroll:true});};
       const reviewValidity=()=>{const invalid=[...quoteForm.querySelectorAll(':invalid')];const box=document.getElementById('quoteSaveErrors');if(!invalid.length){box.innerHTML='<div class="validation-ok">Required fields are complete. You can save this quotation.</div>';return true;}box.innerHTML='<div class="validation-warning"><strong>'+invalid.length+' required field'+(invalid.length===1?' needs':'s need')+' attention.</strong> Use the links below to fix them before saving.</div><div class="validation-links">'+invalid.map((field,index)=>'<button type="button" data-invalid-index="'+index+'">'+escapeHtml(field.closest('div')?.querySelector('label')?.textContent?.trim()||field.name||'Required field')+'</button>').join('')+'</div>';box.querySelectorAll('[data-invalid-index]').forEach((button)=>button.addEventListener('click',()=>revealInvalid(invalid[Number(button.dataset.invalidIndex)])));return false;};
       quickActions.querySelector('[data-review-quote]').addEventListener('click',()=>{updateReview();reviewValidity();saveCard.scrollIntoView({behavior:'smooth',block:'start'});});
       quoteForm.addEventListener('invalid',(event)=>revealInvalid(event.target),true);
@@ -2731,6 +2790,7 @@ document.querySelectorAll('#structuredItemsTable tbody tr').forEach((tr) => sync
     syncCapacity();
 })();
 
+window.quotationTemplateBlocks = <?= json_encode($templateBlocks,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
 window.quoteFormAutofillConfig = {
     settingsBySegment: <?= json_encode($autofillSegments, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
     defaultEnergy: <?= json_encode((float)($quoteDefaults['global']['energy_defaults']['annual_generation_per_kw'] ?? 1450)) ?>
@@ -2908,7 +2968,7 @@ window.quoteFormAutofillConfig = {
     fillScenarioPrices();
 
     const toggleAbove2Applicability = () => {
-        const estimatedLoan = parseNum(above2Price?.value) * 0.9;
+        const estimatedLoan = parseNum(above2Price?.value) * 0.8;
         const isApplicable = estimatedLoan > 200000;
         const above2Fields = [
             ...document.querySelectorAll('[name^="loan_above_2_lacs_"]'),
@@ -2919,7 +2979,7 @@ window.quoteFormAutofillConfig = {
                 if (!isApplicable) {
                     el.checked = false;
                     el.disabled = true;
-                    el.closest('label')?.setAttribute('title', 'Loan above ₹2 lacs requires 90% finance > ₹2,00,000');
+                    el.closest('label')?.setAttribute('title', 'Loan above ₹2 lacs requires 80% finance > ₹2,00,000');
                 } else {
                     el.disabled = false;
                 }
@@ -3017,4 +3077,4 @@ window.quoteFormAutofillConfig = {
   update();
 })();
 
-</script><?php if ($tab === 'bulk'): ?><script src="assets/vendor/browser-export/paged.polyfill.min.js"></script><script src="assets/vendor/browser-export/html2canvas.min.js"></script><script src="assets/vendor/browser-export/jspdf.umd.min.js"></script><script src="assets/vendor/browser-export/fflate.min.js"></script><script src="assets/js/quotation-browser-export.js"></script><?php endif; ?><?php if ($tab === 'editor'): ?><script src="assets/js/quotation-save-new-tab.js"></script><script src="assets/js/quote-panel-layout-designer.js?v=<?= rawurlencode((string) (filemtime(__DIR__ . '/assets/js/quote-panel-layout-designer.js') ?: '1')) ?>"></script><script src="assets/js/quote-form-autofill.js"></script><?php endif; ?></main></body></html>
+</script><?php if ($tab === 'bulk'): ?><script src="assets/vendor/browser-export/paged.polyfill.min.js"></script><script src="assets/vendor/browser-export/html2canvas.min.js"></script><script src="assets/vendor/browser-export/jspdf.umd.min.js"></script><script src="assets/vendor/browser-export/fflate.min.js"></script><script src="assets/js/quotation-browser-export.js"></script><?php endif; ?><?php if ($tab === 'editor'): ?><script src="assets/js/quotation-entry.js"></script><script src="assets/js/quotation-rich-text.js"></script><script src="assets/js/quotation-save-new-tab.js"></script><script src="assets/js/quote-panel-layout-designer.js?v=<?= rawurlencode((string) (filemtime(__DIR__ . '/assets/js/quote-panel-layout-designer.js') ?: '1')) ?>"></script><script src="assets/js/quote-form-autofill.js"></script><?php endif; ?></main></body></html>

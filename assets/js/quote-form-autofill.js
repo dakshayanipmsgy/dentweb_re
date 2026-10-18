@@ -63,7 +63,7 @@
         return Number.isFinite(n) ? n : 0;
     };
     const LOAN_UPTO_2_LACS_CAP_RS = 200000;
-    const LOAN_ABOVE_2_LACS_THRESHOLD_RATIO = 0.9;
+    const LOAN_ABOVE_2_LACS_THRESHOLD_RATIO = 0.8;
     const LOAN_ABOVE_2_LACS_THRESHOLD_RS = 200000;
     const fieldEmpty = (input) => !input || String(input.value || '').trim() === '';
     const isExistingQuote = () => !!(quoteIdInput && String(quoteIdInput.value || '').trim() !== '');
@@ -236,7 +236,7 @@
         marginPct = clamp(marginPct, 0, 100);
         loanPct = clamp(100 - marginPct, 0, 100);
 
-        const computedLoan = price * (loanPct / 100);
+        const computedLoan = price * (defaults.loanPct / 100);
         const amounts = enforceLoanRules(computedLoan, price, defaults.capLoan);
         const finalMarginPct = clamp(pctFor(amounts.margin, price), 0, 100);
         const finalLoanPct = clamp(100 - finalMarginPct, 0, 100);
@@ -276,14 +276,16 @@
 
     const applyScenarioFinanceDefaults = (ctx, changedField) => {
         const defaults = getScenarioDefaults(ctx.type);
-        const mode = String(ctx.modeInput?.value || 'ratio') === 'manual' ? 'manual' : 'ratio';
-        const isManualAmountChange = changedField === 'margin_rs' || changedField === 'loan_rs';
+        const mode = 'ratio';
+        if(ctx.modeInput)ctx.modeInput.value='ratio';
+        if(ctx.tenureInput)setIfAllowed(ctx.tenureInput,10,{force:true,noDecimals:true});
+        const isManualAmountChange = false;
 
         if (!isExistingQuote()) {
             if (fieldEmpty(ctx.marginPctInput)) setIfAllowed(ctx.marginPctInput, defaults.marginPct, {});
             if (fieldEmpty(ctx.loanPctInput)) setIfAllowed(ctx.loanPctInput, defaults.loanPct, {});
             if (fieldEmpty(ctx.interestInput)) setIfAllowed(ctx.interestInput, defaults.interest, {});
-            if (fieldEmpty(ctx.tenureInput)) setIfAllowed(ctx.tenureInput, defaults.tenure, { noDecimals: true });
+            setIfAllowed(ctx.tenureInput, 10, { force: true, noDecimals: true });
         } else {
             if (fieldEmpty(ctx.interestInput)) setIfAllowed(ctx.interestInput, defaults.interest, {});
             if (fieldEmpty(ctx.tenureInput)) setIfAllowed(ctx.tenureInput, defaults.tenure, { noDecimals: true });
@@ -383,7 +385,7 @@
     bindRecalc(annualGenerationInput, () => applyMonthlySuggestion(false));
     bindRecalc(priceUp2Input, () => applyAllScenarioFinanceDefaults('price'));
     bindRecalc(priceAbove2Input, () => { applyAllScenarioFinanceDefaults('price'); syncScenarioApplicability(); });
-    bindRecalc(priceSelfInput, syncLegacyLoanFields);
+    bindRecalc(priceSelfInput, () => applyAllScenarioFinanceDefaults('price'));
     bindRecalc(transportInput, () => applyAllScenarioFinanceDefaults('price'));
     bindRecalc(discountInput, () => applyAllScenarioFinanceDefaults('price'));
 
