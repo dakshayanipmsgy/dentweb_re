@@ -1,0 +1,86 @@
+/* Editor-only arrangement. Shared lists, customer documents and calculations are untouched. */
+body.quotation-entry-page{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;overflow:visible}
+.quotation-entry-page .commercial-header{padding:18px 22px;margin-bottom:12px}
+.quotation-entry-page .commercial-header h1{font-size:25px;margin:0}
+.quotation-entry-page .commercial-header .muted{margin-bottom:0;font-size:13px}
+.quotation-entry-page .commercial-header .btn{padding:10px 14px;min-height:40px;font-size:12px}
+.entry-document-links{margin:0 0 12px;color:var(--admin-muted,#526777);font-size:12px}
+.entry-document-links>summary{cursor:pointer;padding:4px 2px}
+.quotation-entry-page nav[aria-label="Quotation workspace"]{gap:6px;padding:6px;margin-bottom:14px}
+.quotation-entry-page nav[aria-label="Quotation workspace"] a{padding:9px 12px;min-height:38px;font-size:12px}
+#quotationEditor{padding:20px;overflow:visible}
+.quotation-entry-page #quotationEditor [hidden]{display:none!important}
+#quotationEditor .editor-intro{align-items:center;margin-bottom:14px}
+#quotationEditor .editor-intro h2{font-size:22px;margin:0 0 6px}
+#quotationEditor .editor-intro p{font-size:13px;margin:0}
+#quotationEditor .quote-builder-progress{position:sticky;top:6px;gap:8px;padding:7px;z-index:30;background:#fff;box-shadow:0 2px 8px #073c590a}
+#quotationEditor .quote-builder-progress button{background:transparent;border-radius:7px;padding:9px 15px;color:var(--admin-primary,#176b60);font-weight:650;font-size:13px}
+#quotationEditor .quote-builder-progress button:hover{background:#edf6f3}
+#quotationEditor .entry-workspace{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start}
+.entry-main-column{min-width:0;grid-column:1;grid-row:1}
+#quotationEditor .entry-main-column>.section-card{margin:0 0 16px}
+#quotationEditor .section-card{border:1px solid var(--admin-border,#dbe6e7);border-radius:12px;box-shadow:none;background:#fff}
+#quotationEditor .builder-section>summary{padding:17px 18px;gap:11px}
+#quotationEditor .builder-section>summary strong{font-size:15px}
+#quotationEditor .builder-section>summary small{font-size:12px;line-height:1.5;margin-top:3px}
+#quotationEditor .section-number{background:var(--admin-primary,#176b60);border-radius:8px;font-size:12px;width:26px;height:26px;flex-basis:26px}
+#quotationEditor .section-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;padding:0 18px 18px}
+#quotationEditor .section-grid>div{min-width:0;order:0}
+#quotationEditor .full-span,#quotationEditor #splitCapacityFields,#quotationEditor #legacyCapacityField{grid-column:1/-1!important}
+#quotationEditor label{display:block;font-size:12px;line-height:1.5;font-weight:650;margin-bottom:6px}
+#quotationEditor .required-mark{display:inline!important;font-size:inherit}
+#quotationEditor input:not([type=checkbox]):not([type=radio]):not([type=hidden]),#quotationEditor select,#quotationEditor textarea{font:inherit;font-size:14px;font-weight:400;box-sizing:border-box;max-width:100%;min-height:42px;border-radius:7px;padding:9px 11px}
+#quotationEditor input[type=checkbox]{display:inline-block;width:18px;height:18px;min-height:0;padding:0;vertical-align:middle;margin-right:6px}
+#quotationEditor textarea{min-height:78px;width:100%;display:block}
+#quotationEditor .btn{font:inherit;font-size:12px;padding:10px 13px;min-height:40px;border-radius:7px}
+.entry-phone-row{display:flex;gap:8px;align-items:center}.entry-phone-row>input{min-width:0;flex:1}.entry-phone-row>button{flex:none}
+#quotationEditor [role=status]{font-size:12px;line-height:1.5;margin:6px 0 0}
+.entry-extra-fields{border-top:1px solid #e5ecef;padding-top:10px;grid-column:1/-1}
+.entry-extra-fields>summary,#quotationEditor .optional-fields>summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--admin-primary,#176b60);padding:5px 0}
+#quotationEditor .entry-extra-fields>.section-grid{padding:15px 0 0}
+#quotationEditor .entry-extra-fields .full-span{grid-column:1/-1}
+#quotationEditor #quote-price-breakdown{padding:13px;background:#f7faf9;border:1px solid #e1eae7;border-radius:9px}
+#quotationEditor #quote-price-breakdown h3{font-size:13px;margin:0 0 6px}
+#quotationEditor #quote-price-breakdown p{font-size:12px;margin:0 0 12px;line-height:1.5}
+#quotationEditor #quote-price-breakdown output{font-size:14px;color:var(--admin-primary,#176b60);padding-top:12px}
+#quotationEditor #quote-price-breakdown button{font:inherit;font-size:12px;min-height:38px;padding:8px 12px;border:1px solid #c7d8d2;border-radius:7px;background:#fff;color:var(--admin-primary,#176b60);cursor:pointer}
+.entry-options>h3{font-size:13px;margin:23px 0 10px;color:var(--admin-muted,#526777)}
+#quotationEditor .entry-options>.section-card{margin:0 0 10px;background:#fafcfc}
+#quotationEditor .entry-options .section-number,#quotationEditor .entry-options strong:after{display:none}
+#quotationEditor .entry-options .builder-section>summary{padding:14px 18px}
+.entry-loan-group{min-width:0;margin:4px 0 8px;padding:12px 0 0;border:1px solid #d9e5e5;border-radius:8px}
+.entry-loan-group legend{font-size:13px;font-weight:700;padding:0 8px;margin-left:10px}
+#quotationEditor .entry-loan-group>.section-grid{padding:5px 14px 14px}
+#quotationEditor .entry-review{grid-column:2;grid-row:1;position:sticky;top:65px;max-height:calc(100dvh - 80px);overflow-y:auto;margin:0;border-top:3px solid var(--admin-primary,#176b60)}
+.entry-review .static-section-heading{padding:17px 15px;gap:10px}.entry-review .static-section-heading strong{font-size:15px}.entry-review .static-section-heading small{font-size:12px;line-height:1.5}
+.entry-live-total{display:grid;gap:6px;padding:16px;margin:0 15px 15px;border-radius:9px;background:#eef7f3;color:#164b43}
+.entry-live-total>span{font-size:11px}.entry-live-total>strong{font-size:28px;font-weight:750;line-height:1.2}.entry-live-total>small{font-size:12px}
+#quotationEditor .entry-review .review-summary{display:grid;grid-template-columns:1fr;padding:0 15px 8px;gap:0}
+#quotationEditor .entry-review .review-summary>div{padding:10px 0;border:0;border-top:1px solid #e7eeee;border-radius:0;background:none;overflow-wrap:anywhere}
+#quotationEditor .entry-review .review-summary strong{font-size:13px}.entry-review .review-summary small{font-size:11px}
+#quotationEditor .entry-review [data-price-review]{display:none}
+#quotationEditor .entry-review .save-actions{display:flex;flex-direction:column;padding:12px 15px 15px;gap:8px}
+#quotationEditor .entry-review .save-actions>button[type=submit]{order:-1;min-height:44px;font-weight:700}
+.entry-review .save-actions>a{font-size:11px!important;text-align:center}
+#quotationEditor .entry-mobile-save{display:none}
+@media(max-width:1000px){#quotationEditor .entry-workspace{grid-template-columns:minmax(0,1fr) 260px;gap:14px}#quotationEditor .section-grid{gap:12px;padding-left:14px;padding-right:14px}}
+@media(max-width:1050px){
+  #quotationEditor{padding:12px;padding-bottom:90px}#quotationEditor .entry-workspace{display:block}
+  #quotationEditor .entry-review{position:static;max-height:none;overflow:visible;margin-top:18px}
+  #quotationEditor .entry-mobile-save{display:flex;position:fixed!important;top:auto;bottom:0;left:0;right:0;margin:0;padding:10px 14px;border-radius:0;border:0;border-top:1px solid #cbded7;background:#fff;z-index:45;box-shadow:0 -3px 12px #073c5910}
+  #quotationEditor .entry-mobile-save .quick-action-buttons{width:auto}.entry-mobile-save>span{flex:1;min-width:0}.entry-mobile-save>span>strong{display:none}
+  #quotationEditor .entry-mobile-save .quick-action-buttons .btn{width:auto;white-space:nowrap}
+  .quotation-entry-page .commercial-header{padding:14px}.quotation-entry-page .commercial-header h1{font-size:23px}
+  #quotationEditor .quote-builder-progress{top:0;flex-wrap:nowrap}#quotationEditor .quote-builder-progress button{flex:1;padding:8px 4px;font-size:12px}
+}
+@media(max-width:460px){#quotationEditor .section-grid{grid-template-columns:1fr}#quotationEditor .entry-extra-fields>.section-grid{grid-template-columns:1fr}.entry-phone-row{flex-wrap:wrap}.entry-phone-row>button{min-height:42px}}
+@media(max-width:760px){
+  body.quotation-entry-page{width:auto;margin:0;padding-left:0!important;padding-right:0!important}
+  .quotation-entry-page .commercial-shell{margin:0}
+  #quotationEditor{box-sizing:border-box;width:100%}
+  .quotation-entry-page .commercial-shell,.quotation-entry-page .mobile-app-nav{box-sizing:border-box}
+  .quotation-entry-page .commercial-header{position:static}
+  .quotation-entry-page .mobile-app-nav{height:calc(68px + var(--pwa-safe-bottom,0px));align-items:center}
+  #quotationEditor .entry-mobile-save{bottom:calc(68px + var(--pwa-safe-bottom,0px));border-radius:0!important}
+  #quotationEditor{padding-bottom:150px}
+}
