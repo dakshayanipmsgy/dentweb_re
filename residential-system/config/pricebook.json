@@ -1,0 +1,114 @@
+{
+  "version": "owner-confirmed-20261027",
+  "effective_date": "2026-10-21",
+  "confirmed_at": "2026-10-27",
+  "approved_by": "Vishesh Vardhan",
+  "plans": {
+    "ongrid": [
+      {
+        "kw": 1,
+        "price": 85900,
+        "low": 85900,
+        "code": "O1-1P-D",
+        "config": "1 kW panels · 3 kW inverter · 1 phase"
+      },
+      {
+        "kw": 2,
+        "price": 142900,
+        "low": 142900,
+        "code": "O2-1P-D",
+        "config": "2 kW panels · 1 phase"
+      },
+      {
+        "kw": 3,
+        "price": 192900,
+        "low": 192900,
+        "code": "O3-1P-D",
+        "config": "3 kW panels · 1 phase"
+      },
+      {
+        "kw": 5,
+        "price": 308900,
+        "low": 281900,
+        "code": "O5-1P-D",
+        "config": "5 kW panels · 1 phase"
+      },
+      {
+        "kw": 8,
+        "price": 501400,
+        "low": 433900,
+        "code": "O8-3P-D",
+        "config": "8 kW panels · 3 phase"
+      },
+      {
+        "kw": 10,
+        "price": 587400,
+        "low": 492900,
+        "code": "O10-3P-D",
+        "config": "10 kW panels · 3 phase"
+      }
+    ],
+    "hybrid": [
+      {
+        "kw": 1,
+        "price": 155900,
+        "low": 155900,
+        "code": "H1-T3-A2-1P-D",
+        "config": "3 kVA inverter · 2 × 150 Ah lead-acid · 1 phase"
+      },
+      {
+        "kw": 2,
+        "price": 222900,
+        "low": 222900,
+        "code": "H2-T3-A2-1P-D",
+        "config": "3 kVA inverter · 2 × 150 Ah lead-acid · 1 phase"
+      },
+      {
+        "kw": 3,
+        "price": 268900,
+        "low": 268900,
+        "code": "H3-T3-A2-1P-D",
+        "config": "3 kVA inverter · 2 × 150 Ah lead-acid · 1 phase"
+      },
+      {
+        "kw": 5,
+        "price": 424900,
+        "low": 397900,
+        "code": "H5-T5-A4-1P-D",
+        "config": "5 kVA inverter · 4 × 150 Ah lead-acid · 1 phase"
+      },
+      {
+        "kw": 8,
+        "price": 689400,
+        "low": 621900,
+        "code": "H8-L8-A4-3P-D",
+        "config": "8 kW inverter · 4 × 150 Ah lead-acid · 3 phase"
+      },
+      {
+        "kw": 10,
+        "price": 811400,
+        "low": 716900,
+        "code": "H10-L10-A4-3P-D",
+        "config": "10 kW inverter · 4 × 150 Ah lead-acid · 3 phase"
+      }
+    ]
+  },
+  "finance": {
+    "rates": [
+      {
+        "max_loan": 200000,
+        "annual_rate": 5.75
+      },
+      {
+        "max_loan": 600000,
+        "annual_rate": 7.9
+      }
+    ],
+    "months": 120,
+    "source": "https://sbi.bank.in/web/personal-banking/loans/pm-surya-ghar-loan-for-solar-roof-top",
+    "verified_at": "2026-10-27",
+    "mixed_subsidy": "unresolved; deduct zero",
+    "hybrid_subsidy": "conditional; must verify configuration and DISCOM approval"
+  },
+  "scope": "GST and standard installation; site scope must be confirmed; lithium upgrade extra; no automatic backup-hour promise"
+}

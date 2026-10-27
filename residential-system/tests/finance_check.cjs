@@ -1,0 +1,11 @@
+const assert=require('node:assert/strict');
+const {SOLAR_PLANS,solarFinance,solarComparison}=require('../public/solar-enquiry/pricing.js');
+const fs=require('node:fs');const book=JSON.parse(fs.readFileSync(require('node:path').join(__dirname,'../config/pricebook.json'),'utf8'));
+assert.deepEqual(SOLAR_PLANS,book.plans);
+assert.equal(solarFinance(SOLAR_PLANS.ongrid[1]).after,753);
+assert.equal(solarFinance(SOLAR_PLANS.ongrid[3]).price,281900);
+assert.equal(solarFinance(SOLAR_PLANS.ongrid[3]).subsidy,0);
+for(const p of SOLAR_PLANS.hybrid)assert.equal(solarFinance(p).subsidy,0);
+assert.equal(solarComparison(SOLAR_PLANS.ongrid[1],'ongrid',0,7,150,200).saving,0);
+assert.ok(solarComparison(SOLAR_PLANS.ongrid[1],'ongrid',100,7,150,0).saving<=100);
+console.log('PASS controlled pricebook parity, 2kW reference EMI, mixed price, no assumed mixed/hybrid subsidy, zero-bill and savings caps.');

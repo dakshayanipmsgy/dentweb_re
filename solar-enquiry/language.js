@@ -1,0 +1,191 @@
+'use strict';
+const solarEnglish={
+'घर का सोलर प्लान पाएं।':'Get a solar plan for your home.',
+'जानकारी पहले सुरक्षित सेव होगी। WhatsApp वैकल्पिक है।':'Your enquiry is saved first. WhatsApp is optional.',
+'जानकारी पहले सेव होगी। WhatsApp वैकल्पिक है।':'Your enquiry is saved first. WhatsApp is optional.',
+'WhatsApp संदेश न भेजने पर भी इसी नंबर पर संपर्क कर सकेंगे।':'We can respond on this number even if you do not send a WhatsApp message.',
+'जिला, बिल, नाम और संपर्क नंबर दें।':'Share your district, bill range, name and mobile number.',
+'10 अंकों का मोबाइल नंबर':'10-digit mobile number',
+'जरूरी / Required':'Required',
+'Enquiry सेव करें / Save enquiry':'Save enquiry',
+'मेरी सोलर enquiry के बारे में कॉल / WhatsApp की अनुमति है। / I agree to a response about this enquiry.':'I agree to a call or WhatsApp response about this solar enquiry.',
+'वैकल्पिक: विज्ञापन मापन की अनुमति। / Optional advertising measurement.':'Optional: allow advertising measurement.',
+'STOP कहकर संपर्क रोक सकते हैं।':'Say STOP to stop further contact.',
+'Privacy / गोपनीयता':'Privacy',
+'अनुभव जो लोगों ने साझा किए':'Experiences people shared',
+'सोलर के सफर की':'Their solar journey.',
+'उनकी अपनी बात।':'In their own words.',
+'Google पर लिखी समीक्षाओं के छोटे अंश।':'Short excerpts from reviews posted on Google.',
+'हर घर की बचत उसकी खपत और सिस्टम पर निर्भर है।':'Savings vary with each home, its consumption and system.',
+'Google समीक्षा · 17 नवंबर 2024':'Google review · 17 November 2024',
+'स्रोत: Google Business Profile पर प्रकाशित समीक्षाएँ। अंश संक्षिप्त किए गए हैं।':'Source: reviews published on Google Business Profile. Excerpts have been shortened.',
+'हिंदी अनुवाद: दक्षयानी एंटरप्राइजेज के साथ पूरी प्रक्रिया बहुत आसान रही।':'Hindi translation: the process with Dakshayani Enterprises was very smooth.',
+'हिंदी अनुवाद: सुगम इंस्टॉलेशन, बेहतरीन गुणवत्ता और बिजली के बिल में अच्छी बचत।':'Hindi translation: seamless installation, excellent quality and good electricity-bill savings.',
+'ऊपर mixed DN की कीमत है। पात्रता की पुष्टि तक गणना में subsidy नहीं घटाई गई है।':'The price above is for mixed DN. No subsidy is deducted in this estimate pending eligibility confirmation.',
+'गणना में subsidy':'Subsidy used in this estimate',
+'Subsidy घटाए बिना · मासिक खर्च:':'Without deducting subsidy · monthly outflow:',
+'पात्रता की पुष्टि तक subsidy नहीं घटाई गई है।':'No subsidy deducted pending eligibility confirmation.',
+'बचत ':'Savings ',
+'आपकी तुलना ·':'YOUR COMPARISON ·',
+'1–3 kW में DCR, उससे बड़े सिस्टम में कम कीमत वाला DN विकल्प दिखाया है। Full DCR की कीमत starred note में देखें।':'DCR is shown for 1–3 kW; larger systems show the lower-priced DN option. See the starred note for full DCR pricing.',
+'Battery सहित सबसे कम कीमत वाला विकल्प। 3 kW से ऊपर DN कीमत है; Full DCR की कीमत starred note में देखें।':'Lowest-priced options with battery included. Above 3 kW, prices are for DN; see the starred note for full DCR pricing.',
+'Full DCR की कीमत अधिक होगी:':'Full DCR will cost more:',
+'ऊपर DN की कीमत है; DN पर subsidy ₹0।':'The price above is for DN; DN subsidy is ₹0.',
+'Full DCR finance विकल्प देखें':'View the full DCR financing option',
+'मासिक EMI ≈':'Monthly EMI ≈',
+'सोलर · EMI + बचा बिल':'With solar · EMI + remaining bill',
+'DN पर subsidy ₹0 · मासिक खर्च:':'DN subsidy ₹0 · monthly outflow:',
+'DN की कीमत पर गणना; subsidy ₹0।':'Calculated at the DN price; subsidy ₹0.',
+'subsidy credit + bank recast के बाद EMI लगभग':'EMI after subsidy credit and bank recast, approximately',
+'Subsidy से पहले EMI':'EMI before subsidy',
+'बिल बनाम EMI देखें ↓':'Compare electricity bills and EMI ↓',
+'सिस्टम का प्रकार':'System type',
+'अपनी छत को काम पर लगाइए':'Put your roof to work',
+'धूप तो रोज़ आती है।':'Sunshine arrives every day.',
+'अब ':'Now let ', 'बचत भी आए।':'savings arrive too.',
+'बिजली का बिल हल्का करना है या घर को बैकअप देना है? अपने बजट का सोलर चुनिए। लोन की प्रक्रिया में हम साथ हैं।':'Lower electricity bills or power backup for your home? Find solar that fits your budget. We help you through the loan process.',
+'1 kW ऑन-ग्रिड की शुरुआत':'Start with 1 kW on-grid solar',
+'₹85,900 कुल कीमत · 10% DP, स्वीकृत लोन पर':'₹85,900 total price · 10% upfront, subject to loan approval',
+'GST और standard installation शामिल · पात्र घरों के लिए ₹78,000 तक सब्सिडी':'GST and standard installation included · Subsidy up to ₹78,000 for eligible homes',
+'आपकी छत। रोज़ की धूप। लंबे समय की बचत।':'Your roof. Everyday sunshine. Long-term savings.',
+'आपके घर का सोलर प्लान':'A solar plan for your home',
+'बस 3 छोटे जवाब।':'Just 3 quick answers.',
+'फिर आपकी जानकारी के साथ WhatsApp पर बात होगी।':'Then continue on WhatsApp with your details ready.',
+'सोलर कहाँ लगवाना है?':'Which district is your home in?',
+'झारखंड का जिला चुनें':'Choose a district in Jharkhand',
+'जिस जगह सोलर लगवाना है, उसका जिला चुनें।':'Choose the district where the solar system will be installed.',
+'मासिक बिजली बिल कितना है?':'How much is your monthly electricity bill?',
+'बिल की श्रेणी चुनें':'Choose your bill range',
+'आपका नाम':'Your name',
+'अपना नाम लिखें':'Enter your name',
+'मोबाइल नंबर':'Mobile number',
+'वैकल्पिक':'Optional',
+'अलग कॉल नंबर देना चाहें तो लिखें':'Enter a different callback number, if needed',
+'खाली छोड़ सकते हैं—आपके WhatsApp नंबर पर भी बात हो सकती है।':'You may leave this blank; we can use your WhatsApp number.',
+'आगे बढ़ने के लिए जिला, बिल और नाम तीनों भरें।':'Choose your district and bill range, and enter your name to continue.',
+'सही 10 अंकों का मोबाइल नंबर लिखें या वैकल्पिक नंबर खाली छोड़ें।':'Enter a valid 10-digit Indian mobile number, or leave this optional field blank.',
+'जानकारी पूरी है। अब WhatsApp पर आगे बढ़ें।':'Your details are ready. Continue on WhatsApp.',
+'WhatsApp पर आगे बढ़ें':'Continue on WhatsApp',
+'WhatsApp खुलने पर तैयार संदेश भेजने के लिए':'When WhatsApp opens, press',
+' दबाएं।':' to send your prepared message.',
+'← पिछला':'← Back', 'आगे बढ़ें →':'Continue →',
+'आपकी जरूरत समझकर ही सलाह देंगे। अभी कोई payment नहीं।':'Advice based on your needs. No payment at this stage.',
+'घर का जिला':'Home district','मासिक बिजली बिल':'Monthly electricity bill',
+'पहले घर का जिला चुनें।':'Choose your home district first.',
+'पहले मासिक बिल की श्रेणी चुनें।':'Choose your monthly bill range first.',
+'साफ कीमतें':'Clear pricing','लोन में सहायता':'Loan assistance','आपकी जरूरत का सिस्टम':'A system for your needs',
+'सोलर की शुरुआत, छोटी DP के साथ':'Start solar with a smaller upfront payment',
+'घर आपका। चुनाव भी आपका।':'Your home. Your choice.',
+'पहले जरूरत चुनें, फिर क्षमता।':'Choose your need, then the system size.',
+'नीचे दिखाई गई कीमतें आपके लिए referrer rates हैं।':'The prices below use our referrer rates.',
+'बिजली बिल में बचत':'Lower electricity bills','बचत + बैटरी बैकअप':'Savings + battery backup',
+'DP: ₹2.70 लाख तक 10%, उससे ऊपर 20% का प्रस्तावित भुगतान। शेष राशि का लोन बैंक की मंजूरी पर। EMI: 120 महीने; ₹2 लाख तक के पात्र लोन पर 5.75%, बड़े लोन पर 7.90% का अनुमान। अंतिम दर, मंजूर राशि और DP बैंक तय करेगा।':'Proposed upfront payment: 10% for prices up to ₹2.70 lakh; 20% above that. The remaining amount requires loan approval. Illustrations use 120 months, 5.75% for eligible loans up to ₹2 lakh and 7.90% for larger loans. The bank decides the final rate, sanctioned amount and upfront contribution.',
+'बिल को सिर्फ देखिए मत। तुलना कीजिए।':'Do more than read your bill. Compare it.',
+'हर महीने कितना':'How much could you', 'आपके पास बचेगा?':'keep each month?',
+'हर kW के लिए 150 यूनिट × ₹7 = ₹1,050 का मासिक बिल लक्ष्य। उसी खपत के लिए EMI और बचा बिजली बिल साथ देखें।':'Each kW targets 150 units × ₹7 = ₹1,050 of monthly electricity cost. Compare the EMI plus remaining bill for the same consumption.',
+'बिना सोलर का लक्षित मासिक बिल (₹)':'Target monthly bill without solar (₹)',
+'तुलना का अनुमान: क्षमता × 150 यूनिट × ₹7। यह आपका वास्तविक बिल नहीं है।':'Comparison assumption: capacity × 150 units × ₹7. This is not your actual bill.',
+'सोलर क्षमता':'Solar capacity', 'सिस्टम':'System',
+'गणना की धारणाएं बदलें':'Adjust the calculation assumptions',
+'बचने वाली प्रति यूनिट लागत (₹)':'Avoided electricity cost per unit (₹)',
+'प्रति kW मासिक उत्पादन (यूनिट)':'Monthly generation per kW (units)',
+'मासिक fixed / न बचने वाले charges (₹)':'Monthly fixed / unavoidable charges (₹)',
+'अपने बिल की दर और छत की स्थिति के अनुसार बदलें। Hybrid में battery losses के लिए उत्पादन का 85% उपयोग माना गया है।':'Adjust these to your tariff and rooftop conditions. Hybrid calculations use 85% of generation to allow for battery losses.',
+'बात से शुरुआत। सही प्लान तक साथ।':'Start a conversation. Find the right plan.',
+'लोन की उलझन? हम मदद करेंगे।':'Need help with the loan? We are here.',
+'अपनी जानकारी भेजें':'Share your details',
+'जिला, मासिक बिल और नाम। फिर WhatsApp पर छत की 2–3 साफ फोटो भेजें।':'Share your district, monthly bill and name. Then send 2–3 clear rooftop photos on WhatsApp.',
+'हमारी टीम से बात करें':'Talk to our team',
+'आपकी जरूरत, छत, बजट और बैकअप की चर्चा। Documents और loan application में सहायता।':'Discuss your roof, budget and backup needs. Get help with documents and your loan application.',
+'सही प्लान पर आगे बढ़ें':'Move ahead with the right plan',
+'कॉल के बाद जरूरत हो तो site visit। अंतिम quote, bank approval और installation की योजना।':'After a call, arrange a site visit if needed. Then confirm the quotation, bank approval and installation plan.',
+'अब आपकी छत की बारी':'Your roof could be next',
+'कौन सा सोलर सही है?':'Which solar system suits you?',
+'आइए, साथ तय करें।':'Let us work it out together.',
+'सिर्फ तीन जरूरी जवाब।':'Just three required answers.',
+'आपकी जानकारी के साथ WhatsApp खुलेगा।':'WhatsApp opens with your details ready.',
+'आपके बिल के हिसाब से सलाह':'Advice based on your electricity bill',
+'DP, EMI और subsidy की साफ जानकारी':'Clear upfront payment, EMI and subsidy details',
+'लोन की प्रक्रिया में हमारी सहायता':'Our help through the loan process',
+'छत की तस्वीरें पहले, site visit का फैसला हमारी कॉल के बाद। कोई automatic booking नहीं।':'Rooftop photos first. Site visits are agreed after our call, with no automatic booking.',
+'मेरी जानकारी देकर बात करें ↗':'Get my home solar plan ↗',
+'मन में सवाल? यहां से शुरू करें।':'Questions? Start here.',
+'Subsidy के बाद EMI कैसे कम दिखाई गई है?':'How is the lower EMI after subsidy calculated?',
+'पात्र subsidy को loan principal में जमा कर, उसी 120-महीने की अवधि पर दोबारा गणना की गई है। यह तुलना का अनुमान है। वास्तविक credit की तारीख और बैंक की recast policy के अनुसार EMI घट सकती है या अवधि कम हो सकती है। Credit से पहले सामान्य EMI देनी होगी।':'The eligible subsidy is deducted from loan principal and EMI is recalculated over the same 120 months for comparison. Actual credit timing and bank policy may reduce the EMI or shorten the tenure instead. Normal EMI is payable before the credit.',
+'DCR और कम कीमत वाले non-DCR में क्या फर्क है?':'How do DCR and lower-priced non-DCR options differ?',
+'PM Surya Ghar subsidy के लिए DCR-compliant cells/modules और अन्य पात्रता जरूरी हैं। Non-DCR की कीमत कम हो सकती है, लेकिन उस विकल्प में यहां subsidy शून्य रखी गई है। Hybrid के लिए grid-connected approved configuration और DISCOM की मंजूरी जरूरी है; battery पर अलग subsidy नहीं जोड़ी गई है।':'PM Surya Ghar subsidy requires DCR-compliant cells/modules and other eligibility conditions. Non-DCR options can cost less, but subsidy is set to zero here. Hybrid systems require an approved grid-connected configuration and DISCOM approval; no separate battery subsidy is included.',
+'क्या मेरा पूरा बिजली बिल खत्म हो जाएगा?':'Will my entire electricity bill disappear?',
+'बचत आपके उपयोग, धूप, छाया, tariff, net metering और fixed charges पर निर्भर है। Calculator में बचत आपके बच सकने वाले bill तक सीमित है। कम या शून्य paid bill होने पर आर्थिक बचत सीमित होगी; backup चाहिए तो hybrid पर बात करें।':'Savings depend on consumption, sunlight, shade, tariff, net metering and fixed charges. The calculator caps savings at the avoidable part of the bill. If your paid bill is low or zero, financial savings are limited; consider hybrid if you need backup.',
+'Site visit का कितना charge है?':'What does a site visit cost?',
+'Ranchi city में free। Ranchi district में city से बाहर ₹500। अन्य क्षेत्रों में दूरी के अनुसार ₹1,500 / ₹2,000 / ₹2,500 / ₹3,000; टीम पता देखकर पहले पुष्टि करेगी। Paid visit non-refundable है, और project आगे बढ़ने पर final bill में adjust होगी। पहले roof photos और manual call होगी।':'Free within Ranchi city. ₹500 elsewhere in Ranchi district. Other locations: ₹1,500 / ₹2,000 / ₹2,500 / ₹3,000 depending on distance, confirmed by our team beforehand. Paid visits are non-refundable and adjusted against the final project bill if you proceed. Rooftop photos and a manual call come first.',
+'कीमत में क्या शामिल है?':'What is included in the price?',
+'GST और standard installation शामिल हैं। दिखाए गए hybrid base models में lead-acid batteries शामिल हैं; lithium upgrade का अलग quote मिलेगा। Roof structure, phase, sanctioned load और site-specific बदलाव final quote में स्पष्ट होंगे। Battery replacement / maintenance calculator के monthly outflow में शामिल नहीं है।':'GST and standard installation are included. The hybrid base models shown include lead-acid batteries; lithium upgrades are quoted separately. Roof structure, phase, sanctioned load and site-specific changes are detailed in the final quote. Battery replacement and maintenance are not included in the monthly-outflow calculator.',
+'बैंक की शर्तें':'Bank terms','कीमतें: 21 अक्टूबर 2026 की referrer price book से। Loan / subsidy पात्रता की पुष्टि आवश्यक।':'Prices: referrer price book dated 21 October 2026. Loan and subsidy eligibility require confirmation.',
+'Subsidy वाले DCR packages नीचे हैं। कम कीमत के non-DCR विकल्प भी देखें।':'DCR packages for subsidy are shown below. Explore the lower-priced non-DCR alternatives too.',
+'हर क्षमता का सबसे कम कीमत वाला DCR hybrid नीचे है। Battery शामिल है; subsidy configuration और DISCOM approval पर निर्भर है।':'The lowest-priced DCR hybrid for each size is shown below. Battery included; subsidy depends on configuration and DISCOM approval.',
+'घर के लिए तुलना की शुरुआत':'A starting point for comparison',
+'DCR · SUBSIDY विकल्प':'DCR · SUBSIDY OPTION',
+'Subsidy credit + recast बाद EMI ≈':'EMI after subsidy credit + recast ≈',
+'प्रस्तावित DP':'Proposed upfront', 'कुल कीमत':'Total price','पात्र subsidy':'Eligible subsidy',
+'Subsidy से पहले EMI ≈':'EMI before subsidy ≈','अनुमानित दर · अवधि':'Illustrative rate · tenure',
+'लोन राशि':'Loan amount','बचत की क्षमता का उदाहरण':'Potential bill offset example',
+'इस प्लान का हिसाब देखें ↗':'Compare this plan ↗',
+'सबसे कम कीमत:':'Lowest price:',
+'इसी क्षमता का सबसे सस्ता विकल्प। Subsidy ₹0। DP ':'Lowest-priced option at this size. Subsidy ₹0. Upfront ',
+'Subsidy वाला package ऊपर अलग दिखाया गया है।':'The DCR subsidy package is shown separately above.',
+'₹610 ज्यादा DP देकर छोटा loan विकल्प देखें':'Explore a smaller loan with ₹610 extra upfront',
+'DP ₹22,900 करने पर loan ₹2,00,000। पात्र 5.75% दर पर EMI लगभग ₹2,195, और ₹60,000 subsidy credit + bank recast के बाद लगभग ₹1,537/माह (120 माह)। बैंक और hybrid eligibility की पुष्टि जरूरी।':'With ₹22,900 upfront, the loan is ₹2,00,000. At an eligible 5.75% rate, EMI is approximately ₹2,195, or ₹1,537/month after ₹60,000 subsidy credit and bank recast (120 months). Bank and hybrid eligibility must be confirmed.',
+'hybrid में 15% loss माना है। वास्तविक paid bill, छत और net metering से सीमित।':'15% hybrid loss assumed. Limited by actual paid bill, rooftop conditions and net metering.',
+'लोन ₹6 लाख से ऊपर: उपयुक्त बैंक या अधिक DP की पुष्टि जरूरी।':'Loan above ₹6 lakh: confirm a suitable lender or a larger upfront contribution.',
+'आपकी तुलना · DCR PACKAGE':'YOUR COMPARISON · DCR PACKAGE',
+'बिना सोलर · लक्षित बिजली बिल':'Without solar · target electricity bill',
+'सोलर · subsidy के बाद*':'With solar · after subsidy*',
+'बचा बिजली बिल':'remaining electricity bill','बचा बिल':'remaining bill',
+'Subsidy आने से पहले:':'Before subsidy credit:', 'जिसमें EMI':'Including EMI',
+'अनुमानित मासिक राहत':'Estimated monthly relief',
+'इस उदाहरण में अतिरिक्त मासिक खर्च':'Additional monthly cost in this example',
+'शुरुआती DP:':'Initial upfront:', 'दर:':'Rate:',
+'मेरी छत के लिए जांचें ↗':'Get my home solar plan ↗',
+'Subsidy principal में credit और bank recast होने पर अनुमान। बचत ':'Estimate after subsidy is credited to principal and the bank recasts the loan. Savings ',
+'उत्पादन, tariff और fixed charges की बाईं ओर दी गई assumptions पर। Maintenance, battery replacement और loan fees शामिल नहीं।':'based on the generation, tariff and fixed-charge assumptions shown. Excludes maintenance, battery replacement and loan fees.',
+'Hybrid subsidy eligibility की पुष्टि आवश्यक।':'Hybrid subsidy eligibility must be confirmed.',
+'यह loan ₹6 लाख से ऊपर है; financing route की अलग पुष्टि होगी।':'This loan exceeds ₹6 lakh; the financing route needs separate confirmation.',
+'ऑन-ग्रिड':'On-grid','हाइब्रिड':'Hybrid','लगभग':'Approx.','/माह':'/month',' माह':' months',' से अधिक':' and above',
+'मेरे घर का सोलर प्लान पाएं':'Get my home solar plan','अभी कॉल करें':'Call now',
+'सोलर enquiry':'Solar enquiry',
+'सोलर पैनल वाली भारतीय आवासीय छत का चित्रण':'Illustration of an Indian home with rooftop solar',
+'।':'.'
+};
+const languageGate=document.querySelector('#language-choice');
+const englishEntries=Object.entries(solarEnglish).sort((a,b)=>b[0].length-a[0].length);
+function englishText(text){for(const [hi,en] of englishEntries)text=text.split(hi).join(en);return text;}
+let translationObserver;
+function translatePage(){
+ if(window.solarLang!=='en')return;
+ translationObserver?.disconnect();
+ const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;
+ while((node=walker.nextNode())){if(node.parentElement.closest('script,style,#language-choice,.language-switch'))continue;if(node.parentElement.tagName==='OPTION'&&node.textContent.includes(' / ')){node.textContent=node.textContent.split(' / ').at(-1);continue;}const translated=englishText(node.textContent);if(translated!==node.textContent)node.textContent=translated;}
+ document.querySelectorAll('[placeholder],[aria-label],[alt]').forEach(el=>{for(const attr of ['placeholder','aria-label','alt'])if(el.hasAttribute(attr))el.setAttribute(attr,englishText(el.getAttribute(attr)));});
+ translationObserver?.observe(document.body,{childList:true,subtree:true,characterData:true});
+}
+function chooseSolarLanguage(lang){
+ const previous=window.solarLang;
+ window.solarLang=lang;try{sessionStorage.setItem('solar-language',lang);}catch{}
+ if(previous==='en'&&lang==='hi'){window.location.reload();return;}
+ document.documentElement.lang=lang;document.body.classList.remove('language-pending');languageGate.hidden=true;
+ if(lang==='en'){document.title='Your roof. Your savings. | Dakshayani Solar';translatePage();}
+ else document.title='घर की छत, घर की बचत | Dakshayani Solar';
+}
+document.querySelectorAll('[data-language]').forEach(button=>button.addEventListener('click',()=>chooseSolarLanguage(button.dataset.language)));
+document.querySelector('.language-switch').addEventListener('click',()=>{languageGate.hidden=false;document.body.classList.add('language-pending');});
+document.addEventListener('DOMContentLoaded',()=>{
+ translationObserver=new MutationObserver(translatePage);
+ let remembered;try{remembered=sessionStorage.getItem('solar-language');}catch{}
+ if(remembered==='en'||remembered==='hi')chooseSolarLanguage(remembered);
+});
+// A gentle three-pulse cue, never a rapid flash; stop as soon as the user interacts.
+const enquiryCard=document.querySelector('#enquiry');let pulseTimer;
+document.addEventListener('click',event=>{const link=event.target.closest('a[href="#contact"]');if(!link)return;enquiryCard.classList.remove('form-attention');requestAnimationFrame(()=>{enquiryCard.classList.add('form-attention');});clearTimeout(pulseTimer);pulseTimer=setTimeout(()=>enquiryCard.classList.remove('form-attention'),5000);});
+enquiryCard.addEventListener('focusin',()=>enquiryCard.classList.remove('form-attention'));
+enquiryCard.addEventListener('input',()=>enquiryCard.classList.remove('form-attention'));
+
