@@ -1,0 +1,69 @@
+/* Studio 01: financing, hydrogen, knowledge, partnerships and careers. */
+.next-five-page [hidden] { display:none!important; }
+.next-five-page .card-grid,.next-five-page .five-guide-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }
+.next-five-page .five-timeline-four { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.next-five-page .hero-copy .hero-metrics { order:3; }
+.next-five-page .hero-copy .cta-actions { order:2; }
+.next-five-page .hero-copy > .lead { order:1; }
+.next-five-page .hero-media img { aspect-ratio:4/4.5; }
+.next-five-page .ds-split .badge-inline { display:inline-flex; margin-bottom:20px; }
+.next-five-page .ds-split .feature-grid { grid-template-columns:1fr; }
+.next-five-page .five-feature-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.next-five-page .card-grid .card { padding:30px; }
+.next-five-page .five-finance-summary { background:#153b35; border-radius:24px; padding:36px; color:#fff; }
+.next-five-page .five-finance-summary h2 { color:#fff; margin-top:24px; font-size:2.1rem; }
+.next-five-page .five-finance-summary .hero-eyebrow { color:var(--ds-accent); background:#285448; border-color:#426b5e; }
+.next-five-page .five-finance-summary p { color:#c5d8ce; font-size:.86rem; }
+.next-five-page .five-finance-summary .five-note { font-size:.75rem; }
+.next-five-page .five-emi :is(thead,tbody,tr,th,td) { background:transparent; }
+.next-five-page .five-emi td { color:#e5efe8; }
+.next-five-page .five-emi td:last-child { color:var(--ds-accent); font-size:1.3rem; }
+.next-five-page .five-emi caption { color:#c5d8ce; }
+.next-five-page .five-card-link { color:var(--ds-brand); font-weight:600; font-size:.84rem; display:inline-block; margin-top:16px; }
+.next-five-page .feature-card:first-child .five-card-link { color:var(--ds-accent); }
+.next-five-page .five-faq { max-width:840px; margin:auto; }
+.next-five-page .five-faq details { border:0; border-bottom:1px solid var(--ds-border); border-radius:0; background:transparent; box-shadow:none; padding:24px 0; }
+.next-five-page .five-faq summary { font-weight:500; font-size:1.05rem; cursor:pointer; min-height:44px; line-height:1.6; }
+.next-five-page .five-faq p { padding:12px 0; }
+.next-five-page .hero-inner:not(:has(.hero-media,.five-finance-summary)) { grid-template-columns:1fr; max-width:980px; margin-left:max(32px,calc((100% - 1200px)/2)); }
+.next-five-page .five-guide { display:flex; flex-direction:column; padding:32px; background:#fff; border:1px solid var(--ds-border); border-radius:20px; transition:transform .2s,border-color .2s; }
+.next-five-page .five-guide:hover { border-color:#97bbab; transform:translateY(-3px); box-shadow:var(--ds-shadow); }
+.next-five-page .five-guide > i { display:grid; place-items:center; width:48px; height:48px; border:1px solid #dce9e0; background:#edf4ef; color:var(--ds-brand); border-radius:14px; margin-bottom:24px; }
+.next-five-page .five-guide span { font-size:.84rem; color:var(--ds-brand); font-weight:600; margin-top:auto; padding-top:16px; }
+.next-five-page .knowledge-filters { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+.next-five-page .knowledge-filter { border:1px solid var(--ds-border); border-radius:999px; background:#fff; color:var(--ds-ink); padding:10px 20px; min-height:46px; font-size:.85rem; }
+.next-five-page .knowledge-filter.is-active { background:var(--ds-brand); color:#fff; }
+.next-five-page .knowledge-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }
+.next-five-page .knowledge-card { background:#fff; border:1px solid var(--ds-border); border-radius:20px; overflow:hidden; box-shadow:none; }
+.next-five-page .knowledge-card-media img { width:100%; aspect-ratio:16/10; object-fit:cover; }
+.next-five-page .knowledge-card-body { padding:28px; }
+.next-five-page .knowledge-card-meta { display:flex; flex-wrap:wrap; gap:12px; font-size:.75rem; color:var(--ds-muted); }
+.next-five-page .knowledge-card h3 { margin-top:20px; }
+.next-five-page .knowledge-sections { border:0; border-top:1px solid var(--ds-border); padding-top:20px; margin-top:20px; }
+.next-five-page .knowledge-sections summary { color:var(--ds-brand); min-height:44px; cursor:pointer; }
+.next-five-page .knowledge-subscribe { background:#153b35; color:#fff; border-radius:24px; padding:44px; display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:32px; align-items:center; }
+.next-five-page .knowledge-subscribe h2 { color:#fff; }
+.next-five-page .knowledge-subscribe p { color:#c5d8ce; }
+.next-five-page .knowledge-subscribe .btn { background:var(--ds-accent); color:var(--ds-ink); border-color:var(--ds-accent); }
+.next-five-page .knowledge-subscribe .subscribe-feedback:empty { display:none; }
+.knowledge-page .hero-media-main { margin:0; padding:0; border:0; box-shadow:none; }
+.next-five-page .five-knowledge-map { background:#153b35; padding:36px; border-radius:24px; }
+.next-five-page .five-knowledge-map .hero-eyebrow { color:var(--ds-accent); background:#285448; border-color:#426b5e; }
+.next-five-page .five-knowledge-map h2 { color:#fff; font-size:2.1rem; margin:24px 0; }
+.next-five-page .five-knowledge-map a { display:flex; gap:16px; align-items:start; border-top:1px solid #426b5e; padding:22px 0; color:#d8f36a; }
+.next-five-page .five-knowledge-map a:last-child { padding-bottom:0; }
+.next-five-page .five-knowledge-map h3 { color:#f2f7f3; font-size:1rem; margin-bottom:7px; }
+.next-five-page .five-knowledge-map p { color:#c5d8ce; font-size:.82rem; margin:0; }
+.next-five-page .five-map-number { font-size:.78rem; padding-top:4px; }
+.next-five-page .five-knowledge-map a > span:last-child { margin-left:auto; }
+@media(max-width:1000px) { .next-five-page .five-timeline-four { grid-template-columns:repeat(2,minmax(0,1fr)); } .next-five-page .hero-inner:not(:has(.hero-media,.five-finance-summary)) { margin-left:24px; } }
+@media(max-width:800px) { .next-five-page .hero-media img { aspect-ratio:16/10; } .next-five-page .knowledge-subscribe { grid-template-columns:1fr; } }
+@media(max-width:700px) {
+ .next-five-page :is(.card-grid,.five-guide-grid,.five-feature-grid,.five-timeline-four,.knowledge-grid) { grid-template-columns:1fr; }
+ .next-five-page .hero-inner:not(:has(.hero-media,.five-finance-summary)) { margin-left:18px; }
+ .next-five-page :is(.five-finance-summary,.five-guide,.knowledge-subscribe) { padding:26px; }
+ .next-five-page .knowledge-subscribe { width:calc(100% - 36px); }
+ .next-five-page .five-faq details { border-radius:0!important; }
+ .next-five-page .knowledge-filters { justify-content:flex-start; }
+ .next-five-page .card a[href^="mailto:"] { overflow-wrap:anywhere; }
+}

@@ -1,259 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Solar Financing & Bank Loans | Dakshayani Enterprises - Low Interest EMI</title>
-  <meta name="description" content="Access low-interest bank loans and easy EMI options for rooftop solar projects under the PM Surya Ghar scheme. Finance your future with Dakshayani Enterprises."/>
-
-  <link rel="icon" href="images/favicon.ico" />
-  <!-- Universal Stylesheet and Fonts -->
-  <link rel="stylesheet" href="style.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer"/>
-
-  <style>
-    .finance-hero {
-        background-image: linear-gradient(rgba(0,123,154,.8), rgba(0,161,214,.8)), url('images/finance.jpg');
-        background-size: cover;
-        background-position: center;
-        color: var(--surface);
-        text-align: center;
-        padding: 5rem 1rem;
-        position: relative;
-        overflow: hidden;
-    }
-    .finance-hero::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(180deg, rgba(0,0,0,0.15), transparent 65%);
-        pointer-events: none;
-    }
-    .finance-hero .container { position: relative; z-index: 1; }
-    .bank-logo-placeholder {
-        height: 60px;
-        background: var(--surface);
-        border-radius: 0.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        color: var(--base-900);
-        font-size: 1.2rem;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
-    .rate-card {
-        border-radius: 1rem;
-        padding: 1.75rem;
-        background: var(--surface);
-        box-shadow: 0 12px 30px rgba(0,0,0,0.1);
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-    }
-    .emi-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 1.5rem;
-    }
-    .emi-table th, .emi-table td {
-        border: 1px solid rgba(0,0,0,0.08);
-        padding: 0.85rem 1rem;
-        text-align: left;
-    }
-    .emi-table th {
-        background: rgba(0,161,214,0.12);
-        font-weight: 600;
-        color: var(--base-900);
-    }
-    .faq-accordion {
-        display: grid;
-        gap: 1rem;
-        margin-top: 2rem;
-    }
-    details {
-        background: var(--surface);
-        border-radius: 0.75rem;
-        padding: 1rem 1.25rem;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-    }
-    summary {
-        font-weight: 600;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-    summary::marker { font-size: 0; }
-    summary i { color: var(--primary-main); }
-    @media (max-width: 920px) {
-        .grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (max-width: 550px) {
-        .grid.cols-4 { grid-template-columns: 1fr; }
-    }
-  </style>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solar Financing &amp; Loan Guidance | Dakshayani Enterprises</title>
+  <meta name="description" content="Explore solar financing considerations, illustrative EMI examples, and document guidance with Dakshayani Enterprises in Ranchi.">
+  <link rel="icon" href="images/favicon.ico"><link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="assets/css/design-system.css?v=20261027"><link rel="stylesheet" href="assets/css/marketing-pages.css?v=20261027"><link rel="stylesheet" href="assets/css/next-five.css?v=20261027">
 </head>
-<body>
-
-  <!-- HEADER injected via script.js -->
-  <header class="site-header"></header>
-
-  <main>
-    <!-- Page Header/Hero -->
-    <section class="finance-hero">
-      <div class="container">
-        <h1 style="color:var(--surface);">Affordable Solar Financing</h1>
-        <p class="sub" style="color:#FFFFFF; max-width: 800px; margin: 0 auto 1.5rem; font-size: 1.25rem;">
-            Turning the net cost (after subsidy) into manageable, low-interest EMIs. We connect you with authorized banks.
-        </p>
-        <a href="contact.html" class="btn btn-secondary" style="background:#FFC107; color:var(--base-900);">
-            <i class="fa-solid fa-calculator"></i> Calculate Your EMI
-        </a>
-      </div>
-    </section>
-
-    <!-- Scheme Details -->
-    <section class="section">
-        <div class="container grid cols-2" style="gap: 3rem; align-items: flex-start;">
-            <div>
-                <h2>PM Surya Ghar Low-Interest Loans</h2>
-                <p style="font-size: 1.1rem; color: var(--base-600);">
-                    The Government has mandated banks to offer loans at competitive rates (typically around <strong>6-7% p.a.</strong>) for the residential share of the solar cost after the subsidy is applied. We simplify the documentation required for this process.
-                </p>
-
-                <h3 style="margin-top: 2rem;">Key Loan Parameters:</h3>
-                <ul style="list-style: none; padding: 0; margin-top: 1rem; color:var(--base-700);">
-                    <li style="margin-bottom: 0.5rem;"><i class="fa-solid fa-check-circle" style="color:var(--primary-main); margin-right: .5rem;"></i> <strong>Interest Rate:</strong> Typically <mark>6.5% - 7.5%</mark> (check current scheme rates).</li>
-                    <li style="margin-bottom: 0.5rem;"><i class="fa-solid fa-check-circle" style="color:var(--primary-main); margin-right: .5rem;"></i> <strong>Loan Tenure:</strong> Up to 10 years (120 months) is common.</li>
-                    <li style="margin-bottom: 0.5rem;"><i class="fa-solid fa-check-circle" style="color:var(--primary-main); margin-right: .5rem;"></i> <strong>Collateral:</strong> Usually collateral-free for small residential systems.</li>
-                    <li style="margin-bottom: 0.5rem;"><i class="fa-solid fa-check-circle" style="color:var(--primary-main); margin-right: .5rem;"></i> <strong>Our Role:</strong> Preparing the DPR (Detailed Project Report) and coordinating with the bank on your behalf.</li>
-                </ul>
-            </div>
-
-            <div class="rate-card">
-                <h3 style="margin-top: 0; font-size: 1.5rem;">Sample EMI Planner</h3>
-                <p style="color: var(--base-600);">Estimate your monthly EMI using current benchmark rates. Actual values may vary by bank.</p>
-                <table class="emi-table">
-                    <thead>
-                        <tr>
-                            <th>System Size</th>
-                            <th>Approx. Net Cost</th>
-                            <th>Loan Amount</th>
-                            <th>EMI @ 7% (120M)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>3 kW</td>
-                            <td>₹1,05,000</td>
-                            <td>₹60,000</td>
-                            <td>₹696 / month</td>
-                        </tr>
-                        <tr>
-                            <td>5 kW</td>
-                            <td>₹1,70,000</td>
-                            <td>₹1,10,000</td>
-                            <td>₹1,276 / month</td>
-                        </tr>
-                        <tr>
-                            <td>10 kW</td>
-                            <td>₹3,10,000</td>
-                            <td>₹2,20,000</td>
-                            <td>₹2,553 / month</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <p style="font-size: 0.85rem; color: var(--base-500);">*Net cost assumes subsidy already deducted. EMI is indicative for illustration.</p>
-            </div>
-        </div>
-    </section>
-
-    <section class="section" style="padding-top: 0;">
-        <div class="container grid cols-3" style="gap: 2rem;">
-            <div class="rate-card" style="background: var(--primary-bg);">
-                <h3 style="margin: 0;">Commercial Financing (Non-Subsidy)</h3>
-                <p style="color: var(--base-700);">For businesses, factories, and institutions, we provide detailed financial modeling for <strong>CAPEX</strong> and <strong>RESCO</strong> models to maximize ROI.</p>
-                <ul style="list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem;">
-                    <li><i class="fa-solid fa-star" style="color:var(--primary-main); margin-right: .5rem;"></i> CAPEX: Full ownership, fastest ROI (typically 3-5 years).</li>
-                    <li><i class="fa-solid fa-star" style="color:var(--primary-main); margin-right: .5rem;"></i> RESCO: Zero investment, pay only for discounted electricity (PPA).</li>
-                    <li><i class="fa-solid fa-star" style="color:var(--primary-main); margin-right: .5rem;"></i> OPEX to CAPEX migration support.</li>
-                </ul>
-                <a href="contact.html" class="btn btn-primary" style="margin-top: auto;">Request Feasibility Deck</a>
-            </div>
-            <div class="rate-card">
-                <h3 style="margin: 0;">Fast-Track Process</h3>
-                <ol style="margin: 0; padding-left: 1.25rem; color: var(--base-600); display: grid; gap: 0.5rem;">
-                    <li>Share last 12 months electricity bills.</li>
-                    <li>We run a load assessment & subsidy estimation.</li>
-                    <li>Bank partner verifies KYC & credit profile.</li>
-                    <li>Loan sanction & installation kickoff.</li>
-                </ol>
-                <a href="calculator.html" class="btn btn-secondary" style="margin-top: auto;">Use Savings Calculator</a>
-            </div>
-            <div class="rate-card">
-                <h3 style="margin: 0;">Required Documents</h3>
-                <ul style="list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; color: var(--base-600);">
-                    <li><i class="fa-solid fa-file-lines" style="color: var(--primary-main); margin-right: 0.5rem;"></i> Aadhaar & PAN of applicant</li>
-                    <li><i class="fa-solid fa-file-lines" style="color: var(--primary-main); margin-right: 0.5rem;"></i> Latest electricity bill</li>
-                    <li><i class="fa-solid fa-file-lines" style="color: var(--primary-main); margin-right: 0.5rem;"></i> Bank statement (6 months)</li>
-                    <li><i class="fa-solid fa-file-lines" style="color: var(--primary-main); margin-right: 0.5rem;"></i> Property ownership proof</li>
-                </ul>
-                <a href="mailto:documents@dakshayani.co.in" class="btn btn-secondary" style="margin-top: auto;">Submit Documents</a>
-            </div>
-        </div>
-    </section>
-
-    <!-- Bank Partners -->
-    <section class="section alt">
-        <div class="head container">
-            <h2>Our Partner Banks</h2>
-            <p class="sub">We work closely with major banks authorized to facilitate PM Surya Ghar financing.</p>
-        </div>
-        <div class="container grid cols-4">
-            <div class="bank-logo-placeholder">State Bank of India</div>
-            <div class="bank-logo-placeholder">PNB (Punjab National Bank)</div>
-            <div class="bank-logo-placeholder">HDFC Bank</div>
-            <div class="bank-logo-placeholder">Bank of India</div>
-        </div>
-        <div class="text-center" style="margin-top: 2rem;">
-            <p style="color: var(--base-600); font-size: 0.95rem;">Note: Availability of specific loan schemes depends on current bank policies and applicant eligibility.</p>
-        </div>
-    </section>
-
-    <section class="section">
-        <div class="container" style="max-width: 900px;">
-            <div class="head" style="margin-bottom: 1.5rem;">
-                <h2>Financing FAQs</h2>
-                <p class="sub">Get clarity on frequently asked questions before you apply.</p>
-            </div>
-            <div class="faq-accordion">
-                <details>
-                    <summary><i class="fa-solid fa-circle-question"></i>Can I prepay the loan without penalty?</summary>
-                    <p style="margin-top: 0.75rem; color: var(--base-600);">Most banks allow part-prepayment or foreclosure after 6 EMIs with minimal charges. We guide you to choose a lender with flexible prepayment terms.</p>
-                </details>
-                <details>
-                    <summary><i class="fa-solid fa-circle-question"></i>Is insurance coverage included?</summary>
-                    <p style="margin-top: 0.75rem; color: var(--base-600);">Optional solar asset insurance can be bundled with the loan. It protects against natural calamities and theft for the tenure of the loan.</p>
-                </details>
-                <details>
-                    <summary><i class="fa-solid fa-circle-question"></i>How soon can installation begin?</summary>
-                    <p style="margin-top: 0.75rem; color: var(--base-600);">Once the loan is sanctioned, we initiate material procurement within 48 hours and schedule installation as per your convenience.</p>
-                </details>
-            </div>
-        </div>
-    </section>
-
-  </main>
-
-  <!-- FOOTER injected via script.js -->
-  <footer class="site-footer"></footer>
-
-  <!-- Universal Partials loader script -->
-  <script src="script.js" defer></script>
-</body>
-</html>
+<body class="dakshayani-design marketing-page next-five-page finance-page">
+<a class="ds-skip" href="#main-content">Skip to content</a><header class="site-header"></header>
+<main id="main-content">
+  <section class="page-hero"><div class="container hero-inner">
+    <div class="hero-copy"><span class="hero-eyebrow"><i class="fa-solid fa-chart-line" aria-hidden="true"></i> Solar financing</span>
+      <h1>A clearer plan for your solar investment.</h1><p class="lead">Understand the project cost, explore financing, and discuss the documents you need before applying. Our team helps you prepare; your lender makes the credit decision.</p>
+      <div class="cta-actions"><a href="contact.php" class="btn btn-primary">Discuss financing</a><a href="#emi-examples" class="btn btn-secondary">See EMI examples</a></div>
+      <div class="hero-metrics"><div class="hero-metric"><span>Clear scope</span><span>Written project quotation</span></div><div class="hero-metric"><span>Guided</span><span>Document preparation</span></div><div class="hero-metric"><span>Your choice</span><span>Lender and repayment terms</span></div></div>
+    </div>
+    <aside class="five-finance-summary" id="emi-examples" aria-label="Illustrative EMI examples"><span class="hero-eyebrow">PLAN YOUR MONTHLY BUDGET</span><h2>What could an EMI look like?</h2><p>Illustration only: 7% annual interest, 120 monthly payments, with no fees or moratorium included.</p>
+      <table class="five-emi"><caption>Reducing-balance EMI, rounded to the nearest rupee. These are examples, not bank offers or solar quotations.</caption><thead><tr><th scope="col">Loan amount</th><th scope="col">Monthly EMI</th></tr></thead><tbody><tr><td>₹60,000</td><td>₹697</td></tr><tr><td>₹1,10,000</td><td>₹1,277</td></tr><tr><td>₹2,20,000</td><td>₹2,554</td></tr></tbody></table>
+      <p class="five-note">Actual rate, amount, tenure, fees, subsidy treatment, and eligibility depend on the lender and approved scheme.</p>
+    </aside>
+  </div></section>
+  <section class="section"><div class="container"><div class="head"><h2>Know the terms before you apply.</h2><p class="sub">Start with a site assessment and quotation, then compare the full cost of finance.</p></div><div class="feature-grid">
+    <article class="feature-card"><i class="fa-solid fa-percent" aria-hidden="true"></i><h3>Interest &amp; repayment</h3><p>Ask for the current rate, whether it is floating or fixed, the repayment schedule, and the total cost including fees.</p><a href="https://home.sbi.bank.in/web/personal-banking/loans/pm-surya-ghar-loan-for-solar-roof-top09b7.html?languageId=en_US" target="_blank" rel="noopener" class="five-card-link">Example lender information →</a></article>
+    <article class="feature-card"><i class="fa-solid fa-house" aria-hidden="true"></i><h3>Subsidy &amp; loan amount</h3><p>Confirm how any approved subsidy will be credited or adjusted. Do not assume it is deducted before the loan is disbursed.</p><a href="pm-surya-ghar.html" class="five-card-link">Explore subsidy guidance →</a></article>
+    <article class="feature-card"><i class="fa-solid fa-file-lines" aria-hidden="true"></i><h3>Documents &amp; eligibility</h3><p>Prepare identity and property documents, your electricity bill, and the financial documents your lender requests. Requirements vary by product.</p><a href="contact.php" class="five-card-link">Discuss your application →</a></article>
+  </div></div></section>
+  <section class="section alt"><div class="container"><div class="head"><h2>From first conversation to a clear proposal.</h2><p class="sub">A simple sequence keeps the technical scope and financing aligned.</p></div><ul class="timeline five-timeline-four">
+    <li><h3>Share your requirements</h3><p>Discuss your roof, electricity use, budget, and goals.</p></li><li><h3>Review the project</h3><p>Confirm the proposed system, installation scope, quotation, and possible subsidy eligibility.</p></li><li><h3>Apply with your lender</h3><p>Submit the requested documents and review the lender's written terms.</p></li><li><h3>Agree the next steps</h3><p>Coordinate approval, payment milestones, and installation scheduling.</p></li>
+  </ul></div></section>
+  <section class="section"><div class="container ds-split"><div><span class="badge-inline">BUSINESS &amp; INSTITUTIONAL SOLAR</span><h2>Choose a model that fits your operations.</h2><p class="lead">Compare ownership-led CAPEX with a proposed RESCO or power-purchase arrangement. Availability, tariffs, obligations, and returns require a project-specific assessment.</p><div class="cta-actions"><a href="contact.php" class="btn btn-primary">Request a feasibility discussion</a><a href="calculator.html" class="btn btn-secondary">Explore savings</a></div></div><div class="card"><h3>Bring these questions to the table</h3><ul class="list-check"><li><i class="fa-solid fa-check" aria-hidden="true"></i>Who owns the equipment and handles maintenance?</li><li><i class="fa-solid fa-check" aria-hidden="true"></i>What are the charges, term, and exit conditions?</li><li><i class="fa-solid fa-check" aria-hidden="true"></i>How do tariffs, generation, and downtime affect the estimate?</li></ul></div></div></section>
+  <section class="section alt"><div class="container"><div class="head"><h2>Financing questions, answered.</h2></div><div class="five-faq">
+    <details><summary>Can I prepay the loan?</summary><p>Ask your lender for the current prepayment and foreclosure terms for your specific product. Do not rely on a general rule about charges or waiting periods.</p></details>
+    <details><summary>Is insurance included?</summary><p>Confirm whether insurance is included, optional, or required, and review its cost, exclusions, and coverage with the provider.</p></details>
+    <details><summary>When can installation begin?</summary><p>The schedule depends on the agreed project scope, approvals, finance availability, materials, and site readiness. Our team will confirm a plan for your project.</p></details>
+  </div></div></section>
+</main><footer class="site-footer"></footer><script src="script.js" defer></script>
+</body></html>

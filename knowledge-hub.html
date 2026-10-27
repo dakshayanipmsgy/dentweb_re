@@ -9,49 +9,59 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="assets/css/design-system.css?v=20261027" />
+  <link rel="stylesheet" href="assets/css/marketing-pages.css?v=20261027" />
+  <link rel="stylesheet" href="assets/css/next-five.css?v=20261027" />
 </head>
-<body data-active-nav="knowledge-hub">
+<body class="dakshayani-design marketing-page next-five-page knowledge-page" data-active-nav="knowledge-hub">
+  <a class="ds-skip" href="#main-content">Skip to content</a>
   <header class="site-header"></header>
 
-  <main>
-    <section class="section hero hero--knowledge">
-      <div class="container hero-grid">
-        <div class="hero-content">
-          <p class="badge badge--on-dark">Knowledge Hub</p>
-          <h1>Solar Playbooks for Homes, MSMEs &amp; Farmers</h1>
+  <main id="main-content">
+    <section class="page-hero">
+      <div class="container hero-inner">
+        <div class="hero-copy">
+          <p class="hero-eyebrow">Knowledge Hub</p>
+          <h1>Clear answers. Confident solar decisions.</h1>
           <p class="lead">
-            Explore bilingual guides, subsidy checklists, and project learnings powered by Dakshayani's installation data and Google Solar API insights.
+            Explore solar solutions, subsidy guidance, financing considerations, and installation photographs in one place.
           </p>
-          <div class="hero-actions">
-            <button class="btn btn-secondary" data-open-search>
+          <div class="cta-actions">
+            <a class="btn btn-primary" href="#solar-guides">
               <i class="fa-solid fa-search"></i>
-              Search Knowledge Hub
-            </button>
-            <a href="blog/index.php" class="btn btn-primary">
+              Browse solar guides
+            </a>
+            <a href="blog/index.php" class="btn btn-secondary">
               <i class="fa-solid fa-newspaper"></i>
               Visit Blog &amp; News
             </a>
           </div>
         </div>
-        <div class="hero-media">
-          <figure class="hero-media-main">
-            <img
-              src="images/knowledge/knowledge-hero.svg"
-              alt="Dakshayani engineers analysing solar telemetry dashboards"
-              loading="lazy"
-            />
-          </figure>
-        </div>
+        <aside class="hero-media five-knowledge-map" aria-label="Your solar starting point">
+          <span class="hero-eyebrow">A SIMPLE PLACE TO START</span><h2>Your solar questions, organised.</h2>
+          <a href="pm-surya-ghar.html"><span class="five-map-number">01</span><div><h3>Understand eligibility</h3><p>Scheme guidance and document checklists.</p></div><span aria-hidden="true">↗</span></a>
+          <a href="financing.html"><span class="five-map-number">02</span><div><h3>Plan the investment</h3><p>Financing considerations and EMI examples.</p></div><span aria-hidden="true">↗</span></a>
+          <a href="solar-projects.html"><span class="five-map-number">03</span><div><h3>Explore installations</h3><p>Rooftop and commercial project galleries.</p></div><span aria-hidden="true">↗</span></a>
+        </aside>
       </div>
     </section>
 
+    <section class="section" id="solar-guides">
+      <div class="container"><div class="head"><h2>Start with what matters to you.</h2><p class="sub">Practical starting points for your next solar conversation.</p></div>
+      <div class="five-guide-grid">
+        <a class="five-guide" href="pm-surya-ghar.html"><i class="fa-solid fa-sun" aria-hidden="true"></i><h3>Subsidy &amp; eligibility</h3><p>Understand the scheme, documents, and approval steps.</p><span>Explore the guide →</span></a>
+        <a class="five-guide" href="financing.html"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><h3>Financing your system</h3><p>Review loan considerations and illustrative monthly payments.</p><span>Explore financing →</span></a>
+        <a class="five-guide" href="solar-projects.html"><i class="fa-solid fa-solar-panel" aria-hidden="true"></i><h3>Projects &amp; installations</h3><p>Browse rooftop layouts and commercial installation photographs.</p><span>View the gallery →</span></a>
+        <a class="five-guide" href="calculator.html"><i class="fa-solid fa-calculator" aria-hidden="true"></i><h3>Explore your savings</h3><p>Start with an estimate, then discuss a site-specific assessment.</p><span>Open the calculator →</span></a>
+      </div></div>
+    </section>
     <section class="section alt" aria-labelledby="knowledge-categories-title">
       <div class="container">
-        <header class="section-head">
-          <h2 id="knowledge-categories-title">Browse by segment</h2>
-          <p>Choose a segment to filter case studies, FAQs, and explainers most relevant to you.</p>
+        <header class="head">
+          <h2 id="knowledge-categories-title">Explore published insights</h2>
+          <p>When published, article categories help you find relevant explainers.</p>
         </header>
         <div class="knowledge-filters" data-knowledge-filters></div>
       </div>
@@ -59,7 +69,7 @@
 
     <section class="section" aria-labelledby="knowledge-articles-title">
       <div class="container">
-        <header class="section-head">
+        <header class="head">
           <h2 id="knowledge-articles-title">Latest briefs &amp; explainers</h2>
           <p>Every article includes project takeaways, subsidy notes, and reading time to keep your teams aligned.</p>
         </header>
@@ -73,16 +83,9 @@
       <div class="container knowledge-subscribe">
         <div>
           <h2 id="knowledge-subscribe-title">Stay updated with solar policy moves</h2>
-          <p>Subscribe to monthly GA4-backed performance reviews, subsidy deadlines, and new project walkthroughs.</p>
+          <p>Ask our team about solar updates, project walkthroughs, and the guidance relevant to your plans.</p>
         </div>
-        <form class="subscribe-form" data-mailchimp-form>
-          <label class="sr-only" for="subscribe-email">Email address</label>
-          <input id="subscribe-email" type="email" name="email" placeholder="you@example.com" required />
-          <button type="submit" class="btn btn-primary">
-            <i class="fa-solid fa-paper-plane"></i>
-            Subscribe via Mailchimp
-          </button>
-        </form>
+        <a class="btn btn-primary" href="mailto:connect@dakshayani.co.in?subject=Solar%20updates%20request">Request updates by email</a>
         <p class="subscribe-feedback" data-subscribe-feedback role="status" aria-live="polite"></p>
       </div>
     </section>
@@ -106,6 +109,7 @@
         allButton.className = 'knowledge-filter is-active';
         allButton.textContent = 'All';
         allButton.dataset.segment = '';
+        allButton.setAttribute('aria-pressed', 'true');
         filterHost.appendChild(allButton);
 
         categories.forEach((category) => {
@@ -114,6 +118,7 @@
           button.className = 'knowledge-filter';
           button.textContent = category.name;
           button.dataset.segment = category.id;
+          button.setAttribute('aria-pressed', 'false');
           button.title = category.description;
           filterHost.appendChild(button);
         });
@@ -122,7 +127,7 @@
       function renderArticles(articles) {
         if (!listHost) return;
         if (!articles.length) {
-          listHost.innerHTML = '<p class="site-search-empty">No articles available right now. Check back soon!</p>';
+          listHost.innerHTML = '<p class="site-search-empty">New articles will appear here when published. Explore the solar guides above in the meantime.</p>';
           return;
         }
         const list = document.createElement('div');
@@ -166,8 +171,9 @@
         if (!filterHost) return;
         filterHost.querySelectorAll('button').forEach((button) => {
           button.addEventListener('click', () => {
-            filterHost.querySelectorAll('button').forEach((btn) => btn.classList.remove('is-active'));
+            filterHost.querySelectorAll('button').forEach((btn) => { btn.classList.remove('is-active'); btn.setAttribute('aria-pressed', 'false'); });
             button.classList.add('is-active');
+            button.setAttribute('aria-pressed', 'true');
             const segment = button.dataset.segment || '';
             const filtered = segment ? data.articles.filter((item) => item.category === segment) : data.articles;
             renderArticles(filtered);
@@ -189,25 +195,9 @@
             attachFilterHandlers(data);
           })
           .catch(() => {
-            listHost.innerHTML = '<p class="site-search-empty">Unable to load knowledge content right now.</p>';
+            if (filterHost) filterHost.closest('section').hidden = true;
+            listHost.innerHTML = '<p class="site-search-empty">The article feed is currently unavailable. You can still explore the solar guides above or visit our blog.</p>';
           });
-      }
-
-      if (subscribeForm) {
-        subscribeForm.addEventListener('submit', (event) => {
-          event.preventDefault();
-          const formData = new FormData(subscribeForm);
-          const email = String(formData.get('email') || '').trim();
-          if (!email) {
-            feedback.textContent = 'Please enter your email address.';
-            return;
-          }
-          feedback.textContent = 'Submitting to Mailchimp…';
-          setTimeout(() => {
-            feedback.textContent = 'Thanks! We will add you to the GA4-backed insights newsletter.';
-            subscribeForm.reset();
-          }, 900);
-        });
       }
 
       fetchKnowledge();
