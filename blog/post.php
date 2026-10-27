@@ -153,6 +153,8 @@ function send_cache_headers(?string $timestamp, string $seed): void
     } catch (Throwable $exception) {
         return;
     }
+    // Template changes must invalidate cached public HTML as well as post changes.
+    $lastModified->setTimestamp(max($lastModified->getTimestamp(), (int) filemtime(__FILE__)));
     $formatted = $lastModified->format('D, d M Y H:i:s') . ' GMT';
     $etag = '"' . sha1($seed . '|' . $lastModified->getTimestamp()) . '"';
     header('Last-Modified: ' . $formatted);

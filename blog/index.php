@@ -41,6 +41,8 @@ function send_cache_headers(?string $timestamp, string $seed): void
     }
 
     $lastModified->setTimezone(new DateTimeZone('UTC'));
+    // Template changes must invalidate cached public HTML as well as post changes.
+    $lastModified->setTimestamp(max($lastModified->getTimestamp(), (int) filemtime(__FILE__)));
     $formatted = $lastModified->format('D, d M Y H:i:s') . ' GMT';
     $etag = '"' . sha1($seed . '|' . $lastModified->getTimestamp()) . '"';
 
