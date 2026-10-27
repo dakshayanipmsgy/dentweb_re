@@ -1,6 +1,6 @@
 # Exact production change for owner review
 
-Status: PREPARED LOCALLY, NOT INSTALLED. No public deployment, new spending or customer outreach authorised/performed in this turn.
+Current status: INSTALLED on 27 October 2026 after the owner's explicit approval. See LIVE-RELEASE-20261027.md for production evidence and the remaining administrator sign-in check. The scope and pre-installation observations below are retained as the original review record. No ad spending or customer outreach was performed.
 
 ## Existing state verified on 27 October
 
