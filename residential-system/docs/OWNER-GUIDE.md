@@ -1,6 +1,6 @@
 # Dakshayani residential sales desk — first release
 
-Prepared 27 October 2026. This release is local and tested; it is not installed on your hosting yet.
+Installed 27 October 2026. Open https://dakshayani.co.in/residential-enquiries.php with your existing administrator login. Production capture and owner email receipt are verified; a signed-in staff-screen save still needs the owner's sign-in. See LIVE-RELEASE-20261027.md for the exact verification record.
 
 ## What changes for a homeowner
 
