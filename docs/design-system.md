@@ -30,4 +30,6 @@ The homepage switches its hero to one column at 800px, service grids to two colu
 
 `homepage.css` supplies the homepage layout; its Studio 01 section refines the previous layout. Shared navigation, footer, type, and palette belong in `design-system.css`. Promote additional components to the shared file when a second page uses them, keeping page-specific layout in its own stylesheet.
 
+`marketing-pages.css` supplies reusable page heroes, feature cards, timelines, galleries, subsidy tables, filters, and consultation panels for About Us, Solar Projects, and PM Surya Ghar. These pages opt in with `marketing-page` plus their page-specific body class. Their existing routes, image paths, gallery data, and project/testimonial integrations are retained. Project filter buttons expose selection using `aria-pressed`.
+
 The homepage was published on 27 October 2026 to https://dakshayani.co.in/ through GitHub main and cPanel Update from Remote. Production checks passed at 320, 390, 768, 1024, and 1440px; the mobile menu opened and closed, and all 40 rendered installation-gallery images loaded. The local checkout lacks that production photo directory; preserve those live files during later updates.

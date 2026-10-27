@@ -6,7 +6,7 @@
   <title>Solar Projects, Case Studies &amp; Testimonials | Dakshayani Enterprises</title>
   <meta
     name="description"
-    content="Explore Dakshayani Enterprises solar project portfolio, dynamic case studies, and real customer testimonials curated by the admin team."
+    content="Explore Dakshayani Enterprises solar project portfolio, dynamic case studies, and real customer testimonials from our project portfolio."
   />
 
   <link rel="icon" href="images/favicon.ico" />
@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;800;900&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   />
   <link
@@ -23,17 +23,20 @@
     crossorigin="anonymous"
     referrerpolicy="no-referrer"
   />
+  <link rel="stylesheet" href="assets/css/design-system.css?v=20261027" />
+  <link rel="stylesheet" href="assets/css/marketing-pages.css?v=20261027" />
 </head>
-<body>
+<body class="dakshayani-design marketing-page projects-page">
+  <a class="ds-skip" href="#main-content">Skip to content</a>
   <header class="site-header"></header>
 
-  <main>
+  <main id="main-content">
     <section class="page-hero">
       <div class="container hero-inner">
         <div class="hero-copy">
           <span class="hero-eyebrow"><i class="fa-solid fa-solar-panel" aria-hidden="true"></i> Solar success stories</span>
-          <h1>Projects, case studies &amp; testimonials curated by Dakshayani</h1>
-          <p class="lead" style="color: rgba(255, 255, 255, 0.82);">
+          <h1>Real rooftops. Practical solar solutions.</h1>
+          <p class="lead">
             Track the EPC work we deliver across Jharkhand, discover new deployments, and hear directly from families and
             enterprises powering their future with Dakshayani.
           </p>
@@ -51,12 +54,12 @@
               <span>Maintenance support</span>
             </div>
           </div>
-          <div class="cta-actions" style="display: flex; flex-wrap: wrap; gap: 1rem;">
+          <div class="cta-actions">
             <a href="#residential" class="btn btn-primary">Explore project galleries</a>
-            <a href="#case-studies" class="btn btn-secondary" style="background: transparent; border-color: rgba(255, 255, 255, 0.4); color: var(--surface);">Review case studies</a>
+            <a href="#case-studies" class="btn btn-secondary">Review case studies</a>
           </div>
         </div>
-        <div class="hero-media" aria-hidden="true">
+        <div class="hero-media">
           <img
             src="images/residential pics real/WhatsApp Image 2024-09-13 at 19.41.12_13daf8c9.jpg"
             alt="Dakshayani site team working on a residential rooftop array"
@@ -135,14 +138,14 @@
       <div class="container">
         <div class="head">
           <h2>Latest case studies</h2>
-          <p class="sub">Admin-curated reports covering objectives, deployment metrics, and realised impact.</p>
+          <p class="sub">Explore project objectives, system details, and documented outcomes.</p>
         </div>
         <div class="case-filter-group" data-case-filters>
-          <button type="button" class="case-filter is-active" data-case-filter="">All</button>
-          <button type="button" class="case-filter" data-case-filter="residential">Residential</button>
-          <button type="button" class="case-filter" data-case-filter="commercial">Commercial</button>
-          <button type="button" class="case-filter" data-case-filter="industrial">Industrial</button>
-          <button type="button" class="case-filter" data-case-filter="agriculture">Agriculture</button>
+          <button type="button" class="case-filter is-active" aria-pressed="true" data-case-filter="">All</button>
+          <button type="button" class="case-filter" aria-pressed="false" data-case-filter="residential">Residential</button>
+          <button type="button" class="case-filter" aria-pressed="false" data-case-filter="commercial">Commercial</button>
+          <button type="button" class="case-filter" aria-pressed="false" data-case-filter="industrial">Industrial</button>
+          <button type="button" class="case-filter" aria-pressed="false" data-case-filter="agriculture">Agriculture</button>
         </div>
         <div class="case-study-grid" data-case-list>
           <p class="site-search-loading">Loading case studies…</p>
@@ -163,22 +166,22 @@
     </section>
 
     <section class="section alt">
-      <div class="container grid" style="gap: 2.5rem;">
+      <div class="container grid">
         <div class="highlight-banner">
           <span class="badge-inline"><i class="fa-solid fa-screwdriver-wrench"></i> Delivery Assurance</span>
           <h2 class="mb-2">Full-stack EPC, compliance &amp; after-sales in one place</h2>
           <p class="mb-0">We manage design approvals, structural retrofits, procurement, net-metering, and five-year preventive maintenance with on-call support engineers across Jharkhand.</p>
         </div>
-        <div class="grid" style="gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
-          <div class="card" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(59, 130, 246, 0));">
+        <div class="grid ds-duo">
+          <div class="card">
             <h3 class="title">Process you can trust</h3>
             <ul class="list-check">
               <li><i class="fa-solid fa-check"></i>Dedicated project manager &amp; site engineer</li>
-              <li><i class="fa-solid fa-check"></i>Real-time progress dashboards for admins</li>
+              <li><i class="fa-solid fa-check"></i>Clear project milestones and progress updates</li>
               <li><i class="fa-solid fa-check"></i>Final handover with training &amp; AMC options</li>
             </ul>
           </div>
-          <div class="card" style="background: linear-gradient(135deg, rgba(234, 179, 8, 0.12), rgba(249, 115, 22, 0));">
+          <div class="card">
             <h3 class="title">Materials we stand by</h3>
             <ul class="list-check">
               <li><i class="fa-solid fa-check"></i>T1 modules &amp; BIS-certified balance-of-system</li>
@@ -194,13 +197,13 @@
       <div class="container">
         <div class="cta-panel">
           <div>
-            <span class="hero-eyebrow" style="background: rgba(255, 255, 255, 0.16); color: #fff;">Let's build together</span>
-            <h2 style="color: var(--surface); margin-bottom: 0.5rem;">Need a custom solar architecture?</h2>
-            <p class="lead" style="color: rgba(255, 255, 255, 0.8);">Share your load profile or tender requirements and our engineering team will prepare a detailed proposal with cashflows.</p>
+            <span class="hero-eyebrow">Let's build together</span>
+            <h2>Need a custom solar architecture?</h2>
+            <p class="lead">Share your load profile or tender requirements and our engineering team will prepare a detailed proposal with cashflows.</p>
           </div>
           <div class="cta-actions">
-            <a href="contact.html" class="btn btn-primary">Start your project brief</a>
-            <a href="calculator.html" class="btn btn-secondary" style="background: transparent; border-color: rgba(255, 255, 255, 0.45); color: var(--surface);">Estimate ROI first</a>
+            <a href="contact.php" class="btn btn-primary">Start your project brief</a>
+            <a href="calculator.html" class="btn btn-secondary">Estimate ROI first</a>
           </div>
         </div>
       </div>

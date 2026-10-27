@@ -10,20 +10,23 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer"/>
+  <link rel="stylesheet" href="assets/css/design-system.css?v=20261027" />
+  <link rel="stylesheet" href="assets/css/marketing-pages.css?v=20261027" />
 </head>
-<body>
+<body class="dakshayani-design marketing-page scheme-page">
+  <a class="ds-skip" href="#main-content">Skip to content</a>
 
   <header class="site-header"></header>
 
-  <main>
-    <section class="page-hero" style="background-image:linear-gradient(135deg,rgba(15,23,42,0.92),rgba(14,116,144,0.88)),url('images/pmsgy.jpg');background-size:cover;background-position:center;">
+  <main id="main-content">
+    <section class="page-hero">
       <div class="container hero-inner">
         <div class="hero-copy">
           <span class="hero-eyebrow"><i class="fa-solid fa-bolt"></i> PM Surya Ghar Muft Bijli</span>
-          <h1>Unlock up to ₹78,000 subsidy on your rooftop solar</h1>
-          <p class="lead" style="color:rgba(255,255,255,0.82);">Dakshayani Enterprises guides Jharkhand households from registration to subsidy disbursement under the flagship PM Surya Ghar Muft Bijli Yojana.</p>
+          <h1>Your rooftop. A brighter possibility.</h1>
+          <p class="lead">Explore PM Surya Ghar support for eligible households, with guidance from registration through installation and DISCOM coordination.</p>
           <div class="hero-metrics">
             <div class="hero-metric">
               <span>Growing</span>
@@ -38,31 +41,14 @@
               <span>Portal process support</span>
             </div>
           </div>
-          <div class="cta-actions" style="display:flex;flex-wrap:wrap;gap:1rem;">
-            <a href="contact.html" class="btn btn-primary">Check eligibility now</a>
-            <a href="calculator.html" class="btn btn-secondary" style="background:transparent;border-color:rgba(255,255,255,0.45);color:var(--surface);">Estimate your savings</a>
+          <div class="cta-actions">
+            <a href="contact.php" class="btn btn-primary">Check eligibility now</a>
+            <a href="calculator.html" class="btn btn-secondary">Estimate your savings</a>
           </div>
         </div>
-      </div>
-    </section>
-
-    <section class="section">
-      <div class="container grid" style="gap:3rem;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
-        <div class="grid" style="gap:1.5rem;">
-          <div>
-            <h2>The scheme at a glance</h2>
-            <p class="lead" style="color:var(--base-600);">The Government of India covers a significant portion of your rooftop solar cost, ensuring 300 free units every month for eligible homeowners.</p>
-          </div>
-          <ul class="list-check">
-            <li><i class="fa-solid fa-check"></i>Subsidy of ₹30,000, ₹60,000 and ₹78,000 for 1, 2 and 3 kW+ systems respectively.</li>
-            <li><i class="fa-solid fa-check"></i>Direct benefit transfer into the beneficiary&#39;s bank account after commissioning.</li>
-            <li><i class="fa-solid fa-check"></i>Optional low-interest financing support from partner banks.</li>
-            <li><i class="fa-solid fa-check"></i>25-year module warranty &amp; 5-year inverter assurance.</li>
-          </ul>
-        </div>
-        <div class="table-wrapper">
+        <aside class="ds-scheme-summary" aria-label="Residential subsidy overview"><span class="ds-kicker">SUBSIDY AT A GLANCE</span><h2>Support for your solar start.</h2>        <div class="table-wrapper">
           <table>
-            <caption style="caption-side:bottom;padding:0.75rem 1rem;color:var(--base-500);font-size:0.85rem;">Indicative subsidy slabs for Jharkhand households (as per MNRE guidelines, Feb 2024).</caption>
+            <caption>Central subsidy for eligible residential systems. Capacity, scheme conditions, inspection and approval apply. <a href="https://www.pib.gov.in/PressReleasePage.aspx?PRID=2010674" target="_blank" rel="noopener">Government scheme information</a>.</caption>
             <thead>
               <tr>
                 <th scope="col">System size</th>
@@ -84,7 +70,25 @@
               </tr>
             </tbody>
           </table>
+        </div><p class="ds-note">Subsidy is subject to eligibility and approval. We help you understand the process; the government portal and DISCOM determine acceptance.</p></aside>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container grid ds-overview">
+        <div class="grid">
+          <div>
+            <h2>The scheme at a glance</h2>
+            <p class="lead">PM Surya Ghar supports eligible residential rooftop solar installations. Your system size, electricity use, site conditions, and approvals determine the support and savings available.</p>
+          </div>
+          <ul class="list-check">
+            <li><i class="fa-solid fa-check"></i>Subsidy of ₹30,000, ₹60,000 and ₹78,000 for 1, 2 and 3 kW+ systems respectively.</li>
+            <li><i class="fa-solid fa-check"></i>Direct benefit transfer into the beneficiary&#39;s bank account after commissioning.</li>
+            <li><i class="fa-solid fa-check"></i>Optional low-interest financing support from partner banks.</li>
+            <li><i class="fa-solid fa-check"></i>25-year module warranty &amp; 5-year inverter assurance.</li>
+          </ul>
         </div>
+
       </div>
     </section>
 
@@ -92,7 +96,7 @@
       <div class="container">
         <div class="head">
           <h2>How we navigate the portal for you</h2>
-          <p class="sub">Every stage is handled in-house – you simply share documents and sign digitally.</p>
+          <p class="sub">Understand each step, the documents required, and where DISCOM approval is needed.</p>
         </div>
         <ul class="timeline">
           <li>
@@ -145,7 +149,7 @@
               <li><i class="fa-solid fa-check"></i>Loan desk &amp; subsidy tracking dashboard</li>
               <li><i class="fa-solid fa-check"></i>5-year AMC with preventive visits</li>
               <li><i class="fa-solid fa-check"></i>Energy monitoring app onboarding</li>
-              <li><i class="fa-solid fa-check"></i>Festival décor &amp; hero banner control via admin portal</li>
+              <li><i class="fa-solid fa-check"></i>A clear handover with system and warranty documents</li>
             </ul>
           </article>
         </div>
@@ -161,7 +165,7 @@
           </article>
           <article class="faq-item">
             <h3>Can tenants or housing societies apply?</h3>
-            <p>Yes. We help structure society resolutions and NOCs so cooperative housing projects and renters with landlord consent can participate.</p>
+            <p>Eligibility and required permissions differ for individual households and housing societies. Confirm the applicant, connection category, ownership or consent documents, and current portal requirements before applying.</p>
           </article>
           <article class="faq-item">
             <h3>What if my roof needs civil work?</h3>
@@ -175,13 +179,13 @@
       <div class="container">
         <div class="cta-panel">
           <div>
-            <span class="hero-eyebrow" style="background:rgba(255,255,255,0.18);color:#fff;">Next step</span>
-            <h2 style="color:var(--surface);margin-bottom:0.5rem;">Schedule a free PM Surya Ghar consultation</h2>
-            <p class="lead" style="color:rgba(255,255,255,0.82);">Share your latest electricity bill and rooftop photos. Our subsidy experts will validate eligibility and block your installation slot.</p>
+            <span class="hero-eyebrow">Next step</span>
+            <h2>Schedule a free PM Surya Ghar consultation</h2>
+            <p class="lead">Start with your electricity bill and rooftop details. We will assess the site, discuss eligibility, and explain the next steps.</p>
           </div>
           <div class="cta-actions">
-            <a href="contact.html" class="btn btn-primary">Talk to a subsidy specialist</a>
-            <a href="calculator.html" class="btn btn-secondary" style="background:transparent;border-color:rgba(255,255,255,0.45);color:var(--surface);">Compute ROI first</a>
+            <a href="contact.php" class="btn btn-primary">Talk to a subsidy specialist</a>
+            <a href="calculator.html" class="btn btn-secondary">Compute ROI first</a>
           </div>
         </div>
       </div>

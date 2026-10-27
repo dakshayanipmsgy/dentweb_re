@@ -10,20 +10,24 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer"/>
+  <link rel="stylesheet" href="assets/css/design-system.css?v=20261027" />
+  <link rel="stylesheet" href="assets/css/marketing-pages.css?v=20261027" />
 </head>
-<body>
+<body class="dakshayani-design marketing-page about-page">
+  <a class="ds-skip" href="#main-content">Skip to content</a>
 
   <header class="site-header"></header>
 
-  <main>
+  <main id="main-content">
     <section class="page-hero">
       <div class="container hero-inner">
         <div class="hero-copy">
           <span class="hero-eyebrow"><i class="fa-solid fa-sun"></i> About Dakshayani</span>
-          <h1>Structured, foolproof systems for dependable energy delivery.</h1>
-          <p class="lead" style="color:rgba(255,255,255,0.82);">Since 2015, Dakshayani Enterprises has fused civil engineering rigour with customer-first service to deliver reliable solar, infrastructure, and innovation projects across Jharkhand and beyond.</p>
+          <h1>Engineering trust. Delivering dependable energy.</h1>
+          <p class="lead">Since 2015, Dakshayani Enterprises has fused civil engineering rigour with customer-first service to deliver reliable solar, infrastructure, and innovation projects across Jharkhand and beyond.</p>
+          <div class="cta-actions"><a href="#our-story" class="btn btn-primary">Meet the team</a><a href="contact.php" class="btn btn-secondary">Work with us</a></div>
           <div class="hero-metrics">
             <div class="hero-metric">
               <span>Hundreds</span>
@@ -34,31 +38,31 @@
               <span>Clean energy installed</span>
             </div>
             <div class="hero-metric">
-              <span>9 Years</span>
-              <span>Proven field experience</span>
+              <span>Since 2015</span>
+              <span>Rooted in Ranchi</span>
             </div>
           </div>
         </div>
-        <div class="hero-media" aria-hidden="true">
+        <div class="hero-media">
           <img src="images/team.jpg" alt="Dakshayani Enterprises leadership team" loading="lazy" />
           <div class="caption">Leadership huddle · Ranchi HQ</div>
         </div>
       </div>
     </section>
 
-    <section class="section founder-section">
-      <div class="container grid" style="gap:2.5rem;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));align-items:center;">
+    <section class="section founder-section" id="our-story">
+      <div class="container grid ds-split">
         <div class="media-frame">
           <img src="images/visheshoffice.png" alt="Portrait of Vishesh Vardhan" loading="lazy" />
         </div>
-        <div class="grid" style="gap:1rem;">
+        <div class="grid">
           <span class="badge-inline"><i class="fa-solid fa-user-tie"></i> Leadership</span>
           <h2>Vishesh Vardhan · Founder &amp; Managing Director</h2>
-          <p class="lead" style="color:var(--base-600);">B.Tech Civil (2014), Vishesh established Dakshayani Enterprises to bring disciplined project governance to renewable and infrastructure initiatives in eastern India.</p>
+          <p class="lead">B.Tech Civil (2014), Vishesh established Dakshayani Enterprises to bring disciplined project governance to renewable and infrastructure initiatives in eastern India.</p>
           <p>He champions a culture of structured, foolproof systems — from digital approval workflows and ISO-aligned safety protocols to transparent stakeholder communication. Under his guidance, Dakshayani teams execute government EPC mandates, rooftop solar, and technology pilots with the same reliability.</p>
-          <div class="card" style="background:var(--surface);border:1px solid rgba(59,130,246,0.15);">
+          <div class="card">
             <h3 class="mb-2">Leadership commitments</h3>
-            <ul class="list-check" style="margin-bottom:0;">
+            <ul class="list-check">
               <li><i class="fa-solid fa-check"></i>Every project anchored in measurable KPIs and digital dashboards</li>
               <li><i class="fa-solid fa-check"></i>Cross-functional review councils for EPC, DMFT, and innovation programmes</li>
               <li><i class="fa-solid fa-check"></i>Transparent vendor and partner onboarding for channel networks</li>
@@ -69,10 +73,10 @@
     </section>
 
     <section class="section">
-      <div class="container grid" style="gap:3rem;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));align-items:center;">
-        <div class="grid" style="gap:1.5rem;">
+      <div class="container grid ds-split">
+        <div class="grid">
           <h2>Purpose-driven engineering</h2>
-          <p class="lead" style="color:var(--base-600);">We believe reliable solar should be accessible to every household and business. Our multidisciplinary team blends EPC rigour with empathetic service.</p>
+          <p class="lead">We believe reliable solar should be accessible to every household and business. Our multidisciplinary team blends EPC rigour with empathetic service.</p>
           <ul class="list-check">
             <li><i class="fa-solid fa-check"></i>Experienced EPC team supporting projects across Jharkhand.</li>
             <li><i class="fa-solid fa-check"></i>Dedicated design studio for structural, electrical, and yield modelling.</li>
@@ -126,20 +130,20 @@
           <article class="team-card">
             <img src="images/visheshoffice.png" alt="Portrait of Vishesh Vardhan" loading="lazy" />
             <h3>Vishesh Vardhan</h3>
-            <p class="text-sm" style="color:var(--base-600);">Founder &amp; Managing Director</p>
-            <p class="text-sm" style="color:var(--base-500);">Sets the company vision, leads strategic partnerships, and champions inclusive energy access.</p>
+            <p class="text-sm">Founder &amp; Managing Director</p>
+            <p class="text-sm">Sets the company vision, leads strategic partnerships, and champions inclusive energy access.</p>
           </article>
           <article class="team-card">
             <img src="images/sunilkumarpic.jpg" alt="Portrait of Sunil Kumar" loading="lazy" />
             <h3>Sunil Kumar</h3>
-            <p class="text-sm" style="color:var(--base-600);">Head – Projects &amp; Engineering</p>
-            <p class="text-sm" style="color:var(--base-500);">Oversees EPC delivery, quality audits, and the festival décor controls within the admin portal.</p>
+            <p class="text-sm">Head – Projects &amp; Engineering</p>
+            <p class="text-sm">Oversees project delivery, engineering coordination, and quality audits.</p>
           </article>
           <article class="team-card">
             <img src="images/Meghapic.jpeg" alt="Portrait of Megha Agarwal" loading="lazy" />
             <h3>Megha Agarwal</h3>
-            <p class="text-sm" style="color:var(--base-600);">Customer Experience Lead</p>
-            <p class="text-sm" style="color:var(--base-500);">Owns onboarding journeys for customers, installers, employees, and referrers using our unified portal.</p>
+            <p class="text-sm">Customer Experience Lead</p>
+            <p class="text-sm">Owns onboarding journeys for customers, installers, employees, and referrers using our unified portal.</p>
           </article>
         </div>
       </div>
@@ -194,13 +198,13 @@
       <div class="container">
         <div class="cta-panel">
           <div>
-            <span class="hero-eyebrow" style="background:rgba(255,255,255,0.16);color:#fff;">Work with us</span>
-            <h2 style="color:var(--surface);margin-bottom:0.5rem;">Let&#39;s design your next energy milestone</h2>
-            <p class="lead" style="color:rgba(255,255,255,0.8);">Talk to our leadership team about audits, solar EPC, or the Meera GH2 hydrogen initiative. We respond within one business day.</p>
+            <span class="hero-eyebrow">Work with us</span>
+            <h2>Let&#39;s design your next energy milestone</h2>
+            <p class="lead">Talk to our leadership team about audits, solar EPC, or the Meera GH2 hydrogen initiative. We respond within one business day.</p>
           </div>
           <div class="cta-actions">
-            <a href="contact.html" class="btn btn-primary">Schedule a consultation</a>
-            <a href="solar-projects.html" class="btn btn-secondary" style="background:transparent;border-color:rgba(255,255,255,0.45);color:var(--surface);">See our work</a>
+            <a href="contact.php" class="btn btn-primary">Schedule a consultation</a>
+            <a href="solar-projects.html" class="btn btn-secondary">See our work</a>
           </div>
         </div>
       </div>
