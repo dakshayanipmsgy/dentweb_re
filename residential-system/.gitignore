@@ -1,0 +1,5 @@
+/runtime/
+/qa-runtime/
+/qa-cookies*
+/deployment/*/dakshayani-residential-live/runtime/
+/deployment/*/dakshayani-residential-live/release-config.php
