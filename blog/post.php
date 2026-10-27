@@ -277,7 +277,7 @@ function format_ist(?string $timestamp): string
             .article-hero { float: none; width: 100%; margin: 0 0 1rem; }
         }
     </style>
-<link rel="stylesheet" href="/assets/css/marketing-pages.css?v=20261027"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/css/design-system.css?v=20261027"><link rel="stylesheet" href="/assets/css/remaining-public.css?v=20261027"></head>
+<link rel="stylesheet" href="/assets/css/marketing-pages.css?v=20261027"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/css/design-system.css?v=20261027"><link rel="stylesheet" href="/assets/css/remaining-public.css?v=20261027-2"></head>
 <body class="dakshayani-design public-rest marketing-page">
 <?php if ($isAdmin): ?>
     <div class="container" style="padding:1rem 1.5rem 0; display:flex; justify-content:flex-start;">

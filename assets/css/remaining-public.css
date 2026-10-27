@@ -182,3 +182,7 @@
 .public-rest.resco-page .flex:has(>.tab-button) { flex-wrap:wrap; gap:8px; }
 .public-rest.resco-page .tab-button { flex:1 1 120px; }
 .public-rest.resco-page [role=button]:focus-visible { outline:3px solid var(--ds-brand); outline-offset:4px; }
+.public-rest .page-hero:has(.article-meta) .hero-inner { grid-template-columns:1fr; }
+.public-rest .page-hero:has(.article-meta) .hero-copy { max-width:1000px; }
+.public-rest .page-hero:has(.article-meta) h1 { font-size:clamp(2.4rem,4.8vw,4.2rem); max-width:24ch; }
+.public-rest .article-content h1 { font-size:clamp(1.8rem,3vw,2.5rem); }
