@@ -471,7 +471,7 @@ $customerDisplayMeter = public_mask_identifier($customerMeter);
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script id="site-settings-json" type="application/json"><?= $embeddedContentJson ?></script>
   <script type="application/ld+json">
@@ -648,8 +648,12 @@ $customerDisplayMeter = public_mask_identifier($customerMeter);
     }
     .complaint-share .btn { flex: 1; min-width: 190px; justify-content: center; }
   </style>
+  <link rel="stylesheet" href="/assets/css/design-system.css?v=20261027">
+  <link rel="stylesheet" href="/assets/css/marketing-pages.css?v=20261027">
+  <link rel="stylesheet" href="/assets/css/public-tools.css?v=20261027">
 </head>
-<body>
+<body class="dakshayani-design marketing-page utility-page contact-page">
+  <a class="ds-skip" href="#main-content">Skip to content</a>
   <header class="site-header"></header>
 
   <?php
@@ -682,7 +686,7 @@ $customerDisplayMeter = public_mask_identifier($customerMeter);
     <div class="container">
       <div>
         <span class="badge-inline"><i class="fa-solid fa-handshake-angle"></i> Consult · Complaint · Connect</span>
-        <h1>Get help, register a service complaint, or connect directly.</h1>
+        <h1>A clearer way to get help.</h1>
         <p>New to solar or already installed with us? Request a free consultation, log a service complaint as a registered customer, or speak directly with our founder for urgent needs.</p>
         <div class="contact-actions">
           <a class="btn btn-primary" href="tel:+917070278178"><i class="fa-solid fa-phone"></i>Call now</a>
@@ -690,17 +694,17 @@ $customerDisplayMeter = public_mask_identifier($customerMeter);
         </div>
       </div>
       <div class="card" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);backdrop-filter:blur(6px);">
-        <p class="mb-2" style="color:rgba(255,255,255,0.8);">Quick links</p>
+        <p class="mb-2" style="color:rgba(255,255,255,0.8);">Choose how we can help</p>
         <ul class="list-check" style="color:#ffffff;">
-          <li><i class="fa-solid fa-check"></i>Free solar consultation with our team</li>
-          <li><i class="fa-solid fa-check"></i>Complaint registration for existing customers</li>
-          <li><i class="fa-solid fa-check"></i>WhatsApp / email escalation to service desk</li>
+          <li><i class="fa-solid fa-check"></i><a href="#free-consultation">Plan your solar project →</a></li>
+          <li><i class="fa-solid fa-check"></i><a href="#register-complaint">Register a service complaint →</a></li>
+          <li><i class="fa-solid fa-check"></i><a href="#connect-owner">Connect with the owner →</a></li>
         </ul>
       </div>
     </div>
   </section>
 
-  <main class="contact-grid">
+  <main id="main-content" class="contact-grid">
     <section class="contact-card" id="free-consultation">
       <div>
         <span class="badge-inline"><i class="fa-solid fa-solar-panel"></i> Free Consultation</span>

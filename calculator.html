@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="style.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer"/>
 
     <style>
@@ -66,8 +66,12 @@
             .info-card:last-child { grid-column: span 3; }
         }
     </style>
+  <link rel="stylesheet" href="/assets/css/design-system.css?v=20261027">
+  <link rel="stylesheet" href="/assets/css/marketing-pages.css?v=20261027">
+  <link rel="stylesheet" href="/assets/css/public-tools.css?v=20261027">
 </head>
-<body>
+<body class="dakshayani-design marketing-page utility-page calculator-page">
+  <a class="ds-skip" href="#main-content">Skip to content</a>
     <div id="message-modal" class="message-box">
         <p id="message-text" style="color: var(--base-900); font-weight: 600;"></p>
         <button class="btn btn-primary" onclick="document.getElementById('message-modal').style.display = 'none';">OK</button>
@@ -75,17 +79,18 @@
 
     <header class="site-header"></header>
 
-    <main>
+    <main id="main-content">
         <section class="page-hero">
             <div class="container hero-inner">
                 <div class="hero-copy">
                     <span class="hero-eyebrow"><i class="fa-solid fa-calculator"></i> Savings calculator</span>
-                    <h1>Model your solar ROI in minutes</h1>
-                    <p class="lead" style="color:rgba(255,255,255,0.82);">Use Jharkhand-specific irradiation data to size your rooftop solar plant, estimate subsidies, and preview financing options.</p>
+                    <h1>Your solar potential, made clearer.</h1>
+                    <p class="lead" style="color:rgba(255,255,255,0.82);">Explore a planning estimate using monthly units, your electricity bill, or appliance loads. Review the assumptions with our team before making a purchase.</p>
+                    <div class="hero-actions"><a class="btn btn-primary" href="#solar-estimator">Estimate my savings <i class="fa-solid fa-arrow-right"></i></a><a class="btn btn-secondary" href="contact.php">Talk to our team</a></div>
                     <div class="hero-metrics">
                         <div class="hero-metric">
                             <span>5 kWh</span>
-                            <span>Daily output per kWp</span>
+                            <span>Daily output assumption</span>
                         </div>
                         <div class="hero-metric">
                             <span>₹78k</span>
@@ -97,14 +102,14 @@
                         </div>
                     </div>
                 </div>
-                <div class="hero-media" aria-hidden="true">
+                <div class="hero-media">
                     <img src="images/finance.jpg" alt="Illustration of solar savings planning" loading="lazy" />
                     <div class="caption">Finance desk · Customer advisory</div>
                 </div>
             </div>
         </section>
 
-        <section class="section">
+        <section class="section" id="solar-estimator">
             <div class="container grid" style="grid-template-columns: 1fr; gap: 3rem;">
                 
                 <div class="calculator-panel">
@@ -278,7 +283,7 @@
                             <div class="form-group !mb-0">
                                 <label for="interest-rate">Interest Rate (% p.a.)</label>
                                 <input type="number" step="0.1" id="interest-rate" value="6.0" required />
-                                <p class="text-xs text-gray-500" style="font-size: 0.75rem; color: var(--base-600); margin-top: 0.25rem;">Start at 6.0% for residential schemes</p>
+                                <p class="text-xs text-gray-500" style="font-size: 0.75rem; color: var(--base-600); margin-top: 0.25rem;">Illustrative default; enter your lender rate</p>
                             </div>
                             <div class="form-group !mb-0">
                                 <label for="loan-tenure">Loan Tenure (Months)</label>
@@ -301,7 +306,7 @@
                     </div>
                 </div>
 
-                <a href="contact.html" class="btn btn-primary" style="width: 100%; max-width: 400px; margin: 2rem auto 0 auto; padding: 1rem 1.5rem; display: block;">Get Final, Official Quote</a>
+                <a href="contact.php" class="btn btn-primary" style="width: 100%; max-width: 400px; margin: 2rem auto 0 auto; padding: 1rem 1.5rem; display: block;">Get Final, Official Quote</a>
             </div>
         </section>
 

@@ -47,26 +47,31 @@ $defaults = $settings['defaults'] ?? [];
     @media(max-width:900px){.sf-wrap{padding:1rem}.sf-flex{grid-template-columns:1fr}}
     @media(max-width:640px){.sf-explainer-wrap{margin-top:1.75rem;padding:1rem}}
   </style>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/design-system.css?v=20261027">
+  <link rel="stylesheet" href="/assets/css/marketing-pages.css?v=20261027">
+  <link rel="stylesheet" href="/assets/css/public-tools.css?v=20261027">
 </head>
-<body>
+<body class="dakshayani-design marketing-page utility-page solar-finance-page">
+  <a class="ds-skip" href="#main-content">Skip to content</a>
   <header class="site-header"></header>
-  <main class="sf-wrap" data-settings='<?= htmlspecialchars(json_encode($settings, JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8') ?>'>
-    <section class="sf-hero">
+  <main id="main-content" class="sf-wrap" data-settings='<?= htmlspecialchars(json_encode($settings, JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8') ?>'>
+    <section class="sf-hero"><span class="hero-eyebrow">SOLAR &amp; FINANCE EXPLORER</span>
       <h1><?= htmlspecialchars((string) ($content['page_title'] ?? 'Solar and Finance')) ?></h1>
       <p><?= htmlspecialchars((string) ($content['hero_text'] ?? 'Simple solar guidance and finance clarity.')) ?></p>
     </section>
 
     <section class="sf-flex">
       <div class="sf-card">
-        <h2>Enter your details</h2>
-        <h3>B1) Mandatory Inputs</h3>
+        <h2>Start with your electricity use.</h2>
+        <p class="sf-muted">Enter your monthly bill and consumption to compare ownership and finance options.</p>
         <div class="sf-inputs">
           <label>Monthly Bill (₹)<input type="number" id="monthlyBill" min="0"></label>
           <label>Monthly Units (kWh)<input type="number" id="monthlyUnits" min="0"></label>
           <label>System Type<select id="systemType"><option>On-Grid</option><option>Hybrid</option></select></label>
         </div>
         <details class="sf-pro">
-          <summary><strong>B2) Advanced / Pro Inputs</strong></summary>
+          <summary><strong>Advanced assumptions</strong></summary>
           <div class="sf-inputs" style="margin-top:.7rem">
             <label>Solar Size (kW)<input type="number" step="0.1" id="solarSize"></label>
             <label>Daily Generation per kW<input type="number" step="0.1" id="dailyGeneration" value="<?= htmlspecialchars((string) ($defaults['daily_generation_per_kw'] ?? 5)) ?>"></label>
@@ -100,7 +105,7 @@ $defaults = $settings['defaults'] ?? [];
         </details>
         <p class="sf-note">If you enter only bill or only units, the other field auto-fills using unit rate.</p>
         <div style="display:flex;gap:.6rem;flex-wrap:wrap">
-          <button class="sf-btn" id="calcBtn">How solar adoption would look like</button>
+          <button class="sf-btn" id="calcBtn">Compare solar scenarios</button>
           <button class="sf-btn alt" type="button" id="resetBtn">Reset All Fields</button>
         </div>
       </div>
