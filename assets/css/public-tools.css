@@ -128,3 +128,6 @@
 .utility-page .page-hero .lead { color:var(--ds-muted)!important; }
 .utility-page .hidden { display:none!important; }
 .utility-page main h4 { color:var(--ds-ink)!important; }
+/* Preserve status meaning without low-contrast bright green or amber text. */
+.utility-page #saving-vs-emi-message { color:#066457!important; }
+.utility-page #saving-vs-emi-message[style*="245, 158, 11"] { color:#805515!important; }

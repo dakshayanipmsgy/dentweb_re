@@ -186,3 +186,12 @@
 .public-rest .page-hero:has(.article-meta) .hero-copy { max-width:1000px; }
 .public-rest .page-hero:has(.article-meta) h1 { font-size:clamp(2.4rem,4.8vw,4.2rem); max-width:24ch; }
 .public-rest .article-content h1 { font-size:clamp(1.8rem,3vw,2.5rem); }
+/* Explicit foregrounds for light controls and dark information panels. */
+.public-rest.solar-guide .cta .text-block,.public-rest.solar-guide .cta .text-block p { color:#d0e0d5; }
+.public-rest.enquiry-page .btn-primary { color:#fff; }
+.public-rest .login-help-footer a,.public-rest .page .links a:not(:first-child) { color:#066457; }
+.public-rest.residential-page .language-options button span { color:#fff; }
+.public-rest.residential-page .hero-photo small,.public-rest.residential-page .finance-note { color:#4f625c; }
+.public-rest.residential-page .journey-grid article > span { color:#527344; }
+.public-rest.residential-page .enquiry-section .eyebrow { color:#3e634e; }
+.public-rest.partner-page #join .small.muted { color:#4f625c; }

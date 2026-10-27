@@ -243,3 +243,14 @@
  .homepage-modern .faq-list details { border-radius:0!important; }
  .homepage-modern .contact-card { padding:0 0 12px; }
 }
+/* Readable text on the light consultation surface. */
+.homepage-modern .contact-section { color:var(--ds-ink); }
+.homepage-modern .contact-section .head h2,.homepage-modern .contact-section h3 { color:var(--ds-ink); }
+.homepage-modern .contact-section .head p,.homepage-modern .contact-section .contact-card p { color:#4f625c; }
+.homepage-modern .contact-section .contact-card { color:var(--ds-ink); }
+.homepage-modern .contact-section .contact-card a:not(.btn) { color:#066457; text-underline-offset:3px; }
+.homepage-modern .contact-section .contact-card .btn-secondary { color:var(--ds-ink); background:#fff; border-color:#a9bdb2; }
+.homepage-modern .hero-disclaimer { color:var(--ds-muted); }
+.homepage-modern .cta-strip p { color:#d0e0d5; }
+.homepage-modern :is(.capability-kicker,.capability-link) { color:#066457; }
+.homepage-modern .capability-kicker { background:#e7f2eb; }

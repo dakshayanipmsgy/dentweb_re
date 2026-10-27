@@ -37,3 +37,6 @@
 .dakshayani-design .site-footer a { color:#c5d6d3; font-size:.88rem; }
 .dakshayani-design .site-footer a:hover { color:var(--ds-accent); }
 @media(max-width:700px) { .dakshayani-design .site-header .header-inner { min-height:72px; } }
+/* Keep small active navigation labels and placeholders readable. */
+.dakshayani-design .nav-link:is(:hover,.active,[aria-expanded="true"]),.dakshayani-design .nav-desktop .nav-link:is(:hover,.active,[aria-expanded="true"]) { color:var(--ds-brand-hover); }
+.dakshayani-design input::placeholder,.dakshayani-design textarea::placeholder { color:#5d6f75; opacity:1; }
