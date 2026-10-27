@@ -537,6 +537,7 @@ $cardConfigs[] = [
           <span class="dashboard-nav-finder__status" data-dashboard-search-status aria-live="polite"></span>
         </div>
         <div class="admin-overview__primary-actions">
+          <a href="/residential-enquiries.php" class="btn btn-primary"><i class="fa-solid fa-house" aria-hidden="true"></i> Residential Sales Desk</a>
           <a href="<?= htmlspecialchars($pathFor('admin-tasks.php'), ENT_QUOTES) ?>" class="btn btn-primary"><i class="fa-solid fa-list-check" aria-hidden="true"></i> Tasks</a>
           <a href="<?= htmlspecialchars($pathFor('complaints-overview.php'), ENT_QUOTES) ?>" class="btn btn-ghost"><i class="fa-solid fa-headset" aria-hidden="true"></i> Complaints</a>
           <a href="<?= htmlspecialchars($pathFor('leads-dashboard.php'), ENT_QUOTES) ?>" class="btn btn-ghost"><i class="fa-solid fa-address-card" aria-hidden="true"></i> Leads</a>
@@ -546,6 +547,7 @@ $cardConfigs[] = [
           <div class="dashboard-action-group">
             <h3>Daily operations</h3>
             <div class="dashboard-action-links">
+              <a href="/residential-enquiries.php">Residential sales desk · website enquiries</a>
               <a href="<?= htmlspecialchars($pathFor('admin-tasks.php'), ENT_QUOTES) ?>">Task board</a>
               <a href="<?= htmlspecialchars($pathFor('complaints-overview.php'), ENT_QUOTES) ?>">Complaints queue</a>
               <a href="<?= htmlspecialchars($pathFor('leads-dashboard.php'), ENT_QUOTES) ?>">Leads dashboard</a>
