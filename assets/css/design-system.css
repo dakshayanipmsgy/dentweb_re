@@ -1,0 +1,39 @@
+/* Dakshayani / Studio 01. Opt pages in with .dakshayani-design. */
+.dakshayani-design {
+  --ds-ink:#132c35;
+  --ds-muted:#5d6f75;
+  --ds-brand:#087d70;
+  --ds-brand-hover:#066457;
+  --ds-accent:#d8f36a;
+  --ds-paper:#f6f8f7;
+  --ds-surface:#ffffff;
+  --ds-border:#dce5e1;
+  --ds-radius:20px;
+  --ds-control-radius:12px;
+  --ds-content:1200px;
+  --ds-shadow:0 16px 48px #153d3010;
+  color:var(--ds-ink);
+  font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.dakshayani-design :is(h1,h2,h3,h4,.btn,.brand-text,.nav-link,input,select,button) { font-family:inherit; }
+.dakshayani-design :is(h1,h2,h3,h4) { font-weight:600; text-wrap:balance; }
+.dakshayani-design .site-header { background:#ffffffed; border-bottom:1px solid var(--ds-border); backdrop-filter:blur(18px); box-shadow:none; }
+.dakshayani-design .site-header .header-inner { min-height:84px; flex-wrap:nowrap; gap:24px; }
+.dakshayani-design .nav-desktop { flex:1 1 auto; justify-content:flex-end; flex-wrap:nowrap; }
+.dakshayani-design .nav-actions { width:auto; flex:0 0 auto; }
+.dakshayani-design .nav-actions .btn { background:var(--ds-brand); color:#fff; border:1px solid var(--ds-brand); box-shadow:none; }
+.dakshayani-design .brand-text { font-size:1.18rem; font-weight:650; letter-spacing:-.04em; }
+.dakshayani-design .brand-logo-em { height:36px; width:auto; }
+.dakshayani-design .nav-link { font-size:.88rem; font-weight:550; border-radius:8px; color:var(--ds-ink); }
+.dakshayani-design .nav-link:is(:hover,.active) { background:#edf4ef; color:var(--ds-brand); }
+.dakshayani-design .nav-desktop .nav-link { background:transparent; }
+.dakshayani-design .nav-desktop .nav-link:is(:hover,.active,[aria-expanded="true"]) { background:#edf4ef; color:var(--ds-brand); }
+.dakshayani-design .btn { font-weight:600; letter-spacing:-.01em; transition:background .18s,border-color .18s,transform .18s; }
+.dakshayani-design :is(.btn-primary,.btn-secondary):hover { transform:translateY(-2px); }
+.dakshayani-design :is(a,button,input,select,summary):focus-visible { outline:3px solid var(--ds-brand); outline-offset:4px; }
+.dakshayani-design .site-footer { background:#122e32; color:#c5d6d3; border:0; }
+.dakshayani-design .site-footer :is(h4,.brand-text) { color:#fff; font-weight:600; }
+.dakshayani-design .site-footer a { color:#c5d6d3; font-size:.88rem; }
+.dakshayani-design .site-footer a:hover { color:var(--ds-accent); }
+@media(max-width:700px) { .dakshayani-design .site-header .header-inner { min-height:72px; } }

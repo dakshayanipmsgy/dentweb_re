@@ -212,7 +212,7 @@ $schemaContext = [
   <link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__ . '/style.css') ?>" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@700&amp;family=Poppins:wght@400;700;800;900&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@700&amp;family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <?php require_once __DIR__ . '/includes/pwa_head.php'; ?>
   <style>
@@ -250,8 +250,11 @@ $schemaContext = [
   <script type="application/ld+json">
     <?= json_encode($schemaContext, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>
   </script>
+  <link rel="stylesheet" href="assets/css/design-system.css?v=<?= filemtime(__DIR__ . '/assets/css/design-system.css') ?>" />
+  <link rel="stylesheet" href="assets/css/homepage.css?v=<?= filemtime(__DIR__ . '/assets/css/homepage.css') ?>" />
 </head>
-<body>
+<body class="homepage-modern dakshayani-design">
+  <a class="home-skip-link" href="#main-content">Skip to content</a>
   <header class="site-header"></header>
 
   <?php
@@ -280,13 +283,13 @@ $schemaContext = [
     </div>
   <?php endif; ?>
 
-  <main>
+  <main id="main-content">
     <section id="hero" class="hero hero--solar section" data-hero-section>
       <div class="container hero-grid">
         <div class="hero-content">
           <div class="hero-announcement" data-hero-announcement<?= empty($hero['announcement_badge']) && empty($hero['announcement_text']) ? ' hidden' : '' ?>>
             <span class="badge" data-hero-announcement-badge><?= $publicText($hero['announcement_badge'] ?? '') ?></span>
-            <p data-hero-announcement-text><?= $publicText($hero['announcement_text'] ?? '') ?></p>
+
           </div>
           <h1 class="hero-title" data-hero-title><?= $publicText($heroTitle) ?></h1>
           <p class="hero-sub" data-hero-subtitle><?= $publicText($heroSubtitle) ?></p>
@@ -302,9 +305,11 @@ $schemaContext = [
             </a>
           </div>
 
+          <p class="hero-disclaimer" data-hero-announcement-text><?= $publicText($hero['announcement_text'] ?? '') ?></p>
+
           <div class="hero-assurance">
             <div class="assurance-item">
-              <span class="assurance-value">Growing</span>
+              <span class="assurance-value">Local expertise</span>
               <span class="assurance-label">Homes &amp; MSMEs energised</span>
             </div>
             <div class="assurance-item">
@@ -312,7 +317,7 @@ $schemaContext = [
               <span class="assurance-label">PM Surya Ghar application support</span>
             </div>
             <div class="assurance-item">
-              <span class="assurance-value">Dedicated</span>
+              <span class="assurance-value">End-to-end</span>
               <span class="assurance-label">Net-metering support</span>
             </div>
           </div>
@@ -324,6 +329,7 @@ $schemaContext = [
             <figcaption data-hero-main-caption><?= $publicText($hero['primary_caption'] ?? '') ?></figcaption>
           </figure>
           <div class="hero-mini-gallery" data-hero-gallery></div>
+          <a class="home-project-link" href="solar-projects.html"><div>Explore our solar projects<span>Discover solutions for homes and businesses.</span></div><i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
         </div>
       </div>
       <div class="hero-trust">
@@ -333,133 +339,11 @@ $schemaContext = [
       </div>
     </section>
 
-    <section class="section" aria-label="Solar and Finance quick access">
-      <div class="container" style="max-width:none;">
-        <a href="/solar-and-finance.php" class="btn btn-primary" style="display:flex;justify-content:center;gap:.6rem;padding:1rem 1.2rem;font-size:1.05rem;">
+    <section class="section home-finance" aria-label="Solar and Finance quick access">
+      <div class="container">
+        <a href="/solar-and-finance.php" class="home-finance-link">
           <i class="fa-solid fa-chart-line" aria-hidden="true"></i> Explore Solar &amp; Finance (25-year view)
         </a>
-      </div>
-    </section>
-
-    <div data-home-sections hidden>
-      <div data-home-sections-list></div>
-    </div>
-
-    <section class="section offers-section" id="offers">
-      <div class="container">
-        <div class="head">
-          <h2 data-offers-title><?= htmlspecialchars($sections['seasonal_offer_title'] ?? '') ?></h2>
-          <p class="sub" data-offers-subtitle><?= htmlspecialchars($sections['seasonal_offer_text'] ?? '') ?></p>
-        </div>
-        <div class="offers-grid" data-offers-list></div>
-        <p class="site-search-empty" data-offers-empty hidden>Seasonal offers will be published here shortly.</p>
-      </div>
-    </section>
-
-    <section class="section capability-showcase">
-      <div class="container">
-        <div class="head">
-          <h2>Strategic solutions at a glance</h2>
-          <p>Explore the ventures that make Dakshayani Enterprises Jharkhand's comprehensive EPC and technology leader.</p>
-        </div>
-        <div class="capability-grid">
-          <a class="capability-card" href="govt-epc.html">
-            <span class="capability-kicker">Govt. EPC &amp; Infrastructure</span>
-            <h3>Building Jharkhand's Future: Govt. Contracts &amp; DMFT Projects.</h3>
-            <p>Turnkey civil, DWSD, and renewable works with DMFT-compliant reporting.</p>
-            <span class="capability-link">Learn more <i class="fa-solid fa-arrow-right"></i></span>
-          </a>
-          <a class="capability-card" href="e-mobility.html">
-            <span class="capability-kicker">E-Mobility &amp; Charging</span>
-            <h3>Future-Proof Energy: EV Charging Design &amp; Integration.</h3>
-            <p>Consultancy and EPC readiness for solar-synchronised AC and DC charging.</p>
-            <span class="capability-link">Plan a charging hub <i class="fa-solid fa-arrow-right"></i></span>
-          </a>
-          <a class="capability-card" href="innovation-tech.html">
-            <span class="capability-kicker">Innovation &amp; Technology Ventures</span>
-            <h3>Engineering Innovation: Robotics &amp; Advanced Concepts.</h3>
-            <p>Techvan Power lab driving robotics, 3D-printed materials, and climate engineering.</p>
-            <span class="capability-link">See innovation tracks <i class="fa-solid fa-arrow-right"></i></span>
-          </a>
-          <a class="capability-card capability-card--accent" href="rewards.html">
-            <span class="capability-kicker">Channel Network</span>
-            <h3>Partner with Us: India's Most Rewarding Solar Channel Program.</h3>
-            <p>Apply as an advocate, installer, or EPC ally and access transparent payouts.</p>
-            <span class="capability-link">Apply to partner <i class="fa-solid fa-arrow-right"></i></span>
-          </a>
-        </div>
-      </div>
-    </section>
-
-    <section class="section trust-band">
-      <div class="container">
-        <div class="trust-grid">
-          <figure class="trust-card">
-            <img src="images/pmsgy.jpg" alt="PM Surya Ghar programme" loading="lazy" />
-            <figcaption>PM Surya Ghar process support</figcaption>
-          </figure>
-          <figure class="trust-card">
-            <img src="images/large solar small.jpg" alt="Large-scale solar commissioning by Dakshayani" loading="lazy" />
-            <figcaption>MW-scale solar experience across Jharkhand</figcaption>
-          </figure>
-          <figure class="trust-card">
-            <img src="images/dedicatedgrounops.jpg" alt="Operations team at Dakshayani office" loading="lazy" />
-            <figcaption>Dedicated on-ground ops &amp; service</figcaption>
-          </figure>
-          <figure class="trust-card">
-            <img src="images/collage.jpg" alt="Collage of Dakshayani solar projects" loading="lazy" />
-            <figcaption>Integrated design, EPC &amp; maintenance</figcaption>
-          </figure>
-        </div>
-      </div>
-    </section>
-
-    <section id="installs" class="section installs" data-installs-section>
-      <div class="container">
-        <div class="head">
-          <h2>Newest Solar Installs Across Jharkhand</h2>
-        </div>
-
-        <div class="install-slider" data-install-slider>
-          <div class="slides-viewport" data-slides-viewport>
-            <div class="slides-wrapper" data-slides-wrapper>
-              <?php
-              $installDir = __DIR__ . '/images/all sites pics';
-              $installWebPath = '/images/all sites pics/';
-              $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
-              $installImages = [];
-
-                  if (is_dir($installDir)) {
-                  $files = array_diff(scandir($installDir), ['.', '..']);
-
-                  foreach ($files as $file) {
-                      $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-
-                      if (in_array($extension, $allowedExtensions, true)) {
-                          $installImages[] = $file;
-                      }
-                  }
-
-                  // Sort desc to show newest first if named by date, or random
-                  // rsort($installImages); 
-                  
-                  // Limit the number of images to 20 for performance
-                  if (count($installImages) > 20) {
-                      $installImages = array_slice($installImages, 0, 20);
-                  }
-              }
-
-              $loopImages = array_merge($installImages, $installImages);
-              ?>
-
-              <?php foreach ($loopImages as $imageName): ?>
-                <div class="slide">
-                  <img src="<?= htmlspecialchars($installWebPath . rawurlencode($imageName)) ?>" alt="Rooftop solar installation from the Dakshayani project gallery" loading="lazy" />
-                </div>
-              <?php endforeach; ?>
-            </div>
-          </div>
-        </div>
       </div>
     </section>
 
@@ -556,6 +440,94 @@ $schemaContext = [
       </div>
     </section>
 
+
+    <div data-home-sections hidden>
+      <div data-home-sections-list></div>
+    </div>
+
+    <section class="section offers-section" id="offers">
+      <div class="container">
+        <div class="head">
+          <h2 data-offers-title><?= htmlspecialchars($sections['seasonal_offer_title'] ?? '') ?></h2>
+          <p class="sub" data-offers-subtitle><?= htmlspecialchars($sections['seasonal_offer_text'] ?? '') ?></p>
+        </div>
+        <div class="offers-grid" data-offers-list></div>
+        <p class="site-search-empty" data-offers-empty hidden>Seasonal offers will be published here shortly.</p>
+      </div>
+    </section>
+
+    <section class="section trust-band">
+      <div class="container">
+        <div class="trust-grid">
+          <figure class="trust-card">
+            <img src="images/pmsgy.jpg" alt="PM Surya Ghar programme" loading="lazy" />
+            <figcaption>PM Surya Ghar process support</figcaption>
+          </figure>
+          <figure class="trust-card">
+            <img src="images/large solar small.jpg" alt="Large-scale solar commissioning by Dakshayani" loading="lazy" />
+            <figcaption>MW-scale solar experience across Jharkhand</figcaption>
+          </figure>
+          <figure class="trust-card">
+            <img src="images/dedicatedgrounops.jpg" alt="Operations team at Dakshayani office" loading="lazy" />
+            <figcaption>Dedicated on-ground ops &amp; service</figcaption>
+          </figure>
+          <figure class="trust-card">
+            <img src="images/collage.jpg" alt="Collage of Dakshayani solar projects" loading="lazy" />
+            <figcaption>Integrated design, EPC &amp; maintenance</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section id="installs" class="section installs" data-installs-section>
+      <div class="container">
+        <div class="head">
+          <h2>Newest Solar Installs Across Jharkhand</h2>
+        </div>
+
+        <div class="install-slider" data-install-slider>
+          <div class="slides-viewport" data-slides-viewport>
+            <div class="slides-wrapper" data-slides-wrapper>
+              <?php
+              $installDir = __DIR__ . '/images/all sites pics';
+              $installWebPath = '/images/all sites pics/';
+              $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+              $installImages = [];
+
+                  if (is_dir($installDir)) {
+                  $files = array_diff(scandir($installDir), ['.', '..']);
+
+                  foreach ($files as $file) {
+                      $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+
+                      if (in_array($extension, $allowedExtensions, true)) {
+                          $installImages[] = $file;
+                      }
+                  }
+
+                  // Sort desc to show newest first if named by date, or random
+                  // rsort($installImages);
+
+                  // Limit the number of images to 20 for performance
+                  if (count($installImages) > 20) {
+                      $installImages = array_slice($installImages, 0, 20);
+                  }
+              }
+
+              $loopImages = array_merge($installImages, $installImages);
+              ?>
+
+              <?php foreach ($loopImages as $imageName): ?>
+                <div class="slide">
+                  <img src="<?= htmlspecialchars($installWebPath . rawurlencode($imageName)) ?>" alt="Rooftop solar installation from the Dakshayani project gallery" loading="lazy" />
+                </div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="impact" class="section alt impact-section">
       <div class="container impact-layout">
         <div class="impact-summary">
@@ -622,6 +594,42 @@ $schemaContext = [
       </div>
     </section>
 
+    <section class="section capability-showcase">
+      <div class="container">
+        <div class="head">
+          <h2>Strategic solutions at a glance</h2>
+          <p>Explore the ventures that make Dakshayani Enterprises Jharkhand's comprehensive EPC and technology leader.</p>
+        </div>
+        <div class="capability-grid">
+          <a class="capability-card" href="govt-epc.html">
+            <span class="capability-kicker">Govt. EPC &amp; Infrastructure</span>
+            <h3>Building Jharkhand's Future: Govt. Contracts &amp; DMFT Projects.</h3>
+            <p>Turnkey civil, DWSD, and renewable works with DMFT-compliant reporting.</p>
+            <span class="capability-link">Learn more <i class="fa-solid fa-arrow-right"></i></span>
+          </a>
+          <a class="capability-card" href="e-mobility.html">
+            <span class="capability-kicker">E-Mobility &amp; Charging</span>
+            <h3>Future-Proof Energy: EV Charging Design &amp; Integration.</h3>
+            <p>Consultancy and EPC readiness for solar-synchronised AC and DC charging.</p>
+            <span class="capability-link">Plan a charging hub <i class="fa-solid fa-arrow-right"></i></span>
+          </a>
+          <a class="capability-card" href="innovation-tech.html">
+            <span class="capability-kicker">Innovation &amp; Technology Ventures</span>
+            <h3>Engineering Innovation: Robotics &amp; Advanced Concepts.</h3>
+            <p>Techvan Power lab driving robotics, 3D-printed materials, and climate engineering.</p>
+            <span class="capability-link">See innovation tracks <i class="fa-solid fa-arrow-right"></i></span>
+          </a>
+          <a class="capability-card capability-card--accent" href="rewards.html">
+            <span class="capability-kicker">Channel Network</span>
+            <h3>Partner with Us: India's Most Rewarding Solar Channel Program.</h3>
+            <p>Apply as an advocate, installer, or EPC ally and access transparent payouts.</p>
+            <span class="capability-link">Apply to partner <i class="fa-solid fa-arrow-right"></i></span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+
     <section class="section alt faq-section" id="faqs">
       <div class="container">
         <div class="head">
@@ -680,15 +688,15 @@ $schemaContext = [
           <form id="homepage-lead-form" class="mt-4" novalidate>
             <div class="form-group">
               <label class="form-label" for="lead-name">Full Name</label>
-              <input type="text" id="lead-name" name="name" class="form-control" placeholder="Full Name" required />
+              <input type="text" id="lead-name" name="name" autocomplete="name" class="form-control" placeholder="Full Name" required />
             </div>
             <div class="form-group">
               <label class="form-label" for="lead-phone">Phone Number</label>
-              <input type="tel" id="lead-phone" name="phone" class="form-control" placeholder="Phone Number" required />
+              <input type="tel" id="lead-phone" name="phone" autocomplete="tel" inputmode="tel" class="form-control" placeholder="Phone Number" required />
             </div>
             <div class="form-group">
               <label class="form-label" for="lead-city">City</label>
-              <input type="text" id="lead-city" name="city" class="form-control" placeholder="City (e.g., Ranchi, Bokaro, Raipur)" required />
+              <input type="text" id="lead-city" name="city" autocomplete="address-level2" class="form-control" placeholder="City (e.g., Ranchi, Bokaro, Raipur)" required />
             </div>
             <div class="form-group">
               <label class="form-label" for="lead-type">Project Type</label>
@@ -750,14 +758,14 @@ $schemaContext = [
       // Reset to start of first set if at 0, or seamless loop
       const checkInfiniteLoop = () => {
         if (slideSetWidth <= 0) return;
-        
+
         // If we scrolled past the end of the first set (showing start of second set), reset to start
         // Actually, usually we show set1 then set2.
         // To loop infinitely scrolling right (camera moves right), when we reach end of set1, we jump back to 0.
         // wrapper width = 2 * slideSetWidth.
-        
+
         if (viewport.scrollLeft >= slideSetWidth) {
-           viewport.scrollLeft -= slideSetWidth; 
+           viewport.scrollLeft -= slideSetWidth;
         } else if (viewport.scrollLeft <= 0) {
            viewport.scrollLeft += slideSetWidth;
         }
@@ -777,10 +785,11 @@ $schemaContext = [
       // Initial calculation
       calculateWidths();
 
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const autoScroll = () => {
-        if (!isDragging && slideSetWidth > 0) {
+        if (!reducedMotion.matches && !isDragging && slideSetWidth > 0) {
           // Scroll right (camera moves right, items move left)
-          viewport.scrollLeft += 0.8; 
+          viewport.scrollLeft += 0.8;
           checkInfiniteLoop();
         }
         animationId = requestAnimationFrame(autoScroll);
