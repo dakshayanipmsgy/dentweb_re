@@ -213,7 +213,7 @@ function format_ist(?string $timestamp): string
     <link rel="stylesheet" href="../style.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="canonical" href="<?= htmlspecialchars($canonicalUrl, ENT_QUOTES | ENT_HTML5) ?>" />
     <meta property="og:type" content="article" />
@@ -277,8 +277,8 @@ function format_ist(?string $timestamp): string
             .article-hero { float: none; width: 100%; margin: 0 0 1rem; }
         }
     </style>
-</head>
-<body>
+<link rel="stylesheet" href="/assets/css/marketing-pages.css?v=20261027"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/css/design-system.css?v=20261027"><link rel="stylesheet" href="/assets/css/remaining-public.css?v=20261027"></head>
+<body class="dakshayani-design public-rest marketing-page">
 <?php if ($isAdmin): ?>
     <div class="container" style="padding:1rem 1.5rem 0; display:flex; justify-content:flex-start;">
         <a class="btn btn-secondary" href="../admin-blog-manager.php" style="gap:0.5rem; display:inline-flex; align-items:center;">

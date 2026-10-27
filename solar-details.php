@@ -232,9 +232,9 @@ $companyPhone = trim((string) ($settings['company_phone'] ?? ''));
       .text-block ul, .text-block ol { margin-left: 1rem; }
     }
   </style>
-</head>
-<body>
-  <div class="wrap">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/css/design-system.css?v=20261027"><link rel="stylesheet" href="/assets/css/remaining-public.css?v=20261027"></head>
+<body class="dakshayani-design public-rest solar-guide"><a class="public-brand" href="/index.php"><img src="/images/logo/New%20dakshayani%20logo%20centered%20small.png" alt="">Dakshayani Enterprises <span aria-hidden="true">↗</span></a>
+  <main id="main-content" class="wrap">
     <section class="hero">
       <h1><?php echo solar_details_safe((string) $content['page_title']); ?></h1>
       <p style="margin:0;"><?php echo solar_details_safe((string) $content['hero_intro']); ?></p>
@@ -247,29 +247,29 @@ $companyPhone = trim((string) ($settings['company_phone'] ?? ''));
 
     <section class="grid">
       <article class="card">
-        <h2>A) What is Solar Rooftop?</h2>
+        <h2>What is Solar Rooftop?</h2>
         <div class="text-block"><?php echo solar_details_format_rich_text(solar_details_resolve_text($content, 'what_is_solar_rooftop', 'Rooftop solar ka matlab hai aapki chhat par panels lagana jisse ghar/business ki electricity demand ka bada hissa solar se aa sake.')); ?></div>
       </article>
       <article class="card">
-        <h2>B) PM Surya Ghar: Muft Bijli Yojana</h2>
+        <h2>PM Surya Ghar: Muft Bijli Yojana</h2>
         <div class="text-block"><?php echo solar_details_format_rich_text((string) $content['pm_surya_ghar_text']); ?></div>
       </article>
       <article class="card">
-        <h2>C) Who is Eligible?</h2>
+        <h2>Who is Eligible?</h2>
         <div class="text-block"><?php echo solar_details_format_rich_text(solar_details_resolve_text($content, 'who_is_eligible', 'Generally residential consumers jinke paas suitable roof space aur DISCOM/net-metering eligibility ho. Final eligibility local policy aur documents par depend karti hai.')); ?></div>
       </article>
     </section>
 
     <section class="grid">
       <article class="card">
-        <h2>D) On-grid</h2>
+        <h2>On-grid</h2>
         <div class="text-block"><?php echo solar_details_format_rich_text((string) $content['on_grid_text']); ?></div>
         <?php if (trim((string) $content['on_grid_image']) !== ''): ?>
           <img class="image-slot" src="<?php echo solar_details_safe((string) $content['on_grid_image']); ?>" alt="On-grid diagram" />
         <?php endif; ?>
       </article>
       <article class="card">
-        <h2>D) Hybrid</h2>
+        <h2>Hybrid</h2>
         <div class="text-block"><?php echo solar_details_format_rich_text((string) $content['hybrid_text']); ?></div>
         <?php if (trim((string) $content['hybrid_image']) !== ''): ?>
           <img class="image-slot" src="<?php echo solar_details_safe((string) $content['hybrid_image']); ?>" alt="Hybrid diagram" />
@@ -278,9 +278,9 @@ $companyPhone = trim((string) ($settings['company_phone'] ?? ''));
     </section>
 
     <section class="card">
-      <h2>E) Which one is suitable for whom?</h2>
+      <h2>Which one is suitable for whom?</h2>
       <div class="text-block"><?php echo solar_details_format_rich_text(solar_details_resolve_text($content, 'which_one_is_suitable_for_whom', 'Agar aapka goal monthly bill reduction hai aur power-cut concern kam hai, on-grid usually best value deta hai. Agar backup bhi chahiye, hybrid better ho sakta hai.')); ?></div>
-      <h2>F) Process (Inquiry to Installation)</h2>
+      <h2>Process (Inquiry to Installation)</h2>
       <div class="text-block"><?php echo solar_details_format_rich_text((string) $content['process_text']); ?></div>
       <?php if (trim((string) $content['process_flow_image']) !== ''): ?>
         <img class="image-slot" src="<?php echo solar_details_safe((string) $content['process_flow_image']); ?>" alt="Solar process flow" />
@@ -289,20 +289,20 @@ $companyPhone = trim((string) ($settings['company_phone'] ?? ''));
 
     <section class="grid">
       <article class="card">
-        <h2>G) Benefits</h2>
+        <h2>Benefits</h2>
         <div class="text-block"><?php echo solar_details_format_rich_text(solar_details_resolve_text($content, 'benefits', "Lower electricity bill\nEnvironment friendly energy\nLow maintenance\nLong system life")); ?></div>
         <?php if (trim((string) $content['benefits_image']) !== ''): ?>
           <img class="image-slot" src="<?php echo solar_details_safe((string) $content['benefits_image']); ?>" alt="Solar benefits" />
         <?php endif; ?>
       </article>
       <article class="card">
-        <h2>H) Important Expectations</h2>
+        <h2>Important Expectations</h2>
         <div class="text-block"><?php echo solar_details_format_rich_text(solar_details_resolve_text($content, 'important_expectations', "On-grid system grid dependency ke saath kaam karta hai.\nHybrid system backup deta hai but cost higher ho sakti hai.\nSubsidy policy/applicability time ke saath change ho sakti hai.")); ?></div>
       </article>
     </section>
 
     <section class="card">
-      <h2>I) FAQ</h2>
+      <h2>FAQ</h2>
       <div class="text-block"><?php echo solar_details_format_rich_text((string) $content['faq_text']); ?></div>
     </section>
 
@@ -317,6 +317,6 @@ $companyPhone = trim((string) ($settings['company_phone'] ?? ''));
         <?php endif; ?>
       </p>
     </section>
-  </div>
+  </main>
 </body>
 </html>

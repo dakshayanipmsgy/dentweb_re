@@ -12,8 +12,8 @@
   <style>
     body{margin:0;background:#f8fafc;color:#0f172a;font-family:Poppins,Arial,sans-serif}.help-shell{max-width:980px;margin:0 auto;padding:clamp(1rem,4vw,2rem)}.help-hero,.help-card{background:#fff;border:1px solid #e2e8f0;border-radius:24px;box-shadow:0 16px 42px rgba(15,23,42,.08)}.help-hero{padding:clamp(1.25rem,4vw,2.25rem);background:linear-gradient(135deg,#0f766e,#0f172a);color:#fff}.help-hero p{max-width:680px;color:rgba(255,255,255,.86);line-height:1.7}.help-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1rem 0}.help-card{padding:1.25rem}.help-card h2{margin-top:0}.steps{padding-left:1.25rem;line-height:1.85}.help-links{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:1rem}.help-links a,.help-button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:.65rem 1rem;border-radius:999px;text-decoration:none;font-weight:800}.help-button{background:#0f766e;color:#fff}.help-links a:not(.help-button){background:#e0f2fe;color:#075985}.note{background:#ecfeff;border:1px solid #99f6e4;border-radius:18px;padding:1rem;line-height:1.7}@media(max-width:640px){.help-shell{padding:.85rem}.help-hero,.help-card{border-radius:18px}}
   </style>
-</head>
-<body>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/css/design-system.css?v=20261027"><link rel="stylesheet" href="/assets/css/remaining-public.css?v=20261027"></head>
+<body class="dakshayani-design public-rest"><a class="public-brand" href="/index.php"><img src="/images/logo/New%20dakshayani%20logo%20centered%20small.png" alt="">Dakshayani Enterprises <span aria-hidden="true">↗</span></a>
   <main class="help-shell">
     <section class="help-hero">
       <p style="margin:0 0 .35rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase">App installation help</p>

@@ -450,7 +450,7 @@ if ($requestMethod === 'POST') {
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   />
   <link
@@ -463,8 +463,8 @@ if ($requestMethod === 'POST') {
   <style>
     .login-help-footer{margin:1.25rem auto 0;max-width:1120px;padding:0 1rem 1.5rem;color:#64748b;text-align:center}.login-help-footer__links{display:flex;flex-wrap:wrap;justify-content:center;gap:.6rem}.login-help-footer a{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:.45rem .8rem;border-radius:999px;background:#f1f5f9;color:#0f766e;text-decoration:none;font-weight:800;font-size:.9rem}.login-help-footer a:hover,.login-help-footer a:focus{background:#ccfbf1;color:#115e59}.login-help-footer p{margin:.65rem 0 0;font-size:.82rem}
   </style>
-</head>
-<body data-active-nav="login">
+<link rel="stylesheet" href="/assets/css/marketing-pages.css?v=20261027"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/css/design-system.css?v=20261027"><link rel="stylesheet" href="/assets/css/remaining-public.css?v=20261027"></head>
+<body data-active-nav="login" class="dakshayani-design public-rest marketing-page">
   <header class="site-header"></header>
 
   <main>
@@ -472,15 +472,13 @@ if ($requestMethod === 'POST') {
       <div class="container hero-inner">
         <div class="hero-copy">
           <span class="hero-eyebrow"><i class="fa-solid fa-lock"></i> Secure access</span>
-          <h1>Login to your Dakshayani workspace</h1>
+          <h1>Your workspace. One secure login.</h1>
           <p class="lead" style="color: rgba(255, 255, 255, 0.85); max-width: 32rem;">
             Choose your portal to manage approvals, monitor service tickets, or stay updated with assignments.
             Dedicated workspaces for administrators and employees are ready for you.
           </p>
         </div>
-        <div class="hero-art">
-          <img src="images/illustrations/login-portal.svg" alt="Login illustration" onerror="this.remove();" />
-        </div>
+        <aside class="hero-art login-welcome"><span class="hero-eyebrow">DAKSHAYANI CONNECT</span><h2>Stay connected to your work.</h2><p>Access the workspace assigned to you.</p><div><span>01</span> Admin</div><div><span>02</span> Customer</div><div><span>03</span> Employee</div></aside>
       </div>
     </section>
 

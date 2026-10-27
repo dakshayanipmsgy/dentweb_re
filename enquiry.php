@@ -24,8 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Enquiry | Dakshayani Enterprises</title>
   <link rel="stylesheet" href="style.css" />
-</head>
-<body>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/css/design-system.css?v=20261027"><link rel="stylesheet" href="/assets/css/remaining-public.css?v=20261027"></head>
+<body class="dakshayani-design public-rest enquiry-page"><a class="public-brand" href="/index.php"><img src="/images/logo/New%20dakshayani%20logo%20centered%20small.png" alt="">Dakshayani Enterprises <span aria-hidden="true">↗</span></a>
   <main class="admin-form" style="max-width:640px;margin:2rem auto;">
     <h1>Solar Enquiry</h1>
     <p>Share your details and our team will guide you.</p>

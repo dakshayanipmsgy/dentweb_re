@@ -19,20 +19,20 @@
     -->
     <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #EDE7E3; color: #0B2D48; }
+        body { font-family: 'Inter', sans-serif; background-color: #EDE7E3; color: #132c35; }
         .chart-container { position: relative; width: 100%; max-width: 320px; margin: auto; height: 320px; max-height: 320px; }
         .chart-container-bar { position: relative; width: 100%; max-width: 800px; margin: auto; height: 350px; max-height: 400px; }
         .nav-dot { transition: all 0.3s ease; }
-        .nav-dot.active { background-color: #0B2D48; transform: scale(1.5); }
-        .timeline-item::before { content: ''; position: absolute; left: 19px; top: 0; bottom: 0; width: 2px; background-color: #82C0CC; }
+        .nav-dot.active { background-color: #132c35; transform: scale(1.5); }
+        .timeline-item::before { content: ''; position: absolute; left: 19px; top: 0; bottom: 0; width: 2px; background-color: #a4cdbb; }
         .timeline-item:last-child::before { display: none; }
         .timeline-dot { transition: transform 0.2s ease-out; }
         .timeline-item:hover .timeline-dot { transform: scale(1.2); }
         .flow-node { transition: all 0.3s ease; border: 2px solid transparent; }
-        .flow-node.active, .flow-node:hover { border-color: #489FB5; transform: scale(1.03); box-shadow: 0 4px 20px rgba(72, 159, 181, 0.3); }
+        .flow-node.active, .flow-node:hover { border-color: #4ba18d; transform: scale(1.03); box-shadow: 0 4px 20px rgba(72, 159, 181, 0.3); }
     </style>
-</head>
-<body class="antialiased">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/css/design-system.css?v=20261027"><link rel="stylesheet" href="/assets/css/remaining-public.css?v=20261027"></head>
+<body class="dakshayani-design public-rest resco-page antialiased">
 
     <nav class="fixed top-1/2 right-4 transform -translate-y-1/2 z-50 hidden md:block">
         <div id="side-nav" class="space-y-4">
@@ -95,11 +95,11 @@
 
                 <div class="lg:col-span-2 space-y-4">
                     <div class="grid grid-cols-2 gap-4">
-                        <div class="flow-node p-4 bg-white rounded-xl shadow-md cursor-pointer text-center" data-id="vendors">
+                        <div class="flow-node p-4 bg-white rounded-xl shadow-md cursor-pointer text-center" data-id="vendors" role="button" tabindex="0" onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click();}">
                             <p class="font-bold text-lg">RESCO Vendors</p>
                             <p class="text-sm text-gray-600">Solar Installers</p>
                         </div>
-                        <div class="flow-node p-4 bg-white rounded-xl shadow-md cursor-pointer text-center" data-id="owners">
+                        <div class="flow-node p-4 bg-white rounded-xl shadow-md cursor-pointer text-center" data-id="owners" role="button" tabindex="0" onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click();}">
                             <p class="font-bold text-lg">Rooftop Owners</p>
                             <p class="text-sm text-gray-600">Households, RWAs</p>
                         </div>
@@ -110,7 +110,7 @@
                         <span class="transform rotate-45 ml-16">&#11105;</span>
                     </div>
 
-                    <div class="flow-node p-6 bg-0B2D48 text-white rounded-2xl shadow-2xl shadow-0B2D48/30 cursor-pointer text-center" data-id="platform">
+                    <div class="flow-node p-6 bg-0B2D48 text-white rounded-2xl shadow-2xl shadow-0B2D48/30 cursor-pointer text-center" data-id="platform" role="button" tabindex="0" onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click();}">
                         <p class="font-bold text-xl">THE DIGITAL PLATFORM</p>
                         <p class="text-sm opacity-80">AI-Powered Financing & Settlement Engine</p>
                     </div>
@@ -119,7 +119,7 @@
                         <span class="transform rotate-45">&#11107;</span>
                     </div>
                     
-                    <div class="flow-node p-4 bg-white rounded-xl shadow-md cursor-pointer text-center" data-id="financiers">
+                    <div class="flow-node p-4 bg-white rounded-xl shadow-md cursor-pointer text-center" data-id="financiers" role="button" tabindex="0" onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click();}">
                         <p class="font-bold text-lg">Banks & NBFCs</p>
                         <p class="text-sm text-gray-600">Financial Institutions</p>
                     </div>
@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
         funding: {
             labels: ['MNRE Assistance (60%)', 'Promoter Contribution (40%)'],
             values: [30000000, 20000000],
-            colors: ['#16697A', '#489FB5']
+            colors: ['#087d70', '#4ba18d']
         },
         budget: {
             labels: [
@@ -233,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ['Institutional', 'Overheads']
             ],
             values: [22500000, 17500000, 3500000, 4000000, 1500000],
-            colors: ['#16697A', '#489FB5', '#82C0CC', '#b3dbe3', '#d9ecf0'],
+            colors: ['#087d70', '#4ba18d', '#a4cdbb', '#c7ded1', '#e7f2eb'],
             justification: [
                 'Cloud infrastructure, software licenses, security tools, and IoT devices.',
                 'Salaries for developers, data scientists, project managers, and support staff.',
@@ -290,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
             options: {
                 responsive: true, maintainAspectRatio: false, cutout: '60%',
                 plugins: {
-                    legend: { position: 'bottom', labels: { color: '#0B2D48' } },
+                    legend: { position: 'bottom', labels: { color: '#132c35' } },
                     tooltip: {
                         callbacks: {
                             title: tooltipTitleCallback,
@@ -330,8 +330,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 },
                 scales: {
-                    x: { ticks: { color: '#0B2D48', callback: (v) => `₹${v / 1000000}M` } },
-                    y: { ticks: { color: '#0B2D48', autoSkip: false } }
+                    x: { ticks: { color: '#132c35', callback: (v) => `₹${v / 1000000}M` } },
+                    y: { ticks: { color: '#132c35', autoSkip: false } }
                 }
             }
         });

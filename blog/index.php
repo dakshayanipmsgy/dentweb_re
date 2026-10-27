@@ -141,7 +141,7 @@ if ($tag !== '') {
     <link rel="stylesheet" href="../style.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="canonical" href="<?= htmlspecialchars($canonicalUrl, ENT_QUOTES | ENT_HTML5) ?>" />
     <meta property="og:type" content="website" />
@@ -183,15 +183,15 @@ if ($tag !== '') {
             .blog-card img { height: 200px; }
         }
     </style>
-</head>
-<body>
+<link rel="stylesheet" href="/assets/css/marketing-pages.css?v=20261027"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/css/design-system.css?v=20261027"><link rel="stylesheet" href="/assets/css/remaining-public.css?v=20261027"></head>
+<body class="dakshayani-design public-rest marketing-page">
 <header class="site-header"></header>
 <main>
     <section class="page-hero" style="background:linear-gradient(135deg,rgba(15,23,42,0.94),rgba(37,99,235,0.85));">
         <div class="container hero-inner">
             <div class="hero-copy">
                 <span class="hero-eyebrow"><i class="fa-solid fa-newspaper"></i> Blog &amp; insights</span>
-                <h1>Fresh solar intelligence from the Dakshayani editorial desk</h1>
+                <h1>Ideas for a brighter energy future.</h1>
                 <p class="lead" style="color:rgba(255,255,255,0.82); max-width: 640px;">Policy explainers, EPC deep-dives, and hydrogen breakthroughs—published only after the admin desk reviews each story.</p>
                 <div class="tag-cloud" aria-label="Popular blog tags">
                     <span class="tag-chip"><i class="fa-solid fa-solar-panel"></i> Rooftop</span>
@@ -200,10 +200,7 @@ if ($tag !== '') {
                     <span class="tag-chip"><i class="fa-solid fa-flask"></i> Hydrogen</span>
                 </div>
             </div>
-            <div class="hero-media" aria-hidden="true">
-                <img src="../images/hero/hero large.png" alt="Dakshayani editorial team" loading="lazy" />
-                <div class="caption">Published in Ranchi · Updated <?= htmlspecialchars(format_ist($lastUpdated) ?: 'recently', ENT_QUOTES | ENT_HTML5) ?></div>
-            </div>
+            <aside class="policy-directory"><span class="hero-eyebrow">EXPLORE THE ARCHIVE</span><h2>Knowledge that moves you forward.</h2><a href="?q=solar">01 <span>Rooftop solar</span> →</a><a href="?q=subsidy">02 <span>Schemes &amp; subsidies</span> →</a><a href="?q=hydrogen">03 <span>New energy</span> →</a><p>Find practical guidance for your next energy decision.</p></aside>
         </div>
     </section>
 
