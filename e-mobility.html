@@ -9,39 +9,43 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="assets/css/design-system.css?v=20261027" />
+  <link rel="stylesheet" href="assets/css/marketing-pages.css?v=20261027" />
+  <link rel="stylesheet" href="assets/css/ventures.css?v=20261027" />
 </head>
-<body>
+<body class="dakshayani-design marketing-page venture-page">
+  <a class="ds-skip" href="#main-content">Skip to content</a>
   <header class="site-header"></header>
-  <main>
-    <section class="page-hero" style="background:linear-gradient(135deg,rgba(30,64,175,0.9),rgba(59,130,246,0.85));">
+  <main id="main-content">
+    <section class="page-hero">
       <div class="container hero-inner">
         <div class="hero-copy">
-          <span class="hero-eyebrow" style="background:rgba(255,255,255,0.18);color:#e0ecff;"><i class="fa-solid fa-charging-station"></i> E-Mobility</span>
-          <h1>Future-proof EV charging with solar-ready engineering</h1>
-          <p class="lead" style="color:rgba(226,232,240,0.85);">From feasibility to commissioning, we help fleets, developers, and utilities deploy EV infrastructure optimised for Jharkhand's grids and solar resources.</p>
+          <span class="hero-eyebrow"><i class="fa-solid fa-charging-station"></i> E-Mobility</span>
+          <h1>Charging ahead. Ready for solar.</h1>
+          <p class="lead">From feasibility to commissioning, we help fleets, developers, and utilities deploy EV infrastructure optimised for Jharkhand's grids and solar resources.</p>
           <div class="hero-metrics">
-            <div class="hero-metric" style="background:rgba(255,255,255,0.14);">
+            <div class="hero-metric">
               <span>AC &amp; DC</span>
               <span>Charger design spectrum</span>
             </div>
-            <div class="hero-metric" style="background:rgba(255,255,255,0.14);">
+            <div class="hero-metric">
               <span>Hybrid</span>
               <span>Solar + storage integration</span>
             </div>
-            <div class="hero-metric" style="background:rgba(255,255,255,0.14);">
+            <div class="hero-metric">
               <span>24/7</span>
               <span>Monitoring &amp; O&amp;M readiness</span>
             </div>
           </div>
-          <div class="cta-actions" style="display:flex;flex-wrap:wrap;gap:1rem;">
-            <a href="contact.html" class="btn btn-primary">Plan a charging hub</a>
-            <a href="#services" class="btn btn-secondary" style="background:transparent;border-color:rgba(224,236,255,0.5);color:#e0ecff;">View services</a>
+          <div class="cta-actions">
+            <a href="contact.php" class="btn btn-primary">Plan a charging hub</a>
+            <a href="#services" class="btn btn-secondary">View services</a>
           </div>
         </div>
-        <div class="hero-media" aria-hidden="true">
-          <img src="images/other pics.jpg" alt="Dakshayani engineer inspecting an EV charging installation" loading="lazy" />
+        <div class="hero-media">
+          <img src="images/other pics.jpg" alt="Dakshayani engineer inspecting an EV charging installation" loading="eager" />
           <div class="caption">Load study · Ranchi industrial estate</div>
         </div>
       </div>
@@ -50,7 +54,7 @@
     <section class="section" id="services">
       <div class="container">
         <div class="head">
-          <h2>Consultancy and EPC readiness for every charging use-case</h2>
+          <h2>From feasibility to charging readiness</h2>
           <p class="sub">We design decentralised charging that pairs efficiently with rooftop solar, hybrid inverters, and smart metering.</p>
         </div>
         <div class="feature-grid">
@@ -89,11 +93,11 @@
     </section>
 
     <section class="section alt">
-      <div class="container grid" style="gap:2rem;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));align-items:center;">
+      <div class="container grid ds-split">
         <div>
           <span class="badge-inline"><i class="fa-solid fa-solar-panel"></i> Solar + EV advantage</span>
-          <h2>Decentralised charging designed for solar synergy</h2>
-          <p class="lead" style="color:var(--base-600);">Pairing charging plazas with rooftop or ground-mount solar improves payback and shields assets from grid fluctuations.</p>
+          <h2>Solar and charging. Designed together.</h2>
+          <p class="lead">Pairing charging plazas with rooftop or ground-mount solar improves payback and shields assets from grid fluctuations.</p>
           <ul class="list-check">
             <li><i class="fa-solid fa-check"></i>PV-ready conduiting and structural design</li>
             <li><i class="fa-solid fa-check"></i>Hybrid microgrids with diesel genset synchronisation</li>
@@ -112,20 +116,20 @@
           <h2>Segments we empower</h2>
           <p class="sub">Modular packages adapt to residential societies, commercial plazas, and high-throughput fleet depots.</p>
         </div>
-        <div class="card-grid" style="display:grid;gap:1.5rem;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
-          <article class="card" style="background:var(--surface);border:1px solid rgba(59,130,246,0.2);">
+        <div class="card-grid">
+          <article class="card">
             <h3>Residential &amp; RWAs</h3>
             <p class="text-sm">Smart load management with billing integrations for apartment blocks and gated communities.</p>
           </article>
-          <article class="card" style="background:var(--surface);border:1px solid rgba(59,130,246,0.2);">
+          <article class="card">
             <h3>Commercial &amp; Hospitality</h3>
             <p class="text-sm">Destination charging with digital payment and loyalty integrations for malls and hotels.</p>
           </article>
-          <article class="card" style="background:var(--surface);border:1px solid rgba(59,130,246,0.2);">
+          <article class="card">
             <h3>Fleet &amp; Logistics</h3>
             <p class="text-sm">High availability charging depots with swap-ready infrastructure and dispatch dashboards.</p>
           </article>
-          <article class="card" style="background:var(--surface);border:1px solid rgba(59,130,246,0.2);">
+          <article class="card">
             <h3>Public Sector</h3>
             <p class="text-sm">Smart city and transport department projects integrating chargers with renewable energy mandates.</p>
           </article>
@@ -137,13 +141,13 @@
       <div class="container">
         <div class="cta-panel">
           <div>
-            <span class="hero-eyebrow" style="background:rgba(255,255,255,0.18);color:#fff;">Let's collaborate</span>
-            <h2 style="color:#fff;margin-bottom:0.5rem;">Design an EV charging rollout that scales with demand</h2>
-            <p class="lead" style="color:rgba(255,255,255,0.8);">Share your load profile and rollout plan. Our engineers will draft a solar-integrated architecture with phased EPC execution.</p>
+            <span class="hero-eyebrow">Let's collaborate</span>
+            <h2>Design an EV charging rollout that scales with demand</h2>
+            <p class="lead">Share your load profile and rollout plan. Our engineers will draft a solar-integrated architecture with phased EPC execution.</p>
           </div>
           <div class="cta-actions">
-            <a href="contact.html" class="btn btn-primary">Book a discovery call</a>
-            <a href="solar-projects.html#case-studies" class="btn btn-secondary" style="background:transparent;border-color:rgba(255,255,255,0.45);color:#fff;">Download case studies</a>
+            <a href="contact.php" class="btn btn-primary">Book a discovery call</a>
+            <a href="solar-projects.html#residential" class="btn btn-secondary">Explore project gallery</a>
           </div>
         </div>
       </div>
