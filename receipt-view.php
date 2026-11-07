@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/includes/customer_workspace_view.php';
 
 require_once __DIR__ . '/includes/public_document_security.php';
 protect_customer_document_response();
@@ -104,8 +105,8 @@ $quoteNo = (string) ($quote['quote_no'] ?? $receipt['quotation_id'] ?? '');
     }
   .print-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px}.print-tools a{color:#115e59}.print-tools button{border:0;background:#0f766e;color:white;padding:12px 18px;border-radius:10px;font-weight:700;cursor:pointer}.sheet{border:1px solid #dbe4ef;border-radius:18px;min-height:0;box-shadow:0 16px 50px #0f172a12}.header{border-color:#0f766e}.card{padding:14px 18px;overflow-wrap:anywhere}.card p{margin:10px 0}.sign{padding-top:18px;gap:24px;margin-top:54px}.sign>div{border-top:1px solid #94a3b8;padding-top:12px;min-width:180px}.row{flex-wrap:wrap}.card:nth-of-type(3){border-left:4px solid #0f766e}@media screen and (max-width:600px){.sheet{margin:10px;padding:20px;border-radius:12px}.sign{flex-wrap:wrap}.header{align-items:flex-start}.title{font-size:20px}}@media print{@page{size:A4 portrait;margin:14mm}.sheet{width:auto;padding:0;border:0;border-radius:0;box-shadow:none}.mobile-app-nav{display:none!important}.card,.sign{break-inside:avoid}body{font-size:11pt;padding:0!important}.sheet{padding:0!important}.print-tools{display:none!important}}
   </style>
-</head>
-<body><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?>
+<link rel="stylesheet" href="<?= htmlspecialchars(customer_workspace_asset('assets/css/customer-document-screen.css'), ENT_QUOTES, 'UTF-8') ?>"></head>
+<body class="customer-document-screen"><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?>
   <div class="print-tools"><?php if ($customerView): ?><a href="customer-dashboard.php">← Back to dashboard</a><?php endif; ?> <button type="button" onclick="window.print()">Print / Save PDF</button><span> A4 · Portrait</span></div>
   <main class="sheet">
     <header class="header">

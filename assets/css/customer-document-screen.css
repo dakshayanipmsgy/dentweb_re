@@ -1,0 +1,35 @@
+/* Screen styles only: leave existing print layouts and document values intact. */
+@media screen {
+ .customer-document-screen{margin:0;background:#f3f7fa;color:#0f172a;font:16px/1.6 'Segoe UI',Roboto,Arial,sans-serif;-webkit-text-size-adjust:100%}
+ .customer-document-screen *{box-sizing:border-box}
+ .customer-document-screen :where(a,button,input,textarea,select):focus-visible{outline:3px solid #0284c7;outline-offset:3px}
+ .customer-document-screen .sheet{width:calc(100% - 32px);max-width:1100px;margin:24px auto;padding:clamp(18px,3vw,36px);min-height:0;overflow-wrap:anywhere}
+ .customer-document-screen .actions,.customer-document-screen .print-tools,.customer-document-screen .page-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+ .customer-document-screen :where(.btn,button,.actions a){display:inline-flex;align-items:center;justify-content:center;min-height:44px;max-width:100%;font:inherit;font-weight:700;line-height:1.4;text-align:center;white-space:normal;padding:10px 16px;border-radius:10px;text-decoration:none;cursor:pointer}
+ .customer-document-screen .actions{margin-bottom:24px}.customer-document-screen .print-tools{max-width:1100px;padding:12px 16px;margin:8px auto}
+ .customer-document-screen .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+ .customer-document-screen .grid .card{margin:0;min-width:0}.customer-document-screen :where(.value,.detail-row strong,.notes,.header-text,.brand-block p){overflow-wrap:anywhere;word-break:normal}
+ .customer-document-screen .doc-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.customer-document-screen .doc-row>div{min-width:0}
+ .customer-document-screen .doc-row .btn{width:100%}
+ .customer-document-screen h1{font-size:clamp(24px,4vw,36px);line-height:1.2;overflow-wrap:anywhere}
+ .customer-document-screen :where(.card,.sheet) table{max-width:100%;white-space:normal}
+ .customer-document-screen .document-table-scroll{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;margin-top:16px;border:1px solid #dbe4ef;border-radius:12px}
+ .customer-document-screen .document-table-scroll table{width:100%;display:table;margin:0;white-space:normal}.customer-document-screen .document-table-scroll td{overflow-wrap:anywhere}
+ .customer-document-screen .invoice-page{max-width:1200px;margin:24px auto;padding:0 20px}
+ .customer-document-screen .invoice-top{display:flex;padding:28px;gap:22px}.customer-document-screen .invoice-inner{padding:28px}
+ .customer-document-screen .brand-block{min-width:0;max-width:none;flex:1}.customer-document-screen .invoice-title{min-width:200px}
+ .customer-document-screen .table-panel{overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;max-width:100%;outline-offset:3px}
+ .customer-document-screen .invoice-table{min-width:580px;table-layout:auto;font-size:14px}
+ .customer-document-screen .invoice-tax-table{min-width:960px}.customer-document-screen .invoice-table .notes{white-space:normal}
+ .customer-document-screen .table-panel:focus-visible{outline:3px solid #0284c7}
+ .customer-document-screen .table-scroll-hint{display:block;color:#526277;font-size:12px;font-weight:400;margin-top:3px}
+ .customer-document-screen .detail-row{flex-wrap:wrap;gap:4px 14px}.customer-document-screen .detail-row strong{max-width:100%}
+ .customer-document-screen .header{align-items:flex-start}.customer-document-screen .header-logo img{max-width:70px;height:auto}
+ .customer-document-screen input:not([type=checkbox]),.customer-document-screen textarea,.customer-document-screen select{font:inherit;font-size:16px;width:100%;min-width:0;min-height:46px;border:1px solid #94a3b8;border-radius:10px;padding:12px}
+ .customer-document-screen input[type=checkbox]{width:22px;height:22px;min-height:22px;vertical-align:middle;margin-right:8px}
+ .customer-document-screen .card{overflow-wrap:anywhere}.customer-document-screen .error{color:#991b1b}
+ @media(max-width:900px){.customer-document-screen .doc-row{grid-template-columns:repeat(2,minmax(0,1fr))}.customer-document-screen .invoice-top{display:grid;grid-template-columns:1fr}.customer-document-screen .invoice-title{text-align:left;min-width:0}.customer-document-screen .invoice-title p{display:inline-block;margin-right:8px}.customer-document-screen .invoice-title .invoice-header-total{display:block}.customer-document-screen .brand-block{max-width:100%}}
+ @media(max-width:600px){.customer-document-screen .sheet{margin:12px auto;width:calc(100% - 24px);padding:18px;border-radius:14px}.customer-document-screen .grid,.customer-document-screen .doc-row{grid-template-columns:1fr}.customer-document-screen .top{display:block}.customer-document-screen .top strong{display:block;margin-top:8px}.customer-document-screen .invoice-page{margin:12px auto;padding:0 12px!important}.customer-document-screen .invoice-sheet{border-radius:16px}.customer-document-screen .invoice-top,.customer-document-screen .invoice-inner{padding:18px}.customer-document-screen .brand-block{display:block}.customer-document-screen .brand-logo{width:64px;height:64px;margin-bottom:10px}.customer-document-screen .brand-name{font-size:22px}.customer-document-screen .meta-grid,.customer-document-screen .party-grid,.customer-document-screen .summary-grid,.customer-document-screen .detail-grid{display:grid;grid-template-columns:1fr;gap:12px}.customer-document-screen .info-card{padding:16px}.customer-document-screen .actions>*{flex:1 1 140px}.customer-document-screen .sign{gap:24px;flex-wrap:wrap}.customer-document-screen .sign>div{min-width:0;flex:1 1 140px}.customer-document-screen .row{display:block}.customer-document-screen .row>div{margin-top:8px}.customer-document-screen>.card{width:calc(100% - 24px);margin:12px auto;padding:18px}.customer-document-screen .document-table-scroll table{min-width:460px}}
+ @media(pointer:coarse){.customer-document-screen :where(.btn,button,.actions a){min-height:48px}}
+}
+@media print{.table-scroll-hint{display:none!important}.document-table-scroll{overflow:visible;border:0;margin:0}.document-table-scroll table{display:table!important;width:100%;white-space:normal!important}.invoice-table{min-width:0!important}}

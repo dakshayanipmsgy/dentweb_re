@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/includes/customer_workspace_view.php';
 
 require_once __DIR__ . '/includes/customer_portal.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
@@ -132,8 +133,8 @@ if (in_array($type, ['dispatch_advice', 'challan', 'receipt', 'invoice'], true) 
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title><?= $esc($title . ' for ' . $quoteNo) ?></title>
 <style>body{margin:0;background:#f8fafc;color:#0f172a;font:15px/1.55 Arial,sans-serif}.sheet{max-width:1100px;margin:24px auto;background:#fff;border:1px solid #e2e8f0;border-radius:22px;padding:28px;box-shadow:0 20px 60px rgba(15,23,42,.08)}.actions{margin-bottom:14px}.btn{display:inline-block;background:#2563eb;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:800}.muted{color:#64748b}.list{display:grid;gap:14px;margin-top:18px}.doc-row{border:1px solid #e2e8f0;border-radius:16px;padding:16px;background:#fbfdff;display:grid;grid-template-columns:1.1fr repeat(4,1fr) auto;gap:12px;align-items:center}.label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:800}.value{font-weight:800;margin-top:3px}.pill{display:inline-block;background:#e0f2fe;color:#075985;border-radius:999px;padding:4px 9px;font-weight:800;font-size:12px}@media(max-width:900px){.sheet{margin:0;border-radius:0;padding:18px}.doc-row{display:block}.doc-row>div{margin:10px 0}}</style>
-</head>
-<body><main class="sheet">
+<link rel="stylesheet" href="<?= htmlspecialchars(customer_workspace_asset('assets/css/customer-document-screen.css'), ENT_QUOTES, 'UTF-8') ?>"></head>
+<body class="customer-document-screen"><main class="sheet">
 <div class="actions"><a class="btn" href="customer-dashboard.php">Back to dashboard</a></div>
 <h1><?= $esc($title) ?></h1>
 <p class="muted">Select the exact document for <?= $esc($quoteNo) ?>. Only documents linked to your customer portal are shown.</p>
@@ -283,8 +284,8 @@ $acceptedSummary = $type === 'accepted_quotation' ? $acceptedSummary : [];
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title><?= $esc($title . ' ' . $number) ?></title>
 <style>body{margin:0;background:#f8fafc;color:#0f172a;font:15px/1.55 Arial,sans-serif}.sheet{max-width:920px;margin:24px auto;background:#fff;border:1px solid #e2e8f0;border-radius:22px;padding:28px;box-shadow:0 20px 60px rgba(15,23,42,.08)}.top{display:flex;justify-content:space-between;gap:18px;border-bottom:1px solid #e2e8f0;padding-bottom:18px}h1{margin:0;font-size:32px}.muted{color:#64748b}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:18px 0}.card{border:1px solid #e2e8f0;border-radius:14px;padding:14px;background:#fbfdff}.label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:800}.value{font-weight:800;margin-top:4px}.section-title{margin:22px 0 8px;font-size:20px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #e5e7eb;padding:10px;text-align:left;vertical-align:top}th{font-size:12px;text-transform:uppercase;color:#64748b}.actions{margin-bottom:14px}.btn{display:inline-block;background:#2563eb;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:800}@media print{.actions{display:none}.sheet{box-shadow:none;border:0;margin:0;border-radius:0}}@media(max-width:640px){.sheet{margin:0;border-radius:0;padding:18px}.top,.grid{display:block}.card{margin-top:10px}table{display:block;overflow-x:auto;white-space:nowrap}}</style>
-</head>
-<body><main class="sheet">
+<link rel="stylesheet" href="<?= htmlspecialchars(customer_workspace_asset('assets/css/customer-document-screen.css'), ENT_QUOTES, 'UTF-8') ?>"></head>
+<body class="customer-document-screen"><main class="sheet">
 <div class="actions"><a class="btn" href="customer-dashboard.php">Back to dashboard</a> <a class="btn" href="#" onclick="window.print();return false;">Print</a></div>
 <header class="top"><div><h1><?= $esc($title) ?></h1><p class="muted"><?= $esc($number) ?></p></div><div><strong><?= $esc($date ?: '—') ?></strong></div></header>
 <?php if ($type === 'accepted_quotation'): ?>
@@ -299,14 +300,14 @@ $acceptedSummary = $type === 'accepted_quotation' ? $acceptedSummary : [];
   <?php endif; ?>
   <?php if ($rows !== []): ?>
     <h2 class="section-title">Accepted system / project details</h2>
-    <table><thead><tr><th>#</th><th>Item / detail</th><th>Qty</th><th>Unit</th></tr></thead><tbody>
+    <div class="document-table-scroll" tabindex="0" role="region" aria-label="Document table, scroll horizontally for all columns"><table><thead><tr><th>#</th><th>Item / detail</th><th>Qty</th><th>Unit</th></tr></thead><tbody>
     <?php foreach ($rows as $i => $row): ?>
       <tr><td><?= (int) $i + 1 ?></td><td><?= $esc($row['name_snapshot'] ?? $row['name'] ?? $row['description_snapshot'] ?? $row['description'] ?? $row['item'] ?? 'Project item') ?></td><td><?= $esc($row['qty'] ?? $row['quantity'] ?? '') ?></td><td><?= $esc($row['unit'] ?? '') ?></td></tr>
     <?php endforeach; ?>
-    </tbody></table>
+    </tbody></table></div>
   <?php endif; ?>
 <?php else: ?>
   <section class="grid"><div class="card"><div class="label">Customer</div><div class="value"><?= $esc($customer['name'] ?? ($document['customer_name'] ?? 'Customer')) ?></div></div><div class="card"><div class="label">Registered mobile</div><div class="value"><?= $esc($customer['mobile'] ?? '') ?></div></div><?php if ($amount !== null): ?><div class="card"><div class="label">Amount</div><div class="value"><?= $esc($fmt($amount)) ?></div></div><?php endif; ?><div class="card"><div class="label">Status</div><div class="value"><?= $esc(ucwords(str_replace('_', ' ', (string) ($document['status'] ?? 'Available')))) ?></div></div></section>
-  <?php if ($type === 'agreement'): ?><section class="card"><?= quotation_sanitize_html(documents_render_agreement_body_html($document, load_company_profile())) ?></section><?php elseif ($rows !== []): ?><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Unit</th></tr></thead><tbody><?php foreach ($rows as $i => $row): ?><tr><td><?= (int) $i + 1 ?></td><td><?= $esc($row['name'] ?? $row['description'] ?? $row['item'] ?? 'Item') ?></td><td><?= $esc($row['qty'] ?? $row['quantity'] ?? '') ?></td><td><?= $esc($row['unit'] ?? '') ?></td></tr><?php endforeach; ?></tbody></table><?php else: ?><p class="muted">Detailed line items are not available for this document.</p><?php endif; ?>
+  <?php if ($type === 'agreement'): ?><section class="card"><?= quotation_sanitize_html(documents_render_agreement_body_html($document, load_company_profile())) ?></section><?php elseif ($rows !== []): ?><div class="document-table-scroll" tabindex="0" role="region" aria-label="Document table, scroll horizontally for all columns"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Unit</th></tr></thead><tbody><?php foreach ($rows as $i => $row): ?><tr><td><?= (int) $i + 1 ?></td><td><?= $esc($row['name'] ?? $row['description'] ?? $row['item'] ?? 'Item') ?></td><td><?= $esc($row['qty'] ?? $row['quantity'] ?? '') ?></td><td><?= $esc($row['unit'] ?? '') ?></td></tr><?php endforeach; ?></tbody></table></div><?php else: ?><p class="muted">Detailed line items are not available for this document.</p><?php endif; ?>
 <?php endif; ?>
 </main></body></html>
