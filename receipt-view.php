@@ -7,15 +7,22 @@ protect_customer_document_response();
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 
-require_login_any_role(['admin', 'employee']);
-documents_ensure_structure();
-
-$user = current_user();
-$role = (string) ($user['role_name'] ?? '');
-if (!in_array($role, ['admin', 'employee'], true)) {
-    http_response_code(403);
-    exit('Access denied.');
+require_once __DIR__ . '/includes/customer_portal.php';
+require_once __DIR__ . '/includes/customer_receipt_access.php';
+$customerView = (string) ($_GET['customer_view'] ?? '') === '1';
+$customer = null;
+if ($customerView) {
+    customer_portal_require_login();
+    $customer = customer_portal_fetch_customer(new CustomerFsStore());
+    if ($customer === null) { customer_portal_logout(); header('Location: customer-login.php'); exit; }
+} else {
+    require_login_any_role(['admin', 'employee']);
+    $user = current_user();
+    if (!in_array((string) ($user['role_name'] ?? ''), ['admin', 'employee'], true)) {
+        http_response_code(403); exit('Access denied.');
+    }
 }
+documents_ensure_structure();
 
 $rid = safe_text($_GET['rid'] ?? $_GET['id'] ?? '');
 if ($rid === '') {
@@ -29,8 +36,11 @@ if ($receipt === null) {
     exit('Receipt not found.');
 }
 
-$quote = documents_get_quote((string) ($receipt['quotation_id'] ?? $receipt['quote_id'] ?? ''));
-$company = load_company_profile();
+$quote = documents_get_quote(documents_receipt_quote_id($receipt));
+if ($customerView && !customer_receipt_can_view($receipt, $quote, $customer, documents_receipt_ledger(documents_receipt_quote_id($receipt)))) {
+    http_response_code(404); exit('Receipt unavailable.');
+}
+$company = documents_get_company_profile_for_quotes();
 
 $companyName = trim((string) ($company['company_name'] ?? ''));
 if ($companyName === '') {
@@ -56,8 +66,8 @@ $companyLogo = trim((string) ($company['logo_path'] ?? ''));
 $amount = documents_receipt_amount_total($receipt);
 $dateReceived = (string) ($receipt['date_received'] ?? $receipt['receipt_date'] ?? $receipt['created_at'] ?? date('Y-m-d'));
 $receiptNo = (string) ($receipt['receipt_number'] ?? $receipt['id'] ?? '');
-$customerName = (string) ($receipt['customer_name_snapshot'] ?? $receipt['customer_name'] ?? '');
-$mobile = (string) ($receipt['customer_mobile'] ?? '');
+$customerName = (string) ($receipt['customer_name_snapshot'] ?? $receipt['customer_name'] ?? $quote['customer_name'] ?? $quote['customer_snapshot']['name'] ?? '');
+$mobile = (string) ($receipt['customer_mobile'] ?? $quote['customer_mobile'] ?? $quote['customer_snapshot']['mobile'] ?? '');
 $siteAddress = (string) ($receipt['site_address_snapshot'] ?? ($quote['site_address'] ?? ''));
 $quoteNo = (string) ($quote['quote_no'] ?? $receipt['quotation_id'] ?? '');
 
@@ -68,6 +78,7 @@ $quoteNo = (string) ($quote['quote_no'] ?? $receipt['quotation_id'] ?? '');
 <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Payment Receipt <?= htmlspecialchars($receiptNo, ENT_QUOTES) ?></title>
+  <?php require_once __DIR__ . '/includes/pwa_head.php'; ?>
   <style>
     :root { --ink:#111827; --muted:#6b7280; --line:#e5e7eb; }
     * { box-sizing: border-box; }
@@ -91,10 +102,11 @@ $quoteNo = (string) ($quote['quote_no'] ?? $receipt['quotation_id'] ?? '');
       .header-logo img { max-height: 52px; }
       @page { size:A4; margin:0; }
     }
+  .print-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px}.print-tools a{color:#115e59}.print-tools button{border:0;background:#0f766e;color:white;padding:12px 18px;border-radius:10px;font-weight:700;cursor:pointer}.sheet{border:1px solid #dbe4ef;border-radius:18px;min-height:0;box-shadow:0 16px 50px #0f172a12}.header{border-color:#0f766e}.card{padding:14px 18px;overflow-wrap:anywhere}.card p{margin:10px 0}.sign{padding-top:18px;gap:24px;margin-top:54px}.sign>div{border-top:1px solid #94a3b8;padding-top:12px;min-width:180px}.row{flex-wrap:wrap}.card:nth-of-type(3){border-left:4px solid #0f766e}@media screen and (max-width:600px){.sheet{margin:10px;padding:20px;border-radius:12px}.sign{flex-wrap:wrap}.header{align-items:flex-start}.title{font-size:20px}}@media print{@page{size:A4 portrait;margin:14mm}.sheet{width:auto;padding:0;border:0;border-radius:0;box-shadow:none}.mobile-app-nav{display:none!important}.card,.sign{break-inside:avoid}body{font-size:11pt;padding:0!important}.sheet{padding:0!important}.print-tools{display:none!important}}
   </style>
-<?php require_once __DIR__ . '/includes/pwa_head.php'; ?></head>
+</head>
 <body><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?>
-  <div class="print-tools"><button onclick="window.print()">Print</button></div>
+  <div class="print-tools"><?php if ($customerView): ?><a href="customer-dashboard.php">← Back to dashboard</a><?php endif; ?> <button type="button" onclick="window.print()">Print / Save PDF</button><span> A4 · Portrait</span></div>
   <main class="sheet">
     <header class="header">
       <?php if ($companyLogo !== ''): ?>

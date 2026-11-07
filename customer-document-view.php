@@ -61,7 +61,7 @@ function customer_document_assert_owner(array $document, string $customerMobile)
 
 function customer_document_quote_id(array $document): string
 {
-    return (string) ($document['quotation_id'] ?? $document['linked_quote_id'] ?? $document['quote_id'] ?? '');
+    return (string) ($document['quotation_id'] ?? $document['linked_quote_id'] ?? $document['quote_id'] ?? $document['linked_quotation_id'] ?? $document['project_id'] ?? '');
 }
 
 function customer_document_items_summary(array $document): string
@@ -153,7 +153,7 @@ if (in_array($type, ['dispatch_advice', 'challan', 'receipt', 'invoice'], true) 
     <div><div class="label"><?= $esc($dateLabel) ?></div><div class="value"><?= $esc(substr($date, 0, 10) ?: '—') ?></div></div>
     <div><div class="label">Status</div><div class="value"><span class="pill"><?= $esc(customer_document_confirmation_status($document, (string) ($document['workflow_status'] ?? $document['status'] ?? 'Pending'))) ?></span></div></div>
     <div><div class="label"><?= $esc($linkedLabel) ?></div><div class="value"><?= $esc($linked ?: '—') ?></div></div>
-    <div><div class="label">Items / summary</div><div class="value"><?= $esc(customer_document_items_summary($document)) ?></div></div>
+    <div><div class="label"><?= $type === 'receipt' ? 'Amount received' : 'Items / summary' ?></div><div class="value"><?= $esc($type === 'receipt' ? quotation_format_inr_indian(documents_receipt_amount_total($document), true) : customer_document_items_summary($document)) ?></div></div>
     <div><a class="btn" href="customer-document-view.php?<?= $esc(http_build_query(['type' => $type, 'id' => (string) ($document['id'] ?? '')])) ?>"><?= $esc($actionLabel) ?></a></div>
   </article>
 <?php endforeach; ?>
@@ -245,6 +245,10 @@ if ($type === 'accepted_quotation') {
 }
 
 if (!is_array($document)) { http_response_code(404); exit('Document not found.'); }
+if ($type === 'receipt') {
+    header('Location: receipt-view.php?' . http_build_query(['id' => $id, 'customer_view' => '1']));
+    exit;
+}
 customer_document_assert_owner($document, $customerMobile);
 $esc = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 $fmt = static fn($v): string => quotation_format_inr_indian((float) $v, true);
