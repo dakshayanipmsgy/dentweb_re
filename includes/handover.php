@@ -271,11 +271,19 @@ function handover_build_full_html(array $customer, string $finalContentHtml, ?st
 {
     $templates = load_handover_templates();
     $customCss = $styleOverride ?? (string) ($templates['handover_style_css'] ?? '');
+    // Older template settings contain a complete HTML header in the CSS field.
+    // Extract its style blocks so nested head/body tags cannot corrupt the pack.
+    if (preg_match_all('~<style\b[^>]*>(.*?)</style>~is', $customCss, $styleMatches) > 0) {
+        $customCss = implode("\n", $styleMatches[1]);
+    } else {
+        $customCss = strip_tags($customCss);
+    }
     $css = trim(handover_default_css() . "\n" . $customCss);
-    $customerName = htmlspecialchars((string) ($customer['name'] ?? $customer['full_name'] ?? 'Valued Customer'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $customerName = (string) ($customer['name'] ?? $customer['full_name'] ?? 'Valued Customer');
     $title = 'Solar Handover - ' . $customerName;
 
-    $styleBlock = "<style>\n" . $css . "\n</style>";
+    $refinementCss = file_get_contents(__DIR__ . '/../assets/css/handover-document.css');
+    $styleBlock = "<style>\n" . $css . "\n" . ($refinementCss !== false ? $refinementCss : '') . "\n</style>";
 
     return '<!DOCTYPE html>'
         . '<html lang="en">'
@@ -286,6 +294,7 @@ function handover_build_full_html(array $customer, string $finalContentHtml, ?st
         . $styleBlock
         . '</head>'
         . '<body class="handover-doc">'
+        . '<nav class="handover-tools" aria-label="Handover document actions"><a href="customer-dashboard.php">Back to dashboard</a><button type="button" onclick="window.print()">Print / Save PDF</button><span class="handover-print-hint">A4 · Portrait · System details, maintenance and warranty</span></nav>'
         . $finalContentHtml
         . '</body>'
         . '</html>';
@@ -324,6 +333,11 @@ function handover_normalize_mobile(string $mobile): string
 
 function handover_extract_body_content(string $html): string
 {
+    $html = preg_replace('~<nav\b[^>]*class="handover-tools"[^>]*>.*?</nav>~is', '', $html) ?? $html;
+    // Prefer the real wrapper over stray <body> text in legacy CSS settings.
+    if (preg_match('~<body\b[^>]*class=[\"\'][^\"\']*\bhandover-doc\b[^\"\']*[\"\'][^>]*>(.*)</body>~is', $html, $matches) === 1) {
+        return trim((string) ($matches[1] ?? ''));
+    }
     if (preg_match('~<body[^>]*>(.*)</body>~is', $html, $matches) === 1) {
         return trim((string) ($matches[1] ?? ''));
     }

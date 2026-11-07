@@ -459,7 +459,8 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
     .portal-hero{background:linear-gradient(135deg,#0f172a,#2563eb 58%,#06b6d4);color:#fff;border-radius:24px;padding:2rem;box-shadow:0 24px 70px rgba(37,99,235,.25);margin-bottom:1.25rem;display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}.portal-hero h1{margin:0;font-size:clamp(1.8rem,4vw,3rem);letter-spacing:-.04em}.portal-hero p{margin:.5rem 0 0;color:rgba(255,255,255,.86)}.portal-shell{max-width:1280px;margin:0 auto}.portal-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:1.25rem}.portal-stack{display:grid;gap:1rem}.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.85rem}.kpi-card{background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:1rem;box-shadow:0 12px 30px rgba(15,23,42,.06)}.kpi-label{margin:0;color:#64748b;font-weight:800;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em}.kpi-value{margin:.4rem 0 0;color:#0f172a;font-size:1.35rem;font-weight:900}.project-card{background:#fff;border:1px solid #e2e8f0;border-radius:22px;padding:1.25rem;box-shadow:0 18px 45px rgba(15,23,42,.08)}.project-head{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;border-bottom:1px solid #e2e8f0;padding-bottom:1rem;margin-bottom:1rem}.project-head h2{margin:0;color:#0f172a}.badge{display:inline-flex;border-radius:999px;padding:.35rem .7rem;font-size:.78rem;font-weight:900;background:#dcfce7;color:#166534}.badge.pending{background:#fef3c7;color:#92400e}.timeline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.5rem;margin:1rem 0}.step{border:1px solid #e2e8f0;border-radius:14px;padding:.75rem;background:#f8fafc}.step.done{background:#ecfdf5;border-color:#bbf7d0}.step strong{display:block;font-size:.85rem}.step span{color:#64748b;font-size:.78rem}.doc-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem}.doc-card{border:1px solid #e2e8f0;border-radius:16px;padding:1rem;background:#fbfdff;display:flex;flex-direction:column;gap:.65rem}.doc-card h3{margin:0;font-size:1rem;color:#0f172a}.doc-card p{margin:0;color:#64748b;font-size:.9rem}.doc-action{margin-top:auto;display:inline-flex;justify-content:center;text-decoration:none;border-radius:12px;padding:.65rem .85rem;font-weight:900;background:#2563eb;color:#fff}.doc-action.pending{background:#eef2f7;color:#64748b;pointer-events:none}.finance-table{width:100%;border-collapse:collapse;margin-top:.75rem}.finance-table th,.finance-table td{border-bottom:1px solid #e5e7eb;padding:.7rem;text-align:left}.finance-table th{font-size:.75rem;text-transform:uppercase;color:#64748b}.bank-transfer-panel{margin-top:.85rem;padding:1rem;border:1px solid #bfdbfe;border-radius:16px;background:#f8fbff}.bank-transfer-panel h4{margin:0 0 .7rem;color:#0f172a}.bank-transfer-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}.bank-transfer-field{min-width:0;padding:.65rem .75rem;border-radius:11px;background:#fff;border:1px solid #dbeafe}.bank-transfer-field dt{color:#64748b;font-size:.72rem;font-weight:800;text-transform:uppercase}.bank-transfer-field dd{margin:.2rem 0 0;display:flex;align-items:center;gap:.5rem;justify-content:space-between;overflow-wrap:anywhere}.bank-copy{flex:0 0 auto;border:1px solid #93c5fd;border-radius:8px;background:#eff6ff;color:#1d4ed8;padding:.35rem .55rem;font:inherit;font-size:.78rem;font-weight:800;cursor:pointer}.bank-copy:focus-visible{outline:3px solid #f59e0b;outline-offset:2px}.section-title{margin:0 0 .75rem;color:#0f172a}.support-card{background:#fff;border:1px solid #e2e8f0;border-radius:22px;padding:1.25rem;box-shadow:0 18px 45px rgba(15,23,42,.08)}.empty-note{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:14px;padding:1rem;color:#64748b}.legacy-section{margin-top:1rem}
     @media(max-width:1100px){.portal-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}.doc-grid{grid-template-columns:repeat(2,1fr)}.timeline{grid-template-columns:repeat(3,1fr)}.bank-transfer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:640px){.portal-hero{display:block;padding:1.35rem}.kpi-grid,.doc-grid,.timeline,.bank-transfer-grid{grid-template-columns:1fr}.project-head{display:block}.finance-table{min-width:640px}.portal-table-wrap{overflow-x:auto}.bank-transfer-panel{padding:.85rem}.bank-transfer-field dd{align-items:flex-start}}
   </style>
-<?php require_once __DIR__ . '/includes/pwa_head.php'; ?></head>
+<?php require_once __DIR__ . '/includes/pwa_head.php'; ?>
+<link rel="stylesheet" href="assets/css/customer-portal.css"></head>
 <body><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?>
   <div class="dashboard-shell">
     <main class="portal-shell">
@@ -471,9 +472,17 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
         <a class="logout-link" href="logout.php">Log out</a>
       </section>
 
-      <div class="portal-grid">
+      <nav class="portal-quick-nav" aria-label="Your customer workspace">
+        <a href="#projects">Projects &amp; documents</a><a href="#financials">Payments</a><a href="#profile">Account details</a><a href="#raise-complaint">Help &amp; complaints</a>
+      </nav>
+      <p class="portal-help">Open a document to view its full details. Use Print / Save PDF on invoices, receipts and your handover pack to keep a copy.</p>
+      <?php if ($handoverHtmlPath !== ''): ?>
+        <section class="project-card handover-account-card" aria-labelledby="handover-title"><h2 id="handover-title" class="section-title">Your system handover pack</h2><p class="dashboard-subtitle">System details, operation, maintenance and warranty information for your account.</p><a class="doc-action" href="customer-handover.php">View / Print handover pack</a></section>
+      <?php endif; ?>
+      <span id="documents"></span>
+      <div id="projects" class="portal-grid">
         <div class="portal-stack">
-          <section class="kpi-grid" aria-label="Financial summary">
+          <section id="financials" class="kpi-grid" aria-label="Financial summary">
             <?php $projectCount = count($customerProjects); ?>
             <?php $portfolioTotal = array_sum(array_map(static fn(array $p): float => (float) ($p['quotation_value'] ?? 0), $customerProjects)); ?>
             <?php $portfolioPaid = array_sum(array_map(static fn(array $p): float => (float) ($p['payment_summary']['total_received'] ?? 0), $customerProjects)); ?>
@@ -506,7 +515,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
                 <div class="step <?= $project['invoices'] !== [] ? 'done' : '' ?>"><strong>Invoice</strong><span><?= $project['invoices'] !== [] ? 'Available' : 'Pending' ?></span></div>
               </div>
 
-              <h3 id="documents" class="section-title">Documents</h3>
+              <h3 class="section-title">Project documents</h3>
               <div class="doc-grid">
                 <?php $docGroups = [
                   ['Quotation', 'quotation', [$quote], $quoteNo],
@@ -520,10 +529,9 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
                 <?php foreach ($docGroups as [$label, $type, $docs, $fallback]): $doc = $docs[0] ?? null; $docCount = count($docs); ?>
                   <article class="doc-card"><h3><?= customer_portal_safe($label) ?></h3><p><?= customer_portal_safe($doc ? ($docCount > 1 && in_array($type, ['dispatch_advice', 'challan', 'receipt', 'invoice'], true) ? $docCount . ' documents available' : customer_dashboard_doc_description($type, $doc, $fallback)) : 'Not generated yet') ?></p><?php if ($doc): ?><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe(customer_dashboard_doc_group_url($type, $docs, (string) ($quote['id'] ?? ''))) ?>"><?= customer_portal_safe($docCount > 1 && in_array($type, ['dispatch_advice', 'challan', 'receipt'], true) ? 'View List' : customer_dashboard_doc_action_label($type)) ?></a><?php if ($type === 'invoice' && $docCount > 1): ?> <a class="doc-action" href="<?= customer_portal_safe('customer-document-view.php?' . http_build_query(['type' => 'invoice', 'quote_id' => (string)($quote['id'] ?? '')])) ?>">View All Active Invoices</a><?php endif; ?><?php else: ?><span class="doc-action pending">Pending</span><?php endif; ?></article>
                 <?php endforeach; ?>
-                <?php if ($handoverHtmlPath !== ''): ?><article class="doc-card"><h3>Handover pack</h3><p>System handover documents</p><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe('/' . ltrim($handoverHtmlPath, '/')) ?>">View / Print</a></article><?php endif; ?>
               </div>
 
-              <h3 id="financials" class="section-title" style="margin-top:1.25rem">Financial summary</h3>
+              <h3 class="section-title" style="margin-top:1.25rem">Financial summary</h3>
               <div class="details-grid">
                 <div class="details-tile"><p class="tile-label">Total project / quotation value</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['quotation_value'])) ?></p></div>
                 <div class="details-tile"><p class="tile-label">Current invoice total (Drafts included)</p><p class="tile-value"><?= customer_portal_safe($customerInr((float) $project['invoice_value'])) ?></p></div>

@@ -1,0 +1,24 @@
+/* Shared A4 invoice layout, independent of the phone's screen width. */
+.invoice-top{gap:18px}.brand-block,.brand-block>div{min-width:0}.invoice-title{min-width:170px}.invoice-title h1{font-size:30px}.invoice-table td{overflow-wrap:anywhere}.detail-row strong{overflow-wrap:anywhere;min-width:0}.table-panel{overflow-x:auto}.page-actions{flex-wrap:wrap}.page-actions .btn{min-height:44px}.print-hint{font-size:13px;color:#475569;margin:0 0 16px}
+@media print{
+ @page{size:A4 portrait;margin:12mm}
+ html,body{padding:0!important;width:auto!important;min-width:0!important;background:#fff!important;font-size:9pt!important;line-height:1.4!important}
+ .mobile-app-nav,.page-actions,.print-hint{display:none!important}
+ .invoice-page{width:auto!important;margin:0!important;padding:0!important;max-width:none!important}
+ .invoice-sheet{overflow:visible!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+ .invoice-top{display:flex!important;grid-template-columns:none!important;background:#fff!important;color:#0f172a!important;padding:0 0 6mm!important;border-bottom:2px solid #0f766e;gap:6mm}
+ .brand-block{max-width:65%;gap:3mm}.brand-logo{width:18mm;height:18mm;padding:1mm;border:1px solid #e2e8f0;border-radius:3mm}
+ .brand-name{font-size:16pt}.brand-block p,.invoice-title p{color:#334155!important}.invoice-title{text-align:right!important;min-width:0;margin-left:auto}.invoice-title h1{font-size:22pt}.invoice-pill{color:#115e59;border-color:#94a3b8;background:#fff}
+ .invoice-inner{padding:0!important}
+ .meta-grid,.party-grid,.summary-grid,.detail-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:4mm;margin-top:5mm}
+ .info-card,.summary-grid .info-card{padding:4mm;border-radius:2mm;background:#fff!important;box-shadow:none}
+ .info-card h2{margin-bottom:3mm}.detail-row{gap:3mm;margin:2mm 0}.table-panel{overflow:visible!important;margin-top:5mm;break-inside:auto!important;border-radius:2mm}
+ .table-title{padding:3mm}.invoice-table{display:table!important;width:100%!important;font-size:8pt!important;white-space:normal!important}.invoice-table thead{display:table-header-group}.invoice-table th,.invoice-table td{padding:2mm;white-space:normal}.invoice-table .num{white-space:nowrap}.invoice-table tr{break-inside:avoid;page-break-inside:avoid}
+ .solar-total{background:#fff!important;color:#115e59!important;border:1px solid #0f766e;padding:4mm}.solar-total span,.solar-sub{color:#115e59!important}.solar-total strong{font-size:22pt}.solar-sub{border-color:#94a3b8;background:#fff}.print-signature{break-inside:avoid;margin-top:10mm}.notes{font-size:9pt}h2,h3,.table-title{break-after:avoid}
+}
+
+.invoice-header-total small,.invoice-header-total strong{display:block}.invoice-header-total strong{font-size:24px;color:inherit}
+@media print{.invoice-title{flex:0 0 32%}.invoice-title h1{font-size:20pt}.invoice-header-total strong{font-size:18pt}.invoice-top{padding-bottom:4mm!important}.invoice-table{font-size:7.5pt!important}.invoice-table th,.invoice-table td{padding:1.7mm}.invoice-table .notes{font-size:8pt}.info-card{break-inside:avoid}.brand-block{flex:1}.brand-name{line-height:1.2}}
+
+.customer-document .document-audit{display:none}
+@media print{.document-audit{display:none!important}.invoice-inner>.info-card{margin-top:4mm!important}.info-card,.summary-grid .info-card{padding:3mm}.solar-size-card .solar-total{padding:2mm 3mm}.solar-total strong{font-size:17pt}.solar-total span{display:inline;font-size:8pt}.solar-total strong{display:inline;margin-left:3mm}.solar-size-card+.notes{margin-top:2mm!important;font-size:8pt}.detail-grid{margin-top:1mm;gap:1mm 4mm}.payment-grid{grid-template-columns:1fr!important}.payment-grid>.info-card{display:block}.payment-grid .detail-row{max-width:100%}.payment-grid .detail-row:last-child{border:0;padding-top:0;font-size:inherit}.summary-grid{margin-top:4mm}.info-card h2{margin-bottom:2mm}.invoice-top .invoice-pill{font-size:7pt}.invoice-inner>.info-card h2{margin-bottom:1mm}}
