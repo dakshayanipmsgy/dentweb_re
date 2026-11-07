@@ -19,3 +19,6 @@
 
 .invoice-header-total small,.invoice-header-total strong{display:block}.invoice-header-total strong{font-size:24px;color:inherit}
 @media print{.invoice-title{flex:0 0 32%}.invoice-title h1{font-size:20pt}.invoice-header-total strong{font-size:18pt}.invoice-top{padding-bottom:4mm!important}.invoice-table{font-size:7.5pt!important}.invoice-table th,.invoice-table td{padding:1.7mm}.invoice-table .notes{font-size:8pt}.info-card{break-inside:avoid}.brand-block{flex:1}.brand-name{line-height:1.2}}
+
+.customer-document .document-audit{display:none}
+@media print{.document-audit{display:none!important}.invoice-inner>.info-card{margin-top:4mm!important}.info-card,.summary-grid .info-card{padding:3mm}.solar-size-card .solar-total{padding:2mm 3mm}.solar-total strong{font-size:17pt}.solar-total span{display:inline;font-size:8pt}.solar-total strong{display:inline;margin-left:3mm}.solar-size-card+.notes{margin-top:2mm!important;font-size:8pt}.detail-grid{margin-top:1mm;gap:1mm 4mm}.payment-grid{grid-template-columns:1fr!important}.payment-grid>.info-card{display:block}.payment-grid .detail-row{max-width:100%}.payment-grid .detail-row:last-child{border:0;padding-top:0;font-size:inherit}.summary-grid{margin-top:4mm}.info-card h2{margin-bottom:2mm}.invoice-top .invoice-pill{font-size:7pt}.invoice-inner>.info-card h2{margin-bottom:1mm}}
