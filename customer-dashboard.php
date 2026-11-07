@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/includes/customer_portal.php';
+require_once __DIR__ . '/includes/customer_workspace_view.php';
 require_once __DIR__ . '/includes/customer_complaints.php';
 require_once __DIR__ . '/admin/includes/documents_helpers.php';
 require_once __DIR__ . '/includes/quotation_view_renderer.php';
@@ -460,13 +461,16 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
     @media(max-width:1100px){.portal-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}.doc-grid{grid-template-columns:repeat(2,1fr)}.timeline{grid-template-columns:repeat(3,1fr)}.bank-transfer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:640px){.portal-hero{display:block;padding:1.35rem}.kpi-grid,.doc-grid,.timeline,.bank-transfer-grid{grid-template-columns:1fr}.project-head{display:block}.finance-table{min-width:640px}.portal-table-wrap{overflow-x:auto}.bank-transfer-panel{padding:.85rem}.bank-transfer-field dd{align-items:flex-start}}
   </style>
 <?php require_once __DIR__ . '/includes/pwa_head.php'; ?>
-<link rel="stylesheet" href="assets/css/customer-portal.css"></head>
-<body><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?>
+<link rel="stylesheet" href="<?= customer_portal_safe(customer_workspace_asset('assets/css/customer-portal.css')) ?>"></head>
+<body class="customer-workspace"><?php require_once __DIR__ . '/includes/mobile_app_nav.php'; ?>
+  <a class="workspace-skip" href="#main-content">Skip to your account</a>
   <div class="dashboard-shell">
-    <main class="portal-shell">
+    <main id="main-content" class="portal-shell" tabindex="-1">
       <section class="portal-hero">
         <div>
+          <p class="workspace-eyebrow">Dakshayani customer account</p>
           <h1>Welcome, <?= customer_portal_safe($customer['name'] ?? 'Customer') ?></h1>
+          <div class="workspace-identity"><span class="workspace-status"><?= customer_portal_safe($customer['status'] ?? 'New') ?></span><span>Registered mobile: <?= customer_portal_safe($customer['mobile'] ?? '') ?></span></div>
           <p>Your solar project documents, payments, service requests, and account details in one secure place.</p>
         </div>
         <a class="logout-link" href="logout.php">Log out</a>
@@ -498,7 +502,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
             <section class="project-card"><h2 class="section-title">Projects</h2><div class="empty-note">No accepted quotation is linked to your portal yet. Once your quotation is accepted, your project documents will appear here automatically.</div></section>
           <?php endif; ?>
 
-          <?php if($standaloneInvoices!==[]): ?><section class="project-card legacy-section"><h2 class="section-title">Standalone Invoices</h2><p class="dashboard-subtitle">Invoices issued directly to your customer login. These do not include quotation, agreement, dispatch, or challan documents.</p><div class="portal-table-wrap"><table class="finance-table"><thead><tr><th>Invoice</th><th>Date</th><th>Total</th><th>Payment status</th><th>Received</th><th>Outstanding</th><th>Action</th></tr></thead><tbody><?php foreach($standaloneInvoices as $standaloneInvoice):$standalonePay=documents_invoice_payment_summary($standaloneInvoice);?><tr><td><?=customer_portal_safe((string)($standaloneInvoice['invoice_no']??$standaloneInvoice['id']))?></td><td><?=customer_portal_safe(documents_invoice_authoritative_date($standaloneInvoice))?></td><td><?=customer_portal_safe($customerInr((float)$standalonePay['invoice_total']))?></td><td><?=customer_portal_safe(documents_invoice_payment_status_label((string)$standalonePay['payment_status']))?></td><td><?=customer_portal_safe($customerInr((float)$standalonePay['total_received']))?></td><td><?=customer_portal_safe($customerInr((float)$standalonePay['outstanding']))?></td><td><a class="doc-action" href="customer-document-view.php?<?=customer_portal_safe(http_build_query(['type'=>'invoice','id'=>(string)$standaloneInvoice['id']]))?>">View Invoice</a></td></tr><?php endforeach;?></tbody></table></div></section><?php endif; ?>
+          <?php if($standaloneInvoices!==[]): ?><section class="project-card legacy-section"><h2 class="section-title">Standalone Invoices</h2><p class="dashboard-subtitle">Invoices issued directly to your customer login. These do not include quotation, agreement, dispatch, or challan documents.</p><div class="portal-table-wrap"><table role="table" class="finance-table"><thead><tr role="row"><th scope="col" role="columnheader">Invoice</th><th scope="col" role="columnheader">Date</th><th scope="col" role="columnheader">Total</th><th scope="col" role="columnheader">Payment status</th><th scope="col" role="columnheader">Received</th><th scope="col" role="columnheader">Outstanding</th><th scope="col" role="columnheader">Action</th></tr></thead><tbody><?php foreach($standaloneInvoices as $standaloneInvoice):$standalonePay=documents_invoice_payment_summary($standaloneInvoice);?><tr role="row"><td data-label="Invoice" role="cell"><?=customer_portal_safe((string)($standaloneInvoice['invoice_no']??$standaloneInvoice['id']))?></td><td data-label="Date" role="cell"><?=customer_portal_safe(documents_invoice_authoritative_date($standaloneInvoice))?></td><td data-label="Total" role="cell"><?=customer_portal_safe($customerInr((float)$standalonePay['invoice_total']))?></td><td data-label="Payment status" role="cell"><?=customer_portal_safe(documents_invoice_payment_status_label((string)$standalonePay['payment_status']))?></td><td data-label="Received" role="cell"><?=customer_portal_safe($customerInr((float)$standalonePay['total_received']))?></td><td data-label="Outstanding" role="cell"><?=customer_portal_safe($customerInr((float)$standalonePay['outstanding']))?></td><td data-label="Action" role="cell"><a class="doc-action" href="customer-document-view.php?<?=customer_portal_safe(http_build_query(['type'=>'invoice','id'=>(string)$standaloneInvoice['id']]))?>">View Invoice</a></td></tr><?php endforeach;?></tbody></table></div></section><?php endif; ?>
 
           <?php foreach ($customerProjects as $project): $quote = $project['quote']; $quoteNo = (string) ($quote['quote_no'] ?? $quote['id'] ?? 'Quotation'); ?>
             <article class="project-card">
@@ -527,7 +531,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
                   ['Invoice', 'invoice', $project['invoices'], 'Tax invoice'],
                 ]; ?>
                 <?php foreach ($docGroups as [$label, $type, $docs, $fallback]): $doc = $docs[0] ?? null; $docCount = count($docs); ?>
-                  <article class="doc-card"><h3><?= customer_portal_safe($label) ?></h3><p><?= customer_portal_safe($doc ? ($docCount > 1 && in_array($type, ['dispatch_advice', 'challan', 'receipt', 'invoice'], true) ? $docCount . ' documents available' : customer_dashboard_doc_description($type, $doc, $fallback)) : 'Not generated yet') ?></p><?php if ($doc): ?><a class="doc-action" target="_blank" rel="noreferrer" href="<?= customer_portal_safe(customer_dashboard_doc_group_url($type, $docs, (string) ($quote['id'] ?? ''))) ?>"><?= customer_portal_safe($docCount > 1 && in_array($type, ['dispatch_advice', 'challan', 'receipt'], true) ? 'View List' : customer_dashboard_doc_action_label($type)) ?></a><?php if ($type === 'invoice' && $docCount > 1): ?> <a class="doc-action" href="<?= customer_portal_safe('customer-document-view.php?' . http_build_query(['type' => 'invoice', 'quote_id' => (string)($quote['id'] ?? '')])) ?>">View All Active Invoices</a><?php endif; ?><?php else: ?><span class="doc-action pending">Pending</span><?php endif; ?></article>
+                  <article class="doc-card"><h3><?= customer_portal_safe($label) ?></h3><p><?= customer_portal_safe($doc ? ($docCount > 1 && in_array($type, ['dispatch_advice', 'challan', 'receipt', 'invoice'], true) ? $docCount . ' documents available' : customer_dashboard_doc_description($type, $doc, $fallback)) : 'Not generated yet') ?></p><?php if ($doc): ?><a class="doc-action" href="<?= customer_portal_safe(customer_dashboard_doc_group_url($type, $docs, (string) ($quote['id'] ?? ''))) ?>"><?= customer_portal_safe($docCount > 1 && in_array($type, ['dispatch_advice', 'challan', 'receipt'], true) ? 'View List' : customer_dashboard_doc_action_label($type)) ?></a><?php if ($type === 'invoice' && $docCount > 1): ?> <a class="doc-action" href="<?= customer_portal_safe('customer-document-view.php?' . http_build_query(['type' => 'invoice', 'quote_id' => (string)($quote['id'] ?? '')])) ?>">View All Active Invoices</a><?php endif; ?><?php else: ?><span class="doc-action pending">Pending</span><?php endif; ?></article>
                 <?php endforeach; ?>
               </div>
 
@@ -544,7 +548,7 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
 
               <?php if ($project['payment_requests'] !== []): ?>
                 <h3 class="section-title" style="margin-top:1rem">Active payment requests</h3>
-                <div class="portal-table-wrap"><table class="finance-table"><thead><tr><th>Date</th><th>Amount</th><th>Reason</th><th>Due</th><th>Status</th><th>Payment</th></tr></thead><tbody><?php foreach ($project['payment_requests'] as $request): $paymentLink = documents_customer_payment_request_link_state($request, $quote, $customerMobile); ?><tr><td><?= customer_portal_safe(substr((string) ($request['created_at'] ?? ''), 0, 10)) ?></td><td><?= customer_portal_safe($customerInr((float) ($request['amount_requested'] ?? 0))) ?></td><td><?= customer_portal_safe(documents_payment_request_reason_label($request)) ?></td><td><?= customer_portal_safe((string) ($request['due_date'] ?? '')) ?></td><td><?= customer_portal_safe(customer_dashboard_status_label((string) ($request['status'] ?? 'draft'))) ?></td><td><?php if ($paymentLink['available']): ?><a class="doc-action" target="_blank" rel="noopener noreferrer" href="<?= customer_portal_safe($paymentLink['url']) ?>"><?= customer_portal_safe($paymentLink['label'] ?? 'Pay via UPI') ?></a><?php else: ?><span class="doc-action pending"><?= customer_portal_safe($paymentLink['label'] ?? 'Payment link not available') ?></span><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div>
+                <div class="portal-table-wrap"><table role="table" class="finance-table"><thead><tr role="row"><th scope="col" role="columnheader">Date</th><th scope="col" role="columnheader">Amount</th><th scope="col" role="columnheader">Reason</th><th scope="col" role="columnheader">Due</th><th scope="col" role="columnheader">Status</th><th scope="col" role="columnheader">Payment</th></tr></thead><tbody><?php foreach ($project['payment_requests'] as $request): $paymentLink = documents_customer_payment_request_link_state($request, $quote, $customerMobile); ?><tr role="row"><td data-label="Date" role="cell"><?= customer_portal_safe(substr((string) ($request['created_at'] ?? ''), 0, 10)) ?></td><td data-label="Amount" role="cell"><?= customer_portal_safe($customerInr((float) ($request['amount_requested'] ?? 0))) ?></td><td data-label="Reason" role="cell"><?= customer_portal_safe(documents_payment_request_reason_label($request)) ?></td><td data-label="Due" role="cell"><?= customer_portal_safe((string) ($request['due_date'] ?? '')) ?></td><td data-label="Status" role="cell"><?= customer_portal_safe(customer_dashboard_status_label((string) ($request['status'] ?? 'draft'))) ?></td><td data-label="Payment" role="cell"><?php if ($paymentLink['available']): ?><a class="doc-action" target="_blank" rel="noopener noreferrer" href="<?= customer_portal_safe($paymentLink['url']) ?>"><?= customer_portal_safe($paymentLink['label'] ?? 'Pay via UPI') ?></a><?php else: ?><span class="doc-action pending"><?= customer_portal_safe($paymentLink['label'] ?? 'Payment link not available') ?></span><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div>
                 <section class="bank-transfer-panel" aria-labelledby="bank-transfer-<?= customer_portal_safe((string) ($quote['id'] ?? 'project')) ?>">
                   <h4 id="bank-transfer-<?= customer_portal_safe((string) ($quote['id'] ?? 'project')) ?>">Bank transfer details</h4>
                   <?php if ($companyBankDetails['has_details']): ?><dl class="bank-transfer-grid"><?php foreach ($companyBankDetails['fields'] as $bankField): ?><div class="bank-transfer-field"><dt><?= customer_portal_safe($bankField['label']) ?></dt><dd><span><?= customer_portal_safe($bankField['value']) ?></span><?php if ($bankField['copyable']): ?><button class="bank-copy" type="button" data-copy-value="<?= customer_portal_safe($bankField['value']) ?>" aria-label="Copy <?= customer_portal_safe(strtolower($bankField['label'])) ?>">Copy</button><?php endif; ?></dd></div><?php endforeach; ?></dl><?php else: ?><p class="dashboard-subtitle">Bank transfer details are not configured. Please contact our team for payment instructions.</p><?php endif; ?>
@@ -553,45 +557,43 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
 
               <h3 class="section-title" style="margin-top:1rem">Payment history / receipts</h3>
               <div class="portal-table-wrap">
-                <table class="finance-table"><thead><tr><th>Date</th><th>Amount</th><th>Mode / Reference</th><th>Receipt</th></tr></thead><tbody>
-                  <?php foreach ($project['receipts'] as $receipt): ?><tr><td><?= customer_portal_safe((string) ($receipt['date_received'] ?? $receipt['receipt_date'] ?? '')) ?></td><td><?= customer_portal_safe($customerInr(documents_receipt_amount_total($receipt))) ?></td><td><?= customer_portal_safe(trim((string) ($receipt['mode'] ?? '') . ' ' . (string) ($receipt['txn_ref'] ?? $receipt['reference'] ?? ''))) ?></td><td><a target="_blank" rel="noreferrer" href="<?= customer_portal_safe(customer_dashboard_doc_url('receipt', $receipt)) ?>"><?= customer_portal_safe((string) ($receipt['receipt_number'] ?? $receipt['id'] ?? 'Receipt')) ?></a></td></tr><?php endforeach; ?>
-                  <?php if ($project['receipts'] === []): ?><tr><td colspan="4">No finalized payment receipts are available yet.</td></tr><?php endif; ?>
+                <table role="table" class="finance-table"><thead><tr role="row"><th scope="col" role="columnheader">Date</th><th scope="col" role="columnheader">Amount</th><th scope="col" role="columnheader">Mode / Reference</th><th scope="col" role="columnheader">Receipt</th></tr></thead><tbody>
+                  <?php foreach ($project['receipts'] as $receipt): ?><tr role="row"><td data-label="Date" role="cell"><?= customer_portal_safe((string) ($receipt['date_received'] ?? $receipt['receipt_date'] ?? '')) ?></td><td data-label="Amount" role="cell"><?= customer_portal_safe($customerInr(documents_receipt_amount_total($receipt))) ?></td><td data-label="Mode / Reference" role="cell"><?= customer_portal_safe(trim((string) ($receipt['mode'] ?? '') . ' ' . (string) ($receipt['txn_ref'] ?? $receipt['reference'] ?? ''))) ?></td><td data-label="Receipt" role="cell"><a href="<?= customer_portal_safe(customer_dashboard_doc_url('receipt', $receipt)) ?>"><?= customer_portal_safe((string) ($receipt['receipt_number'] ?? $receipt['id'] ?? 'Receipt')) ?></a></td></tr><?php endforeach; ?>
+                  <?php if ($project['receipts'] === []): ?><tr role="row"><td colspan="4" role="cell">No finalized payment receipts are available yet.</td></tr><?php endif; ?>
                 </tbody></table>
               </div>
             </article>
           <?php endforeach; ?>
 
-          <section id="profile" class="project-card legacy-section"><h2 class="section-title">Your account information</h2><div class="status-banner" role="status">Current Status: <?= customer_portal_safe($customer['status'] ?? 'New') ?></div><div class="details-grid">
-            <?php foreach ([['Mobile number','mobile'],['Customer type','customer_type'],['Address','address'],['City','city'],['District','district'],['PIN code','pin_code'],['State','state'],['Meter number','meter_number'],['Meter serial number','meter_serial_number'],['JBVNL account number','jbvnl_account_number'],['Application ID','application_id'],['Complaints raised','complaints_raised']] as [$label,$key]): ?><div class="details-tile"><p class="tile-label"><?= customer_portal_safe($label) ?></p><p class="tile-value"><?= customer_portal_safe($customer[$key] ?? '') ?></p></div><?php endforeach; ?>
-          </div></section>
+          <section id="profile" class="project-card account-profile" aria-labelledby="account-title">
+            <header class="account-heading"><div><p class="workspace-eyebrow">Your profile</p><h2 id="account-title" class="section-title">Account &amp; installation details</h2><p class="dashboard-subtitle">Details held for your solar project. Contact our team if anything needs correcting.</p></div><a class="doc-action" href="#raise-complaint">Request a correction</a></header>
+            <div class="profile-groups">
+              <?php foreach (customer_workspace_profile_groups($customer) as $profileGroup): ?>
+                <section class="profile-group"><h3><?= customer_portal_safe($profileGroup['title']) ?></h3><dl class="profile-fields">
+                  <?php foreach ($profileGroup['rows'] as $field): ?><div><dt><?= customer_portal_safe($field['label']) ?></dt><dd<?= $field['value'] === '' ? ' class="profile-missing"' : '' ?>><?= customer_portal_safe($field['display']) ?></dd></div><?php endforeach; ?>
+                </dl></section>
+              <?php endforeach; ?>
+            </div>
+            <?php if ($handoverHtmlPath !== ''): ?><p class="profile-footer"><a href="customer-handover.php">Open your handover pack for operating and warranty information</a></p><?php endif; ?>
+          </section>
         </div>
 
-        <aside class="portal-stack">
+        <aside class="portal-stack" aria-label="Customer support">
           <section class="support-card"><h2 class="section-title">Need help?</h2><p class="dashboard-subtitle">Raise a complaint or contact our team if you need help understanding a document, payment, or project stage.</p></section>
           <section class="complaints-section" aria-labelledby="raise-complaint">
             <div class="complaints-card raise-complaint-card">
-              <h2 id="raise-complaint">Raise Complaint</h2>
+              <h2 id="raise-complaint">How can we help?</h2><p class="dashboard-subtitle">Send a service request, document question or profile correction.</p>
               <?php if ($complaintSuccess !== ''): ?><div class="alert-success" role="status"><?= customer_portal_safe($complaintSuccess) ?></div><?php endif; ?>
               <?php if ($complaintErrors !== []): ?><div class="alert-error" role="alert"><ul style="padding-left: 1.25rem; margin: 0;"><?php foreach ($complaintErrors as $message): ?><li><?= customer_portal_safe($message) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
-              <form method="post" class="complaint-form"><?= csrf_field() ?><input type="hidden" name="complaint_action" value="raise" /><label for="title">Title *</label><input id="title" name="title" type="text" required /><label for="description">Description *</label><textarea id="description" name="description" rows="4" required></textarea><label for="problem_category">Problem Category *</label><select id="problem_category" name="problem_category" required><option value="">Select a category</option><?php foreach ($problemCategories as $category): ?><option value="<?= customer_portal_safe($category) ?>"><?= customer_portal_safe($category) ?></option><?php endforeach; ?></select><button type="submit">Submit complaint</button></form>
+              <form method="post" class="complaint-form"><?= csrf_field() ?><input type="hidden" name="complaint_action" value="raise" /><label for="title">Title *</label><input id="title" name="title" type="text" value="<?= customer_portal_safe((string) ($complaintErrors !== [] ? ($_POST['title'] ?? '') : '')) ?>" required /><label for="description">Description *</label><textarea id="description" name="description" rows="4" required><?= customer_portal_safe((string) ($complaintErrors !== [] ? ($_POST['description'] ?? '') : '')) ?></textarea><label for="problem_category">Problem Category *</label><select id="problem_category" name="problem_category" required><option value="">Select a category</option><?php foreach ($problemCategories as $category): ?><option value="<?= customer_portal_safe($category) ?>"<?= (string) ($complaintErrors !== [] ? ($_POST['problem_category'] ?? '') : '') === $category ? ' selected' : '' ?>><?= customer_portal_safe($category) ?></option><?php endforeach; ?></select><button type="submit">Submit complaint</button></form>
             </div>
-            <div class="complaints-card my-complaints-card" style="margin-top: 1.25rem;"><h2>My Complaints</h2><?php if ($customerComplaints === []): ?><p style="margin: 0; color: #4b5563;">No complaints found.</p><?php else: ?><div class="complaints-table-wrapper"><table class="complaint-table"><thead><tr><th>Title</th><th>Status</th><th>Problem Category</th><th>Created</th></tr></thead><tbody><?php foreach ($customerComplaints as $complaint): ?><tr><td><?= customer_portal_safe($complaint['title'] ?? '') ?></td><td><?= customer_portal_safe(ucfirst((string) ($complaint['status'] ?? ''))) ?></td><td><?= customer_portal_safe($complaint['problem_category'] ?? complaint_default_category()) ?></td><td><?= customer_portal_safe($complaint['created_at'] ?? '') ?></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?></div>
+            <div class="complaints-card my-complaints-card" style="margin-top: 1.25rem;"><h2>My Complaints</h2><?php if ($customerComplaints === []): ?><p style="margin: 0; color: #4b5563;">No complaints found.</p><?php else: ?><div class="complaints-table-wrapper"><table role="table" class="complaint-table"><thead><tr role="row"><th scope="col" role="columnheader">Title</th><th scope="col" role="columnheader">Status</th><th scope="col" role="columnheader">Problem Category</th><th scope="col" role="columnheader">Created</th></tr></thead><tbody><?php foreach ($customerComplaints as $complaint): ?><tr role="row"><td data-label="Title" role="cell"><?= customer_portal_safe($complaint['title'] ?? '') ?></td><td data-label="Status" role="cell"><?= customer_portal_safe(ucfirst((string) ($complaint['status'] ?? ''))) ?></td><td data-label="Problem Category" role="cell"><?= customer_portal_safe($complaint['problem_category'] ?? complaint_default_category()) ?></td><td data-label="Created" role="cell"><?= customer_portal_safe($complaint['created_at'] ?? '') ?></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?></div>
           </section>
         </aside>
       </div>
     </main>
   </div>
-  <script>
-    document.addEventListener('click', function (event) {
-      const button = event.target.closest('.bank-copy');
-      if (!button) return;
-      const value = button.getAttribute('data-copy-value') || '';
-      if (!value || !navigator.clipboard || !navigator.clipboard.writeText) return;
-      navigator.clipboard.writeText(value).then(function () {
-        button.textContent = 'Copied';
-        window.setTimeout(function () { button.textContent = 'Copy'; }, 1500);
-      });
-    });
-  </script>
+  <p id="workspace-feedback" class="workspace-feedback" role="status" aria-live="polite"></p>
+  <script defer src="<?= customer_portal_safe(customer_workspace_asset('assets/js/customer-workspace.js')) ?>"></script>
 </body>
 </html>

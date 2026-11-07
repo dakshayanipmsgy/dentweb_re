@@ -18,6 +18,11 @@ invoice-view.php
 receipt-view.php
 includes/customer_receipt_access.php
 includes/handover.php
+includes/customer_workspace_view.php
+includes/mobile_app_nav.php
+customer-document-acceptance.php
+assets/js/customer-workspace.js
+assets/css/customer-document-screen.css
 assets/css/customer-portal.css
 assets/css/document-print.css
 assets/css/handover-document.css'
@@ -27,7 +32,7 @@ for release_file in $release_files; do
     [ -f "$release_source/$release_file" ]
     case "$release_file" in *.php) "$release_php" -l "$release_source/$release_file" ;; esac
 done
-# Save only the ten deployed code/assets, outside the web root, before writing.
+# Save only the deployed code/assets, outside the web root, before writing.
 release_backup=$(mktemp -d /home/tegwf0aqgwek/customer-portal-release-backup.XXXXXXXX)
 for release_file in $release_files; do
     if [ -L "$release_target/$release_file" ]; then
