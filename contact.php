@@ -467,7 +467,7 @@ $customerDisplayMeter = public_mask_identifier($customerMeter);
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Contact | Consult · Complaint · Connect | Dakshayani Enterprises</title>
   <meta name="description" content="Talk to Dakshayani Enterprises for solar consultations, register a service complaint, or connect directly with the owner." />
-  <link rel="icon" href="images/favicon.ico" />
+  <link rel="icon" href="/images/favicon.ico?v=20261108" />
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -651,6 +651,7 @@ $customerDisplayMeter = public_mask_identifier($customerMeter);
   <link rel="stylesheet" href="/assets/css/design-system.css?v=20261027">
   <link rel="stylesheet" href="/assets/css/marketing-pages.css?v=20261027">
   <link rel="stylesheet" href="/assets/css/public-tools.css?v=20261027">
+<link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png?v=20261108">
 </head>
 <body class="dakshayani-design marketing-page utility-page contact-page">
   <a class="ds-skip" href="#main-content">Skip to content</a>

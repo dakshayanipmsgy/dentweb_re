@@ -208,7 +208,7 @@ $schemaContext = [
   <meta name="twitter:image" content="https://dakshayani.co.in/images/marketing/solar-solutions-illustration.png" />
   <meta name="twitter:image:alt" content="Dakshayani Enterprises rooftop and commercial solar solutions illustration" />
 
-  <link rel="icon" href="images/favicon.ico" />
+  <link rel="icon" href="/images/favicon.ico?v=20261108" />
   <link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__ . '/style.css') ?>" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

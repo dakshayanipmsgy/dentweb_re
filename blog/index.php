@@ -139,7 +139,7 @@ if ($tag !== '') {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title><?= htmlspecialchars($pageTitle, ENT_QUOTES | ENT_HTML5) ?></title>
     <meta name="description" content="<?= htmlspecialchars($metaDescription, ENT_QUOTES | ENT_HTML5) ?>" />
-    <link rel="icon" href="../images/favicon.ico" />
+    <link rel="icon" href="/images/favicon.ico?v=20261108" />
     <link rel="stylesheet" href="../style.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -185,7 +185,8 @@ if ($tag !== '') {
             .blog-card img { height: 200px; }
         }
     </style>
-<link rel="stylesheet" href="/assets/css/marketing-pages.css?v=20261027"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/css/design-system.css?v=20261027"><link rel="stylesheet" href="/assets/css/remaining-public.css?v=20261027"></head>
+<link rel="stylesheet" href="/assets/css/marketing-pages.css?v=20261027"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/css/design-system.css?v=20261027"><link rel="stylesheet" href="/assets/css/remaining-public.css?v=20261027"><link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png?v=20261108">
+</head>
 <body class="dakshayani-design public-rest marketing-page">
 <header class="site-header"></header>
 <main>

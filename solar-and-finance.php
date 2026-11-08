@@ -11,7 +11,7 @@ $defaults = $settings['defaults'] ?? [];
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title><?= htmlspecialchars((string) ($content['page_title'] ?? 'Solar and Finance')) ?> | Dakshayani Enterprises</title>
-  <link rel="icon" href="/images/favicon.ico" />
+  <link rel="icon" href="/images/favicon.ico?v=20261108" />
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -51,6 +51,7 @@ $defaults = $settings['defaults'] ?? [];
   <link rel="stylesheet" href="/assets/css/design-system.css?v=20261027">
   <link rel="stylesheet" href="/assets/css/marketing-pages.css?v=20261027">
   <link rel="stylesheet" href="/assets/css/public-tools.css?v=20261027">
+<link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png?v=20261108">
 </head>
 <body class="dakshayani-design marketing-page utility-page solar-finance-page">
   <a class="ds-skip" href="#main-content">Skip to content</a>
