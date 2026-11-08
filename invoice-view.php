@@ -98,7 +98,7 @@ if ($adjustmentType === DOCUMENTS_INVOICE_ADJUSTMENT_DISCOUNT) {
 $addPricingRow('Final invoice total incl GST', $grandTotal);
 $addPricingRow('Basic value', $invoiceTaxSummary['taxable']);
 $addPricingRow('Total GST', $invoiceTaxSummary['gst']);
-$addPricingRow('Amount payable', $grandTotal);
+$addPricingRow('Invoice total before payments', $grandTotal);
 $masterItemSnapshots = $invoice !== null && is_array($invoice['quote_items'] ?? null) ? array_values($invoice['quote_items']) : [];
 $itemHsn = static function (array $item, int $index) use ($first, $masterItemSnapshots): string {
     $master = is_array($masterItemSnapshots[$index] ?? null) ? $masterItemSnapshots[$index] : [];
@@ -204,7 +204,7 @@ $displaySolarKwp = $hasSolarSizeBreakup ? $totalSolarKwp : $solarSizeValue($invo
     </tbody></table></section>
 
     <section class="summary-grid"><div class="info-card"><h2>Notes</h2><p class="notes"><?= $esc($invoice['notes'] ?? 'Thank you for your business.') ?></p></div></section>
-    <div class="print-signature"><div class="signature-box"><?= $invoice !== null ? document_signature_render($invoice) : '' ?>Authorized Signatory</div></div>
+    <div class="print-signature"><div class="signature-box"><?= ($invoice !== null ? document_signature_render($invoice) : '') ?: 'Authorized Signatory' ?></div></div>
     </div>
   </section>
   <?php endif; ?>
