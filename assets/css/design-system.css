@@ -40,3 +40,8 @@
 /* Keep small active navigation labels and placeholders readable. */
 .dakshayani-design .nav-link:is(:hover,.active,[aria-expanded="true"]),.dakshayani-design .nav-desktop .nav-link:is(:hover,.active,[aria-expanded="true"]) { color:var(--ds-brand-hover); }
 .dakshayani-design input::placeholder,.dakshayani-design textarea::placeholder { color:#5d6f75; opacity:1; }
+/* Keep the compliance row within the shared footer palette. */
+.dakshayani-design .site-footer .footer-trust { background:transparent; color:#c5d6d3; border-top:1px solid #ffffff1f; }
+.dakshayani-design .site-footer .trust-badges li { color:#c5d6d3; }
+.dakshayani-design .site-footer .badge-icon { flex:0 0 32px; background:#254b46; color:#d8f36a; box-shadow:none; }
+.dakshayani-design .site-footer .badge-icon i { color:inherit; }
