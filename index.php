@@ -485,8 +485,15 @@ $schemaContext = [
           <h2>Newest Solar Installs Across Jharkhand</h2>
         </div>
 
+        <div class="gallery-toolbar">
+          <p id="home-gallery-help">Swipe, scroll, or use the arrows. Open a photo to see it in full.</p>
+          <div class="gallery-controls" role="group" aria-label="Installation gallery controls">
+            <button type="button" data-gallery-previous aria-controls="home-install-gallery" disabled><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Previous</button>
+            <button type="button" data-gallery-next aria-controls="home-install-gallery">Next <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button>
+          </div>
+        </div>
         <div class="install-slider" data-install-slider>
-          <div class="slides-viewport" data-slides-viewport>
+          <div class="slides-viewport" data-slides-viewport id="home-install-gallery" role="region" aria-label="Solar installation photos" aria-describedby="home-gallery-help" tabindex="0">
             <div class="slides-wrapper" data-slides-wrapper>
               <?php
               $installDir = __DIR__ . '/images/all sites pics';
@@ -514,12 +521,14 @@ $schemaContext = [
                   }
               }
 
-              $loopImages = array_merge($installImages, $installImages);
+              $loopImages = $installImages;
               ?>
 
-              <?php foreach ($loopImages as $imageName): ?>
+              <?php foreach ($loopImages as $imageIndex => $imageName): ?>
                 <div class="slide">
-                  <img src="<?= htmlspecialchars($installWebPath . rawurlencode($imageName)) ?>" alt="Rooftop solar installation from the Dakshayani project gallery" loading="lazy" />
+                  <a class="installation-photo" href="<?= htmlspecialchars($installWebPath . rawurlencode($imageName)) ?>" target="_blank" rel="noopener" aria-label="Open installation photo <?= $imageIndex + 1 ?> in full size">
+                    <img src="<?= htmlspecialchars($installWebPath . rawurlencode($imageName)) ?>" alt="Dakshayani rooftop solar installation <?= $imageIndex + 1 ?>" loading="lazy" />
+                  </a>
                 </div>
               <?php endforeach; ?>
             </div>
@@ -567,13 +576,13 @@ $schemaContext = [
     <section class="section media-section">
       <div class="container">
         <div class="head">
-          <h2>See Our Teams in Action</h2>
-          <p>From structure assembly to final commissioning, here’s a glimpse of our on-ground excellence.</p>
+          <h2>Solar guidance &amp; scheme videos</h2>
+          <p>Watch the PM Surya Ghar guides below for application steps, subsidy redemption and an introduction to rooftop solar.</p>
         </div>
         <div class="media-grid">
-          <iframe src="https://www.youtube.com/embed/ybAm15bn6ok?si=YTYTgY12qS6dVHzB" title="Installation Video 1" allowfullscreen loading="lazy"></iframe>
-          <iframe src="https://www.youtube.com/embed/xAOc5eP1mkA?si=3tk0Ks8Qzfcm1pap" title="Installation Video 2" allowfullscreen loading="lazy"></iframe>
-          <iframe src="https://www.youtube.com/embed/cPiLFBfKR94?si=Kc1XF-OCwJKBx6Ye" title="Installation Video 3" allowfullscreen loading="lazy"></iframe>
+          <iframe src="https://www.youtube.com/embed/ybAm15bn6ok?si=YTYTgY12qS6dVHzB" title="PM Surya Ghar: submitting an application" allowfullscreen loading="lazy"></iframe>
+          <iframe src="https://www.youtube.com/embed/xAOc5eP1mkA?si=3tk0Ks8Qzfcm1pap" title="PM Surya Ghar: redeeming a subsidy" allowfullscreen loading="lazy"></iframe>
+          <iframe src="https://www.youtube.com/embed/cPiLFBfKR94?si=Kc1XF-OCwJKBx6Ye" title="PM Surya Ghar: introduction to rooftop solar" allowfullscreen loading="lazy"></iframe>
         </div>
       </div>
     </section>
@@ -734,106 +743,10 @@ $schemaContext = [
 
   <footer class="site-footer"></footer>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const viewport = document.querySelector('[data-slides-viewport]');
-      const wrapper = document.querySelector('[data-slides-wrapper]');
 
-      if (!viewport || !wrapper || !wrapper.children.length) {
-        return;
-      }
-
-      const slides = Array.from(wrapper.querySelectorAll('.slide'));
-      let slideSetWidth = 0;
-      let isDragging = false;
-      let startX = 0;
-      let startScrollLeft = 0;
-      let animationId = null;
-
-      const calculateWidths = () => {
-        // We have duplicated images, so half width is one set.
-        slideSetWidth = wrapper.scrollWidth / 2;
-      };
-
-      // Reset to start of first set if at 0, or seamless loop
-      const checkInfiniteLoop = () => {
-        if (slideSetWidth <= 0) return;
-
-        // If we scrolled past the end of the first set (showing start of second set), reset to start
-        // Actually, usually we show set1 then set2.
-        // To loop infinitely scrolling right (camera moves right), when we reach end of set1, we jump back to 0.
-        // wrapper width = 2 * slideSetWidth.
-
-        if (viewport.scrollLeft >= slideSetWidth) {
-           viewport.scrollLeft -= slideSetWidth;
-        } else if (viewport.scrollLeft <= 0) {
-           viewport.scrollLeft += slideSetWidth;
-        }
-      };
-
-      const updateOnLoad = () => {
-        calculateWidths();
-      };
-
-      slides.forEach((slide) => {
-        const image = slide.querySelector('img');
-        if (image && !image.complete) {
-          image.addEventListener('load', updateOnLoad, { once: true });
-        }
-      });
-
-      // Initial calculation
-      calculateWidths();
-
-      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-      const autoScroll = () => {
-        if (!reducedMotion.matches && !isDragging && slideSetWidth > 0) {
-          // Scroll right (camera moves right, items move left)
-          viewport.scrollLeft += 0.8;
-          checkInfiniteLoop();
-        }
-        animationId = requestAnimationFrame(autoScroll);
-      };
-
-      // Start looping
-      animationId = requestAnimationFrame(autoScroll);
-
-      viewport.addEventListener('pointerdown', (event) => {
-        isDragging = true;
-        startX = event.clientX;
-        startScrollLeft = viewport.scrollLeft;
-        viewport.setPointerCapture(event.pointerId);
-        cancelAnimationFrame(animationId); // Pause on drag
-      });
-
-      viewport.addEventListener('pointermove', (event) => {
-        if (!isDragging) return;
-        const deltaX = startX - event.clientX; // Drag left (positive delta) -> scroll right
-        viewport.scrollLeft = startScrollLeft + deltaX;
-        checkInfiniteLoop();
-      });
-
-      ['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => {
-        viewport.addEventListener(eventName, (event) => {
-          if (!isDragging) return;
-          isDragging = false;
-          if (viewport.hasPointerCapture(event.pointerId)) {
-            viewport.releasePointerCapture(event.pointerId);
-          }
-          // Resume scrolling
-          cancelAnimationFrame(animationId);
-          animationId = requestAnimationFrame(autoScroll);
-        });
-      });
-
-      window.addEventListener('resize', () => {
-        calculateWidths();
-        checkInfiniteLoop();
-      });
-    });
-  </script>
 
   <script src="script.js?v=<?= filemtime(__DIR__ . '/script.js') ?>" defer></script>
   <script src="site-content.js" defer></script>
+  <script src="assets/js/homepage.js?v=<?= filemtime(__DIR__ . '/assets/js/homepage.js') ?>" defer></script>
 </body>
 </html>

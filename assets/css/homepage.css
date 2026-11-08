@@ -254,3 +254,32 @@
 .homepage-modern .cta-strip p { color:#d0e0d5; }
 .homepage-modern :is(.capability-kicker,.capability-link) { color:#066457; }
 .homepage-modern .capability-kicker { background:#e7f2eb; }
+/* Homepage review: contained mobile navigation, controllable photos and clear form states. */
+.homepage-modern .gallery-toolbar { display:flex; align-items:center; justify-content:space-between; gap:24px; margin:0 0 24px; }
+.homepage-modern .gallery-toolbar p { margin:0; color:var(--ds-muted); font-size:.9rem; }
+.homepage-modern .gallery-controls { display:flex; gap:10px; flex:0 0 auto; }
+.homepage-modern .gallery-controls button { display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:48px; padding:12px 18px; border:1px solid #a9bdb2; border-radius:12px; background:#fff; color:var(--ds-ink); font-family:inherit; font-size:.88rem; font-weight:600; line-height:1.4; cursor:pointer; }
+.homepage-modern .gallery-controls button:disabled { opacity:.5; cursor:default; }
+.homepage-modern .slides-viewport { cursor:auto; touch-action:auto; scrollbar-width:thin; scrollbar-color:#8fae9f #e7f2eb; scroll-padding:4px; padding:4px 4px 14px; }
+.homepage-modern .slides-viewport::-webkit-scrollbar { display:block; height:6px; }
+.homepage-modern .slides-wrapper { width:max-content; gap:16px; will-change:auto; }
+.homepage-modern .slide { flex:0 0 clamp(240px,38vw,360px); width:clamp(240px,38vw,360px); }
+.homepage-modern .installation-photo { display:block; background:#fff; border:1px solid var(--ds-border); border-radius:16px; padding:8px; }
+.homepage-modern .slide img { width:100%; height:280px; max-width:100%; object-fit:contain; border-radius:10px; box-shadow:none; }
+.homepage-modern #homepage-lead-form [aria-invalid="true"] { border:2px solid #a83232; }
+.homepage-modern .nav-mobile:not(.show) { visibility:hidden; pointer-events:none; }
+.homepage-modern .nav-mobile.show { visibility:visible; }
+.homepage-modern.home-menu-open { overflow:hidden!important; }
+.homepage-modern.home-menu-open [data-floating-actions] { visibility:hidden; }
+@media(max-width:920px) {
+ .homepage-modern .nav-mobile { inset:0; width:100%; height:100vh; height:100dvh; max-height:100vh; max-height:100dvh; margin:0; border:0; border-radius:0; background:#fff; backdrop-filter:none; overflow-y:auto; overscroll-behavior:contain; padding-bottom:calc(28px + env(safe-area-inset-bottom,0px)); }
+}
+@media(max-width:700px) {
+ .homepage-modern .gallery-toolbar { flex-direction:column; align-items:stretch; gap:16px; }
+ .homepage-modern .gallery-controls button { flex:1; }
+ .homepage-modern .gallery-controls { width:100%; }
+ .homepage-modern .slide { flex-basis:78vw; width:78vw; }
+ .homepage-modern .slide img { height:240px; }
+ .homepage-modern.home-contact-visible [data-floating-actions]:not(:focus-within) { visibility:hidden; }
+}
+@media(prefers-reduced-motion:reduce) { .homepage-modern .slides-viewport { scroll-behavior:auto!important; } }
