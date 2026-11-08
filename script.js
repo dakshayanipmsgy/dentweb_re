@@ -22,37 +22,17 @@ const INLINE_PARTIALS = {
           <span class="brand-text">Dakshayani Enterprises</span>
         </a>
 
-        <nav class="nav-desktop" aria-label="Primary navigation">
-          <a href="/index.php" class="nav-link">Home</a>
-          <a href="/about.html" class="nav-link">About Us</a>
-          <div class="nav-dropdown">
-            <button type="button" class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
-              Solutions
-              <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-            </button>
-            <div class="nav-dropdown-menu" role="menu">
-              <a href="/solar-projects.html" class="nav-link" role="menuitem">Solar Projects</a>
-              <a href="/govt-epc.html" class="nav-link" role="menuitem">Govt. EPC &amp; Infrastructure</a>
-              <a href="/pm-surya-ghar.html" class="nav-link" role="menuitem">PM Surya Ghar Subsidy</a>
-              <a href="/meera-gh2.html" class="nav-link" role="menuitem">Meera GH2 Initiative</a>
-              <a href="/e-mobility.html" class="nav-link" role="menuitem">E-Mobility &amp; Charging</a>
-            </div>
-          </div>
-          <div class="nav-dropdown">
-            <button type="button" class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">
-              Knowledge Hub
-              <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-            </button>
-            <div class="nav-dropdown-menu" role="menu">
-          <a href="/knowledge-hub.html" class="nav-link" role="menuitem">Knowledge Hub</a>
-          <a href="/innovation-tech.html" class="nav-link" role="menuitem">Innovation &amp; Tech</a>
-          <a href="/blog/index.php" class="nav-link" role="menuitem">Blog &amp; Insights</a>
-          <a href="/calculator.html" class="nav-link" role="menuitem">Solar Calculator</a>
-          <a href="/solar-and-finance.php" class="nav-link" role="menuitem">Solar &amp; Finance</a>
-          <a href="/policies.html" class="nav-link" role="menuitem">Policies &amp; Compliance</a>
-            </div>
-          </div>
-        </nav>
+        <nav class="nav-desktop" aria-label="Primary navigation"><a href="/index.php" class="nav-link">Home</a><div class="nav-dropdown"><button type="button" class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">Solar Solutions <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button><div class="nav-dropdown-menu" role="menu" aria-label="Solar Solutions"><a href="/solar-projects.html" class="nav-link" role="menuitem">Solar Projects</a>
+<a href="/pm-surya-ghar.html" class="nav-link" role="menuitem">PM Surya Ghar Subsidy</a>
+<a href="/financing.html" class="nav-link" role="menuitem">Financing &amp; Loans</a>
+<a href="/govt-epc.html" class="nav-link" role="menuitem">Govt. EPC &amp; Infrastructure</a>
+<a href="/e-mobility.html" class="nav-link" role="menuitem">E-Mobility &amp; Charging</a></div></div><a href="/calculator.html" class="nav-link nav-tool-link">Solar Calculator</a><a href="/solar-and-finance.php" class="nav-link nav-tool-link">Solar &amp; Finance</a><div class="nav-dropdown"><button type="button" class="nav-link nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false">Explore <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button><div class="nav-dropdown-menu" role="menu" aria-label="Explore"><a href="/about.html" class="nav-link" role="menuitem">About Us</a>
+<a href="/knowledge-hub.html" class="nav-link" role="menuitem">Knowledge Hub</a>
+<a href="/blog/index.php" class="nav-link" role="menuitem">Blog &amp; Insights</a>
+<a href="/innovation-tech.html" class="nav-link" role="menuitem">Innovation &amp; Tech</a>
+<a href="/meera-gh2.html" class="nav-link" role="menuitem">Meera GH2 Initiative</a>
+<a href="/policies.html" class="nav-link" role="menuitem">Policies &amp; Compliance</a>
+<a href="/contact.php" class="nav-link" role="menuitem">Contact &amp; Support</a></div></div></nav>
 
         <div class="nav-actions" role="group" aria-label="Header quick actions">
           <a href="/login.php" class="btn btn-secondary nav-login-link">Login Portal</a>
@@ -73,40 +53,19 @@ const INLINE_PARTIALS = {
       </div>
 
       <nav id="mobile-menu" class="nav-mobile" aria-label="Mobile navigation">
-        <div class="nav-mobile-header">
-           <button type="button" class="nav-mobile-close" data-close-mobile aria-label="Close menu">
-             <i class="fa-solid fa-xmark"></i>
-           </button>
-        </div>
-        <div class="nav-mobile-section" aria-label="Primary pages">
-          <a href="/index.php">Home</a>
-          <a href="/about.html">About Us</a>
-        </div>
-        <div class="nav-mobile-divider" role="presentation"></div>
-        <div class="nav-mobile-section" aria-label="Solutions">
-          <p class="nav-mobile-label">Solutions</p>
-          <a href="/solar-projects.html">Solar Projects</a>
-          <a href="/govt-epc.html">Govt. EPC &amp; Infrastructure</a>
-          <a href="/pm-surya-ghar.html">PM Surya Ghar Subsidy</a>
-          <a href="/meera-gh2.html">Meera GH2 Initiative</a>
-          <a href="/e-mobility.html">E-Mobility &amp; Charging</a>
-        </div>
-        <div class="nav-mobile-divider" role="presentation"></div>
-        <div class="nav-mobile-section" aria-label="Knowledge Hub">
-          <p class="nav-mobile-label">Knowledge Hub</p>
-      <a href="/knowledge-hub.html">Knowledge Hub</a>
-      <a href="/innovation-tech.html">Innovation &amp; Tech</a>
-      <a href="/blog/index.php">Blog &amp; Insights</a>
-      <a href="/calculator.html">Solar Calculator</a>
-      <a href="/solar-and-finance.php">Solar &amp; Finance</a>
-      <a href="/policies.html">Policies &amp; Compliance</a>
-        </div>
-        <div class="nav-mobile-divider" role="presentation"></div>
-        <div class="nav-mobile-section" aria-label="Quick actions">
-          <a href="/login.php" class="btn btn-secondary" data-close-mobile>Login Portal</a>
-          <p class="nav-mobile-theme" data-site-theme-label hidden></p>
-        </div>
-      </nav>
+<div class="nav-mobile-header"><button type="button" class="nav-mobile-close" data-close-mobile aria-label="Close menu"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
+<div class="nav-mobile-section" aria-label="Start here"><p class="nav-mobile-label">Start here</p><a href="/index.php">Home</a><a href="/calculator.html" class="nav-tool-link">Solar Calculator <span>Estimate system size &amp; savings →</span></a><a href="/solar-and-finance.php" class="nav-tool-link">Solar &amp; Finance <span>Compare costs &amp; long-term savings →</span></a><a href="/contact.php">Book a site visit</a></div>
+<div class="nav-mobile-divider" role="presentation"></div><div class="nav-mobile-section" aria-label="Solar solutions"><p class="nav-mobile-label">Solar solutions</p><a href="/solar-projects.html" class="nav-link">Solar Projects</a>
+<a href="/pm-surya-ghar.html" class="nav-link">PM Surya Ghar Subsidy</a>
+<a href="/financing.html" class="nav-link">Financing &amp; Loans</a>
+<a href="/govt-epc.html" class="nav-link">Govt. EPC &amp; Infrastructure</a>
+<a href="/e-mobility.html" class="nav-link">E-Mobility &amp; Charging</a></div><div class="nav-mobile-divider" role="presentation"></div><div class="nav-mobile-section" aria-label="Explore Dakshayani"><p class="nav-mobile-label">Explore Dakshayani</p><a href="/about.html" class="nav-link">About Us</a>
+<a href="/knowledge-hub.html" class="nav-link">Knowledge Hub</a>
+<a href="/blog/index.php" class="nav-link">Blog &amp; Insights</a>
+<a href="/innovation-tech.html" class="nav-link">Innovation &amp; Tech</a>
+<a href="/meera-gh2.html" class="nav-link">Meera GH2 Initiative</a>
+<a href="/policies.html" class="nav-link">Policies &amp; Compliance</a>
+<a href="/contact.php" class="nav-link">Contact &amp; Support</a></div><div class="nav-mobile-divider" role="presentation"></div><div class="nav-mobile-section" aria-label="Portal access"><a href="/login.php" class="btn btn-secondary" data-close-mobile>Login Portal</a><p class="nav-mobile-theme" data-site-theme-label hidden></p></div></nav>
 
     </header>
 
@@ -569,6 +528,19 @@ function enhanceHeaderNavigation(headerEl) {
     });
 
     dropdown.addEventListener('keydown', (event) => {
+      const items = Array.from(menu.querySelectorAll('a'));
+      if (event.target === toggle && event.key === 'ArrowDown') {
+        event.preventDefault();
+        closeDropdowns(dropdown);
+        dropdown.classList.add('is-open');
+        toggle.setAttribute('aria-expanded', 'true');
+        items[0]?.focus();
+      } else if (menu.contains(event.target) && ['ArrowDown','ArrowUp','Home','End'].includes(event.key)) {
+        event.preventDefault();
+        const index = items.indexOf(document.activeElement);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+        items[next]?.focus();
+      }
       if (event.key === 'Escape') {
         dropdown.classList.remove('is-open');
         toggle.setAttribute('aria-expanded', 'false');
@@ -596,10 +568,12 @@ function enhanceHeaderNavigation(headerEl) {
   if (!menuButton || !mobileMenu) return;
 
   const closeMenu = () => {
+    const wasOpen = mobileMenu.classList.contains('show');
     mobileMenu.classList.remove('show');
     menuButton.setAttribute('aria-expanded', 'false');
     menuButton.classList.remove('is-active');
     menuButton.setAttribute('aria-label', 'Open navigation menu');
+    if (wasOpen) menuButton.focus({ preventScroll: true });
   };
 
   menuButton.addEventListener('click', () => {
@@ -610,6 +584,24 @@ function enhanceHeaderNavigation(headerEl) {
       'aria-label',
       isOpen ? 'Close navigation menu' : 'Open navigation menu',
     );
+    if (isOpen) {
+      mobileMenu.scrollTop = 0;
+      mobileMenu.querySelector('[data-close-mobile]')?.focus({ preventScroll: true });
+    }
+  });
+
+  mobileMenu.addEventListener('keydown', (event) => {
+    if (event.key !== 'Tab' || !mobileMenu.classList.contains('show')) return;
+    const controls = Array.from(mobileMenu.querySelectorAll('a[href],button:not([disabled])')).filter((node) => node.getClientRects().length);
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
   });
 
   mobileMenu.querySelectorAll('a').forEach((link) => {
@@ -1693,6 +1685,54 @@ window.initDakshayaniTranslate = function initDakshayaniTranslate() {
   applyStoredLanguagePreference();
 };
 
+// Keep useful planning tools beside the public-page content they support.
+function renderSolarPlanningLinks() {
+  const route = window.location.pathname.replace(/\/+$/, '') || '/';
+  const contexts = {
+    '/': ['Plan your rooftop solar project', 'Start with an estimate, then compare the costs and long-term savings.'],
+    '/index.php': ['Plan your rooftop solar project', 'Start with an estimate, then compare the costs and long-term savings.'],
+    '/about.html': ['See what solar could mean for you', 'Explore a rooftop estimate before discussing your project with our team.'],
+    '/solar-projects.html': ['Plan a system for your property', 'Estimate rooftop system size and savings, then explore the financial picture.'],
+    '/pm-surya-ghar.html': ['Explore your rooftop solar numbers', 'Use the planning tools for an initial estimate. Scheme eligibility and subsidy approval need a separate assessment.'],
+    '/govt-epc.html': ['Exploring rooftop solar for your premises?', 'Use these tools for an initial rooftop estimate. Institutional and tender projects need a project-specific assessment.'],
+    '/meera-gh2.html': ['Looking for rooftop solar instead?', 'For a home or business rooftop, start with our solar planning tools.'],
+    '/e-mobility.html': ['Explore solar alongside EV charging', 'Estimate the rooftop solar side of your project. Charger sizing and integration need a separate assessment.'],
+    '/knowledge-hub.html': ['Turn your solar research into a plan', 'Put the guidance into context with a system estimate and a financial comparison.'],
+    '/innovation-tech.html': ['Ready to explore rooftop solar?', 'Use our customer planning tools to estimate a system and compare its financial outlook.'],
+    '/blog/index.php': ['Put solar insights into practice', 'Explore a rooftop system estimate and compare costs, savings and financing.'],
+    '/blog/post.php': ['Explore the numbers for your own roof', 'Use our planning tools alongside this guidance for an initial, personalised estimate.'],
+    '/policies.html': ['Planning your solar purchase?', 'Compare initial estimates, then review the applicable terms with your proposal.'],
+    '/financing.html': ['Compare your solar options', 'Estimate your rooftop system first, then explore savings and financing scenarios.'],
+    '/contact.php': ['Have a starting estimate ready', 'Explore your system size and costs before discussing the details with our team.'],
+    '/calculator.html': ['Take the next step with your estimate', 'Compare long-term savings and costs, or discuss site-specific details with our team.'],
+    '/solar-and-finance.php': ['Check the system behind the numbers', 'Estimate your rooftop system size, or ask our team for a site-specific assessment.']
+  };
+  const context = contexts[route];
+  const main = document.querySelector('main');
+  if (!context || !main || !document.body.classList.contains('dakshayani-design') || document.querySelector('.solar-planning')) return;
+  const calculator = ['/calculator.html', 'Solar Calculator', 'Estimate rooftop system size and electricity savings.'];
+  const finance = ['/solar-and-finance.php', 'Solar & Finance', 'Compare costs, financing and long-term savings.'];
+  const contact = ['/contact.php', 'Talk to our team', 'Request a site-specific assessment and written proposal.'];
+  const tools = route === '/calculator.html' ? [finance, contact] : route === '/solar-and-finance.php' ? [calculator, contact] : [calculator, finance];
+  const section = document.createElement('section');
+  section.className = 'solar-planning';
+  section.setAttribute('aria-labelledby', 'solar-planning-title');
+  section.innerHTML = `<div class="container"><h2 id="solar-planning-title">${context[0]}</h2><p>${context[1]}</p><div class="solar-planning-grid">${tools.map(([href, title, description]) => `<a class="solar-planning-link" href="${href}"><strong>${title}</strong><small>${description}</small><span aria-hidden="true">→</span></a>`).join('')}</div></div>`;
+  const oldHomeLink = main.querySelector('.home-finance');
+  if (oldHomeLink) {
+    oldHomeLink.replaceWith(section);
+    return;
+  }
+  // Tool pages keep their working inputs first; the next-step links follow them.
+  if (route === '/calculator.html' || route === '/solar-and-finance.php' || route === '/blog/post.php') {
+    main.append(section);
+  } else {
+    const hero = main.querySelector('.page-hero,.contact-hero');
+    if (hero && hero.parentElement === main) hero.after(section);
+    else main.append(section);
+  }
+}
+
 // Wait for the document to be interactive before injecting content.
 document.addEventListener('DOMContentLoaded', () => {
   const headerPromise = injectPartial('header.site-header', PARTIALS.header);
@@ -1700,6 +1740,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const contentPromise = ensureSiteContentReady();
   stampCurrentYear();
   setupLeadForm();
+  renderSolarPlanningLinks();
   refreshSubheaderMarquee();
   contentPromise.then((detail) => {
     if (detail) {
