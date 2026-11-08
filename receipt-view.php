@@ -131,13 +131,13 @@ $quoteNo = (string) ($quote['quote_no'] ?? $receipt['quotation_id'] ?? '');
     <div class="card">
       <p><strong>Amount Received:</strong> ₹<?= htmlspecialchars(number_format($amount, 2), ENT_QUOTES) ?></p>
       <p><strong>Mode:</strong> <?= htmlspecialchars((string) ($receipt['mode'] ?? ''), ENT_QUOTES) ?></p>
-      <p><strong>Transaction Ref:</strong> <?= htmlspecialchars((string) ($receipt['txn_ref'] ?? $receipt['reference'] ?? ''), ENT_QUOTES) ?></p>
-      <p><strong>Status:</strong> <?= htmlspecialchars((string) ($receipt['status'] ?? 'draft'), ENT_QUOTES) ?></p>
+      <p><strong>Transaction Ref:</strong> <?= htmlspecialchars(customer_workspace_first_text([$receipt['txn_ref'] ?? '', $receipt['reference'] ?? '']) ?: 'Not recorded', ENT_QUOTES) ?></p>
+      <p><strong>Status:</strong> <?= htmlspecialchars(['final' => 'Finalized', 'finalized' => 'Finalized', 'draft' => 'Draft'][(string) ($receipt['status'] ?? 'draft')] ?? ucwords((string) ($receipt['status'] ?? 'draft')), ENT_QUOTES) ?></p>
     </div>
 
     <div class="card">
       <p><strong>Against Quotation:</strong> <?= htmlspecialchars($quoteNo, ENT_QUOTES) ?></p>
-      <p><strong>Notes:</strong> <?= nl2br(htmlspecialchars((string) ($receipt['notes'] ?? ''), ENT_QUOTES)) ?></p>
+      <?php if (customer_workspace_first_text([$receipt['notes'] ?? '']) !== ''): ?><p><strong>Notes:</strong> <?= nl2br(htmlspecialchars((string) $receipt['notes'], ENT_QUOTES)) ?></p><?php endif; ?>
     </div>
 
     <div class="sign">

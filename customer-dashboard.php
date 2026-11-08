@@ -574,6 +574,8 @@ $customerInr = static fn(float $amount): string => quotation_format_inr_indian($
                 </dl></section>
               <?php endforeach; ?>
             </div>
+            <?= customer_workspace_references_html(customer_workspace_project_references($customerProjects, $standaloneInvoices)) ?>
+            <p class="project-reference-note">Unrecorded installation, meter or warranty details need confirmation by our team. Use Request a correction to supply them.</p>
             <?php if ($handoverHtmlPath !== ''): ?><p class="profile-footer"><a href="customer-handover.php">Open your handover pack for operating and warranty information</a></p><?php endif; ?>
           </section>
         </div>
