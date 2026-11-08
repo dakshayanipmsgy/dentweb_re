@@ -74,6 +74,8 @@ body.dakshayani-design .nav-dropdown-menu .nav-link:last-child { border-bottom:0
 body.dakshayani-design .nav-dropdown-menu .nav-link:hover { background:#e7f2eb; color:#075e52; }
 body.dakshayani-design .nav-dropdown:not(.is-open) .nav-dropdown-menu { display:none; }
 body.dakshayani-design:has(.nav-mobile.show) { overflow:hidden; }
+html:has(body.dakshayani-design .nav-mobile.show) { overflow:hidden; }
+body.dakshayani-design .site-header:has(.nav-mobile.show) { backdrop-filter:none; }
 body.dakshayani-design:has(.nav-mobile.show) .floating-support { visibility:hidden; pointer-events:none; }
 /* The legacy illustration wrapper used a horizontal flex layout for text. */
 body.dakshayani-design .login-hero .hero-art.login-welcome { display:block; width:100%; max-width:none; min-width:0; padding:clamp(24px,3vw,36px); }
